@@ -1,0 +1,28 @@
+{
+  "name": "ks-agent",
+  "version": "1.0.0",
+  "description": "KS AGENT - Multi-model autonomous coding agent",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node node_modules/concurrently/dist/bin/concurrently.js \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "npm run dev --workspace=apps/server",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspaces",
+    "build:server": "npm run build --workspace=apps/server",
+    "build:web": "npm run build --workspace=apps/web",
+    "start": "npm run start --workspace=apps/server",
+    "db:migrate": "npm run db:migrate --workspace=apps/server",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

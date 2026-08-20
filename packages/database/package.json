@@ -1,0 +1,23 @@
+{
+  "name": "@ks-agent/database",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "node ../../node_modules/typescript/bin/tsc",
+    "dev": "node ../../node_modules/typescript/bin/tsc --watch",
+    "lint": "",
+    "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit",
+    "migrate": "node ../../node_modules/tsx/dist/cli.mjs src/migrate.ts"
+  },
+  "dependencies": {
+    "@ks-agent/types": "*",
+    "@ks-agent/shared": "*",
+    "better-sqlite3": "^9.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.2"
+  }
+}
