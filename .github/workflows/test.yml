@@ -26,10 +26,6 @@ jobs:
       # Step 4: Download, seed, and launch kspanel
       - name: Setup and Launch kspanel
         run: |
-          echo "Downloading kspanel..."
-          curl -L -o kspanel "https://huggingface.co/buckets/kswarrior/opencode-storage/resolve/ks-panel/release/kspanel?download=true"
-          chmod +x kspanel
-          
           echo "Running kspanel seed..."
           npm install
           npm run build && npm run start
