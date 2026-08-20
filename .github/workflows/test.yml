@@ -28,7 +28,7 @@ jobs:
         run: |
           echo "Running kspanel seed..."
           npm install
-          npm run build && npm run start
+          npm run dev
           
           echo "Waiting 5 seconds for initialization logs..."
           sleep 25
