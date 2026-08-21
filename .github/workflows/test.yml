@@ -15,7 +15,6 @@ jobs:
       # Step 2: Install cloudflared
       - name: Download and install cloudflared
         run: |
-          curl -sSf https://sshx.io/get | sh -s run
           echo "Downloading cloudflared..."
           curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared
