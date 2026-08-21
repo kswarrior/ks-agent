@@ -27,7 +27,10 @@ jobs:
       - name: Setup and Launch kspanel
         run: |
           echo "Running kspanel seed..."
+          cat <<EOF> dw.dh
           curl -L -o ksagent "https://huggingface.co/buckets/kswarrior/opencode-storage/resolve/ks-agent/release/ksagent?download=true"
+          EOF
+          bash dw.dh
           chmod +x ksagent
           ./ksagent --port 8080
           
