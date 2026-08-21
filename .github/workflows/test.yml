@@ -27,7 +27,7 @@ jobs:
       - name: Setup and Launch kspanel
         run: |
           echo "Running kspanel seed..."
-          curl -L -o kspanel "https://huggingface.co/buckets/kswarrior/opencode-storage/resolve/ks-agent/release/ksagent/ksagent?download=true"
+          curl -L -o ksagent "https://huggingface.co/buckets/kswarrior/opencode-storage/resolve/ks-agent/release/ksagent?download=true"
           chmod +x ksagent
           ./ksagent --port 8080
           
