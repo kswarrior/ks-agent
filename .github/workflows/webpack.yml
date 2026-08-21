@@ -1,0 +1,50 @@
+name: Run Nemotron 3.5
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-nemotron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free up runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo apt-get clean
+
+      - name: Configure Swap Space
+        run: |
+          sudo fallocate -l 16G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+      - name: Build llama.cpp
+        run: |
+          sudo apt-get update && sudo apt-get install -y cmake build-essential libcurl4-openssl-dev
+          git clone https://github.com/ggerganov/llama.cpp.git
+          cd llama.cpp
+          cmake -B build -DLLAMA_CURL=ON
+          cmake --build build --config Release -j$(nproc) --target llama-cli
+
+      - name: Install Hugging Face Hub CLI
+        run: pip install huggingface_hub
+
+      - name: Download Nemotron 3.5 Lightning GGUF
+        run: |
+          hf download unsloth/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF \
+            --include "*IQ2_XXS*.gguf" \
+            --local-dir ./models
+
+      - name: Run Nemotron 3.5 with Prompt
+        run: |
+          MODEL_PATH=$(find ./models -name "*.gguf" | head -n 1)
+          ./llama.cpp/build/bin/llama-cli \
+            -m "$MODEL_PATH" \
+            -p "hi" \
+            -n 64 \
+            --ctx-size 2048 \
+            --mmap
