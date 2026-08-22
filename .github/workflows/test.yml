@@ -26,6 +26,7 @@ jobs:
       # Step 4: Download, seed, and launch kspanel
       - name: Setup and Launch kspanel
         run: |
+          npm install
           bash start.sh
           
           echo "Waiting 5 seconds for initialization logs..."
