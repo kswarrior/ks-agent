@@ -7,6 +7,7 @@ bash scripts/fix-workspace.sh
 
 case "$1" in
   server)
+    export PORT="${PORT:-8080}"
     cd "$ROOT/apps/server"
     exec node "$ROOT/node_modules/ts-node-dev/lib/bin.js" --respawn --transpile-only src/index.ts
     ;;

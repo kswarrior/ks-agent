@@ -31,6 +31,7 @@ echo "=== Building web UI ==="
 (cd apps/web && node node_modules/vite/bin/vite.js build)
 
 echo "=== Starting server ==="
+export PORT="${PORT:-8080}"
 (cd apps/server/dist && node index.js) &
 SERVER_PID=$!
 
