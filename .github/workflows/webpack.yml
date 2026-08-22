@@ -7,19 +7,34 @@ jobs:
   run-nemotron:
     runs-on: ubuntu-latest
     steps:
-      - name: Free up runner disk space
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Maximize Runner Disk Space
         run: |
+          echo "Disk space before cleanup:"
+          df -h
+          
+          # Remove heavy pre-installed packages from Ubuntu runner
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/doc/cmake
+          sudo rm -rf /var/lib/docker
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          
           sudo apt-get clean
+          
+          echo "Disk space after cleanup:"
+          df -h
 
-      - name: Configure Swap Space
+      - name: Configure Small Swap Space (4GB)
         run: |
           sudo swapoff -a || true
           sudo rm -f /swapfile /mnt/swapfile
-          sudo fallocate -l 16G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=16384
+          sudo fallocate -l 4G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=4096
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
           sudo swapon /mnt/swapfile
@@ -35,15 +50,26 @@ jobs:
       - name: Install Hugging Face Hub CLI
         run: pip install huggingface_hub
 
-      - name: Download Nemotron 3.5 Lightning GGUF
+      - name: Download Nemotron 3.5 GGUF Directly
+        env:
+          HF_HUB_ENABLE_HF_TRANSFER: "0"
         run: |
-          hf download unsloth/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF \
-            --include "*IQ2_XXS*.gguf" \
-            --local-dir ./models
+          mkdir -p ./models
+          # Using --no-cache-dir or direct local-dir to prevent space duplication
+          python3 -c "
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='unsloth/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF',
+              allow_patterns=['*IQ2_XXS*.gguf'],
+              local_dir='./models',
+              max_workers=2
+          )
+          "
 
       - name: Run Nemotron 3.5 with Prompt
         run: |
           MODEL_PATH=$(find ./models -name "*.gguf" | head -n 1)
+          echo "Found model at: $MODEL_PATH"
           ./llama.cpp/build/bin/llama-cli \
             -m "$MODEL_PATH" \
             -p "hi" \
