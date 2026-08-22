@@ -1,216 +1,227 @@
 # KS AGENT
 
-**A production-quality, multi-model autonomous coding agent.**
+KS AGENT is a production-grade autonomous multi-model coding agent. It plans, explores, codes, tests, reviews, fixes, and re-tests — all driven by real LLM calls and real filesystem operations — while you watch the activity in a professional three-pane developer UI.
 
-KS AGENT is a coding agent that works like OpenCode/Cline-style agents. You give it a natural-language request and it plans, explores your codebase, implements changes, runs tests, reviews its work, fixes problems, and reports the final result — all through a professional, dark-themed web UI.
+## Highlights
 
-## Core Features
+- **Real persistent state machine**: `IDLE → PLANNING → EXPLORING → IMPLEMENTING → TESTING → REVIEWING → FIXING → RETESTING → COMPLETED / FAILED`
+- **Per-role model routing**: every agent role (Planner, Explorer, Coder, Tester, Reviewer, Fixer, Final Tester) can independently use any configured provider/model
+- **Real tools**: `write_file`, `edit_file`, `shell`, `read_file`, `list_files`, `search_code`
+- **Safety first**: project-root sandboxing, symlink safety, path-traversal protection, dangerous-command detection, tool approval, secret redaction
+- **Streaming UI**: Server-Sent Events stream model responses and tool activity live
+- **SQLite persistence**: projects, chats, messages, runs, steps, tool calls, providers, models, settings
+- **Custom providers**: add unlimited OpenAI-compatible providers (NVIDIA, OpenAI, OpenRouter, Ollama, etc.)
+- **Appearance**: configurable background (image URL or solid color), border radius, theme colors, overlay opacity
+- **Professional black & white developer theme**, default 5px border radius
 
-- **Multi-model agent pipeline**: Planner → Explorer → Coder → Test Agent → Reviewer → Fixer → Final Tester
-- **Independent model selection per role** via Settings → Models
-- **Real tools**: `write_file`, `edit_file`, `shell` (real filesystem + shell execution)
-- **Tool permission system** with approval prompts for dangerous operations
-- **Multiple projects**, each bound to a local directory
-- **Multiple chats per project** with full history persistence
-- **Live agent activity timeline** streamed over WebSocket
-- **SQLite persistence** (projects, chats, messages, runs, steps, tool calls, settings)
-- **Resumable agent state machine** with fix-loop safeguards (MAX_FIX_ITERATIONS)
+## Stack
 
-## Architecture
-
-```
-apps/
-  web/          React + TypeScript single-page app (Vite)
-  server/       Node.js + TypeScript HTTP + WebSocket API
-
-packages/
-  types/        Shared TypeScript types and enums
-  shared/       Shared utilities
-  database/     SQLite schema + repositories
-  ai/           AI provider interface, NVIDIA provider, model registry/router
-  tools/        Tool registry + write_file / edit_file / shell executors
-  agent/        Agent state machine, context manager, agent engine, event bus
-```
-
-### Agent workflow
+- React 18 + TypeScript (Vite)
+- Node.js + Express + TypeScript
+- better-sqlite3 with migrations
+- SSE for streaming
+- npm workspaces monorepo
 
 ```
-USER
-  ↓
-① PLANNER          Nemotron 3 Ultra              Understand + Plan
-② EXPLORER         Nemotron 3.5 Lightning 30B    Explore Codebase
-③ CODER            Step 3.7 Flash                EDIT / WRITE code
-④ TEST AGENT       Nemotron 3.5 Lightning 30B    Run / Inspect
-⑤ REVIEWER         Nemotron 3 Ultra              Deep independent review
-⑥ FIXER            Step 3.7 Flash                Fix review issues
-⑦ TEST AGENT       Nemotron 3.5 Lightning 30B    Run tests again
-  ↓
-TESTS PASS → DONE
+ks-agent/
+├── apps/web/                # React UI (port 5173 in dev)
+├── apps/server/             # Express API + SSE (port 8080)
+├── packages/
+│   ├── agent/               # State machine + workflow
+│   ├── ai/                  # Provider system (NVIDIA, OpenAI, Anthropic, Google, custom)
+│   ├── tools/               # Real tools (file + shell)
+│   ├── database/            # SQLite + repositories + migrations
+│   ├── types/               # Shared TypeScript types
+│   └── shared/              # Logger, id, paths, diff utilities
+└── data/                    # SQLite database lives here
 ```
-
-Each stage is implemented as a state machine (`idle → planning → exploring → implementing → testing → reviewing → fixing → retesting → completed | failed | waiting_for_user`). The loop is bounded by `MAX_FIX_ITERATIONS` (default 5) and `MAX_AGENT_STEPS` (default 100).
 
 ## Installation
 
-Requirements: Node.js >= 20.
-
 ```bash
 npm install
+npm run build:packages   # compile shared packages once
+npm run build            # build server + web
 ```
 
-## Environment Variables
+## Configuration
 
-Create a `.env` file in the project root (copy `.env.example`):
+The `.env` file (optional):
 
-```text
-NVIDIA_API_KEY=your_key_here
+```bash
 PORT=8080
-HOST=0.0.0.0
 DATABASE_PATH=./data/ks-agent.db
+NVIDIA_API_KEY=your_nvidia_key_here
 ```
 
-## NVIDIA API Setup
+> API keys are also configurable in **Settings → Providers** in the UI and are never sent to the frontend in plain text.
 
-1. Get an API key from NVIDIA (build.nvidia.com → Get API Key).
-2. Set it as `NVIDIA_API_KEY` in `.env` (recommended), or enter it in **Settings → API** in the UI.
-3. Click **Test Connection** to verify.
-
-The API key is stored on the backend only and is never exposed to the React frontend.
-
-## Running the Application
-
-Development (server + web, both live-reload):
+## Run
 
 ```bash
-npm run dev
+npm run dev          # starts server (8080) and web dev server (5173) with proxy
+# or
+npm run start        # production server
 ```
 
-Then open http://localhost:8080
+Open `http://localhost:8080` (the server serves the built web UI).
 
-Build everything:
+## Workflow
 
-```bash
-npm run build
+1. **Create a project** in the sidebar — give it a name and an absolute path to your local codebase.
+2. **Create a chat** under the project.
+3. Type a coding request and hit **Send**.
+4. Watch the agent:
+   - Plan
+   - Explore the codebase
+   - Implement (with `write_file` / `edit_file` / `shell`)
+   - Run tests
+   - Review
+   - Fix iteratively (up to `Maximum fix iterations`)
+   - Re-test until passing
+5. The right-hand **Activity** panel shows the live timeline, tool calls, shell output, tests, review, and plan.
+
+## Default Models
+
+By default, every role uses NVIDIA via `https://integrate.api.nvidia.com/v1`. Configure the actual model IDs in **Settings → Models**. The plan calls for:
+
+| Role | Default |
+| --- | --- |
+| Planner | Nemotron (NVIDIA) |
+| Explorer | Nemotron (NVIDIA) |
+| Coder | Step 3.7 Flash |
+| Test Agent | Nemotron (NVIDIA) |
+| Reviewer | Nemotron (NVIDIA) |
+| Fixer | Step 3.7 Flash |
+| Final Tester | Nemotron (NVIDIA) |
+
+Every role is fully configurable from the UI.
+
+## Custom Providers
+
+Add any OpenAI-compatible provider:
+
+1. Open **Settings → Providers → + Add Provider**
+2. Fill in:
+   - **Name**: display name
+   - **Type**: `openai-compatible`, `nvidia`, `openai`, `anthropic`, `google`, or `custom`
+   - **Base URL**: e.g. `https://api.openai.com/v1`
+   - **API Key**
+   - **Model ID**: e.g. `gpt-4o`
+   - **Model Name**: friendly label
+3. Optional: Chat endpoint override, Auth header, Custom headers, Streaming, Temperature, Max tokens, Context limit, Timeout.
+4. Click **Test** to verify connectivity.
+5. Use **Settings → Models** to assign this provider to any role.
+
+### Examples
+
+```
+# NVIDIA
+Base URL: https://integrate.api.nvidia.com/v1
+Model ID: nvidia/llama-3.1-nemotron-70b-instruct
+
+# OpenAI
+Base URL: https://api.openai.com/v1
+Model ID: gpt-4o
+
+# Ollama
+Base URL: http://localhost:11434/v1
+Model ID: llama3
+
+# OpenRouter
+Base URL: https://openrouter.ai/api/v1
+Model ID: anthropic/claude-3.5-sonnet
 ```
 
-Run the production server (serves both API and built web UI on port 8080):
+## Tools
 
-```bash
-npm run build
-npm run start
-```
+The agent can use:
 
-## Creating a Project
+| Tool | Description |
+| --- | --- |
+| `read_file(path, start_line?, end_line?)` | Read a file inside the project root |
+| `write_file(path, content)` | Create or overwrite a file |
+| `edit_file(path, old_text, new_text, replace_all?)` | Surgical edit with old/new text |
+| `list_files(path, recursive?, max_depth?, ignore?)` | List project files |
+| `search_code(pattern, path?, include?, max_results?)` | Regex search |
+| `shell(command, timeout_ms?, max_output_bytes?)` | Real shell command (sandboxed to project root) |
 
-1. Click **+ New Project**.
-2. Give it a name, and enter the **root directory** of an existing local project.
-3. Create a chat and send a request, e.g. `Add authentication to this application`.
+### Tool Permissions
 
-KS AGENT will bind all tools (file writes, edits, shell) to that project directory. Path traversal outside the project root is blocked.
+Configured in **Settings → Agent**:
 
-## Model Configuration
+- **Shell approval**: `Ask every time` / `Ask dangerous commands only` / `Autonomous`
+- **Autonomous Mode**: when off, file edits require approval
+- Dangerous commands (rm -rf /, fork bombs, dd of=/dev/sd*, curl|sh, sudo, shutdown, etc.) are always blocked or require explicit approval.
 
-Each agent role has an independent model. Open **Settings → Models** and pick a model for:
+## Settings Sections
 
-- Planner
-- Codebase Explorer
-- Coder / Editor
-- Test / Shell Agent
-- Reviewer
-- Fixer
-- Final Test Agent
-
-## Tool Permissions
-
-Under **Settings → Tools** choose:
-
-- **Ask every time**: prompt for all tool calls (future / per-tool).
-- **Ask for dangerous commands only**: prompt before things like `rm -rf`, `sudo`, destructive git operations.
-- **Autonomous**: run without prompts.
-
-When the agent requests approval, the UI shows the exact command/tool and asks **Allow / Deny**.
-
-## Agent Settings
-
-Under **Settings → Agent**:
-
-- Autonomous mode
-- Maximum fix iterations (default 5)
-- Require approval for shell
-- Automatically run tests
-- Review before completion
-- Maximum agent steps (default 100)
-
-All persisted in SQLite.
+- **General** — workspace root, default shell, shell timeout, log level
+- **Models** — assign provider/model/temperature/max_tokens to every agent role
+- **Providers** — add/edit/delete/test OpenAI-compatible providers
+- **API** — host, port, CORS origins
+- **Tools** — enable/disable each tool
+- **Agent** — autonomous mode, max fix iterations, shell approval, automatic tests, review-before-completion, max agent steps
+- **Appearance** — background type (image/color), background URL, background color, overlay opacity, border radius (default 5px), theme colors
+- **Database** — view table counts and reset
 
 ## Database
 
-SQLite database at `data/ks-agent.db` (configurable via `DATABASE_PATH`).
+SQLite at `./data/ks-agent.db` (override via `DATABASE_PATH`). Schema is created on first run with migrations:
 
-Tables: `projects`, `chats`, `messages`, `agent_runs`, `agent_steps`, `tool_calls`, `model_settings`, `app_settings`.
-
-```text
-Project  ── many Chats ── many Messages
-              └── many Agent Runs ── many Agent Steps ── many Tool Calls
+```
+projects, chats, messages, agent_runs, agent_steps, tool_calls,
+model_settings, provider_settings, app_settings
 ```
 
-Run the migration manually:
-
-```bash
-npm run db:migrate
-```
-
-## Streaming
-
-The frontend receives live agent events over WebSocket (`/ws`):
-
-- `state_change` — state machine transitions
-- `step_start` / `step_complete` — per role
-- `tool_call` / `tool_result` — tool activity
-- `approval_request` — permission prompts
-- `message` — role output
-- `run_complete` — final result
-
-The Activity panel on the right renders these in real time.
+API keys never leave the backend.
 
 ## Development
 
 ```bash
-npm run dev          # server + web with live reload
-npm run dev:server   # backend only
-npm run dev:web      # frontend only
-npm run build        # compile all workspaces
-npm run typecheck    # TypeScript checks across workspaces
+npm install
+npm run build:packages
+npm run dev
 ```
 
-## Production Build
+- Server hot-reloads with `ts-node-dev`
+- Web hot-reloads with Vite, proxies `/api` and `/api/events` to the server
+
+## Production
 
 ```bash
+npm install
+npm run build:packages
 npm run build
-npm run start
+PORT=8080 DATABASE_PATH=/var/lib/ks-agent/ks-agent.db npm run start
 ```
-
-The server serves the built React frontend from `apps/web/dist` on port 8080.
-
-## Security
-
-- Path traversal blocked on all file tools (`write_file`, `edit_file`).
-- Shell commands restricted to the project working directory.
-- Dangerous command detection with approval gate.
-- Shell timeouts and output limits.
-- API key never returned to the browser.
-- No secrets logged.
 
 ## Troubleshooting
 
-**"NVIDIA API key is not configured"**
-Set `NVIDIA_API_KEY` in `.env` or add it in Settings → API.
+- **`EADDRINUSE 8080`** — change `PORT` or `Settings → API → Port`.
+- **No providers available** — open Settings → Providers and add at least one enabled provider with a valid API key.
+- **Shell commands hang** — adjust `General → Shell timeout` and inspect the Activity → Shell tab.
+- **Web UI not loading** — make sure `npm run build` was executed so `apps/web/dist` exists; the server falls back to a placeholder page if the UI was not built.
+- **Reset database** — Settings → Database → **Reset projects/chats/runs**.
 
-**Port 8080 already in use**
-Change `PORT` in `.env`.
+## Architecture Notes
 
-**Model calls fail / rate limited**
-Retries are built in for 429 and 5xx responses. Verify the API key and provider status.
+- **State machine**: implemented in `packages/agent/src/workflow.ts`. Each role uses a tailored prompt and role-specific context (planner sees request+chat; explorer sees plan; coder sees plan+explorer; tester sees changes; reviewer sees plan+diff+tests; fixer sees review findings).
+- **Provider system**: every provider implements `AIProvider` with `chat`, `stream`, and `testConnection`. The OpenAI-compatible base class handles NVIDIA, OpenAI, OpenRouter, Ollama, and any other OpenAI-shaped API.
+- **Path safety**: every file tool uses `safeResolve(root, target)` which rejects `..` escapes and resolves symlinks.
+- **Streaming**: the workflow streams model responses to the client via an SSE bus (`/api/events`). The UI reactively renders deltas.
+- **Approvals**: when a tool needs approval, the workflow emits an `approval.required` event; the UI shows the dialog and the user's decision resumes the run.
+- **Future-friendly**: the package layout and repository design leave room for git tools, MCP, RAG, code indexing, and parallel agents.
 
-**Database file permissions**
-Ensure the `data/` directory is writable by the Node.js process.
+## Security
+
+- API keys are stored only on the server; the API returns masked versions to the UI.
+- Filesystem operations are sandboxed to each project's root directory.
+- Symlinks that escape the root are rejected.
+- Shell commands have configurable timeouts and output limits.
+- Dangerous commands are blocked by default.
+- All user input is validated server-side.
+
+---
+
+**KS AGENT** — a real, modular, extensible autonomous coding-agent platform.

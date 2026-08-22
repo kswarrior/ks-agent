@@ -1,176 +1,177 @@
 import { useState } from 'react';
-import { Project } from '../types/api';
-import { useAppState } from '../hooks/useAppState';
+import { Chat, Project } from '../types';
 
-interface SidebarProps {
-  appState: ReturnType<typeof useAppState>;
+interface Props {
+  projects: Project[];
+  chats: Record<string, Chat[]>;
+  selectedProjectId: string | null;
+  selectedChatId: string | null;
+  onSelectProject: (id: string) => void;
+  onSelectChat: (id: string) => void;
+  onCreateProject: (name: string, root_directory: string) => Promise<void>;
+  onUpdateProject: (id: string, fields: Partial<Project>) => Promise<void>;
+  onDeleteProject: (id: string) => Promise<void>;
+  onCreateChat: (projectId: string) => Promise<void>;
+  onRenameChat: (id: string, title: string) => Promise<void>;
+  onDeleteChat: (id: string) => Promise<void>;
 }
 
-export function Sidebar({ appState }: SidebarProps) {
-  const [showNewProject, setShowNewProject] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectRoot, setNewProjectRoot] = useState('');
-  const [confirmProject, setConfirmProject] = useState<Project | null>(null);
-  const [confirmChat, setConfirmChat] = useState<{ id: string; title: string; projectId: string } | null>(null);
+export function Sidebar(p: Props) {
+  const [showNew, setShowNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newRoot, setNewRoot] = useState('');
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [editProjectId, setEditProjectId] = useState<string | null>(null);
 
-  const handleCreateProject = async () => {
-    if (!newProjectName.trim() || !newProjectRoot.trim()) return;
-    await appState.createProject(newProjectName.trim(), newProjectRoot.trim());
-    setNewProjectName('');
-    setNewProjectRoot('');
-    setShowNewProject(false);
+  const submitNew = async () => {
+    if (!newName.trim() || !newRoot.trim()) return;
+    await p.onCreateProject(newName.trim(), newRoot.trim());
+    setNewName('');
+    setNewRoot('');
+    setShowNew(false);
   };
 
-  const handleNewChat = async (projectId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const chatId = await appState.createChat(projectId, 'New chat');
-    await appState.selectChat(chatId);
+  const startRenameChat = (c: Chat) => {
+    setRenameId(c.id);
+    setRenameValue(c.title);
+  };
+
+  const commitRenameChat = async () => {
+    if (renameId && renameValue.trim()) {
+      await p.onRenameChat(renameId, renameValue.trim());
+    }
+    setRenameId(null);
+    setRenameValue('');
   };
 
   return (
-    <div className="sidebar">
-      <div className="sidebar-header">
-        <button className="btn btn-small" style={{ width: '100%' }} onClick={() => setShowNewProject(true)}>
-          + New Project
+    <aside className="panel">
+      <div className="panel-header">
+        <span>Projects</span>
+        <button className="ghost" onClick={() => setShowNew((v) => !v)}>
+          + New
         </button>
       </div>
-
-      <div className="sidebar-section-title">Projects</div>
-
-      {appState.projects.length === 0 && (
-        <div className="empty-state" style={{ padding: '24px 12px', fontSize: 12 }}>
-          No projects yet. Create one to begin.
-        </div>
-      )}
-
-      {appState.projects.map((project) => (
-        <div
-          key={project.id}
-          className={`project-item ${appState.selectedProjectId === project.id ? 'active' : ''}`}
-          onClick={() => appState.selectProject(project.id)}
-        >
-          <span className="project-name">
-            <span>{project.name}</span>
-            <span className="project-actions">
-              <button className="icon-btn" title="Open directory" onClick={(e) => { e.stopPropagation(); }}>
-                f
+      <div className="panel-body compact">
+        {showNew && (
+          <div className="section" style={{ padding: 8, borderBottom: '1px solid var(--border)' }}>
+            <input
+              placeholder="Project name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              style={{ marginBottom: 6 }}
+            />
+            <input
+              placeholder="Project root directory (absolute)"
+              value={newRoot}
+              onChange={(e) => setNewRoot(e.target.value)}
+              style={{ marginBottom: 6 }}
+            />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={submitNew}>Create</button>
+              <button className="ghost" onClick={() => setShowNew(false)}>
+                Cancel
               </button>
-              <button className="icon-btn" title="Delete project" onClick={(e) => { e.stopPropagation(); setConfirmProject(project); }}>
-                x
-              </button>
-            </span>
-          </span>
-
-          <button
-            className="add-chat-btn"
-            onClick={(e) => handleNewChat(project.id, e)}
-          >
-            + New Chat
-          </button>
-
-          {project.chats && project.chats.map((chat) => (
+            </div>
+          </div>
+        )}
+        {p.projects.length === 0 && (
+          <div className="empty">
+            No projects yet.
+            <br />
+            Create one to start using KS AGENT.
+          </div>
+        )}
+        {p.projects.map((proj) => (
+          <div key={proj.id}>
             <div
-              key={chat.id}
-              className={`chat-item ${appState.selectedChatId === chat.id ? 'active' : ''}`}
-              onClick={() => appState.selectChat(chat.id)}
+              className={`sidebar-item ${p.selectedProjectId === proj.id ? 'selected' : ''}`}
+              onClick={() => p.onSelectProject(proj.id)}
+              onDoubleClick={() => {
+                setEditProjectId(proj.id);
+              }}
             >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chat.title}</span>
-              <button
-                className="icon-btn danger"
-                title="Delete chat"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmChat({ id: chat.id, title: chat.title, projectId: project.id });
-                }}
-              >
-                x
-              </button>
+              <span className="name">{proj.name}</span>
+              <span className="meta">{p.chats[proj.id]?.length ?? 0}</span>
             </div>
-          ))}
-        </div>
-      ))}
-
-      {/* New project modal */}
-      {showNewProject && (
-        <div className="modal-overlay" onClick={() => setShowNewProject(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>New Project</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Project Name</label>
-                <input
-                  className="settings-input"
-                  style={{ width: '100%' }}
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="My React App"
-                />
+            {p.selectedProjectId === proj.id && (
+              <div style={{ paddingLeft: 10 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '4px 6px',
+                  }}
+                >
+                  <span className="muted small">Chats</span>
+                  <button className="ghost small" onClick={() => p.onCreateChat(proj.id)}>
+                    + Chat
+                  </button>
+                </div>
+                {(p.chats[proj.id] ?? []).map((c) => (
+                  <div
+                    key={c.id}
+                    className={`sidebar-item ${p.selectedChatId === c.id ? 'selected' : ''}`}
+                    onClick={() => p.onSelectChat(c.id)}
+                    onDoubleClick={() => startRenameChat(c)}
+                  >
+                    {renameId === c.id ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={commitRenameChat}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitRenameChat();
+                          if (e.key === 'Escape') setRenameId(null);
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <span className="name">{c.title}</span>
+                        <button
+                          className="ghost small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            p.onDeleteChat(c.id);
+                          }}
+                        >
+                          ×
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {editProjectId === proj.id && (
+                  <div className="section" style={{ padding: 8 }}>
+                    <input
+                      defaultValue={proj.name}
+                      onBlur={(e) => {
+                        p.onUpdateProject(proj.id, { name: e.target.value });
+                        setEditProjectId(null);
+                      }}
+                      autoFocus
+                      style={{ marginBottom: 6 }}
+                    />
+                    <input
+                      defaultValue={proj.root_directory}
+                      onBlur={(e) => {
+                        p.onUpdateProject(proj.id, { root_directory: e.target.value });
+                      }}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <button className="danger" onClick={() => p.onDeleteProject(proj.id)}>
+                      Delete project
+                    </button>
+                  </div>
+                )}
               </div>
-              <div>
-                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Root Directory</label>
-                <input
-                  className="settings-input"
-                  style={{ width: '100%' }}
-                  value={newProjectRoot}
-                  onChange={(e) => setNewProjectRoot(e.target.value)}
-                  placeholder="/path/to/project"
-                />
-                <div className="settings-hint">The agent will operate in this directory.</div>
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="button-secondary" onClick={() => setShowNewProject(false)}>Cancel</button>
-              <button className="button-primary" onClick={handleCreateProject} disabled={!newProjectName || !newProjectRoot}>Create</button>
-            </div>
+            )}
           </div>
-        </div>
-      )}
-
-      {/* Confirm delete project */}
-      {confirmProject && (
-        <div className="modal-overlay" onClick={() => setConfirmProject(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Delete project?</h3>
-            <p style={{ color: 'var(--text-muted)' }}>This will permanently delete "{confirmProject.name}" and all its chats.</p>
-            <div className="modal-actions">
-              <button className="button-secondary" onClick={() => setConfirmProject(null)}>Cancel</button>
-              <button
-                className="button-primary"
-                style={{ background: 'var(--red)', color: '#000' }}
-                onClick={() => {
-                  appState.deleteProject(confirmProject.id);
-                  setConfirmProject(null);
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirm delete chat */}
-      {confirmChat && (
-        <div className="modal-overlay" onClick={() => setConfirmChat(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Delete chat?</h3>
-            <p style={{ color: 'var(--text-muted)' }}>This will permanently delete "{confirmChat.title}".</p>
-            <div className="modal-actions">
-              <button className="button-secondary" onClick={() => setConfirmChat(null)}>Cancel</button>
-              <button
-                className="button-primary"
-                style={{ background: 'var(--red)', color: '#000' }}
-                onClick={() => {
-                  appState.deleteChat(confirmChat.id);
-                  setConfirmChat(null);
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        ))}
+      </div>
+    </aside>
   );
 }

@@ -1,19 +1,19 @@
 {
   "name": "@ks-agent/ai",
-  "version": "1.0.0",
+  "version": "0.1.0",
+  "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "node ../../node_modules/typescript/bin/tsc",
-    "dev": "node ../../node_modules/typescript/bin/tsc --watch",
-    "lint": "",
-    "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit"
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@ks-agent/types": "*",
-    "@ks-agent/shared": "*"
+    "@ks-agent/shared": "*",
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0"
+    "@types/node-fetch": "^2.6.11",
+    "typescript": "^5.4.5"
   }
 }

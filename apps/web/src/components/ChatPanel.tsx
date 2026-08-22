@@ -1,176 +1,136 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { ChatInput } from './ChatInput';
-import { MessageItem } from './MessageItem';
-import { useAppState } from '../hooks/useAppState';
-import { WSEvent } from '../types/api';
-import { api } from '../utils/api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api } from '../api';
+import { Chat, Message, Project } from '../types';
 
-interface ChatPanelProps {
-  appState: ReturnType<typeof useAppState>;
-  runId: string | null;
-  onSend: (message: string) => Promise<void>;
-  events?: WSEvent[];
+interface Props {
+  project: Project | null;
+  chat: Chat | null;
+  activeRunId: string | null;
+  events: any[];
+  onRunStarted: (runId: string) => void;
+  onRunFinished: () => void;
 }
 
-export function ChatPanel({ appState, runId, onSend, events }: ChatPanelProps) {
-  const [liveEvents, setLiveEvents] = useState<WSEvent[]>([]);
-  const [pendingApproval, setPendingApproval] = useState<{
-    requestId: string;
-    toolName: string;
-    args: Record<string, unknown>;
-    reason?: string;
-  } | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const runIdRef = useRef<string | null>(null);
+export function ChatPanel(p: Props) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    runIdRef.current = runId;
-  }, [runId]);
-
-  // Watch for approval requests for the current run
-  useEffect(() => {
-    if (!events || events.length === 0 || !runIdRef.current) return;
-    const latest = events[events.length - 1];
-    if (latest.type === 'approval_request' && latest.runId === runIdRef.current) {
-      const data = latest.data || {};
-      if (data.requestId) {
-        setPendingApproval({
-          requestId: data.requestId,
-          toolName: data.toolName,
-          args: data.args || {},
-          reason: data.reason
-        });
-      }
+    if (!p.chat) {
+      setMessages([]);
+      return;
     }
-    if (latest.type === 'run_complete' || latest.type === 'run_error') {
-      if (appState.selectedChatId) {
-        appState.loadMessages(appState.selectedChatId);
-      }
+    api.listMessages(p.chat.id).then(setMessages).catch(console.error);
+  }, [p.chat?.id]);
+
+  // Apply streaming deltas
+  useEffect(() => {
+    const last = p.events[p.events.length - 1];
+    if (!last) return;
+    if (last.type === 'message.delta' && last.runId === p.activeRunId) {
+      setStreamingMessage((cur) => (cur ?? '') + last.delta);
     }
-  }, [events]);
-
-  // Auto-refresh messages when new message events arrive
-  useEffect(() => {
-    if (!events || events.length === 0 || !appState.selectedChatId) return;
-    const latest = events[events.length - 1];
-    if (latest.type === 'message' && latest.runId === runIdRef.current) {
-      const t = setTimeout(() => appState.loadMessages(appState.selectedChatId!), 300);
-      return () => clearTimeout(t);
+    if (last.type === 'message.final' && last.runId === p.activeRunId) {
+      setStreamingMessage(null);
+      if (p.chat) api.listMessages(p.chat.id).then(setMessages).catch(console.error);
     }
-  }, [events]);
+    if (last.type === 'agent_run.completed' || last.type === 'agent_run.failed') {
+      setBusy(false);
+      setStreamingMessage(null);
+      p.onRunFinished();
+      if (p.chat) api.listMessages(p.chat.id).then(setMessages).catch(console.error);
+    }
+    if (last.type === 'agent_run.started' && last.runId === p.activeRunId) {
+      setBusy(true);
+      setStreamingMessage('');
+    }
+  }, [p.events, p.activeRunId, p.chat, p.onRunFinished]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [appState.messages.length, liveEvents.length]);
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages.length, streamingMessage]);
 
-  // Poll run state while running
-  useEffect(() => {
-    if (!runId) return;
-    const timer = setInterval(async () => {
-      try {
-        const state = await api.getRunState(runId);
-        if (!state.running) {
-          // Run finished, reload messages
-          if (appState.selectedChatId) {
-            appState.loadMessages(appState.selectedChatId);
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [runId]);
-
-  const handleApprove = async () => {
-    if (pendingApproval && runIdRef.current) {
-      await api.approveRun(runIdRef.current, pendingApproval.requestId);
-      setPendingApproval(null);
+  const submit = async () => {
+    if (!p.chat || !input.trim() || busy) return;
+    const text = input.trim();
+    setInput('');
+    setBusy(true);
+    const tempUserMsg: Message = {
+      id: 'temp',
+      chat_id: p.chat.id,
+      role: 'user',
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((m) => [...m, tempUserMsg]);
+    try {
+      const { runId } = await api.startRun(p.chat.id, text);
+      p.onRunStarted(runId);
+    } catch (e: any) {
+      setBusy(false);
+      alert(`Failed to start run: ${e.message}`);
     }
   };
 
-  const handleDeny = async () => {
-    if (pendingApproval && runIdRef.current) {
-      await api.denyRun(runIdRef.current, pendingApproval.requestId);
-      setPendingApproval(null);
-    }
-  };
-
-  // Check events for approval requests and new messages
-  useEffect(() => {
-    return undefined;
-  }, []);
-
-  const projectName = appState.projects.find(p => p.id === appState.selectedProjectId)?.name || '';
+  if (!p.project || !p.chat) {
+    return (
+      <section className="center">
+        <div className="empty">Select a project and chat, or create one to begin.</div>
+      </section>
+    );
+  }
 
   return (
-    <div className="chat-panel">
-      <div className="chat-header">
-        <div>
-          <div className="chat-title">
-            {appState.chats.find(c => c.id === appState.selectedChatId)?.title || 'Chat'}
-          </div>
-          <div className="chat-meta">Project: {projectName}</div>
-        </div>
-        {appState.loading && <span className="status-chip connected">● running</span>}
-      </div>
-
-      <div className="message-list">
-        {appState.messages.length === 0 && (
-          <div className="empty-state">
-            Send a message to start the agent workflow:
-            <br />
-            <br />
-            e.g. "Add authentication to this application"
-          </div>
+    <section className="center">
+      <div className="panel-header">
+        <span>{p.project.name} · {p.chat.title}</span>
+        {busy && (
+          <span className="status-pill">
+            <span className="spinner" />
+            Agent running
+          </span>
         )}
-
-        {appState.messages.map((msg) => (
-          <MessageItem key={msg.id} message={msg} />
+      </div>
+      <div className="messages" ref={scrollRef}>
+        {messages.map((m) => (
+          <div key={m.id} className={`message ${m.role}`}>
+            <div className="role">{m.role}</div>
+            <div>{m.content}</div>
+          </div>
         ))}
-
-        {pendingApproval && (
-          <div className="message">
-            <div className="tool-call" style={{ borderColor: 'var(--yellow)' }}>
-              <div className="tool-call-header">
-                <span className="tool-name">Approval required</span>
-                <span className="tool-status running">waiting</span>
-              </div>
-              <div className="tool-call-body">
-                The agent wants to run: {pendingApproval.toolName}
-                {pendingApproval.reason ? `\nReason: ${pendingApproval.reason}` : ''}
-                {"\n\n"}{JSON.stringify(pendingApproval.args, null, 2)}
-              </div>
-              <div style={{ display: 'flex', gap: 8, padding: 10 }}>
-                <button className="btn btn-small" style={{ background: '#fff' }} onClick={handleApprove}>Allow</button>
-                <button className="btn btn-small btn-secondary" onClick={handleDeny}>Deny</button>
-              </div>
-            </div>
+        {streamingMessage !== null && (
+          <div className="message assistant">
+            <div className="role">assistant (streaming)</div>
+            <div>{streamingMessage || <span className="spinner" />}</div>
           </div>
         )}
-
-        {appState.loading && (
-          <div className="message message-assistant">
-            <div className="message-role-label">KS Agent</div>
-            <div className="message-bubble">
-              <span className="status-chip connected">● Working...</span>
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
       </div>
-
-      <ChatInput onSend={onSend} disabled={appState.loading} />
-
-      {appState.error && (
-        <div style={{ padding: '0 18px 10px' }}>
-          <span style={{ color: 'var(--red)', fontSize: 12 }}>Error: {appState.error}</span>
-          <button className="btn btn-small btn-secondary" style={{ marginLeft: 8 }} onClick={() => appState.setError(null)}>
-            Dismiss
+      <div className="composer">
+        <textarea
+          placeholder={`Ask KS AGENT to modify ${p.project.name}…`}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button onClick={submit} disabled={busy || !input.trim()}>
+            Send
           </button>
+          {p.activeRunId && (
+            <button className="ghost" onClick={() => api.cancelRun(p.activeRunId!)}>
+              Cancel
+            </button>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </section>
   );
 }

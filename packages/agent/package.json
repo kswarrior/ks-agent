@@ -1,13 +1,11 @@
 {
   "name": "@ks-agent/agent",
-  "version": "1.0.0",
+  "version": "0.1.0",
+  "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "node ../../node_modules/typescript/bin/tsc",
-    "dev": "node ../../node_modules/typescript/bin/tsc --watch",
-    "lint": "",
-    "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit"
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@ks-agent/types": "*",
@@ -17,7 +15,6 @@
     "@ks-agent/database": "*"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.5"
   }
 }

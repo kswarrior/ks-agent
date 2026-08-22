@@ -1,28 +1,24 @@
 {
   "name": "ks-agent",
-  "version": "1.0.0",
-  "description": "KS AGENT - Multi-model autonomous coding agent",
+  "version": "0.1.0",
   "private": true,
+  "description": "KS AGENT - Production AI Coding Agent",
+  "scripts": {
+    "postinstall": "bash scripts/fix-workspace.sh",
+    "setup": "bash scripts/fix-workspace.sh",
+    "dev": "bash scripts/fix-workspace.sh && concurrently -k -n server,web -c yellow,cyan \"bash scripts/run-dev.sh server\" \"bash scripts/run-dev.sh web\"",
+    "dev:server": "bash scripts/run-dev.sh server",
+    "dev:web": "bash scripts/run-dev.sh web",
+    "build": "bash scripts/build-all.sh",
+    "start": "bash scripts/run-prod.sh",
+    "build:packages": "bash scripts/build-packages.sh"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
-  "scripts": {
-    "dev": "node node_modules/concurrently/dist/bin/concurrently.js \"npm run dev:server\" \"npm run dev:web\"",
-    "dev:server": "npm run dev --workspace=apps/server",
-    "dev:web": "npm run dev --workspace=apps/web",
-    "build": "npm run build --workspaces",
-    "build:server": "npm run build --workspace=apps/server",
-    "build:web": "npm run build --workspace=apps/web",
-    "start": "npm run start --workspace=apps/server",
-    "db:migrate": "npm run db:migrate --workspace=apps/server",
-    "typecheck": "npm run typecheck --workspaces"
-  },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "typescript": "^5.4.0"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "typescript": "^5.9.0"
   }
 }
