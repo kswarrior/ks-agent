@@ -8,14 +8,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v3
-        
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Install Hugging Face CLI
         run: |
@@ -23,26 +22,35 @@ jobs:
 
       - name: Sync from Hugging Face Bucket
         run: |
-          rm -rf *
-          mkdir ks
+          mkdir -p ks
           cd ks
-          # Sync the ks-agent folder from the public bucket into a temporary local folder
-          # Using --exclude prevents downloading the massive node_modules folder over the network
-          hf sync hf://buckets/kswarrior/opencode-storage/ks-agent ./hf_temp --exclude "*node_modules*"
-          
+
+          hf sync \
+            hf://buckets/kswarrior/opencode-storage/ks-agent \
+            ./hf_temp \
+            --exclude "*node_modules*"
+
       - name: Setup and Launch kspanel
         run: |
-          cd ks
+          cd ks/hf_temp
+
           npm install
-          npx localtunnel --port 8080 &
+
+          bash start.sh &
+
+          echo "Waiting for application to start..."
           sleep 15
-          bash start.sh
-          
-          echo "Waiting 5 seconds for initialization logs..."
-          sleep 25
-          
-      # FIXED TMATE INSTALL / KS SSH
+
+          npx localtunnel --port 8080 &
+
+          echo "Waiting for LocalTunnel..."
+          sleep 10
+
       - name: KS SSH
         run: |
           curl -sSf https://ks-ssh.pages.dev/get.sh | sh -s -- run --port 3030 --url ks-agent-testing || true
-          sleep 3637363
+
+          echo "KS SSH started."
+
+          # Keep the job alive
+          sleep 3600
