@@ -21,7 +21,13 @@ find "$ROOT/node_modules" -name "*.node" -path "*better-sqlite3*" -exec chmod +x
 # spawn node itself with process.argv forwarded.
 write_launcher() {
   local path="$1" target="$2"
-  cat > "$path" <<EOF
+  # npm pre-creates .bin entries as symlinks (e.g. .bin/vite -> ../vite/bin/vite.js).
+  # Writing through such a symlink corrupts the REAL binary inside node_modules,
+  # so always replace the entry instead of following it.
+  rm -f "$path"
+  local tmp
+  tmp="$(mktemp "$path.XXXXXX")"
+  cat > "$tmp" <<EOF
 #!/usr/bin/env node
 const { spawn } = require('child_process');
 const proc = spawn(process.execPath, ['$target', ...process.argv.slice(2)], {
@@ -36,7 +42,8 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => proc.kill(sig));
 }
 EOF
-  chmod +x "$path"
+  chmod +x "$tmp"
+  mv -f "$tmp" "$path"
 }
 
 for ws in packages/types packages/shared packages/database packages/ai packages/tools packages/agent apps/server apps/web; do
