@@ -30,11 +30,14 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
-      - name: Configure Small Swap Space (4GB)
+      - name: Configure Large Swap Space (20GB) & Memory Overcommit
         run: |
+          # Allow virtual memory overcommit for large llama.cpp allocations
+          sudo sysctl -w vm.overcommit_memory=1
+
           sudo swapoff -a || true
           sudo rm -f /swapfile /mnt/swapfile
-          sudo fallocate -l 4G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=4096
+          sudo fallocate -l 20G /mnt/swapfile || sudo dd if=/dev/zero of=/mnt/swapfile bs=1M count=20480
           sudo chmod 600 /mnt/swapfile
           sudo mkswap /mnt/swapfile
           sudo swapon /mnt/swapfile
@@ -55,7 +58,6 @@ jobs:
           HF_HUB_ENABLE_HF_TRANSFER: "0"
         run: |
           mkdir -p ./models
-          # Using --no-cache-dir or direct local-dir to prevent space duplication
           python3 -c "
           from huggingface_hub import snapshot_download
           snapshot_download(
@@ -74,5 +76,5 @@ jobs:
             -m "$MODEL_PATH" \
             -p "hi" \
             -n 64 \
-            --ctx-size 2048 \
+            --ctx-size 1024 \
             --mmap
