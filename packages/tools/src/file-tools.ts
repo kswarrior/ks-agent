@@ -50,6 +50,18 @@ export const TOOL_DEFINITIONS: ToolDefinitionLite[] = [
     },
   ),
   fileToolDef(
+    'shell',
+    'Execute a shell command in the project root (build, install dependencies, run tests). Has a timeout and output limits.',
+    {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'The shell command to execute' },
+        timeout_ms: { type: 'integer', description: 'Optional timeout in milliseconds' },
+      },
+      required: ['command'],
+    },
+  ),
+  fileToolDef(
     'read_file',
     'Read the contents of a file. Path must be inside the project root.',
     {
@@ -302,7 +314,9 @@ export async function searchCodeTool(
   }
   let regex: RegExp;
   try {
-    regex = new RegExp(args.pattern, 'gm');
+    // No 'g' flag: lastIndex state from .test() can skip matches; we test
+    // every line independently.
+    regex = new RegExp(args.pattern, 'm');
   } catch (e: any) {
     return { ok: false, output: '', error: `Invalid regex: ${e?.message ?? String(e)}` };
   }
@@ -343,10 +357,10 @@ export async function searchCodeTool(
       const lines = text.split(/\r?\n/);
       for (let i = 0; i < lines.length; i++) {
         if (matches.length >= max) return;
+        regex.lastIndex = 0;
         if (regex.test(lines[i])) {
           const rel = path.relative(rootDir, full);
           matches.push(`${rel}:${i + 1}:${lines[i]}`);
-          regex.lastIndex = 0;
         }
       }
     }

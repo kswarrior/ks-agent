@@ -83,19 +83,19 @@ Open `http://localhost:8080` (the server serves the built web UI).
 
 ## Default Models
 
-By default, every role uses NVIDIA via `https://integrate.api.nvidia.com/v1`. Configure the actual model IDs in **Settings → Models**. The plan calls for:
+By default, every role uses the NVIDIA provider via `https://integrate.api.nvidia.com/v1`, with per-role defaults matching the product spec:
 
-| Role | Default |
+| Role | Default model |
 | --- | --- |
-| Planner | Nemotron (NVIDIA) |
-| Explorer | Nemotron (NVIDIA) |
+| Planner | Nemotron 3 Ultra |
+| Explorer | Nemotron 3.5 Lightning 30B-A3B |
 | Coder | Step 3.7 Flash |
-| Test Agent | Nemotron (NVIDIA) |
-| Reviewer | Nemotron (NVIDIA) |
+| Test Agent | Nemotron 3.5 Lightning 30B-A3B |
+| Reviewer | Nemotron 3 Ultra |
 | Fixer | Step 3.7 Flash |
-| Final Tester | Nemotron (NVIDIA) |
+| Final Tester | Nemotron 3.5 Lightning 30B-A3B |
 
-Every role is fully configurable from the UI.
+Every role's provider, model ID, temperature, and max tokens are fully configurable from **Settings → Models**.
 
 ## Custom Providers
 
@@ -112,6 +112,11 @@ Add any OpenAI-compatible provider:
 3. Optional: Chat endpoint override, Auth header, Custom headers, Streaming, Temperature, Max tokens, Context limit, Timeout.
 4. Click **Test** to verify connectivity.
 5. Use **Settings → Models** to assign this provider to any role.
+
+### API key handling
+
+- API keys are stored only in the backend SQLite database and are **never** returned to the UI — list/save responses always show `********`.
+- When editing a provider, leaving the field as `********` means "keep the existing key"; type a new value to replace it, or clear it to remove the key.
 
 ### Examples
 
@@ -206,11 +211,11 @@ PORT=8080 DATABASE_PATH=/var/lib/ks-agent/ks-agent.db npm run start
 
 ## Architecture Notes
 
-- **State machine**: implemented in `packages/agent/src/workflow.ts`. Each role uses a tailored prompt and role-specific context (planner sees request+chat; explorer sees plan; coder sees plan+explorer; tester sees changes; reviewer sees plan+diff+tests; fixer sees review findings).
+- **State machine**: implemented in `packages/agent/src/workflow.ts`. Each role uses a tailored prompt and role-specific context (planner sees request+chat; explorer sees plan; coder sees plan+explorer; tester sees the change digest — real diffs + command results; reviewer sees requirements+diff+tests; fixer sees review findings+failures+diff).
 - **Provider system**: every provider implements `AIProvider` with `chat`, `stream`, and `testConnection`. The OpenAI-compatible base class handles NVIDIA, OpenAI, OpenRouter, Ollama, and any other OpenAI-shaped API.
 - **Path safety**: every file tool uses `safeResolve(root, target)` which rejects `..` escapes and resolves symlinks.
-- **Streaming**: the workflow streams model responses to the client via an SSE bus (`/api/events`). The UI reactively renders deltas.
-- **Approvals**: when a tool needs approval, the workflow emits an `approval.required` event; the UI shows the dialog and the user's decision resumes the run.
+- **Streaming**: model responses stream to the UI as `message.delta` events over SSE (`/api/events`), alongside agent state changes, step updates, and live tool output. Cancelling a run aborts in-flight HTTP requests via `AbortSignal`.
+- **Approvals**: when a tool needs approval, the run enters `WAITING_FOR_USER`, the tool call is marked `awaiting_approval`, and the UI shows an Approve/Deny dialog. Cancelling the run resolves pending approvals immediately.
 - **Future-friendly**: the package layout and repository design leave room for git tools, MCP, RAG, code indexing, and parallel agents.
 
 ## Security

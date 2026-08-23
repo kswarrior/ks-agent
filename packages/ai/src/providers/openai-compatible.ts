@@ -67,6 +67,7 @@ export class OpenAICompatibleProvider implements AIProvider {
       headers,
       body: JSON.stringify(body),
       timeoutMs: settings.timeout * 1000,
+      signal: req.signal,
     });
     return this.parseResponse(data, req.model || settings.model_id);
   }
@@ -83,6 +84,7 @@ export class OpenAICompatibleProvider implements AIProvider {
       headers,
       body: JSON.stringify(body),
       timeoutMs: settings.timeout * 1000,
+      signal: req.signal,
     });
     const modelId = req.model || settings.model_id;
     for await (const evt of iter) {

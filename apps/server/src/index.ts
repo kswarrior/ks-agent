@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import express from 'express';
 import cors from 'cors';
-import { openDatabase } from '@ks-agent/database';
+import { closeDatabase, openDatabase } from '@ks-agent/database';
 import { logger, randomId } from '@ks-agent/shared';
 import {
   AgentRunsRepo,
@@ -24,68 +24,66 @@ import { AgentWorkflow } from '@ks-agent/agent';
 import { registerRoutes } from './routes';
 import { ProviderSettings, ToolApprovalRequest } from '@ks-agent/types';
 
-// Ensure NVIDIA default provider exists
+// Seed default providers only on first run (empty table) so user deletions
+// are permanent. Existing configuration is never overwritten.
 function ensureDefaultProviders(db: any) {
   const list = ProvidersRepo.list(db);
-  const hasNvidia = list.some((p) => p.type === 'nvidia');
+  if (list.length > 0) return;
   const ts = new Date().toISOString();
-  if (!hasNvidia) {
-    ProvidersRepo.upsert(db, {
-      id: 'prov_nvidia_default',
-      name: 'NVIDIA',
-      type: 'nvidia',
-      base_url: 'https://integrate.api.nvidia.com/v1',
-      api_key: process.env.NVIDIA_API_KEY ?? '',
-      model_id: 'nvidia/llama-3.1-nemotron-70b-instruct',
-      model_name: 'Nemotron',
-      chat_endpoint: '',
-      streaming: true,
-      auth_header: 'Authorization',
-      custom_headers: '',
-      temperature: 0.2,
-      max_tokens: 4096,
-      context_limit: 32000,
-      timeout: 120,
-      builtin: true,
-      enabled: true,
-    } as ProviderSettings);
-  }
-  const hasOpenAI = list.some((p) => p.type === 'openai-compatible');
-  if (!hasNvidia && !hasOpenAI) {
-    ProvidersRepo.upsert(db, {
-      id: 'prov_openai_default',
-      name: 'OpenAI Compatible',
-      type: 'openai-compatible',
-      base_url: 'https://api.openai.com/v1',
-      api_key: '',
-      model_id: 'gpt-4o-mini',
-      model_name: 'GPT-4o mini',
-      chat_endpoint: '',
-      streaming: true,
-      auth_header: 'Authorization',
-      custom_headers: '',
-      temperature: 0.2,
-      max_tokens: 4096,
-      context_limit: 32000,
-      timeout: 120,
-      builtin: true,
-      enabled: true,
-    } as ProviderSettings);
-  }
+  ProvidersRepo.upsert(db, {
+    id: 'prov_nvidia_default',
+    name: 'NVIDIA',
+    type: 'nvidia',
+    base_url: 'https://integrate.api.nvidia.com/v1',
+    api_key: process.env.NVIDIA_API_KEY ?? '',
+    model_id: 'nvidia/nemotron-3-ultra',
+    model_name: 'Nemotron 3 Ultra',
+    chat_endpoint: '',
+    streaming: true,
+    auth_header: 'Authorization',
+    custom_headers: '',
+    temperature: 0.2,
+    max_tokens: 4096,
+    context_limit: 32000,
+    timeout: 120,
+    builtin: true,
+    enabled: true,
+  } as ProviderSettings);
+  ProvidersRepo.upsert(db, {
+    id: 'prov_openai_default',
+    name: 'OpenAI Compatible',
+    type: 'openai-compatible',
+    base_url: 'https://api.openai.com/v1',
+    api_key: '',
+    model_id: 'gpt-4o-mini',
+    model_name: 'GPT-4o mini',
+    chat_endpoint: '',
+    streaming: true,
+    auth_header: 'Authorization',
+    custom_headers: '',
+    temperature: 0.2,
+    max_tokens: 4096,
+    context_limit: 32000,
+    timeout: 120,
+    builtin: true,
+    enabled: true,
+  } as ProviderSettings);
 }
 
 function ensureDefaultModels(db: any) {
   const list = ModelsRepo.list(db);
-  const roles = ['planner', 'explorer', 'coder', 'tester', 'reviewer', 'fixer', 'finalTester'];
-  const defaults: Record<string, { provider: string; model: string }> = {
-    planner: { provider: 'prov_nvidia_default', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
-    explorer: { provider: 'prov_nvidia_default', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
-    coder: { provider: 'prov_nvidia_default', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
-    tester: { provider: 'prov_nvidia_default', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
-    reviewer: { provider: 'prov_nvidia_default', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
-    fixer: { provider: 'prov_nvidia_default', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
-    finalTester: { provider: 'prov_nvidia_default', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
+  // Default models per plan §3 — every role stays fully configurable in Settings.
+  const NVIDIA = 'prov_nvidia_default';
+  const defaults: Record<string, { provider: string; model: string; name: string }> = {
+    planner: { provider: NVIDIA, model: 'nvidia/nemotron-3-ultra', name: 'Nemotron 3 Ultra' },
+    explorer: { provider: NVIDIA, model: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B-A3B' },
+    coder: { provider: NVIDIA, model: 'step/step-3.7-flash', name: 'Step 3.7 Flash' },
+    tester: { provider: NVIDIA, model: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B-A3B' },
+    reviewer: { provider: NVIDIA, model: 'nvidia/nemotron-3-ultra', name: 'Nemotron 3 Ultra' },
+    fixer: { provider: NVIDIA, model: 'step/step-3.7-flash', name: 'Step 3.7 Flash' },
+    finalTester: { provider: NVIDIA, model: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B-A3B' },
   };
+  const roles = Object.keys(defaults);
   const ts = new Date().toISOString();
   for (const role of roles) {
     if (!list.find((m: any) => m.role === role)) {
@@ -176,9 +174,24 @@ async function main() {
     }
   });
 
-  app.listen(port, host, () => {
+  const server = app.listen(port, host, () => {
     logger.info(`KS AGENT server listening at http://${host}:${port}`, undefined, 'server');
   });
+
+  const shutdown = (signal: string) => {
+    logger.info(`${signal} received, shutting down`, undefined, 'server');
+    server.close(() => {
+      try {
+        closeDatabase();
+      } catch (_e) {
+        // ignore
+      }
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 3000).unref();
+  };
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 main().catch((e) => {

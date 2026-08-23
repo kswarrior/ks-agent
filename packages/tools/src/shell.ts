@@ -52,12 +52,13 @@ export class ShellRunner {
         } catch (_e) {
           // ignore
         }
+        // Grace period, then force-kill. proc.killed is true immediately
+        // after SIGTERM, so it cannot be used to decide here; killing an
+        // exited process is a harmless no-op (ESRCH is caught).
         setTimeout(() => {
-          if (!proc.killed) {
-            try {
-              proc.kill('SIGKILL');
-            } catch (_e) {}
-          }
+          try {
+            proc.kill('SIGKILL');
+          } catch (_e) {}
         }, 1500);
       }, opts.timeoutMs);
 

@@ -18,14 +18,26 @@ function splitLines(text: string): string[] {
   return text.split(/\r?\n/);
 }
 
+/** Beyond this many lines per side, LCS is O(n²) in time/memory — fall back to a coarse diff. */
+const MAX_LCS_LINES = 4000;
+
 /**
- * Compute a minimal line-level diff using LCS.
+ * Compute a minimal line-level diff using LCS. For very large inputs it
+ * degrades gracefully to a remove-all/add-all diff instead of exhausting
+ * memory.
  */
 export function computeDiff(before: string, after: string): DiffResult {
   const a = splitLines(before);
   const b = splitLines(after);
   const m = a.length;
   const n = b.length;
+
+  if (m > MAX_LCS_LINES || n > MAX_LCS_LINES) {
+    const lines: DiffLine[] = [];
+    for (let i = 0; i < m; i++) lines.push({ type: 'remove', text: a[i], oldLine: i + 1 });
+    for (let j = 0; j < n; j++) lines.push({ type: 'add', text: b[j], newLine: j + 1 });
+    return { before, after, lines, added: n, removed: m };
+  }
 
   // LCS dp matrix
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));

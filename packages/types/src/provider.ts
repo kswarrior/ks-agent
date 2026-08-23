@@ -36,6 +36,8 @@ export interface ChatRequest {
   stream?: boolean;
   stop?: string[];
   tools?: ToolDefinition[];
+  /** Optional cancellation signal; honored by providers when supported. */
+  signal?: AbortSignal;
 }
 
 export interface ChatResponse {

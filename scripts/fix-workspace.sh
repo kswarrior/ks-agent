@@ -11,50 +11,52 @@ for pkg in types shared database ai tools agent; do
   ln -sf "$ROOT/packages/$pkg" "$ROOT/node_modules/@ks-agent/$pkg"
 done
 
+# Ensure native binaries keep their exec bits (npm can strip them).
+chmod +x "$ROOT"/node_modules/@esbuild/*/bin/esbuild 2>/dev/null || true
+chmod +x "$ROOT"/node_modules/esbuild/bin/esbuild 2>/dev/null || true
+find "$ROOT/node_modules" -name "*.node" -path "*better-sqlite3*" -exec chmod +x {} \; 2>/dev/null || true
+
+# Write a launcher that works for both CJS and ESM entry points.
+# require() crashes on ESM-only entries (ERR_REQUIRE_ASYNC_MODULE), so we
+# spawn node itself with process.argv forwarded.
+write_launcher() {
+  local path="$1" target="$2"
+  cat > "$path" <<EOF
+#!/usr/bin/env node
+const { spawn } = require('child_process');
+const proc = spawn(process.execPath, ['$target', ...process.argv.slice(2)], {
+  stdio: 'inherit',
+  env: process.env,
+});
+proc.on('exit', (code, signal) => {
+  if (signal) process.kill(process.pid, signal);
+  else process.exitCode = code ?? 0;
+});
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => proc.kill(sig));
+}
+EOF
+  chmod +x "$path"
+}
+
 for ws in packages/types packages/shared packages/database packages/ai packages/tools packages/agent apps/server apps/web; do
   mkdir -p "$ws/node_modules/.bin"
-  cat > "$ws/node_modules/.bin/tsc" <<EOF
-#!/usr/bin/env node
-require("$ROOT/node_modules/typescript/lib/tsc.js");
-EOF
-  chmod +x "$ws/node_modules/.bin/tsc"
+  write_launcher "$ws/node_modules/.bin/tsc" "$ROOT/node_modules/typescript/lib/tsc.js"
   if [ -f "$ROOT/node_modules/vite/bin/vite.js" ]; then
-    cat > "$ws/node_modules/.bin/vite" <<EOF
-#!/usr/bin/env node
-require("$ROOT/node_modules/vite/bin/vite.js");
-EOF
-    chmod +x "$ws/node_modules/.bin/vite"
+    write_launcher "$ws/node_modules/.bin/vite" "$ROOT/node_modules/vite/bin/vite.js"
   fi
 done
 
 # Root .bin wrappers
 mkdir -p "$ROOT/node_modules/.bin"
-if [ ! -x "$ROOT/node_modules/.bin/tsc" ]; then
-  cat > "$ROOT/node_modules/.bin/tsc" <<EOF
-#!/usr/bin/env node
-require("$ROOT/node_modules/typescript/lib/tsc.js");
-EOF
-  chmod +x "$ROOT/node_modules/.bin/tsc"
+write_launcher "$ROOT/node_modules/.bin/tsc" "$ROOT/node_modules/typescript/lib/tsc.js"
+if [ -f "$ROOT/node_modules/vite/bin/vite.js" ]; then
+  write_launcher "$ROOT/node_modules/.bin/vite" "$ROOT/node_modules/vite/bin/vite.js"
 fi
-if [ ! -x "$ROOT/node_modules/.bin/vite" ] && [ -f "$ROOT/node_modules/vite/bin/vite.js" ]; then
-  cat > "$ROOT/node_modules/.bin/vite" <<EOF
-#!/usr/bin/env node
-require("$ROOT/node_modules/vite/bin/vite.js");
-EOF
-  chmod +x "$ROOT/node_modules/.bin/vite"
+if [ -f "$ROOT/node_modules/concurrently/dist/bin/concurrently.js" ]; then
+  write_launcher "$ROOT/node_modules/.bin/concurrently" "$ROOT/node_modules/concurrently/dist/bin/concurrently.js"
 fi
-if [ ! -x "$ROOT/node_modules/.bin/concurrently" ] && [ -f "$ROOT/node_modules/concurrently/dist/bin/concurrently.js" ]; then
-  cat > "$ROOT/node_modules/.bin/concurrently" <<EOF
-#!/usr/bin/env node
-require("$ROOT/node_modules/concurrently/dist/bin/concurrently.js");
-EOF
-  chmod +x "$ROOT/node_modules/.bin/concurrently"
-fi
-if [ ! -x "$ROOT/node_modules/.bin/ts-node-dev" ] && [ -f "$ROOT/node_modules/ts-node-dev/lib/bin.js" ]; then
-  cat > "$ROOT/node_modules/.bin/ts-node-dev" <<EOF
-#!/usr/bin/env node
-require("$ROOT/node_modules/ts-node-dev/lib/bin.js");
-EOF
-  chmod +x "$ROOT/node_modules/.bin/ts-node-dev"
+if [ -f "$ROOT/node_modules/ts-node-dev/lib/bin.js" ]; then
+  write_launcher "$ROOT/node_modules/.bin/ts-node-dev" "$ROOT/node_modules/ts-node-dev/lib/bin.js"
 fi
 echo "Workspace symlinks configured."

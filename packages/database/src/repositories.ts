@@ -329,6 +329,12 @@ export const ToolCallsRepo = {
       id,
     );
   },
+  setApproved(db: DB, id: string, approved: boolean) {
+    db.prepare(`UPDATE tool_calls SET approved = ? WHERE id = ?`).run(
+      approved ? 1 : 0,
+      id,
+    );
+  },
   appendResult(db: DB, id: string, chunk: string) {
     const cur = this.get(db, id);
     if (!cur) return;

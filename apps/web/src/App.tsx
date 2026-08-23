@@ -22,8 +22,9 @@ export function App() {
   const refreshProjects = useCallback(async () => {
     const list = await api.listProjects();
     setProjects(list);
-    if (!selectedProjectId && list.length) setSelectedProjectId(list[0].id);
-  }, [selectedProjectId]);
+    // Auto-select the first project only when nothing is selected yet.
+    setSelectedProjectId((cur) => cur ?? list[0]?.id ?? null);
+  }, []);
 
   const refreshChats = useCallback(async (projectId: string) => {
     const list = await api.listChats(projectId);
@@ -143,6 +144,9 @@ export function App() {
     await refreshApprovals();
   };
 
+  const onRunStarted = useCallback((id: string) => setActiveRunId(id), []);
+  const onRunFinished = useCallback(() => setActiveRunId(null), []);
+
   const activeProject = useMemo(
     () => projects.find((p) => p.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
@@ -211,8 +215,8 @@ export function App() {
             chat={activeChat}
             activeRunId={activeRunId}
             events={events}
-            onRunStarted={(id) => setActiveRunId(id)}
-            onRunFinished={() => setActiveRunId(null)}
+            onRunStarted={onRunStarted}
+            onRunFinished={onRunFinished}
           />
           <ActivityPanel
             project={activeProject}

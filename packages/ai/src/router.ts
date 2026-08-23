@@ -33,7 +33,9 @@ class AnthropicProvider implements AIProvider {
         max_tokens: req.max_tokens ?? settings.max_tokens,
         temperature: req.temperature ?? settings.temperature,
       }),
-      signal: AbortSignal.timeout(settings.timeout * 1000),
+      signal: req.signal
+        ? AbortSignal.any([AbortSignal.timeout(settings.timeout * 1000), req.signal])
+        : AbortSignal.timeout(settings.timeout * 1000),
     });
     const data: any = await res.json();
     if (!res.ok) throw new Error(`Anthropic error: ${JSON.stringify(data)}`);
@@ -113,7 +115,9 @@ class GoogleProvider implements AIProvider {
           maxOutputTokens: req.max_tokens ?? settings.max_tokens,
         },
       }),
-      signal: AbortSignal.timeout(settings.timeout * 1000),
+      signal: req.signal
+        ? AbortSignal.any([AbortSignal.timeout(settings.timeout * 1000), req.signal])
+        : AbortSignal.timeout(settings.timeout * 1000),
     });
     const data: any = await res.json();
     if (!res.ok) throw new Error(`Google error: ${JSON.stringify(data)}`);
