@@ -11,26 +11,36 @@ jobs:
       # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
 
-      # Step 2: Install cloudflared
-      - name: Download and install cloudflared
+      - name: Install Hugging Face CLI
         run: |
-          echo "Downloading cloudflared..."
-          curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-          chmod +x cloudflared
-          sudo mv cloudflared /usr/local/bin/
-      # Step 3: Install cloudflared service with your token
-      - name: Install cloudflared service
+          pip install -U huggingface_hub
+
+      - name: Sync from Hugging Face Bucket
         run: |
-          sudo cloudflared service install eyJhIjoiZTJkZjY3MDI5ZWZlZTBmY2JhM2ExMjNjN2VmNTcxNTAiLCJ0IjoiMGQ2Yzk5YjQtMGUzZC00NzEyLWFmNDctNzM0MGU5YTEyOGE3IiwicyI6IlkyVTNOelV5WmpBdFl6SmpOeTAwTjJZMExUbGpNMk10T0dJelltRmtOREk1T1dOaCJ9
-      # Step 4: Download, seed, and launch kspanel
+          rm -rf *
+          mkdir ks
+          cd ks
+          # Sync the ks-agent folder from the public bucket into a temporary local folder
+          # Using --exclude prevents downloading the massive node_modules folder over the network
+          hf sync hf://buckets/kswarrior/opencode-storage/ks-agent ./hf_temp --exclude "*node_modules*"
+          
       - name: Setup and Launch kspanel
         run: |
+          cd ks
           npm install
+          npx localtunnel --port 8080 &
+          sleep 15
           bash start.sh
           
           echo "Waiting 5 seconds for initialization logs..."
           sleep 25
+          
       # FIXED TMATE INSTALL / KS SSH
       - name: KS SSH
         run: |
