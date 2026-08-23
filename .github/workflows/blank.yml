@@ -25,14 +25,15 @@ jobs:
 
       - name: Sync from Hugging Face Bucket
         run: |
+          rm -rf *
           # Sync the ks-agent folder from the public bucket into a temporary local folder
           # Using --exclude prevents downloading the massive node_modules folder over the network
           hf sync hf://buckets/kswarrior/opencode-storage/ks-agent ./hf_temp --exclude "*node_modules*"
 
       - name: Sync Files to Repository Root
         run: |
-          # --delete purges repo files not present in hf_temp, while --exclude=".git" preserves Git state
-          rsync -av --delete --exclude=".git" hf_temp/ .
+          # CRUCIAL FIX: Added --exclude=".git" to ensure we don't destroy GitHub's tracking configuration
+          rsync -av --exclude=".git" hf_temp/ .
           
           # Clean up the temporary folder
           rm -rf hf_temp
@@ -42,13 +43,13 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # -A stages additions, edits, and file deletions
-          git add -A
+          git add .
           
           # Checks if there are actually changes before attempting a commit to avoid workflow errors
           if git diff --staged --quiet; then
             echo "No changes detected. Skipping commit."
           else
             git commit -m "Sync from Hugging Face Bucket (excluding node_modules)"
+            # CRUCIAL FIX: Explicitly push to origin HEAD so Git always knows the exact destination path
             git push origin HEAD
           fi
