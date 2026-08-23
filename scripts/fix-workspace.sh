@@ -3,7 +3,7 @@
 # 1. Each workspace's node_modules/.bin has a tsc link.
 # 2. node_modules/@ks-agent/* points to packages/* so require() works.
 set -e
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 mkdir -p node_modules/@ks-agent

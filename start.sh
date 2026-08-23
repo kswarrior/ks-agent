@@ -3,6 +3,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+bash scripts/fix-workspace.sh
+
 ensure_bin() {
   mkdir -p node_modules/.bin
   # Link workspace binaries (hoisted but no .bin by default)
@@ -17,18 +19,23 @@ ensure_bin() {
 }
 ensure_bin
 
-NODE_TS="node node_modules/.bin/tsc"
+chmod +x "$SCRIPT_DIR/node_modules/@esbuild/linux-x64/bin/esbuild" 2>/dev/null || true
+
+NODE_TS="node $SCRIPT_DIR/node_modules/.bin/tsc"
+VITE_BIN="$SCRIPT_DIR/node_modules/vite/bin/vite.js"
 
 echo "=== Building packages ==="
 for p in packages/types packages/shared packages/database packages/ai packages/tools packages/agent; do
-  (cd "$p" && $NODE_TS -b tsconfig.json) && echo "  ok $p"
+  rm -rf "$SCRIPT_DIR/$p/dist" "$SCRIPT_DIR/$p/tsconfig.tsbuildinfo"
+  ($NODE_TS -p "$SCRIPT_DIR/$p/tsconfig.json") && echo "  ok $p"
 done
 
 echo "=== Building server ==="
-(cd apps/server && $NODE_TS -p tsconfig.json)
+rm -rf "$SCRIPT_DIR/apps/server/dist" "$SCRIPT_DIR/apps/server/tsconfig.tsbuildinfo"
+($NODE_TS -p "$SCRIPT_DIR/apps/server/tsconfig.json")
 
 echo "=== Building web UI ==="
-(cd apps/web && node node_modules/vite/bin/vite.js build)
+(cd apps/web && node "$VITE_BIN" build)
 
 echo "=== Starting server ==="
 export PORT="${PORT:-8080}"
