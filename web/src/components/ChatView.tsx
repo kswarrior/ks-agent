@@ -251,8 +251,10 @@ export function ChatView(props: Props) {
                         </div>
                       )}
                     </div>
-                  </div>
+                    </div>
+                  )}
                   <div className="model-dd-list">
+                    {props.models.length === 0 && (
                       <div style={{ padding: '12px' }}>
                         <div className="dd-empty">No models configured.</div>
                         <button
