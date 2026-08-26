@@ -539,6 +539,34 @@ app.patch('/api/settings/plan-prompt', async (c) => {
   return c.json({ ok: true, planPrompt })
 })
 
+// ---------------- Settings: retry ----------------
+
+app.get('/api/settings/retry', (c) => {
+  return c.json(getRetrySettings())
+})
+
+app.patch('/api/settings/retry', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const allowedKeys = ['enabled', 'maxRetries', 'baseDelayMs', 'maxDelayMs', 'retryOnStatusCodes', 'stopOnStatusCodes'] as const
+  const patch: Partial<RetrySettings> = {}
+  for (const key of allowedKeys) {
+    if (body[key] !== undefined) {
+      const val = body[key]
+      if (key === 'enabled') patch.enabled = Boolean(val)
+      else if (key === 'maxRetries') patch.maxRetries = Math.max(0, Math.min(10, Number(val)))
+      else if (key === 'baseDelayMs') patch.baseDelayMs = Math.max(100, Math.min(60000, Number(val)))
+      else if (key === 'maxDelayMs') patch.maxDelayMs = Math.max(1000, Math.min(300000, Number(val)))
+      else if (key === 'retryOnStatusCodes' && Array.isArray(val)) {
+        patch.retryOnStatusCodes = val.filter((x: any) => Number.isInteger(x) && x >= 100 && x < 600)
+      }
+      else if (key === 'stopOnStatusCodes' && Array.isArray(val)) {
+        patch.stopOnStatusCodes = val.filter((x: any) => Number.isInteger(x) && x >= 100 && x < 600)
+      }
+    }
+  }
+  return c.json(updateRetrySettings(patch))
+})
+
 // ---------------- Project files ----------------
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
