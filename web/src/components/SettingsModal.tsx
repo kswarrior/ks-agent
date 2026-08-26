@@ -48,7 +48,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   useEffect(() => {
     if (open) {
       refresh()
-      loadSystemPrompt()
+      loadPlanPrompt()
       setProviderForm(null)
       setProviderPicker(false)
       setShowModelForm(false)
@@ -66,23 +66,23 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
   }
 
-  async function loadSystemPrompt() {
+  async function loadPlanPrompt() {
     try {
-      const { systemPrompt } = await api.getSystemPrompt()
-      setSystemPrompt(systemPrompt)
-      setSystemDraft(systemPrompt)
+      const { planPrompt } = await api.getPlanPrompt()
+      setPlanPrompt(planPrompt)
+      setPlanDraft(planPrompt)
     } catch (e: any) {
       toast(e.message, 'error')
     }
   }
 
-  async function submitSystemPrompt() {
+  async function submitPlanPrompt() {
     setError(null)
     try {
-      const { systemPrompt } = await api.saveSystemPrompt(systemDraft.trim())
-      setSystemPrompt(systemPrompt)
-      setSystemDraft(systemPrompt)
-      toast('System prompt saved', 'success')
+      const { planPrompt } = await api.savePlanPrompt(planDraft.trim())
+      setPlanPrompt(planPrompt)
+      setPlanDraft(planPrompt)
+      toast('Plan prompt saved', 'success')
     } catch (e: any) {
       setError(e.message)
     }
@@ -203,7 +203,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
             Models
           </button>
           <button className={`tab${tab === 'prompt' ? ' active' : ''}`} onClick={() => { setTab('prompt'); setError(null) }}>
-            System Prompt
+            Prompts
           </button>
         </div>
 
