@@ -409,8 +409,8 @@ function KsAgent() {
             chat={activeChat}
             hasProject={!!activeProject}
             messages={messages}
-            streaming={streaming}
-            streamText={streamText}
+            streaming={activeChat ? streams[activeChat.id] !== undefined : false}
+            streamText={activeChat ? streams[activeChat.id] ?? '' : ''}
             models={models}
             selectedModelId={selectedModelId}
             onSelectModel={setSelectedModelId}
