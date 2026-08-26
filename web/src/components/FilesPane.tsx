@@ -416,6 +416,31 @@ export function FilesPane({ projectId }: FilesPaneProps) {
             </button>
           </div>
 
+          {selected && (
+            <div className="fp-editor">
+              <div className="fp-editor-head">
+                <span className="fp-editor-title">{selected}</span>
+                <div className="fp-editor-actions">
+                  <button className="btn btn-ghost" disabled={editLoading || editSaving} onClick={() => { setSelected(null); setEditContent(''); }}>
+                    <IconX size={14} /> Cancel
+                  </button>
+                  <button className="btn btn-primary" disabled={editLoading || editSaving} onClick={() => saveFileContent(selected)}>
+                    {editSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+              <textarea
+                className="fp-editor-textarea"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                disabled={editLoading}
+                placeholder={editLoading ? 'Loading…' : ''}
+                spellCheck={false}
+                autoFocus
+              />
+            </div>
+          )}
+
           <div className="fp-list">
             {loading ? (
               <div className="fp-skel" aria-label="Loading files">

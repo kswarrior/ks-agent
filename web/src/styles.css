@@ -1709,16 +1709,6 @@ button {
   margin-top: 2px;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
 /* ---------------- Responsive ---------------- */
 
 @media (min-width: 900px) {
