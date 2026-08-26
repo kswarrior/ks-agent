@@ -332,11 +332,6 @@ app.post('/api/chats/:id/messages', async (c) => {
   const chat = findChat(c.req.param('id'))
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
 
-  const running = generations.get(chat.id)
-  if (running && running.status === 'running') {
-    return c.json({ error: 'This chat is already generating a reply' }, 409)
-  }
-
   const body: any = await c.req.json().catch(() => ({}))
   const content = String(body.content ?? '').trim()
   const modelId = body.modelId ? String(body.modelId) : ''
@@ -352,6 +347,13 @@ app.post('/api/chats/:id/messages', async (c) => {
   const provider = db.providers.find((p) => p.id === resolvedModel.providerId)
   if (!provider) {
     return c.json({ error: 'Model has no valid provider' }, 400)
+  }
+
+  // From here to the response there are no awaits, so two concurrent posts to the
+  // same chat cannot both slip past this guard and register a job.
+  const runningJob = generations.get(chat.id)
+  if (runningJob && runningJob.status === 'running') {
+    return c.json({ error: 'This chat is already generating a reply' }, 409)
   }
 
   const project = findProject(chat.projectId)
@@ -390,7 +392,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   generations.set(chat.id, job)
 
   void runGeneration(job, provider, resolvedModel.model, history).finally(() => {
-    generations.delete(chat.id)
+    if (generations.get(job.chatId) === job) generations.delete(job.chatId)
   })
 
   return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
