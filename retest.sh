@@ -51,9 +51,11 @@ if [ "${SKIP_BUILD:-0}" != "1" ]; then
   NODE_TS="node $ROOT/node_modules/.bin/tsc"
   echo "=== Building packages ==="
   for p in packages/types packages/shared packages/database packages/ai packages/tools packages/agent; do
+    rm -rf "$ROOT/$p/dist" "$ROOT/$p/tsconfig.tsbuildinfo"
     ($NODE_TS -p "$ROOT/$p/tsconfig.json") && echo "  ok $p"
   done
   echo "=== Building server ==="
+  rm -rf "$ROOT/apps/server/dist" "$ROOT/apps/server/tsconfig.tsbuildinfo"
   ($NODE_TS -p "$ROOT/apps/server/tsconfig.json")
 fi
 
