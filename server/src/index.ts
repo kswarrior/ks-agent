@@ -104,6 +104,10 @@ app.delete('/api/projects/:id', (c) => {
   const chatIds = new Set(db.chats.filter((ch) => ch.projectId === removed.id).map((ch) => ch.id))
   db.chats = db.chats.filter((ch) => ch.projectId !== removed.id)
   db.messages = db.messages.filter((m) => !chatIds.has(m.chatId))
+  for (const cid of chatIds) {
+    generations.get(cid)?.controller.abort()
+    generations.delete(cid)
+  }
   saveDb()
   return c.json({ ok: true })
 })
@@ -151,6 +155,8 @@ app.delete('/api/chats/:id', (c) => {
   if (idx === -1) return c.json({ error: 'Chat not found' }, 404)
   db.chats.splice(idx, 1)
   db.messages = db.messages.filter((m) => m.chatId !== id)
+  generations.get(id)?.controller.abort()
+  generations.delete(id)
   saveDb()
   return c.json({ ok: true })
 })
@@ -317,6 +323,11 @@ app.post('/api/chats/:id/messages', async (c) => {
   const chat = findChat(c.req.param('id'))
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
 
+  const running = generations.get(chat.id)
+  if (running && running.status === 'running') {
+    return c.json({ error: 'This chat is already generating a reply' }, 409)
+  }
+
   const body: any = await c.req.json().catch(() => ({}))
   const content = String(body.content ?? '').trim()
   const modelId = body.modelId ? String(body.modelId) : ''
@@ -358,58 +369,22 @@ app.post('/api/chats/:id/messages', async (c) => {
     ...messagesOf(chat.id).map((m) => ({ role: m.role as LLMMessage['role'], content: m.content }))
   ]
 
-  return streamSSE(c, async (stream) => {
-      const assistantId = newId()
-      await stream.writeSSE({
-        event: 'meta',
-        data: JSON.stringify({ userMsgId: userMsg.id, assistantId, model: resolvedModel.model })
-      })
+  const job: GenJob = {
+    chatId: chat.id,
+    assistantId: newId(),
+    model: resolvedModel.model,
+    content: '',
+    status: 'running',
+    controller: new AbortController(),
+    listeners: new Set()
+  }
+  generations.set(chat.id, job)
 
-      let full = ''
-      let aborted = false
-      try {
-        for await (const delta of streamChat(provider.baseUrl, provider.apiKey, resolvedModel.model, history, c.req.raw.signal)) {
-          full += delta
-          await stream.writeSSE({ event: 'delta', data: JSON.stringify(delta) })
-        }
-      } catch (e: any) {
-        if (e?.name === 'AbortError') {
-          aborted = true
-        } else {
-          const message = full
-            ? `${full}\n\n_[stream interrupted: ${String(e?.message || e)}]_`
-            : `Error: ${String(e?.message || e)}`
-          const msg = {
-            id: assistantId,
-            chatId: chat.id,
-            role: 'assistant' as const,
-            content: message,
-            createdAt: new Date().toISOString(),
-            error: true
-          }
-          getDb().messages.push(msg)
-          touchChat(chat)
-          saveDb()
-          await stream.writeSSE({ event: 'error', data: JSON.stringify({ message }) })
-          return
-        }
-      }
-
-      const msg = {
-        id: assistantId,
-        chatId: chat.id,
-        role: 'assistant' as const,
-        content: aborted ? full + '\n\n_[stopped]_' : full,
-        createdAt: new Date().toISOString(),
-        error: aborted && !full ? true : undefined
-      }
-      if (msg.content.trim()) {
-        getDb().messages.push(msg)
-        touchChat(chat)
-        saveDb()
-      }
-      await stream.writeSSE({ event: 'done', data: JSON.stringify({ messageId: assistantId }) })
+  void runGeneration(job, provider, resolvedModel.model, history).finally(() => {
+    generations.delete(chat.id)
   })
+
+  return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
 })
 
 // ---------------- Settings: providers & models ----------------
