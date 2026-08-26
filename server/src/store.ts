@@ -148,3 +148,13 @@ export function findPlanForChat(chatId: string): Plan | undefined {
     .filter((p) => p.chatId === chatId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
 }
+
+export function terminalsOf(projectId: string): Terminal[] {
+  return db.terminals
+    .filter((t) => t.projectId === projectId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+export function findTerminal(id: string): Terminal | undefined {
+  return db.terminals.find((t) => t.id === id)
+}
