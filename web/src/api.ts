@@ -1,4 +1,4 @@
-import type { Chat, Message, ModelEntry, Project, Provider } from './types'
+import type { Chat, FileListing, Message, ModelEntry, Plan, Project, Provider } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -33,28 +33,45 @@ export const deleteChat = (id: string) => req<{ ok: true }>(`/api/chats/${id}`, 
 // Messages
 export const listMessages = (chatId: string) => req<Message[]>(`/api/chats/${chatId}/messages`)
 
+/** Sends a user message. The reply is generated in the background; watch it via streamChatEvents. */
+export async function sendMessage(
+  chatId: string,
+  content: string,
+  modelId: string | null
+): Promise<{ userMsgId: string; assistantId: string; model: string }> {
+  const res = await fetch(`/api/chats/${chatId}/messages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content, modelId })
+  })
+  let data: any = null
+  try {
+    data = await res.json()
+  } catch {}
+  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
+  return data
+}
+
+// Background generations
+
 export interface StreamHandlers {
   onMeta?: (meta: { assistantId: string; model: string }) => void
+  onSnapshot?: (text: string) => void
   onDelta: (text: string) => void
+  onTool?: (tool: { callId: string; name: string; args: string }) => void
+  onToolResult?: (result: { callId: string; ok: boolean; summary: string }) => void
+  onPlan?: (plan: Plan) => void
   onError: (message: string) => void
   onDone: () => void
 }
 
-/** Sends a user message and consumes the SSE stream from the server. */
-export async function sendMessage(
+/** Subscribes to the live event stream of a chat's background generation. */
+export async function streamChatEvents(
   chatId: string,
-  content: string,
-  modelId: string | null,
   handlers: StreamHandlers,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch(`/api/chats/${chatId}/messages`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, modelId }),
-    signal
-  })
-
+  const res = await fetch(`/api/chats/${chatId}/events`, { signal })
   if (!res.ok) {
     let msg = `Request failed (${res.status})`
     try {
@@ -94,19 +111,33 @@ export async function sendMessage(
         data = line.slice(5).trim()
       }
 
+      if (event === 'ping' || event === 'idle') continue
       try {
         const parsed = JSON.parse(data)
         switch (event) {
           case 'meta':
             handlers.onMeta?.({ assistantId: parsed.assistantId, model: parsed.model })
             break
+          case 'snapshot':
+            handlers.onSnapshot?.(parsed)
+            break
           case 'delta':
             handlers.onDelta(parsed)
+            break
+          case 'tool':
+            handlers.onTool?.(parsed)
+            break
+          case 'tool_result':
+            handlers.onToolResult?.(parsed)
+            break
+          case 'plan':
+            handlers.onPlan?.(parsed)
             break
           case 'error':
             handlers.onError(parsed.message)
             break
           case 'done':
+          case 'stopped':
             handlers.onDone()
             break
         }
@@ -115,6 +146,45 @@ export async function sendMessage(
   }
   handlers.onDone()
 }
+
+export const listGenerations = () => req<string[]>('/api/generations')
+
+export const stopGeneration = (chatId: string) =>
+  req<{ ok: true }>(`/api/chats/${chatId}/stop`, json('POST', {}))
+
+// Plans
+export const getPlan = (chatId: string) => req<Plan | null>(`/api/chats/${chatId}/plan`)
+
+// Project files
+export const listFiles = (projectId: string, path = '') =>
+  req<FileListing>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`)
+
+export const createFileEntry = (projectId: string, kind: 'file' | 'folder', path: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files`, json('POST', { kind, path }))
+
+export const renameFileEntry = (projectId: string, from: string, to: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files`, json('PATCH', { from, to }))
+
+export const deleteFileEntry = (projectId: string, path: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
+
+export const downloadUrl = (projectId: string, path: string) =>
+  `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`
+
+export async function uploadLocalFiles(projectId: string, dir: string, files: File[]): Promise<void> {
+  const form = new FormData()
+  form.append('path', dir)
+  for (const f of files) form.append('file', f)
+  const res = await fetch(`/api/projects/${projectId}/files/upload`, { method: 'POST', body: form })
+  let data: any = null
+  try {
+    data = await res.json()
+  } catch {}
+  if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`)
+}
+
+export const uploadFromUrl = (projectId: string, p: { url: string; path: string }) =>
+  req<{ ok: true; name: string }>(`/api/projects/${projectId}/files/upload-url`, json('POST', p))
 
 // Settings
 export const listProviders = () => req<Provider[]>('/api/settings/providers')
@@ -133,6 +203,7 @@ export const createModel = (m: { providerId: string; model: string; displayName?
 export const deleteModel = (id: string) =>
   req<{ ok: true }>(`/api/settings/models/${id}`, { method: 'DELETE' })
 
-export const getSystemPrompt = () => req<{ systemPrompt: string }>('/api/settings/system-prompt')
-export const saveSystemPrompt = (systemPrompt: string) =>
-  req<{ ok: true; systemPrompt: string }>('/api/settings/system-prompt', json('PATCH', { systemPrompt }))
+// The primary system prompt is built-in and intentionally not exposed.
+export const getPlanPrompt = () => req<{ planPrompt: string }>('/api/settings/plan-prompt')
+export const savePlanPrompt = (planPrompt: string) =>
+  req<{ ok: true; planPrompt: string }>('/api/settings/plan-prompt', json('PATCH', { planPrompt }))
