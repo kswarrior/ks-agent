@@ -531,7 +531,7 @@ const MAX_LIST_ENTRIES = 500
 
 type FileTarget = { error: Response } | { abs: string; stat: fs.Stats }
 
-function fileTarget(c: Context, project: Project, rel: string): FileTarget {
+function fileTarget(c: { json: (data: unknown, status?: number) => Response }, project: Project, rel: string): FileTarget {
   const abs = resolveInProject(project.path, rel)
   if (!abs) return { error: c.json({ error: 'Invalid path' }, 400) }
   let stat: fs.Stats
