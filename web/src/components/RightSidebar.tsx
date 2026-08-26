@@ -111,8 +111,10 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
               autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-              onKeyDown={(e) => e.key === 'Escape' && setCreating(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreate()
+                if (e.key === 'Escape') { setCreating(false); setNewName(''); }
+              }}
             />
             <button className="btn btn-primary" onClick={handleCreate} disabled={!newName.trim()}>
               Create
