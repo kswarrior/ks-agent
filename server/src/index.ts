@@ -684,50 +684,6 @@ app.post('/api/projects/:id/files/upload', async (c) => {
   return c.json({ ok: true, saved }, 201)
 })
 
-app.get('/api/projects/:id/files/content', (c) => {
-  const project = findProject(c.req.param('id'))
-  if (!project) return c.json({ error: 'Project not found' }, 404)
-  const rel = String(c.req.query('path') ?? '')
-  if (!rel || rel === '.') return c.json({ error: 'Invalid path' }, 400)
-  const abs = resolveInProject(project.path, rel)
-  if (!abs) return c.json({ error: 'Invalid path' }, 400)
-  let stat: fs.Stats
-  try {
-    stat = fs.statSync(abs)
-  } catch {
-    return c.json({ error: 'File not found' }, 404)
-  }
-  if (!stat.isFile()) return c.json({ error: 'Not a file' }, 400)
-  if (stat.size > 10 * 1024 * 1024) return c.json({ error: 'File too large to edit' }, 400)
-  const content = fs.readFileSync(abs, 'utf8')
-  return c.json({ content })
-})
-
-app.put('/api/projects/:id/files/content', async (c) => {
-  const project = findProject(c.req.param('id'))
-  if (!project) return c.json({ error: 'Project not found' }, 404)
-  const body = await c.req.json().catch(() => ({}))
-  const rel = String(body.path ?? '')
-  const content = String(body.content ?? '')
-  if (!rel || rel === '.') return c.json({ error: 'Invalid path' }, 400)
-  const abs = resolveInProject(project.path, rel)
-  if (!abs) return c.json({ error: 'Invalid path' }, 400)
-  let stat: fs.Stats
-  try {
-    stat = fs.statSync(abs)
-  } catch {
-    return c.json({ error: 'File not found' }, 404)
-  }
-  if (!stat.isFile()) return c.json({ error: 'Not a file' }, 400)
-  if (content.length > 10 * 1024 * 1024) return c.json({ error: 'Content too large' }, 400)
-  try {
-    fs.writeFileSync(abs, content, 'utf8')
-  } catch (e: any) {
-    return c.json({ error: e?.message || 'Failed to write file' }, 400)
-  }
-  return c.json({ ok: true })
-})
-
 app.post('/api/projects/:id/files/upload-url', async (c) => {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
