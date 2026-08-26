@@ -296,7 +296,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 </div>
               )}
             </>
-          )}
+          ) : null}
 
           {tab === 'models' && (
             <>
