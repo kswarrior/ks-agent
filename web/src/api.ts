@@ -171,6 +171,12 @@ export const deleteFileEntry = (projectId: string, path: string) =>
 export const downloadUrl = (projectId: string, path: string) =>
   `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`
 
+export const readFileContent = (projectId: string, path: string) =>
+  req<{ content: string }>(`/api/projects/${projectId}/files/content?path=${encodeURIComponent(path)}`)
+
+export const saveFileContent = (projectId: string, path: string, content: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files/content`, json('PUT', { path, content }))
+
 export async function uploadLocalFiles(projectId: string, dir: string, files: File[]): Promise<void> {
   const form = new FormData()
   form.append('path', dir)
