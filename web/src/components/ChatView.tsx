@@ -148,12 +148,14 @@ export function ChatView(props: Props) {
             {props.messages.map((m) =>
               m.role === 'user' ? (
                 <div key={m.id} className="msg-user">
-                  {m.content}
+                  <ClampedContent>{m.content}</ClampedContent>
                 </div>
               ) : (
                 <div key={m.id} className={`msg-assistant${m.error ? ' msg-error-text' : ''}`}>
                   <div className="role-tag">KS Agent</div>
-                  <Markdown content={m.content} />
+                  <ClampedContent>
+                    <Markdown content={m.content} />
+                  </ClampedContent>
                 </div>
               )
             )}
@@ -205,36 +207,87 @@ export function ChatView(props: Props) {
 
               {modelOpen && (
                 <div className="model-dd">
-                  {props.models.length === 0 && (
-                    <div style={{ padding: '12px' }}>
-                      <div className="dd-empty">No models configured.</div>
+                  <div className="dd-toolbar">
+                    <div className="search-box">
+                      <IconSearch size={14} />
+                      <input
+                        className="search-input"
+                        placeholder="Search models…"
+                        value={modelQuery}
+                        onChange={(e) => setModelQuery(e.target.value)}
+                      />
+                    </div>
+                    <div className="prov-filter-wrap">
                       <button
-                        className="btn"
-                        style={{ width: '100%', marginTop: 8 }}
+                        className={`filter-chip${provFilterId ? ' active' : ''}`}
+                        onClick={() => setProvOpen((v) => !v)}
+                        title="Filter by provider"
+                      >
+                        <span>{provFilterName ?? 'All'}</span>
+                        <IconChevronDown size={12} />
+                      </button>
+                      {provOpen && (
+                        <div className="prov-pop">
+                          <button
+                            className={`dd-item${provFilterId === null ? ' active' : ''}`}
+                            onClick={() => {
+                              setProvFilterId(null)
+                              setProvOpen(false)
+                            }}
+                          >
+                            <span>All providers</span>
+                          </button>
+                          {providers.map(([id, name]) => (
+                            <button
+                              key={id}
+                              className={`dd-item${provFilterId === id ? ' active' : ''}`}
+                              onClick={() => {
+                                setProvFilterId(id)
+                                setProvOpen(false)
+                              }}
+                            >
+                              <span>{name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="model-dd-list">
+                    {props.models.length === 0 && (
+                      <div style={{ padding: '12px' }}>
+                        <div className="dd-empty">No models configured.</div>
+                        <button
+                          className="btn"
+                          style={{ width: '100%', marginTop: 8 }}
+                          onClick={() => {
+                            setModelOpen(false)
+                            props.onRequestSettings()
+                          }}
+                        >
+                          Open Settings
+                        </button>
+                      </div>
+                    )}
+                    {props.models.length > 0 && visibleModels.length === 0 && (
+                      <div className="dd-empty">No matching models.</div>
+                    )}
+                    {visibleModels.map((m) => (
+                      <button
+                        key={m.id}
+                        className={`dd-item${m.id === props.selectedModelId ? ' active' : ''}`}
                         onClick={() => {
+                          props.onSelectModel(m.id)
                           setModelOpen(false)
-                          props.onRequestSettings()
                         }}
                       >
-                        Open Settings
+                        <span>{m.displayName || m.model}</span>
+                        <small style={{ color: 'var(--text-faint)' }}>
+                          {m.displayName && m.displayName !== m.model ? `${m.providerName} · ${m.model}` : m.providerName}
+                        </small>
                       </button>
-                    </div>
-                  )}
-                  {props.models.map((m) => (
-                    <button
-                      key={m.id}
-                      className={`dd-item${m.id === props.selectedModelId ? ' active' : ''}`}
-                      onClick={() => {
-                        props.onSelectModel(m.id)
-                        setModelOpen(false)
-                      }}
-                    >
-                      <span>{m.displayName || m.model}</span>
-                      <small style={{ color: 'var(--text-faint)' }}>
-                        {m.displayName && m.displayName !== m.model ? `${m.providerName} · ${m.model}` : m.providerName}
-                      </small>
-                    </button>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
               {modelOpen && (
