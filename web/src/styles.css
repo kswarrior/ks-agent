@@ -1577,12 +1577,6 @@ button {
     padding: 14px 12px 6px;
   }
 
-  .msg-user {
-    width: calc(100% + 24px);
-    margin-left: -12px;
-    margin-right: -12px;
-  }
-
   .composer {
     padding-left: 10px;
     padding-right: 10px;
