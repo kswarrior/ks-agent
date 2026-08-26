@@ -81,9 +81,9 @@ export function Sidebar(props: SidebarProps) {
     }
   }, [menuFor])
 
-  function toggleMenu(e: React.MouseEvent<HTMLSpanElement>, id: string) {
+  function toggleMenu(e: React.MouseEvent<HTMLSpanElement>, kind: MenuState['kind'], id: string) {
     e.stopPropagation()
-    if (menuFor?.id === id) {
+    if (menuFor?.kind === kind && menuFor.id === id) {
       setMenuFor(null)
       return
     }
@@ -91,13 +91,16 @@ export function Sidebar(props: SidebarProps) {
     const width = 150
     const height = 96
     setMenuFor({
+      kind,
       id,
       top: Math.min(rect.bottom + 6, window.innerHeight - height - 8),
       left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
     })
   }
 
-  const menuChat = menuFor ? props.chats.find((c) => c.id === menuFor.id) : null
+  const menuChat = menuFor?.kind === 'chat' ? props.chats.find((c) => c.id === menuFor.id) ?? null : null
+  const menuProject =
+    menuFor?.kind === 'project' ? props.projects.find((p) => p.id === menuFor.id) ?? null : null
 
   const filteredProjects = props.projects.filter((p) =>
     p.name.toLowerCase().includes(projQuery.trim().toLowerCase())
