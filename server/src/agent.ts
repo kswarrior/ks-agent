@@ -318,6 +318,8 @@ export interface AgentRunOptions {
   onDelta: (text: string) => void
   /** Named SSE events forwarded verbatim to subscribed clients (tool, tool_result, plan). */
   onEvent: (event: string, data: string) => void
+  /** Optional retry settings for provider requests. */
+  retrySettings?: RetrySettings
 }
 
 export interface AgentRunOutcome {
