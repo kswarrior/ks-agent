@@ -1,9 +1,12 @@
+import type { CSSProperties } from 'react'
+
 interface IconProps {
   size?: number
   className?: string
+  style?: CSSProperties
 }
 
-function base(size = 18) {
+function base(size = 18, style?: CSSProperties) {
   return {
     width: size,
     height: size,
@@ -12,7 +15,8 @@ function base(size = 18) {
     stroke: 'currentColor',
     strokeWidth: 1.8,
     strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const
+    strokeLinejoin: 'round' as const,
+    style
   }
 }
 
