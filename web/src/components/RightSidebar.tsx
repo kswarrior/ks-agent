@@ -20,6 +20,7 @@ const TABS: Array<{ id: RsTab; label: string }> = [
   { id: 'plan', label: 'Plan' },
   { id: 'files', label: 'Files' },
   { id: 'terminal', label: 'Terminal' },
+  { id: 'activity', label: 'Activity' },
   { id: 'settings', label: 'Settings' }
 ]
 
