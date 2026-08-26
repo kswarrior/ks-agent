@@ -38,7 +38,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [providerForm, setProviderForm] = useState<ProviderForm | null>(null)
   const [providerPicker, setProviderPicker] = useState(false)
   const [showModelForm, setShowModelForm] = useState(false)
-  const [modelForm, setModelForm] = useState({ providerId: '', model: '' })
+  const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '' })
   const [error, setError] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()

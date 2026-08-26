@@ -33,6 +33,7 @@ export interface Provider {
 export interface ModelEntry {
   id: string
   model: string
+  displayName?: string
   providerId: string
   providerName: string
 }

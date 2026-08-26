@@ -126,7 +126,7 @@ export const deleteProvider = (id: string) =>
   req<{ ok: true }>(`/api/settings/providers/${id}`, { method: 'DELETE' })
 
 export const listModels = () => req<ModelEntry[]>('/api/settings/models')
-export const createModel = (m: { providerId: string; model: string }) =>
+export const createModel = (m: { providerId: string; model: string; displayName?: string }) =>
   req<ModelEntry>('/api/settings/models', json('POST', m))
 export const deleteModel = (id: string) =>
   req<{ ok: true }>(`/api/settings/models/${id}`, { method: 'DELETE' })
