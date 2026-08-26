@@ -49,7 +49,7 @@ export interface FileListing {
   entries: FileEntry[]
 }
 
-export type PlanStepStatus = 'pending' | 'done'
+export type PlanStepStatus = 'pending' | 'working' | 'done'
 
 export interface PlanStep {
   id: string

@@ -217,3 +217,8 @@ export const deleteModel = (id: string) =>
 export const getPlanPrompt = () => req<{ planPrompt: string }>('/api/settings/plan-prompt')
 export const savePlanPrompt = (planPrompt: string) =>
   req<{ ok: true; planPrompt: string }>('/api/settings/plan-prompt', json('PATCH', { planPrompt }))
+
+// Settings: retry
+export const getRetrySettings = () => req<RetrySettings>('/api/settings/retry')
+export const updateRetrySettings = (patch: Partial<RetrySettings>) =>
+  req<RetrySettings>('/api/settings/retry', json('PATCH', patch))
