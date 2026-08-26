@@ -97,10 +97,11 @@ export function loadDb(): void {
       // Legacy field kept (and re-saved) so old settings are never lost.
       systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : '',
       planPrompt: typeof parsed.planPrompt === 'string' ? parsed.planPrompt : '',
-      plans: Array.isArray(parsed.plans) ? parsed.plans : []
+      plans: Array.isArray(parsed.plans) ? parsed.plans : [],
+      terminals: Array.isArray(parsed.terminals) ? parsed.terminals : []
     }
   } catch {
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [] }
   }
 }
 
