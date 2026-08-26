@@ -44,7 +44,7 @@ function getToolIcon(type: Activity['toolType']) {
   }
 }
 
-function getArgsDisplay(type: Activity['toolType'], args: Record<string, unknown>): string {
+function getCommandDisplay(type: Activity['toolType'], args: Record<string, unknown>): string {
   switch (type) {
     case 'read_file':
       return args.path as string || ''
@@ -65,17 +65,19 @@ function getArgsDisplay(type: Activity['toolType'], args: Record<string, unknown
   }
 }
 
+function getResultDisplay(activity: Activity): string {
+  if (activity.result) {
+    return activity.result
+  }
+  return activity.summary || ''
+}
+
 export function ActivityPane({ activities }: { activities: Activity[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const sortedActivities = [...activities].sort((a, b) => 
     new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )
-
-  const toolCounts = sortedActivities.reduce((acc, a) => {
-    acc[a.toolType] = (acc[a.toolType] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
 
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id))
@@ -88,11 +90,11 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
   return (
     <div className="activity-pane">
       <div className="activity-list">
-        {sortedActivities.map((activity, index) => {
+        {sortedActivities.map((activity) => {
           const label = getToolLabel(activity.toolType)
-          const count = toolCounts[activity.toolType]
-          const argsDisplay = getArgsDisplay(activity.toolType, activity.args)
+          const commandDisplay = getCommandDisplay(activity.toolType, activity.args)
           const isExpanded = expandedId === activity.id
+          const resultDisplay = getResultDisplay(activity)
 
           return (
             <div key={activity.id} className="activity-item">
@@ -104,12 +106,9 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                   {getToolIcon(activity.toolType)}
                 </span>
                 <span className="activity-label">
-                  [cycle] {label}
+                  {label}
                 </span>
-                <span className="activity-count">
-                  [{count}]
-                </span>
-                <span className="activity-args">{argsDisplay}</span>
+                <span className="activity-args">{commandDisplay}</span>
                 <span className="activity-chevron">
                   <IconChevronDown size={12} style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                 </span>
@@ -124,14 +123,16 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                       {activity.ok === false ? 'Error' : activity.ok === true ? 'Success' : 'Running'}
                     </span>
                   </div>
-                  <div className="activity-detail-args">
-                    <strong>Arguments:</strong>
-                    <pre>{JSON.stringify(activity.args, null, 2)}</pre>
-                  </div>
-                  {activity.result && (
-                    <div className="activity-detail-result">
-                      <strong>Result:</strong>
-                      <pre>{activity.result}</pre>
+                  {commandDisplay && (
+                    <div className="activity-detail-section">
+                      <strong>Command</strong>
+                      <pre>{commandDisplay}</pre>
+                    </div>
+                  )}
+                  {resultDisplay && (
+                    <div className="activity-detail-section">
+                      <strong>Result</strong>
+                      <pre>{resultDisplay}</pre>
                     </div>
                   )}
                 </div>
