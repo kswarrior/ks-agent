@@ -436,7 +436,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   const agent: AgentSpec | null = project ? { projectPath: project.path } : null
 
   void runGeneration(job, provider, resolvedModel.model, history, agent).finally(() => {
-    if (generations.get(job.chatId) === job) generations.delete(job.chatId)
+    job.finishedAt = new Date().toISOString()
   })
 
   return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
