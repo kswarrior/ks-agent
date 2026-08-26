@@ -153,22 +153,50 @@ function KsAgent() {
       const controller = new AbortController()
       subsRef.current.set(chatId, controller)
       setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
+      let acc = ''
+      let assistantId: string | null = null
       api
         .streamChatEvents(
           chatId,
           {
-            onSnapshot: (text) => setStreams((prev) => ({ ...prev, [chatId]: text })),
-            onDelta: (text) => setStreams((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? '') + text })),
+            onMeta: (meta) => {
+              assistantId = meta.assistantId
+            },
+            onSnapshot: (text) => {
+              acc = text
+              setStreams((prev) => ({ ...prev, [chatId]: text }))
+            },
+            onDelta: (text) => {
+              acc += text
+              setStreams((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? '') + text }))
+            },
             onError: (message) => toast(message.split('\n')[0], 'error'),
             onDone: () => {}
           },
           controller.signal
         )
         .catch((e: any) => {
-          if (e?.name !== 'AbortError') toast(e.message, 'error')
+          if (e?.name !== 'AbortError') toast(e.message)
         })
         .finally(async () => {
           subsRef.current.delete(chatId)
+          if (acc.trim() && activeChatIdRef.current === chatId) {
+            const id = assistantId || 'tmp-assistant-' + Date.now()
+            setMessages((prev) =>
+              prev.some((m) => m.id === id)
+                ? prev
+                : [
+                    ...prev,
+                    {
+                      id,
+                      chatId,
+                      role: 'assistant' as const,
+                      content: acc,
+                      createdAt: new Date().toISOString()
+                    }
+                  ]
+            )
+          }
           setStreams((prev) => {
             const next = { ...prev }
             delete next[chatId]
