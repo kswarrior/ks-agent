@@ -340,6 +340,18 @@ app.delete('/api/settings/models/:id', (c) => {
   return c.json({ ok: true })
 })
 
+app.get('/api/settings/system-prompt', (c) => {
+  return c.json({ systemPrompt: getDb().systemPrompt })
+})
+
+app.patch('/api/settings/system-prompt', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const systemPrompt = String(body.systemPrompt ?? '').trim()
+  getDb().systemPrompt = systemPrompt
+  saveDb()
+  return c.json({ ok: true, systemPrompt })
+})
+
 // ---------------- Static frontend ----------------
 
 const distDir = process.env.KS_WEB_DIST || './dist'
