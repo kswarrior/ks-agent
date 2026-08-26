@@ -353,6 +353,247 @@ app.patch('/api/settings/system-prompt', async (c) => {
   return c.json({ ok: true, systemPrompt })
 })
 
+// ---------------- Project files ----------------
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+const MAX_LIST_ENTRIES = 500
+
+function resolveInProject(root: string, rel: string): string | null {
+  const absRoot = path.resolve(root)
+  const abs = path.resolve(absRoot, rel)
+  if (abs !== absRoot && !abs.startsWith(absRoot + path.sep)) return null
+  return abs
+}
+
+function relWithin(root: string, abs: string): string {
+  return path.relative(path.resolve(root), abs).split(path.sep).join('/')
+}
+
+function validSegment(name: string): boolean {
+  return (
+    !!name &&
+    name !== '.' &&
+    name !== '..' &&
+    !name.includes('/') &&
+    !name.includes('\\') &&
+    !name.includes('\0') &&
+    name.trim() === name
+  )
+}
+
+function isBlockedHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, '').replace(/^\[/, '').replace(/\]$/, '')
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true
+  if (h === '::1' || h === '::') return true
+  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!m) return false
+  const a = Number(m[1])
+  const b = Number(m[2])
+  if (a === 127 || a === 10 || a === 0) return true
+  if (a === 169 && b === 254) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  return false
+}
+
+function fileTarget(c: any, project: { path: string }, rel: string) {
+  const abs = resolveInProject(project.path, rel)
+  if (!abs) return { error: c.json({ error: 'Invalid path' }, 400) as Response }
+  let stat: fs.Stats
+  try {
+    stat = fs.statSync(abs)
+  } catch {
+    return { error: c.json({ error: 'Path not found' }, 400) as Response }
+  }
+  return { abs, stat }
+}
+
+app.get('/api/projects/:id/files', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const t = fileTarget(c, project, String(c.req.query('path') ?? ''))
+  if (t.error) return t.error
+  if (!t.stat!.isDirectory()) return c.json({ error: 'Not a directory' }, 400)
+
+  const dirs: Array<{ name: string; type: 'dir' }> = []
+  const files: Array<{ name: string; type: 'file'; size: number }> = []
+  for (const ent of fs.readdirSync(t.abs!, { withFileTypes: true })) {
+    if (ent.isDirectory()) dirs.push({ name: ent.name, type: 'dir' })
+    else {
+      let size = 0
+      try {
+        size = fs.statSync(path.join(t.abs!, ent.name)).size
+      } catch {}
+      files.push({ name: ent.name, type: 'file', size })
+    }
+  }
+  const byName = (x: { name: string }, y: { name: string }) => x.name.localeCompare(y.name)
+  dirs.sort(byName)
+  files.sort(byName)
+  return c.json({
+    path: relWithin(project.path, t.abs!),
+    entries: [...dirs, ...files].slice(0, MAX_LIST_ENTRIES)
+  })
+})
+
+app.post('/api/projects/:id/files', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const kind = body.kind === 'folder' ? 'folder' : body.kind === 'file' ? 'file' : null
+  const rel = String(body.path ?? '')
+  if (!kind) return c.json({ error: 'kind must be "file" or "folder"' }, 400)
+  if (!validSegment(rel)) return c.json({ error: 'Invalid name' }, 400)
+  const abs = resolveInProject(project.path, rel)
+  if (!abs) return c.json({ error: 'Invalid path' }, 400)
+  if (fs.existsSync(abs)) return c.json({ error: `"${rel}" already exists` }, 400)
+  try {
+    if (kind === 'folder') fs.mkdirSync(abs)
+    else fs.writeFileSync(abs, '', { flag: 'wx' })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to create' }, 400)
+  }
+  return c.json({ ok: true }, 201)
+})
+
+app.patch('/api/projects/:id/files', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const from = String(body.from ?? '')
+  const to = String(body.to ?? '')
+  if (!validSegment(from)) return c.json({ error: 'Invalid source name' }, 400)
+  if (!validSegment(to)) return c.json({ error: 'Invalid new name' }, 400)
+  const dirAbs = resolveInProject(project.path, '.')
+  if (!dirAbs) return c.json({ error: 'Invalid path' }, 400)
+  const fromAbs = path.join(dirAbs, from)
+  const toAbs = path.join(dirAbs, to)
+  if (!fs.existsSync(fromAbs)) return c.json({ error: `"${from}" not found` }, 400)
+  if (fs.existsSync(toAbs)) return c.json({ error: `"${to}" already exists` }, 400)
+  try {
+    fs.renameSync(fromAbs, toAbs)
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Rename failed' }, 400)
+  }
+  return c.json({ ok: true })
+})
+
+app.delete('/api/projects/:id/files', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const rel = String(c.req.query('path') ?? '')
+  if (!rel || rel === '.') return c.json({ error: 'Cannot delete the project root' }, 400)
+  const abs = resolveInProject(project.path, rel)
+  if (!abs) return c.json({ error: 'Invalid path' }, 400)
+  try {
+    fs.rmSync(abs, { recursive: true })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Delete failed' }, 400)
+  }
+  return c.json({ ok: true })
+})
+
+app.get('/api/projects/:id/files/download', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const t = fileTarget(c, project, String(c.req.query('path') ?? ''))
+  if (t.error) return t.error
+  if (!t.stat!.isFile()) return c.json({ error: 'Not a file' }, 400)
+  const filename = path.basename(t.abs!)
+  const ascii =
+    filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_') || 'download'
+  c.header('Content-Type', 'application/octet-stream')
+  c.header('Content-Length', String(t.stat!.size))
+  c.header(
+    'Content-Disposition',
+    `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+  )
+  return c.body(Readable.toWeb(fs.createReadStream(t.abs!)) as ReadableStream)
+})
+
+app.post('/api/projects/:id/files/upload', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const form = await c.req.parseBody().catch(() => null)
+  if (!form) return c.json({ error: 'Expected multipart form data' }, 400)
+  const dirRel = typeof form.path === 'string' ? form.path : ''
+  const t = fileTarget(c, project, dirRel)
+  if (t.error) return t.error
+  if (!t.stat!.isDirectory()) return c.json({ error: 'Target is not a directory' }, 400)
+
+  const raw = (form as Record<string, unknown>).file
+  const list = Array.isArray(raw) ? raw : [raw]
+  const saved: string[] = []
+  for (const item of list) {
+    if (!(item instanceof File)) continue
+    if (!validSegment(item.name)) return c.json({ error: `Invalid file name: "${item.name}"` }, 400)
+    if (item.size > MAX_UPLOAD_BYTES) return c.json({ error: `"${item.name}" exceeds size limit` }, 400)
+    const buf = Buffer.from(await item.arrayBuffer())
+    fs.writeFileSync(path.join(t.abs!, item.name), buf)
+    saved.push(item.name)
+  }
+  if (saved.length === 0) return c.json({ error: 'No files in upload' }, 400)
+  return c.json({ ok: true, saved }, 201)
+})
+
+app.post('/api/projects/:id/files/upload-url', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const urlStr = String(body.url ?? '').trim()
+  const destDir = String(body.path ?? '')
+  let name = String(body.name ?? '').trim()
+  let parsed: URL
+  try {
+    parsed = new URL(urlStr)
+  } catch {
+    return c.json({ error: 'Invalid URL' }, 400)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return c.json({ error: 'Only http(s) URLs are allowed' }, 400)
+  }
+  if (isBlockedHost(parsed.hostname)) return c.json({ error: 'Blocked host' }, 400)
+
+  const t = fileTarget(c, project, destDir)
+  if (t.error) return t.error
+  if (!t.stat!.isDirectory()) return c.json({ error: 'Target is not a directory' }, 400)
+
+  if (!name) {
+    const base = path.basename(decodeURIComponent(parsed.pathname))
+    name = base && base !== '/' && base !== '.' ? base : 'download'
+  }
+  if (!validSegment(name)) return c.json({ error: 'Invalid file name' }, 400)
+
+  let res: globalThis.Response
+  try {
+    res = await fetch(parsed, { redirect: 'follow', signal: AbortSignal.timeout(30_000) })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to fetch URL' }, 400)
+  }
+  if (isBlockedHost(new URL(res.url).hostname)) return c.json({ error: 'Blocked host' }, 400)
+  if (!res.ok) return c.json({ error: `Failed to fetch URL (${res.status})` }, 400)
+
+  const chunks: Buffer[] = []
+  let total = 0
+  try {
+    for await (const chunk of res.body!) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer)
+      total += buf.length
+      if (total > MAX_UPLOAD_BYTES) return c.json({ error: 'Download exceeds size limit' }, 400)
+      chunks.push(buf)
+    }
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Download failed' }, 400)
+  }
+  try {
+    fs.writeFileSync(path.join(t.abs!, name), Buffer.concat(chunks), { flag: 'wx' })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to save file' }, 400)
+  }
+  return c.json({ ok: true, name }, 201)
+})
+
 // ---------------- Static frontend ----------------
 
 const distDir = process.env.KS_WEB_DIST || './dist'
