@@ -150,8 +150,7 @@ function KsAgent() {
     }
   }
 
-  async function renameChat(chat: Chat) {
-    const title = await prompt({ title: 'Rename chat', label: 'Title', value: chat.title })
+  async function renameChat(chat: Chat) {    const title = await prompt({ title: 'Rename chat', label: 'Title', value: chat.title })
     if (!title || title === chat.title) return
     try {
       const updated = await api.renameChat(chat.id, title)
