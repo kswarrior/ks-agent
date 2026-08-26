@@ -42,6 +42,23 @@ export interface ModelEntry {
   displayName?: string
 }
 
+export type PlanStepStatus = 'pending' | 'done'
+
+export interface PlanStep {
+  id: string
+  title: string
+  status: PlanStepStatus
+}
+
+export interface Plan {
+  id: string
+  chatId: string
+  title: string
+  steps: PlanStep[]
+  createdAt: string
+  updatedAt: string
+}
+
 interface DB {
   projects: Project[]
   chats: Chat[]
@@ -49,12 +66,14 @@ interface DB {
   providers: Provider[]
   models: ModelEntry[]
   systemPrompt: string
+  planPrompt: string
+  plans: Plan[]
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '' }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [] }
 
 export function loadDb(): void {
   try {
@@ -66,10 +85,13 @@ export function loadDb(): void {
       messages: Array.isArray(parsed.messages) ? parsed.messages : [],
       providers: Array.isArray(parsed.providers) ? parsed.providers : [],
       models: Array.isArray(parsed.models) ? parsed.models : [],
-      systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : ''
+      // Legacy field kept (and re-saved) so old settings are never lost.
+      systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : '',
+      planPrompt: typeof parsed.planPrompt === 'string' ? parsed.planPrompt : '',
+      plans: Array.isArray(parsed.plans) ? parsed.plans : []
     }
   } catch {
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '' }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [] }
   }
 }
 
@@ -108,4 +130,11 @@ export function messagesOf(chatId: string): Message[] {
 
 export function touchChat(chat: Chat): void {
   chat.updatedAt = new Date().toISOString()
+}
+
+/** Latest plan for a chat (create_plan replaces older ones, so at most one remains). */
+export function findPlanForChat(chatId: string): Plan | undefined {
+  return [...db.plans]
+    .filter((p) => p.chatId === chatId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
 }

@@ -1,6 +1,31 @@
 export interface LLMMessage {
-  role: 'system' | 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
+  /** Assistant-only: tool calls requested by the model (echoed back in history). */
+  tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
+  /** Tool-only: id of the tool call this result belongs to. */
+  tool_call_id?: string
+}
+
+export interface ToolDef {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+  }
+}
+
+export interface ParsedToolCall {
+  id: string
+  name: string
+  args: string
+}
+
+interface RawChunk {
+  text?: string
+  finishReason?: string | null
+  toolCallDeltas?: Array<{ index: number; id?: string; name?: string; argsDelta?: string }>
 }
 
 function endpoint(baseUrl: string): string {
@@ -9,17 +34,12 @@ function endpoint(baseUrl: string): string {
   return clean + '/chat/completions'
 }
 
-/**
- * Streams an OpenAI-compatible chat completion.
- * Yields text deltas as they arrive.
- */
-export async function* streamChat(
+async function openStream(
   baseUrl: string,
   apiKey: string,
-  model: string,
-  messages: LLMMessage[],
+  body: Record<string, unknown>,
   signal?: AbortSignal
-): AsyncGenerator<string> {
+): Promise<AsyncIterableIterator<string>> {
   const res = await fetch(endpoint(baseUrl), {
     method: 'POST',
     signal,
@@ -27,7 +47,7 @@ export async function* streamChat(
       'content-type': 'application/json',
       authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify({ model, messages, stream: true })
+    body: JSON.stringify(body)
   })
 
   if (!res.ok) {
@@ -38,8 +58,46 @@ export async function* streamChat(
     throw new Error(`Provider responded ${res.status}${detail ? `: ${detail}` : ''}`)
   }
   if (!res.body) throw new Error('Provider returned an empty response body')
+  return res.body.getReader()
+}
 
-  const reader = res.body.getReader()
+/** Parses one SSE `data:` payload into deltas, or null for keep-alives. */
+function parseChunk(payload: string): RawChunk | null {
+  let json: any
+  try {
+    json = JSON.parse(payload)
+  } catch {
+    return null // ignore keep-alives / malformed fragments
+  }
+  const choice = json.choices?.[0]
+  if (!choice) return null
+  const delta = choice.delta ?? choice.message ?? {}
+  const chunk: RawChunk = {
+    text: typeof delta.content === 'string' ? delta.content : undefined,
+    finishReason: choice.finish_reason ?? null
+  }
+  if (Array.isArray(delta.tool_calls)) {
+    chunk.toolCallDeltas = delta.tool_calls.map((tc: any, i: number) => ({
+      index: typeof tc.index === 'number' ? tc.index : i,
+      id: typeof tc.id === 'string' ? tc.id : undefined,
+      name: tc.function?.name ? String(tc.function.name) : undefined,
+      argsDelta: typeof tc.function?.arguments === 'string' ? tc.function.arguments : undefined
+    }))
+  }
+  return chunk
+}
+
+/**
+ * Streams an OpenAI-compatible chat completion and yields text deltas as they arrive.
+ */
+export async function* streamChat(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: LLMMessage[],
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true }, signal)
   const decoder = new TextDecoder()
   let buf = ''
 
@@ -54,14 +112,78 @@ export async function* streamChat(
       if (!line.startsWith('data:')) continue
       const payload = line.slice(5).trim()
       if (payload === '[DONE]') return
-      try {
-        const json = JSON.parse(payload)
-        const choice = json.choices?.[0]
-        const delta: string = choice?.delta?.content ?? choice?.text ?? ''
-        if (delta) yield delta
-      } catch {
-        // ignore keep-alives / malformed fragments
+      const chunk = parseChunk(payload)
+      if (chunk?.text) yield chunk.text
+    }
+  }
+}
+
+export interface AgentStreamResult {
+  /** All text streamed during this round. */
+  text: string
+  finishReason: string | null
+  /** Complete tool calls accumulated from stream fragments. */
+  toolCalls: ParsedToolCall[]
+}
+
+/**
+ * Streams a chat completion with tools enabled. Text deltas are forwarded to
+ * `onDelta` as they arrive; resolves with the round's full text, finish reason
+ * and accumulated tool calls.
+ */
+export async function streamChatWithTools(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: LLMMessage[],
+  tools: ToolDef[],
+  onDelta: (text: string) => void,
+  signal?: AbortSignal
+): Promise<AgentStreamResult> {
+  const reader = await openStream(
+    baseUrl,
+    apiKey,
+    { model, messages, stream: true, tools, tool_choice: 'auto' },
+    signal
+  )
+  const decoder = new TextDecoder()
+  let buf = ''
+  let text = ''
+  let finishReason: string | null = null
+  const calls = new Map<number, { id: string; name: string; args: string }>()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    let nl: number
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim()
+      buf = buf.slice(nl + 1)
+      if (!line.startsWith('data:')) continue
+      const payload = line.slice(5).trim()
+      if (payload === '[DONE]') continue
+      const chunk = parseChunk(payload)
+      if (!chunk) continue
+      if (chunk.text) {
+        text += chunk.text
+        onDelta(chunk.text)
+      }
+      if (chunk.finishReason) finishReason = chunk.finishReason
+      for (const d of chunk.toolCallDeltas ?? []) {
+        const cur = calls.get(d.index) ?? { id: '', name: '', args: '' }
+        if (d.id) cur.id = cur.id + d.id
+        if (d.name) cur.name = cur.name + d.name
+        if (d.argsDelta) cur.args += d.argsDelta
+        calls.set(d.index, cur)
       }
     }
   }
+
+  const toolCalls: ParsedToolCall[] = [...calls.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, c], i) => ({ id: c.id || `call_${i}`, name: c.name, args: c.args }))
+    .filter((c) => c.name)
+
+  return { text, finishReason, toolCalls }
 }
