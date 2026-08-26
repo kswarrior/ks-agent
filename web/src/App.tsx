@@ -46,6 +46,7 @@ function KsAgent() {
 
   // chatId → live text of its background generation (key present = still running)
   const [streams, setStreams] = useState<Record<string, string>>({})
+  const [activities, setActivities] = useState<Activity[]>([])
   const subsRef = useRef(new Map<string, AbortController>())
   const activeChatIdRef = useRef<string | null>(null)
   const skipLoadForRef = useRef<string | null>(null)
