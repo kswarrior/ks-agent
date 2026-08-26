@@ -59,14 +59,6 @@ export interface Plan {
   updatedAt: string
 }
 
-export interface Terminal {
-  id: string
-  projectId: string
-  name: string
-  createdAt: string
-  updatedAt: string
-}
-
 interface DB {
   projects: Project[]
   chats: Chat[]
@@ -76,13 +68,12 @@ interface DB {
   systemPrompt: string
   planPrompt: string
   plans: Plan[]
-  terminals: Terminal[]
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [] }
 
 export function loadDb(): void {
   try {
@@ -97,11 +88,10 @@ export function loadDb(): void {
       // Legacy field kept (and re-saved) so old settings are never lost.
       systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : '',
       planPrompt: typeof parsed.planPrompt === 'string' ? parsed.planPrompt : '',
-      plans: Array.isArray(parsed.plans) ? parsed.plans : [],
-      terminals: Array.isArray(parsed.terminals) ? parsed.terminals : []
+      plans: Array.isArray(parsed.plans) ? parsed.plans : []
     }
   } catch {
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [] }
   }
 }
 
@@ -147,14 +137,4 @@ export function findPlanForChat(chatId: string): Plan | undefined {
   return [...db.plans]
     .filter((p) => p.chatId === chatId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
-}
-
-export function terminalsOf(projectId: string): Terminal[] {
-  return db.terminals
-    .filter((t) => t.projectId === projectId)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-}
-
-export function findTerminal(id: string): Terminal | undefined {
-  return db.terminals.find((t) => t.id === id)
 }

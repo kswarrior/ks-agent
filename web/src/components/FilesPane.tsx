@@ -13,8 +13,7 @@ import {
   IconPencil,
   IconSearch,
   IconTrash,
-  IconUpload,
-  IconX
+  IconUpload
 } from '../icons'
 
 interface FilesPaneProps {
@@ -52,9 +51,6 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   const [newName, setNewName] = useState('')
   const [urlValue, setUrlValue] = useState('')
   const [busy, setBusy] = useState(false)
-  const [editContent, setEditContent] = useState('')
-  const [editLoading, setEditLoading] = useState(false)
-  const [editSaving, setEditSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -147,33 +143,6 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     setSelected(null)
     setQuery('')
     setSubPage(null)
-  }
-
-  async function loadFileContent(relPath: string) {
-    if (!projectId) return
-    setEditLoading(true)
-    try {
-      const res = await api.readFileContent(projectId, relPath)
-      setEditContent(res.content)
-    } catch (e: any) {
-      toast(e.message, 'error')
-      setEditContent('')
-    } finally {
-      setEditLoading(false)
-    }
-  }
-
-  async function saveFileContent(relPath: string) {
-    if (!projectId) return
-    setEditSaving(true)
-    try {
-      await api.saveFileContent(projectId, relPath, editContent)
-      toast('File saved', 'success')
-    } catch (e: any) {
-      toast(e.message, 'error')
-    } finally {
-      setEditSaving(false)
-    }
   }
 
   async function doRename(entry: FileEntry) {
@@ -416,31 +385,6 @@ export function FilesPane({ projectId }: FilesPaneProps) {
             </button>
           </div>
 
-          {selected && (
-            <div className="fp-editor">
-              <div className="fp-editor-head">
-                <span className="fp-editor-title">{selected}</span>
-                <div className="fp-editor-actions">
-                  <button className="btn btn-ghost" disabled={editLoading || editSaving} onClick={() => { setSelected(null); setEditContent(''); }}>
-                    <IconX size={14} /> Cancel
-                  </button>
-                  <button className="btn btn-primary" disabled={editLoading || editSaving} onClick={() => saveFileContent(selected)}>
-                    {editSaving ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
-              </div>
-              <textarea
-                className="fp-editor-textarea"
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                disabled={editLoading}
-                placeholder={editLoading ? 'Loading…' : ''}
-                spellCheck={false}
-                autoFocus
-              />
-            </div>
-          )}
-
           <div className="fp-list">
             {loading ? (
               <div className="fp-skel" aria-label="Loading files">
@@ -480,14 +424,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
                       key={entry.name}
                       className={`fp-row${selected === rel ? ' active' : ''}${rowMenu?.entry.name === entry.name ? ' menu-open' : ''}`}
                       role="button"
-                      onClick={() => {
-                        if (entry.type === 'dir') {
-                          openDir(entry.name)
-                        } else {
-                          setSelected(rel)
-                          loadFileContent(rel)
-                        }
-                      }}
+                      onClick={() => (entry.type === 'dir' ? openDir(entry.name) : setSelected(rel))}
                     >
                       {entry.type === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
                       <span className="fp-name">{entry.name}</span>

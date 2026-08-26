@@ -1,4 +1,4 @@
-import type { Chat, FileListing, Message, ModelEntry, Plan, Project, Provider, Terminal } from './types'
+import type { Chat, FileListing, Message, ModelEntry, Plan, Project, Provider } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -171,12 +171,6 @@ export const deleteFileEntry = (projectId: string, path: string) =>
 export const downloadUrl = (projectId: string, path: string) =>
   `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`
 
-export const readFileContent = (projectId: string, path: string) =>
-  req<{ content: string }>(`/api/projects/${projectId}/files/content?path=${encodeURIComponent(path)}`)
-
-export const saveFileContent = (projectId: string, path: string, content: string) =>
-  req<{ ok: true }>(`/api/projects/${projectId}/files/content`, json('PUT', { path, content }))
-
 export async function uploadLocalFiles(projectId: string, dir: string, files: File[]): Promise<void> {
   const form = new FormData()
   form.append('path', dir)
@@ -191,16 +185,6 @@ export async function uploadLocalFiles(projectId: string, dir: string, files: Fi
 
 export const uploadFromUrl = (projectId: string, p: { url: string; path: string }) =>
   req<{ ok: true; name: string }>(`/api/projects/${projectId}/files/upload-url`, json('POST', p))
-
-// Terminals
-export const listTerminals = (projectId: string) =>
-  req<Terminal[]>(`/api/projects/${projectId}/terminals`)
-export const createTerminal = (projectId: string, name: string) =>
-  req<Terminal>(`/api/projects/${projectId}/terminals`, json('POST', { name }))
-export const renameTerminal = (id: string, name: string) =>
-  req<Terminal>(`/api/terminals/${id}`, json('PATCH', { name }))
-export const deleteTerminal = (id: string) =>
-  req<{ ok: true }>(`/api/terminals/${id}`, { method: 'DELETE' })
 
 // Settings
 export const listProviders = () => req<Provider[]>('/api/settings/providers')
