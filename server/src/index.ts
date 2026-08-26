@@ -11,16 +11,19 @@ import {
   findChat,
   findPlanForChat,
   findProject,
+  findTerminal,
   getDb,
   getRetrySettings,
   loadDb,
   messagesOf,
   newId,
   saveDb,
+  terminalsOf,
   touchChat,
   updateRetrySettings,
   type Chat,
-  type Project
+  type Project,
+  type Terminal
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, runAgentLoop } from './agent.js'
