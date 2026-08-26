@@ -41,6 +41,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '' })
   const [planPrompt, setPlanPrompt] = useState('')
   const [planDraft, setPlanDraft] = useState('')
+  const [retrySettings, setRetrySettings] = useState<RetrySettings | null>(null)
+  const [retryDraft, setRetryDraft] = useState<RetrySettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()
@@ -49,6 +51,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     if (open) {
       refresh()
       loadPlanPrompt()
+      loadRetrySettings()
       setProviderForm(null)
       setProviderPicker(false)
       setShowModelForm(false)
@@ -76,6 +79,16 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
   }
 
+  async function loadRetrySettings() {
+    try {
+      const settings = await api.getRetrySettings()
+      setRetrySettings(settings)
+      setRetryDraft({ ...settings })
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
   async function submitPlanPrompt() {
     setError(null)
     try {
@@ -86,6 +99,31 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     } catch (e: any) {
       setError(e.message)
     }
+  }
+
+  async function submitRetrySettings() {
+    if (!retryDraft) return
+    setError(null)
+    try {
+      const settings = await api.updateRetrySettings(retryDraft)
+      setRetrySettings(settings)
+      setRetryDraft({ ...settings })
+      toast('Retry settings saved', 'success')
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
+  function resetRetryDefaults() {
+    const defaults: RetrySettings = {
+      enabled: true,
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 30000,
+      retryOnStatusCodes: [429, 503],
+      stopOnStatusCodes: [404]
+    }
+    setRetryDraft(defaults)
   }
 
   if (!open) return null
