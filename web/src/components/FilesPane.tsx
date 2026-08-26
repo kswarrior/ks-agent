@@ -149,6 +149,33 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     setSubPage(null)
   }
 
+  async function loadFileContent(relPath: string) {
+    if (!projectId) return
+    setEditLoading(true)
+    try {
+      const res = await api.readFileContent(projectId, relPath)
+      setEditContent(res.content)
+    } catch (e: any) {
+      toast(e.message, 'error')
+      setEditContent('')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  async function saveFileContent(relPath: string) {
+    if (!projectId) return
+    setEditSaving(true)
+    try {
+      await api.saveFileContent(projectId, relPath, editContent)
+      toast('File saved', 'success')
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   async function doRename(entry: FileEntry) {
     if (!projectId) return
     const name = await prompt({ title: `Rename ${entry.type}`, label: 'Name', value: entry.name })
