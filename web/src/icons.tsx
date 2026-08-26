@@ -159,3 +159,9 @@ export const IconRotate = ({ size, className, style }: IconProps) => (
     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
   </svg>
 )
+
+export const IconActivity = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)}>
+    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+  </svg>
+)
