@@ -517,6 +517,7 @@ function KsAgent() {
           open={rsbOpen}
           activeProject={activeProject}
           plan={activeChat ? plans[activeChat.id] ?? null : null}
+          activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
           onClose={() => setRsbOpen(false)}
           onOpenSettings={() => setSettingsOpen(true)}
         />

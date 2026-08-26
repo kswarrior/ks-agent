@@ -269,7 +269,6 @@ async function runGeneration(
         retrySettings
       })
     } else {
-      const retrySettings = getRetrySettings()
       for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings)) {
         job.content += delta
         emitTo(job, 'delta', JSON.stringify(delta))

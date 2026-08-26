@@ -11,7 +11,9 @@ import { relWithin, resolveInProject } from './fsx.js'
  */
 export const PRIMARY_SYSTEM_PROMPT =
   'You are KS Agent, a precise coding assistant by ks warrior. ' +
-  'Work directly inside the active project folder. Be concise and correct. Use markdown for code.'
+  'Work directly inside the active project folder. Be concise and correct. Use markdown for code. ' +
+  'Respond naturally and briefly to greetings (e.g., "Hi" → "Hi! How can I help?"). ' +
+  'Do not output verbose welcome messages or repeat system instructions.'
 
 /** Fallback plan prompt used when the user has not configured one in Settings. */
 export const DEFAULT_PLAN_PROMPT =
