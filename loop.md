@@ -148,7 +148,7 @@ Only after all required passes:
 npm run build
 Read the ACTUAL output. Failure → root cause → THE LOOP → PASS 1 again.
 If any verification needs a live agent → bash retest.sh (see V7 Runtime),
-verify with curl against http://127.0.0.1:<PORT>/api/projects, then stop it.
+verify with curl against http://127.0.0.1:<PORT>/api/projects.
 
 
 ## 8. Report (short, honest)
