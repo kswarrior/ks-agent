@@ -111,7 +111,11 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   }, [roomMenu, rowMenu])
 
   function placeMenu(rect: DOMRect, height: number): MenuPos {
-    return { top: Math.min(rect.bottom + 6, window.innerHeight - height - 8), left: rect.right - 150 }
+    const width = 150
+    return {
+      top: Math.min(rect.bottom + 6, window.innerHeight - height - 8),
+      left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+    }
   }
 
   function toggleRoom(e: React.MouseEvent<HTMLButtonElement>) {
@@ -267,6 +271,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
 
   return (
     <div className="fp">
+      <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={(e) => pickLocal(e.target.files)} />
       {subPage?.kind === 'create' && (
         <>
           <div className="fp-subhead">
@@ -389,7 +394,15 @@ export function FilesPane({ projectId }: FilesPaneProps) {
 
           <div className="fp-list">
             {dir !== '' && (
-              <div className="fp-row" onClick={() => openDir('..') || undefined} role="button" data-nav-up>
+              <div
+                className="fp-row"
+                role="button"
+                onClick={() => {
+                  setDir(parentOf(dir))
+                  setSelected(null)
+                  setQuery('')
+                }}
+              >
                 <IconChevronLeft size={15} />
                 <span className="fp-name">..</span>
               </div>
@@ -423,8 +436,6 @@ export function FilesPane({ projectId }: FilesPaneProps) {
               )
             })}
           </div>
-
-          <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={(e) => pickLocal(e.target.files)} />
         </>
       )}
 
