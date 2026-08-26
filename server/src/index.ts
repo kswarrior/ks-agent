@@ -530,7 +530,7 @@ app.patch('/api/settings/plan-prompt', async (c) => {
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 const MAX_LIST_ENTRIES = 500
 
-type FileTarget = { error: ReturnType<Context['json']> } | { abs: string; stat: fs.Stats }
+type FileTarget = { error: Response } | { abs: string; stat: fs.Stats }
 
 function fileTarget(c: Context, project: Project, rel: string): FileTarget {
   const abs = resolveInProject(project.path, rel)
