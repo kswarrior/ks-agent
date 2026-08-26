@@ -48,6 +48,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     if (open) {
       refresh()
       setProviderForm(null)
+      setProviderPicker(false)
       setShowModelForm(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
