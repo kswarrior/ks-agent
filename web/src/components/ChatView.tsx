@@ -149,7 +149,7 @@ export function ChatView(props: Props) {
               >
                 <IconChevronDown size={14} style={{ transform: 'rotate(90deg)' }} />
                 <span>
-                  {selectedModelLabel
+                  {selectedModel && selectedModelLabel
                     ? `${selectedModel.providerName} · ${selectedModelLabel}`
                     : 'No model'}
                 </span>
