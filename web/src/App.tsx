@@ -99,6 +99,10 @@ function KsAgent() {
       setMessages([])
       return
     }
+    if (skipLoadForRef.current === activeChatId) {
+      skipLoadForRef.current = null
+      return
+    }
     let cancelled = false
     api
       .listMessages(activeChatId)
