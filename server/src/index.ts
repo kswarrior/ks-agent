@@ -463,12 +463,14 @@ app.patch('/api/projects/:id/files', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const from = String(body.from ?? '')
   const to = String(body.to ?? '')
-  if (!validSegment(from)) return c.json({ error: 'Invalid source name' }, 400)
+  const fromParts = from.split('/').filter(Boolean)
+  if (fromParts.length === 0 || !fromParts.every(validSegment)) {
+    return c.json({ error: 'Invalid source path' }, 400)
+  }
   if (!validSegment(to)) return c.json({ error: 'Invalid new name' }, 400)
-  const dirAbs = resolveInProject(project.path, '.')
-  if (!dirAbs) return c.json({ error: 'Invalid path' }, 400)
-  const fromAbs = path.join(dirAbs, from)
-  const toAbs = path.join(dirAbs, to)
+  const fromAbs = resolveInProject(project.path, from)
+  if (!fromAbs) return c.json({ error: 'Invalid path' }, 400)
+  const toAbs = path.join(path.dirname(fromAbs), to)
   if (!fs.existsSync(fromAbs)) return c.json({ error: `"${from}" not found` }, 400)
   if (fs.existsSync(toAbs)) return c.json({ error: `"${to}" already exists` }, 400)
   try {
