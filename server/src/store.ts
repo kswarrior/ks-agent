@@ -116,6 +116,7 @@ export function loadDb(): void {
       systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : '',
       planPrompt: typeof parsed.planPrompt === 'string' ? parsed.planPrompt : '',
       plans: Array.isArray(parsed.plans) ? parsed.plans : [],
+      terminals: Array.isArray(parsed.terminals) ? parsed.terminals : [],
       retrySettings: parsed.retrySettings && typeof parsed.retrySettings === 'object'
         ? {
             enabled: Boolean(parsed.retrySettings.enabled ?? defaultRetrySettings.enabled),
@@ -140,7 +141,7 @@ export function loadDb(): void {
       retryOnStatusCodes: [429, 503],
       stopOnStatusCodes: [404]
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], retrySettings: defaultRetrySettings }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], retrySettings: defaultRetrySettings }
   }
 }
 
