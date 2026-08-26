@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -397,7 +398,7 @@ function isBlockedHost(hostname: string): boolean {
   return false
 }
 
-function fileTarget(c: any, project: { path: string }, rel: string) {
+function fileTarget(c: Context, project: { path: string }, rel: string) {
   const abs = resolveInProject(project.path, rel)
   if (!abs) return { error: c.json({ error: 'Invalid path' }, 400) as Response }
   let stat: fs.Stats

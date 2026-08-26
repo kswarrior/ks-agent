@@ -1,4 +1,4 @@
-import type { Chat, Message, ModelEntry, Project, Provider } from './types'
+import type { Chat, FileListing, Message, ModelEntry, Project, Provider } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
