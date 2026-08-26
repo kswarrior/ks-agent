@@ -331,7 +331,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   <div className="group-label">{providerName}</div>
                   {entries.map((m) => (
                     <div key={m.id} className="model-row">
-                      <span className="model-id">{m.model}</span>
+                      <span className="model-id">
+                        {m.displayName || m.model}
+                        {m.displayName && m.displayName !== m.model && (
+                          <small style={{ color: 'var(--text-faint)', marginLeft: 6 }}>{m.model}</small>
+                        )}
+                      </span>
                       <button
                         className="icon-btn"
                         style={{ width: 28, height: 28, color: '#ef4444' }}
@@ -369,6 +374,14 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                     onKeyDown={(e) => e.key === 'Enter' && submitModel()}
                   />
                   <p className="hint">Use the provider's model identifier, e.g. minimax-ai/minimax-m3</p>
+                  <label className="field-label">Display name</label>
+                  <input
+                    className="input"
+                    placeholder="e.g. MiniMax M3 (optional)"
+                    value={modelForm.displayName}
+                    onChange={(e) => setModelForm({ ...modelForm, displayName: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && submitModel()}
+                  />
                   <div className="dialog-actions">
                     <button className="btn" onClick={() => { setShowModelForm(false); setError(null) }}>
                       Cancel
