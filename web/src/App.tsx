@@ -197,13 +197,14 @@ function KsAgent() {
             },
             onTool: (tool) => {
               const { callId, name, args } = tool
-              pendingTools.set(callId, { name, args: args as Record<string, unknown> })
+              const parsedArgs = typeof args === 'string' ? JSON.parse(args) : args
+              pendingTools.set(callId, { name, args: parsedArgs as Record<string, unknown> })
               const activity: Activity = {
                 id: callId,
                 chatId,
                 toolType: name as Activity['toolType'],
                 toolCallId: callId,
-                args: args as Record<string, unknown>,
+                args: parsedArgs as Record<string, unknown>,
                 summary: '',
                 timestamp: new Date().toISOString(),
                 expanded: false
