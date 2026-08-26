@@ -202,6 +202,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           <button className={`tab${tab === 'models' ? ' active' : ''}`} onClick={() => { setTab('models'); setError(null) }}>
             Models
           </button>
+          <button className={`tab${tab === 'prompt' ? ' active' : ''}`} onClick={() => { setTab('prompt'); setError(null) }}>
+            System Prompt
+          </button>
         </div>
 
         <div className="tab-body">
@@ -417,7 +420,28 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   </div>
                 </div>
               )}
-            </>
+             </>
+          )}
+
+          {tab === 'prompt' && (
+            <div className="inline-form" style={{ marginTop: 0 }}>
+              <h4>System prompt</h4>
+              <p className="hint" style={{ marginTop: 2, marginBottom: 10 }}>
+                Sent to the model at the start of every conversation. Leave blank to use the default KS Agent prompt.
+              </p>
+              <textarea
+                className="input"
+                rows={10}
+                placeholder="You are a precise coding assistant…"
+                value={systemDraft}
+                onChange={(e) => setSystemDraft(e.target.value)}
+              />
+              <div className="dialog-actions">
+                <button className="btn btn-primary" onClick={submitSystemPrompt}>
+                  Save
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
