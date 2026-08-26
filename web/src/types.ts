@@ -73,3 +73,12 @@ export interface Terminal {
   createdAt: string
   updatedAt: string
 }
+
+export interface RetrySettings {
+  enabled: boolean
+  maxRetries: number
+  baseDelayMs: number
+  maxDelayMs: number
+  retryOnStatusCodes: number[]
+  stopOnStatusCodes: number[]
+}
