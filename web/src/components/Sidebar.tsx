@@ -25,6 +25,8 @@ interface SidebarProps {
   onNewChat: () => void
   onRenameChat: (chat: Chat) => void
   onDeleteChat: (chat: Chat) => void
+  onRenameProject: (project: Project) => void
+  onDeleteProject: (project: Project) => void
   onAddProject: () => void
   onOpenSettings: () => void
   onCloseMobile: () => void
