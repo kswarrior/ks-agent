@@ -237,6 +237,15 @@ function KsAgent() {
               )
             )
           } catch {}
+          try {
+            const plan = await api.getPlan(chatId)
+            setPlans((prev) => {
+              const next = { ...prev }
+              if (plan) next[chatId] = plan
+              else delete next[chatId]
+              return next
+            })
+          } catch {}
         })
     },
     [toast]
