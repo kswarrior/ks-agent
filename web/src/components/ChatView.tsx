@@ -48,6 +48,9 @@ interface Props {
 export function ChatView(props: Props) {
   const [input, setInput] = useState('')
   const [modelOpen, setModelOpen] = useState(false)
+  const [modelQuery, setModelQuery] = useState('')
+  const [provOpen, setProvOpen] = useState(false)
+  const [provFilterId, setProvFilterId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -90,6 +93,23 @@ export function ChatView(props: Props) {
   const selectedModel = props.models.find((m) => m.id === props.selectedModelId)
   const selectedModelLabel = selectedModel ? selectedModel.displayName || selectedModel.model : null
   const canSend = input.trim().length > 0 && !props.streaming && props.hasProject
+
+  const providers = [...new Map(props.models.map((m) => [m.providerId, m.providerName])).entries()]
+  const provFilterName = provFilterId ? providers.find(([id]) => id === provFilterId)?.[1] ?? null : null
+  const q = modelQuery.trim().toLowerCase()
+  const visibleModels = props.models.filter(
+    (m) =>
+      (provFilterId === null || m.providerId === provFilterId) &&
+      (q === '' ||
+        `${m.displayName ?? ''} ${m.model} ${m.providerName}`.toLowerCase().includes(q))
+  )
+
+  useEffect(() => {
+    if (!modelOpen) {
+      setProvOpen(false)
+      setModelQuery('')
+    }
+  }, [modelOpen])
 
   return (
     <>
