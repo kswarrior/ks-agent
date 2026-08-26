@@ -217,7 +217,7 @@ export function Sidebar(props: SidebarProps) {
                     aria-label="Chat options"
                     data-row-menu="trigger"
                     style={{ width: 28, height: 28 }}
-                    onClick={(e) => toggleMenu(e, chat.id)}
+                    onClick={(e) => toggleMenu(e, 'chat', chat.id)}
                   >
                     <IconDots size={16} />
                   </span>
@@ -236,6 +236,34 @@ export function Sidebar(props: SidebarProps) {
         </div>
       </aside>
       <div className={`scrim${props.open ? ' show' : ''}`} onClick={props.onCloseMobile} />
+      {menuFor && menuProject &&
+        createPortal(
+          <div
+            className="menu-pop menu-pop-fixed"
+            data-row-menu="popover"
+            style={{ top: menuFor.top, left: menuFor.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setMenuFor(null)
+                props.onRenameProject(menuProject)
+              }}
+            >
+              <IconPencil size={15} /> Rename
+            </button>
+            <button
+              className="danger"
+              onClick={() => {
+                setMenuFor(null)
+                props.onDeleteProject(menuProject)
+              }}
+            >
+              <IconTrash size={15} /> Delete
+            </button>
+          </div>,
+          document.body
+        )}
       {menuFor && menuChat &&
         createPortal(
           <div

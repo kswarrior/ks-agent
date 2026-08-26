@@ -20,6 +20,8 @@ export const listProjects = () => req<Project[]>('/api/projects')
 export const createProject = (p: { name: string; path: string; mkdir: boolean }) =>
   req<Project>('/api/projects', json('POST', p))
 export const deleteProject = (id: string) => req<{ ok: true }>(`/api/projects/${id}`, { method: 'DELETE' })
+export const renameProject = (id: string, name: string) =>
+  req<Project>(`/api/projects/${id}`, json('PATCH', { name }))
 
 // Chats
 export const listChats = (projectId: string) => req<Chat[]>(`/api/projects/${projectId}/chats`)
