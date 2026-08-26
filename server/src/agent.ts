@@ -297,6 +297,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       plan.steps[idx].status = 'done'
       plan.updatedAt = new Date().toISOString()
       saveDb()
+      ctx.onEvent('plan', JSON.stringify(plan))
       return ok(`OK step ${idx} marked complete`, `done: ${plan.steps[idx].title.slice(0, 60)}`)
     }
 
