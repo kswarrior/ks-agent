@@ -741,6 +741,55 @@ app.post('/api/projects/:id/files/upload-url', async (c) => {
   return c.json({ ok: true, name }, 201)
 })
 
+// ---------------- Terminals ----------------
+
+app.get('/api/projects/:id/terminals', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  return c.json(terminalsOf(project.id))
+})
+
+app.post('/api/projects/:id/terminals', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const name = String(body.name ?? '').trim() || 'Terminal'
+  const now = new Date().toISOString()
+  const terminal: Terminal = {
+    id: newId(),
+    projectId: project.id,
+    name,
+    createdAt: now,
+    updatedAt: now
+  }
+  getDb().terminals.push(terminal)
+  saveDb()
+  return c.json(terminal, 201)
+})
+
+app.patch('/api/terminals/:id', async (c) => {
+  const terminal = findTerminal(c.req.param('id'))
+  if (!terminal) return c.json({ error: 'Terminal not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  if (body.name !== undefined) {
+    const name = String(body.name).trim()
+    if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
+    terminal.name = name
+  }
+  terminal.updatedAt = new Date().toISOString()
+  saveDb()
+  return c.json(terminal)
+})
+
+app.delete('/api/terminals/:id', (c) => {
+  const db = getDb()
+  const idx = db.terminals.findIndex((t) => t.id === c.req.param('id'))
+  if (idx === -1) return c.json({ error: 'Terminal not found' }, 404)
+  db.terminals.splice(idx, 1)
+  saveDb()
+  return c.json({ ok: true })
+})
+
 function isBlockedHost(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/\.$/, '').replace(/^\[/, '').replace(/\]$/, '')
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal'))
