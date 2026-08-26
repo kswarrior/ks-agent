@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Activity } from '../types'
-import { IconActivity, IconFile, IconTerminal, IconEdit, IconPlus, IconX, IconChevronDown, IconRotate } from '../icons'
+import { IconActivity, IconFile, IconTerminal, IconEdit, IconPlus, IconX, IconChevronDown, IconRotate, IconCheck } from '../icons'
 
 function getToolLabel(type: Activity['toolType']): string {
   switch (type) {
