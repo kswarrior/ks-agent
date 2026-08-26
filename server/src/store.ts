@@ -85,6 +85,7 @@ interface DB {
   systemPrompt: string
   planPrompt: string
   plans: Plan[]
+  terminals: Terminal[]
   retrySettings: RetrySettings
 }
 
