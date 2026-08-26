@@ -4,8 +4,6 @@ import type { Chat, Message, ModelEntry } from '../types'
 import { Markdown } from './Markdown'
 import { IconChevronDown, IconSearch, IconSend, IconStop } from '../icons'
 
-const CLAMP_LINES = 5
-
 function ClampedContent({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState(false)
