@@ -504,10 +504,7 @@ button {
 }
 
 .msg-user {
-  align-self: stretch;
-  width: calc(100% + 32px);
-  margin-left: -16px;
-  margin-right: -16px;
+  width: 75%;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 14px 14px 4px 14px;
@@ -723,7 +720,7 @@ button {
 }
 
 .composer-input {
-  width: 75%;
+  width: 100%;
   resize: none;
   background: var(--input);
   border: 1px solid var(--border);
