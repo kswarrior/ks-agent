@@ -43,14 +43,19 @@ function KsAgent() {
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
-  const [streaming, setStreaming] = useState(false)
-  const [streamText, setStreamText] = useState('')
-  const abortRef = useRef<AbortController | null>(null)
+  // chatId → live text of its background generation (key present = still running)
+  const [streams, setStreams] = useState<Record<string, string>>({})
+  const subsRef = useRef(new Map<string, AbortController>())
+  const activeChatIdRef = useRef<string | null>(null)
   const skipLoadForRef = useRef<string | null>(null)
   const creatingChatRef = useRef(false)
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null
   const activeChat = chats.find((c) => c.id === activeChatId) ?? null
+
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId
+  }, [activeChatId])
 
   // ---- initial load ----
   useEffect(() => {
