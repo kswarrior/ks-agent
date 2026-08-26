@@ -52,6 +52,9 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   const [newName, setNewName] = useState('')
   const [urlValue, setUrlValue] = useState('')
   const [busy, setBusy] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [editLoading, setEditLoading] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
