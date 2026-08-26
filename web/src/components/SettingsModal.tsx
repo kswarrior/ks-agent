@@ -498,7 +498,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h4>Retry behavior</h4>
                 <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={resetRetryDefaults}>
-                  <IconRotateCw size={14} /> Reset to defaults
+                  <IconRotate size={14} /> Reset to defaults
                 </button>
               </div>
               <p className="hint" style={{ marginBottom: 16 }}>
