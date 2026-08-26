@@ -28,8 +28,20 @@ function KsAgent() {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(() => localStorage.getItem(LS_MODEL))
 
   const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 900px)').matches)
+  const [rsbOpen, setRsbOpen] = useState(() => window.matchMedia('(min-width: 1200px)').matches)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+
+  // Keep the right workspace panel always open whenever the screen is wide
+  // enough for it to fit next to the left sidebar and the composer input.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1200px)')
+    const onChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setRsbOpen(true)
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState('')
@@ -350,7 +362,7 @@ function KsAgent() {
   // ---- render ----
   return (
     <div className="app">
-      <Header onMenu={() => setSidebarOpen((v) => !v)} />
+      <Header onMenu={() => setSidebarOpen((v) => !v)} onToggleRight={() => setRsbOpen((v) => !v)} />
       <div className={`shell${sidebarOpen ? '' : ' sb-closed'}`}>
         <Sidebar
           open={sidebarOpen}
@@ -384,6 +396,12 @@ function KsAgent() {
             onRequestSettings={() => setSettingsOpen(true)}
           />
         </main>
+        <RightSidebar
+          open={rsbOpen}
+          activeProject={activeProject}
+          onClose={() => setRsbOpen(false)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
       </div>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onDataChanged={refreshModels} />

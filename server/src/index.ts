@@ -155,6 +155,156 @@ app.delete('/api/chats/:id', (c) => {
   return c.json({ ok: true })
 })
 
+// ---------------- Background generation ----------------
+
+interface GenJob {
+  chatId: string
+  assistantId: string
+  model: string
+  content: string
+  status: 'running' | 'done' | 'stopped' | 'error'
+  errorMessage?: string
+  controller: AbortController
+  listeners: Set<(event: string, data: string) => void>
+}
+
+const generations = new Map<string, GenJob>()
+
+function emitTo(job: GenJob, event: string, data: string): void {
+  for (const notify of [...job.listeners]) {
+    try {
+      notify(event, data)
+    } catch {
+      job.listeners.delete(notify)
+    }
+  }
+}
+
+async function persistAssistant(job: GenJob, content: string, isError: boolean): Promise<void> {
+  const chat = findChat(job.chatId)
+  if (!chat) return
+  getDb().messages.push({
+    id: job.assistantId,
+    chatId: job.chatId,
+    role: 'assistant',
+    content,
+    createdAt: new Date().toISOString(),
+    error: isError || undefined
+  })
+  touchChat(chat)
+  saveDb()
+}
+
+async function runGeneration(
+  job: GenJob,
+  provider: { baseUrl: string; apiKey: string },
+  model: string,
+  history: LLMMessage[]
+): Promise<void> {
+  try {
+    for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal)) {
+      job.content += delta
+      emitTo(job, 'delta', JSON.stringify(delta))
+    }
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      job.status = 'stopped'
+      if (job.content.trim()) {
+        await persistAssistant(job, job.content + '\n\n_[stopped]_', !job.content)
+      } else {
+        await persistAssistant(job, '\n\n_[stopped]_', true)
+      }
+      emitTo(job, 'stopped', '{}')
+      return
+    }
+    job.status = 'error'
+    const message = job.content
+      ? `${job.content}\n\n_[stream interrupted: ${String(e?.message || e)}]_`
+      : `Error: ${String(e?.message || e)}`
+    await persistAssistant(job, message, true)
+    job.errorMessage = message
+    emitTo(job, 'error', JSON.stringify({ message }))
+    return
+  }
+  job.status = 'done'
+  if (job.content.trim()) await persistAssistant(job, job.content, false)
+  emitTo(job, 'done', JSON.stringify({ messageId: job.assistantId }))
+}
+
+app.get('/api/generations', (c) => {
+  return c.json([...generations.values()].filter((j) => j.status === 'running').map((j) => j.chatId))
+})
+
+app.post('/api/chats/:id/stop', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  const job = generations.get(chat.id)
+  if (!job || job.status !== 'running') return c.json({ error: 'No active generation in this chat' }, 409)
+  job.controller.abort()
+  return c.json({ ok: true })
+})
+
+app.get('/api/chats/:id/events', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  return streamSSE(c, async (stream) => {
+    const job = generations.get(chat.id)
+    if (!job) {
+      await stream.writeSSE({ event: 'idle', data: '{}' })
+      return
+    }
+
+    await stream.writeSSE({
+      event: 'meta',
+      data: JSON.stringify({ assistantId: job.assistantId, model: job.model })
+    })
+    await stream.writeSSE({ event: 'snapshot', data: JSON.stringify(job.content) })
+
+    let settle = () => {}
+    const finished = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    const terminal = (event: string) => event === 'done' || event === 'stopped' || event === 'error'
+    let closed = false
+    const markClosed = () => {
+      if (!closed) {
+        closed = true
+        settle()
+      }
+    }
+    const listener = (event: string, data: string) => {
+      if (closed) return
+      stream
+        .writeSSE({ event, data })
+        .then(() => {
+          if (terminal(event)) markClosed()
+        })
+        .catch(markClosed)
+    }
+    job.listeners.add(listener)
+    const onAbort = () => markClosed()
+    c.req.raw.signal.addEventListener('abort', onAbort)
+    const ping = setInterval(() => {
+      if (closed) return
+      stream.writeSSE({ event: 'ping', data: '' }).catch(markClosed)
+    }, 15000)
+
+    if (job.status !== 'running') {
+      if (job.status === 'done') listener('done', JSON.stringify({ messageId: job.assistantId }))
+      else if (job.status === 'stopped') listener('stopped', '{}')
+      else listener('error', JSON.stringify({ message: job.errorMessage ?? 'Generation failed' }))
+    }
+
+    try {
+      await finished
+    } finally {
+      clearInterval(ping)
+      job.listeners.delete(listener)
+      c.req.raw.signal.removeEventListener('abort', onAbort)
+    }
+  })
+})
+
 // ---------------- Messages ----------------
 
 app.get('/api/chats/:id/messages', (c) => {
