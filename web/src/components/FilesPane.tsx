@@ -441,8 +441,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              disabled={!selIsFile}
-              style={{ opacity: selIsFile ? 1 : 0.45 }}
+              style={{ opacity: selIsFile ? 1 : 0.6 }}
               onClick={() => {
                 setRoomMenu(null)
                 triggerDownload()
