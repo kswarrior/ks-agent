@@ -190,7 +190,7 @@ export function Sidebar(props: SidebarProps) {
               {filteredChats.map((chat) => (
                 <div
                   key={chat.id}
-                  className={`chat-row${props.activeChatId === chat.id ? ' active' : ''}${menuFor === chat.id ? ' menu-open' : ''}`}
+                  className={`chat-row${props.activeChatId === chat.id ? ' active' : ''}${menuFor?.id === chat.id ? ' menu-open' : ''}`}
                   onClick={() => props.onSelectChat(chat.id)}
                 >
                   <IconChat size={15} />
@@ -199,35 +199,12 @@ export function Sidebar(props: SidebarProps) {
                     className="icon-btn row-menu"
                     role="button"
                     aria-label="Chat options"
+                    data-row-menu="trigger"
                     style={{ width: 28, height: 28 }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setMenuFor(menuFor === chat.id ? null : chat.id)
-                    }}
+                    onClick={(e) => toggleMenu(e, chat.id)}
                   >
                     <IconDots size={16} />
                   </span>
-                  {menuFor === chat.id && (
-                    <div className="menu-pop" ref={menuRef} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => {
-                          setMenuFor(null)
-                          props.onRenameChat(chat)
-                        }}
-                      >
-                        <IconPencil size={15} /> Rename
-                      </button>
-                      <button
-                        className="danger"
-                        onClick={() => {
-                          setMenuFor(null)
-                          props.onDeleteChat(chat)
-                        }}
-                      >
-                        <IconTrash size={15} /> Delete
-                      </button>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -243,6 +220,34 @@ export function Sidebar(props: SidebarProps) {
         </div>
       </aside>
       <div className={`scrim${props.open ? ' show' : ''}`} onClick={props.onCloseMobile} />
+      {menuFor && menuChat && props.activeChatId !== undefined &&
+        createPortal(
+          <div
+            className="menu-pop menu-pop-fixed"
+            data-row-menu="popover"
+            style={{ top: menuFor.top, left: menuFor.left }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setMenuFor(null)
+                props.onRenameChat(menuChat)
+              }}
+            >
+              <IconPencil size={15} /> Rename
+            </button>
+            <button
+              className="danger"
+              onClick={() => {
+                setMenuFor(null)
+                props.onDeleteChat(menuChat)
+              }}
+            >
+              <IconTrash size={15} /> Delete
+            </button>
+          </div>,
+          document.body
+        )}
     </>
   )
 }
