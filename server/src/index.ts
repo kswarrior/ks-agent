@@ -256,7 +256,6 @@ app.post('/api/chats/:id/messages', async (c) => {
         saveDb()
       }
       await stream.writeSSE({ event: 'done', data: JSON.stringify({ messageId: assistantId }) })
-    })
   })
 })
 
