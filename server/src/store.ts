@@ -39,6 +39,7 @@ export interface ModelEntry {
   id: string
   providerId: string
   model: string
+  displayName?: string
 }
 
 interface DB {

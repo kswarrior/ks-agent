@@ -308,6 +308,7 @@ app.get('/api/settings/models', (c) => {
     db.models.map((m) => ({
       id: m.id,
       model: m.model,
+      displayName: m.displayName?.trim() ? m.displayName.trim() : m.model,
       providerId: m.providerId,
       providerName: db.providers.find((p) => p.id === m.providerId)?.name ?? 'Unknown'
     }))
@@ -318,11 +319,12 @@ app.post('/api/settings/models', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const model = String(body.model ?? '').trim()
   const providerId = String(body.providerId ?? '').trim()
+  const displayName = String(body.displayName ?? '').trim()
   if (!model) return c.json({ error: 'Model id is required' }, 400)
   if (!getDb().providers.some((p) => p.id === providerId)) {
     return c.json({ error: 'Select a valid provider' }, 400)
   }
-  const entry = { id: newId(), providerId, model }
+  const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}) }
   getDb().models.push(entry)
   saveDb()
   return c.json(entry, 201)

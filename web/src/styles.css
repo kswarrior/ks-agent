@@ -471,6 +471,7 @@ button {
 
 .menu-pop-fixed {
   position: fixed;
+  right: auto;
   z-index: 130;
 }
 
@@ -1248,6 +1249,10 @@ button {
 
 @media (min-width: 900px) {
   .shell.sb-closed .sidebar {
+    display: none;
+  }
+
+  .menu-btn {
     display: none;
   }
 }
