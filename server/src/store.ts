@@ -178,3 +178,13 @@ export function findPlanForChat(chatId: string): Plan | undefined {
     .filter((p) => p.chatId === chatId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
 }
+
+export function getRetrySettings(): RetrySettings {
+  return db.retrySettings
+}
+
+export function updateRetrySettings(partial: Partial<RetrySettings>): RetrySettings {
+  db.retrySettings = { ...db.retrySettings, ...partial }
+  saveDb()
+  return db.retrySettings
+}
