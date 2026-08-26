@@ -3,7 +3,7 @@ import * as api from '../api'
 import type { ModelEntry, Provider } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
-import { IconPencil, IconPlus, IconTrash, IconX } from '../icons'
+import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX } from '../icons'
 
 interface Props {
   open: boolean
@@ -12,6 +12,16 @@ interface Props {
 }
 
 type Tab = 'providers' | 'models'
+
+const PROVIDER_PRESETS = [
+  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
+  { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
+  { name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1' },
+  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1' },
+  { name: 'Together', baseUrl: 'https://api.together.xyz/v1' },
+  { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1' },
+  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1' }
+]
 
 interface ProviderForm {
   editingId: string | null
@@ -27,6 +37,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [providers, setProviders] = useState<Provider[]>([])
   const [models, setModels] = useState<ModelEntry[]>([])
   const [providerForm, setProviderForm] = useState<ProviderForm | null>(null)
+  const [providerPicker, setProviderPicker] = useState(false)
   const [showModelForm, setShowModelForm] = useState(false)
   const [modelForm, setModelForm] = useState({ providerId: '', model: '' })
   const [error, setError] = useState<string | null>(null)

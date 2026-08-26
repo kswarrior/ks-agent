@@ -48,6 +48,12 @@ export const IconChevronDown = ({ size, className, style }: IconProps) => (
   </svg>
 )
 
+export const IconChevronLeft = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <polyline points="15 18 9 12 15 6" />
+  </svg>
+)
+
 export const IconDots = ({ size, className, style }: IconProps) => (
   <svg {...base(size, style)} className={className} strokeWidth={2.4}>
     <circle cx="12" cy="5" r="0.6" fill="currentColor" />
