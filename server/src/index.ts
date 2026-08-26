@@ -249,6 +249,7 @@ async function runGeneration(
   history: LLMMessage[],
   agent: AgentSpec | null
 ): Promise<void> {
+  const retrySettings = getRetrySettings()
   try {
     if (agent) {
       await runAgentLoop({
@@ -263,7 +264,8 @@ async function runGeneration(
           job.content += text
           emitTo(job, 'delta', JSON.stringify(text))
         },
-        onEvent: (event, data) => emitTo(job, event, data)
+        onEvent: (event, data) => emitTo(job, event, data),
+        retrySettings
       })
     } else {
       const retrySettings = getRetrySettings()

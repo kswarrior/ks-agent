@@ -179,6 +179,7 @@ function KsAgent() {
       setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
       let acc = ''
       let assistantId: string | null = null
+      const pendingTools = new Map<string, { name: string; args: Record<string, unknown> }>()
       api
         .streamChatEvents(
           chatId,
@@ -193,6 +194,35 @@ function KsAgent() {
             onDelta: (text) => {
               acc += text
               setStreams((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? '') + text }))
+            },
+            onTool: (tool) => {
+              const { callId, name, args } = tool
+              pendingTools.set(callId, { name, args: args as Record<string, unknown> })
+              const activity: Activity = {
+                id: callId,
+                chatId,
+                toolType: name as Activity['toolType'],
+                toolCallId: callId,
+                args: args as Record<string, unknown>,
+                summary: '',
+                timestamp: new Date().toISOString(),
+                expanded: false
+              }
+              setActivities((prev) => [...prev, activity])
+            },
+            onToolResult: (result) => {
+              const { callId, ok, summary } = result
+              const pending = pendingTools.get(callId)
+              pendingTools.delete(callId)
+              if (pending) {
+                setActivities((prev) =>
+                  prev.map((a) =>
+                    a.toolCallId === callId
+                      ? { ...a, summary, ok, result: summary }
+                      : a
+                  )
+                )
+              }
             },
             onPlan: (plan) => {
               setPlans((prev) => ({ ...prev, [chatId]: plan }))
