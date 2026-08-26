@@ -502,8 +502,10 @@ button {
 }
 
 .msg-user {
-  align-self: flex-end;
-  max-width: 85%;
+  align-self: stretch;
+  width: calc(100% + 32px);
+  margin-left: -16px;
+  margin-right: -16px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 14px 14px 4px 14px;
