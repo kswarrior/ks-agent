@@ -89,6 +89,14 @@ export function loadDb(): void {
   try {
     const raw = fs.readFileSync(dbFile, 'utf8')
     const parsed = JSON.parse(raw)
+    const defaultRetrySettings: RetrySettings = {
+      enabled: true,
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 30000,
+      retryOnStatusCodes: [429, 503],
+      stopOnStatusCodes: [404]
+    }
     db = {
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
       chats: Array.isArray(parsed.chats) ? parsed.chats : [],
@@ -98,10 +106,32 @@ export function loadDb(): void {
       // Legacy field kept (and re-saved) so old settings are never lost.
       systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : '',
       planPrompt: typeof parsed.planPrompt === 'string' ? parsed.planPrompt : '',
-      plans: Array.isArray(parsed.plans) ? parsed.plans : []
+      plans: Array.isArray(parsed.plans) ? parsed.plans : [],
+      retrySettings: parsed.retrySettings && typeof parsed.retrySettings === 'object'
+        ? {
+            enabled: Boolean(parsed.retrySettings.enabled ?? defaultRetrySettings.enabled),
+            maxRetries: Number(parsed.retrySettings.maxRetries ?? defaultRetrySettings.maxRetries),
+            baseDelayMs: Number(parsed.retrySettings.baseDelayMs ?? defaultRetrySettings.baseDelayMs),
+            maxDelayMs: Number(parsed.retrySettings.maxDelayMs ?? defaultRetrySettings.maxDelayMs),
+            retryOnStatusCodes: Array.isArray(parsed.retrySettings.retryOnStatusCodes)
+              ? parsed.retrySettings.retryOnStatusCodes.filter((x: any) => Number.isInteger(x))
+              : defaultRetrySettings.retryOnStatusCodes,
+            stopOnStatusCodes: Array.isArray(parsed.retrySettings.stopOnStatusCodes)
+              ? parsed.retrySettings.stopOnStatusCodes.filter((x: any) => Number.isInteger(x))
+              : defaultRetrySettings.stopOnStatusCodes
+          }
+        : defaultRetrySettings
     }
   } catch {
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [] }
+    const defaultRetrySettings: RetrySettings = {
+      enabled: true,
+      maxRetries: 3,
+      baseDelayMs: 1000,
+      maxDelayMs: 30000,
+      retryOnStatusCodes: [429, 503],
+      stopOnStatusCodes: [404]
+    }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], retrySettings: defaultRetrySettings }
   }
 }
 
