@@ -37,3 +37,31 @@ export interface ModelEntry {
   providerId: string
   providerName: string
 }
+
+export interface FileEntry {
+  name: string
+  type: 'file' | 'dir'
+  size?: number
+}
+
+export interface FileListing {
+  path: string
+  entries: FileEntry[]
+}
+
+export type PlanStepStatus = 'pending' | 'done'
+
+export interface PlanStep {
+  id: string
+  title: string
+  status: PlanStepStatus
+}
+
+export interface Plan {
+  id: string
+  chatId: string
+  title: string
+  steps: PlanStep[]
+  createdAt: string
+  updatedAt: string
+}
