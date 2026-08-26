@@ -3,7 +3,7 @@ import * as api from '../api'
 import type { ModelEntry, Provider, RetrySettings } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
-import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRefreshCw, IconRotateCw } from '../icons'
+import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate } from '../icons'
 
 interface Props {
   open: boolean
