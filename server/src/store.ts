@@ -59,6 +59,14 @@ export interface Plan {
   updatedAt: string
 }
 
+export interface Terminal {
+  id: string
+  projectId: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
 interface DB {
   projects: Project[]
   chats: Chat[]
