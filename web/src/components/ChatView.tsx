@@ -1,7 +1,35 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { Chat, Message, ModelEntry } from '../types'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconSend, IconStop } from '../icons'
+import { IconChevronDown, IconSearch, IconSend, IconStop } from '../icons'
+
+const CLAMP_LINES = 5
+
+function ClampedContent({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [overflowing, setOverflowing] = useState(false)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    setOverflowing(el.scrollHeight > el.clientHeight + 1)
+  }, [])
+
+  return (
+    <>
+      <div ref={ref} className={`msg-clamp${expanded ? ' open' : ''}`}>
+        {children}
+      </div>
+      {overflowing && !expanded && (
+        <button className="read-more-btn" onClick={() => setExpanded(true)}>
+          Read more
+        </button>
+      )}
+    </>
+  )
+}
 
 interface Props {
   chat: Chat | null
