@@ -69,20 +69,28 @@ export function ChatView(props: Props) {
         {(!props.chat || props.messages.length === 0) && !props.streaming ? (
           <div className="empty" style={{ height: '100%' }}>
             <div className="empty-logo">KS</div>
-            <h2>{props.chat ? 'Start the conversation' : 'Select or create a chat'}</h2>
+            <h2>
+              {props.chat
+                ? 'Start the conversation'
+                : props.hasProject
+                  ? 'Start a chat'
+                  : 'Select a project'}
+            </h2>
             <p>
               {props.chat
                 ? 'Ask anything about your project.'
                 : props.messages.length > 0
                   ? ''
-                  : 'Pick a project in the sidebar, then create a chat.'}
+                  : props.hasProject
+                    ? 'Send a message and a chat is created automatically.'
+                    : 'Pick a project in the sidebar to begin.'}
             </p>
             {props.chat && (
               <span className="empty-hint">
                 {props.models.length === 0
                   ? 'Add a provider + model in Settings to begin'
-                  : selectedModel
-                    ? `Model: ${selectedModel.model}`
+                  : selectedModelLabel
+                    ? `Model: ${selectedModelLabel}`
                     : 'Select a model below'}
               </span>
             )}
@@ -118,8 +126,8 @@ export function ChatView(props: Props) {
             ref={textareaRef}
             className="composer-input"
             rows={1}
-            placeholder={props.chat ? 'Message KS Agent…' : 'Create a chat first'}
-            disabled={!props.chat}
+            placeholder={!props.hasProject ? 'Select a project first' : 'Message KS Agent…'}
+            disabled={!props.hasProject}
             value={input}
             onChange={(e) => {
               setInput(e.target.value)
@@ -140,7 +148,11 @@ export function ChatView(props: Props) {
                 title="Choose model"
               >
                 <IconChevronDown size={14} style={{ transform: 'rotate(90deg)' }} />
-                <span>{selectedModel ? `${selectedModel.providerName} · ${selectedModel.model}` : 'No model'}</span>
+                <span>
+                  {selectedModelLabel
+                    ? `${selectedModel.providerName} · ${selectedModelLabel}`
+                    : 'No model'}
+                </span>
               </button>
 
               {modelOpen && (
@@ -169,8 +181,10 @@ export function ChatView(props: Props) {
                         setModelOpen(false)
                       }}
                     >
-                      <span>{m.model}</span>
-                      <small style={{ color: 'var(--text-faint)' }}>{m.providerName}</small>
+                      <span>{m.displayName || m.model}</span>
+                      <small style={{ color: 'var(--text-faint)' }}>
+                        {m.displayName && m.displayName !== m.model ? `${m.providerName} · ${m.model}` : m.providerName}
+                      </small>
                     </button>
                   ))}
                 </div>
