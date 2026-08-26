@@ -1933,13 +1933,6 @@ button {
   min-width: 0;
 }
 
-.activity-count {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--text-faint);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
 .activity-args {
   flex: 1;
   min-width: 0;
@@ -2004,21 +1997,18 @@ button {
   color: var(--danger);
 }
 
-.activity-detail-args,
-.activity-detail-result {
+.activity-detail-section {
   margin-bottom: 8px;
 }
 
-.activity-detail-args strong,
-.activity-detail-result strong {
+.activity-detail-section strong {
   display: block;
   font-size: 11px;
   color: var(--text-dim);
   margin-bottom: 4px;
 }
 
-.activity-detail-args pre,
-.activity-detail-result pre {
+.activity-detail-section pre {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
