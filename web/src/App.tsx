@@ -353,70 +353,33 @@ function KsAgent() {
       setMessages((prev) => [...prev, tempUserMsg])
     }
 
-    setStreaming(true)
-    setStreamText('')
-
-    const controller = new AbortController()
-    abortRef.current = controller
-
-    let acc = ''
-    let assistantId: string | null = null
+    setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
 
     try {
-      await api.sendMessage(
-        chatId,
-        content,
-        selectedModelId,
-        {
-          onMeta: (meta) => {
-            assistantId = meta.assistantId
-          },
-          onDelta: (text) => {
-            acc += text
-            setStreamText((prev) => prev + text)
-          },
-          onError: (message) => toast(message.split('\n')[0], 'error'),
-          onDone: () => {}
-        },
-        controller.signal
-      )
+      await api.sendMessage(chatId, content, selectedModelId)
+      trackGeneration(chatId)
     } catch (e: any) {
-      if (e.name !== 'AbortError') toast(e.message, 'error')
-    } finally {
-      abortRef.current = null
-      if (acc.trim()) {
-        setMessages((prev) => {
-          const id = assistantId ?? 'tmp-assistant-' + Date.now()
-          return prev.some((m) => m.id === id)
-            ? prev
-            : [
-                ...prev,
-                {
-                  id,
-                  chatId,
-                  role: 'assistant' as const,
-                  content: acc,
-                  createdAt: new Date().toISOString()
-                }
-              ]
-        })
-      }
-      setStreaming(false)
-      setStreamText('')
+      toast(e.message, 'error')
+      setStreams((prev) => {
+        const next = { ...prev }
+        delete next[chatId]
+        return next
+      })
       try {
         const fresh = await api.listMessages(chatId)
-        setMessages(fresh)
-        setChats((prev) =>
-          [...prev].sort((a, b) =>
-            a.id === chatId ? -1 : b.id === chatId ? 1 : b.updatedAt.localeCompare(a.updatedAt)
-          )
-        )
+        if (activeChatIdRef.current === chatId) setMessages(fresh)
       } catch {}
     }
   }
 
-  function stopStreaming() {
-    abortRef.current?.abort()
+  async function stopStreaming() {
+    const chatId = activeChatId
+    if (!chatId || !subsRef.current.has(chatId)) return
+    try {
+      await api.stopGeneration(chatId)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
   }
 
   // ---- render ----
