@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import type { Project } from '../types'
-import { IconX } from '../icons'
+import type { Plan } from '../types'
+import { IconCheck, IconX } from '../icons'
 import { FilesPane } from './FilesPane'
 
 type RsTab = 'plan' | 'files' | 'terminal' | 'settings'
 
 interface RightSidebarProps {
   open: boolean
-  activeProject: Project | null
+  activeProject: import('../types').Project | null
+  plan: Plan | null
   onClose: () => void
   onOpenSettings: () => void
 }
@@ -19,7 +20,30 @@ const TABS: Array<{ id: RsTab; label: string }> = [
   { id: 'settings', label: 'Settings' }
 ]
 
-export function RightSidebar({ open, activeProject, onClose, onOpenSettings }: RightSidebarProps) {
+function PlanView({ plan }: { plan: Plan }) {
+  const done = plan.steps.filter((s) => s.status === 'done').length
+  return (
+    <div className="plan">
+      <div className="plan-head">
+        <span className="plan-title" title={plan.title}>
+          {plan.title}
+        </span>
+        <span className="plan-count">
+          {done}/{plan.steps.length}
+        </span>
+      </div>
+      {plan.steps.map((step, i) => (
+        <div key={step.id} className={`plan-card${step.status === 'done' ? ' done' : ''}`}>
+          <span className="plan-check">{step.status === 'done' && <IconCheck size={11} />}</span>
+          <span className="plan-step">{step.title}</span>
+          <span className="plan-num">{i + 1}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function RightSidebar({ open, activeProject, plan, onClose, onOpenSettings }: RightSidebarProps) {
   const [tab, setTab] = useState<RsTab>('plan')
 
   return (
@@ -37,11 +61,11 @@ export function RightSidebar({ open, activeProject, onClose, onOpenSettings }: R
         </div>
 
         <div className="rsb-body">
-          {tab === 'plan' && <div className="rsb-empty">Nothing here yet</div>}
+          {tab === 'plan' && (plan ? <PlanView plan={plan} /> : <div className="rsb-empty">Nothing here yet</div>)}
           {tab === 'terminal' && <div className="rsb-empty">Nothing here yet</div>}
           {tab === 'settings' && (
             <div className="rsb-settings">
-              <p>Providers, models and the system prompt are managed in Settings.</p>
+              <p>Providers, models and prompts are managed in Settings.</p>
               <button className="btn btn-primary" onClick={onOpenSettings}>
                 Open settings
               </button>
