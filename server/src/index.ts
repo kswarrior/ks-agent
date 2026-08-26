@@ -184,11 +184,24 @@ interface GenerationJob {
   content: string
   status: 'running' | 'done' | 'stopped' | 'error'
   errorMessage?: string
+  finishedAt?: string
   controller: AbortController
   listeners: Set<(event: string, data: string) => void>
 }
 
 const generations = new Map<string, GenerationJob>()
+
+// Terminal jobs are kept so late /api/chats/:id/events subscribers still receive
+// meta + snapshot + the terminal event; pruned periodically.
+const JOB_TTL_MS = 10 * 60_000
+setInterval(() => {
+  const cutoff = Date.now() - JOB_TTL_MS
+  for (const [id, j] of generations) {
+    if (j.status !== 'running' && j.finishedAt && Date.parse(j.finishedAt) < cutoff) {
+      generations.delete(id)
+    }
+  }
+}, 60_000).unref()
 
 function emitTo(job: GenerationJob, event: string, data: string): void {
   for (const notify of [...job.listeners]) {
