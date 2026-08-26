@@ -329,6 +329,17 @@ export interface AgentRunOutcome {
  * Runs the tool-augmented generation loop: stream a round, execute requested
  * tools, feed results back, repeat until the model answers without tool calls.
  */
+function markWorkingStep(ctx: ToolContext): void {
+  const plan = findPlanForChat(ctx.chatId)
+  if (!plan) return
+  const workingIdx = plan.steps.findIndex((s) => s.status === 'pending')
+  if (workingIdx === -1) return
+  plan.steps[workingIdx].status = 'working'
+  plan.updatedAt = new Date().toISOString()
+  saveDb()
+  ctx.onEvent('plan', JSON.stringify(plan))
+}
+
 export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutcome> {
   const messages: LLMMessage[] = [...opts.history]
   const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent }
@@ -336,6 +347,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     if (opts.signal.aborted) throw abortError()
+    markWorkingStep(ctx)
     const outcome = await streamChatWithTools(
       opts.baseUrl,
       opts.apiKey,
