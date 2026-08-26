@@ -11,7 +11,7 @@ interface Props {
   onDataChanged: () => void
 }
 
-type Tab = 'providers' | 'models'
+type Tab = 'providers' | 'models' | 'prompt'
 
 const PROVIDER_PRESETS = [
   { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
