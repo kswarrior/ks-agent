@@ -82,3 +82,18 @@ export interface RetrySettings {
   retryOnStatusCodes: number[]
   stopOnStatusCodes: number[]
 }
+
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step'
+
+export interface Activity {
+  id: string
+  chatId: string
+  toolType: ActivityToolType
+  toolCallId: string
+  args: Record<string, unknown>
+  summary: string
+  result?: string
+  ok?: boolean
+  timestamp: string
+  expanded?: boolean
+}
