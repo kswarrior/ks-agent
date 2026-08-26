@@ -201,6 +201,15 @@ async function persistAssistant(job: GenJob, content: string, isError: boolean):
   saveDb()
 }
 
+// Persistence failures must never leave subscribers hanging without a terminal event.
+async function persistAssistantSafe(job: GenJob, content: string, isError: boolean): Promise<void> {
+  try {
+    await persistAssistant(job, content, isError)
+  } catch (e) {
+    console.error('Failed to persist assistant message:', e)
+  }
+}
+
 async function runGeneration(
   job: GenJob,
   provider: { baseUrl: string; apiKey: string },
@@ -216,9 +225,9 @@ async function runGeneration(
     if (e?.name === 'AbortError') {
       job.status = 'stopped'
       if (job.content.trim()) {
-        await persistAssistant(job, job.content + '\n\n_[stopped]_', !job.content)
+        await persistAssistantSafe(job, job.content + '\n\n_[stopped]_', false)
       } else {
-        await persistAssistant(job, '\n\n_[stopped]_', true)
+        await persistAssistantSafe(job, '\n\n_[stopped]_', true)
       }
       emitTo(job, 'stopped', '{}')
       return
@@ -227,13 +236,13 @@ async function runGeneration(
     const message = job.content
       ? `${job.content}\n\n_[stream interrupted: ${String(e?.message || e)}]_`
       : `Error: ${String(e?.message || e)}`
-    await persistAssistant(job, message, true)
+    await persistAssistantSafe(job, message, true)
     job.errorMessage = message
     emitTo(job, 'error', JSON.stringify({ message }))
     return
   }
   job.status = 'done'
-  if (job.content.trim()) await persistAssistant(job, job.content, false)
+  if (job.content.trim()) await persistAssistantSafe(job, job.content, false)
   emitTo(job, 'done', JSON.stringify({ messageId: job.assistantId }))
 }
 
