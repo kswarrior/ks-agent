@@ -92,7 +92,7 @@ interface DB {
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], retrySettings: { enabled: true, maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 30000, retryOnStatusCodes: [429, 503], stopOnStatusCodes: [404] } }
 
 export function loadDb(): void {
   try {
