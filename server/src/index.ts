@@ -23,7 +23,8 @@ import {
   updateRetrySettings,
   type Chat,
   type Project,
-  type Terminal
+  type Terminal,
+  type RetrySettings
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, runAgentLoop } from './agent.js'
