@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import {
+  chatsOf,
   findChat,
   findProject,
   getDb,
@@ -160,51 +161,51 @@ app.get('/api/chats/:id/messages', (c) => {
   return c.json(messagesOf(chat.id))
 })
 
-app.post('/api/chats/:id/messages', (c) => {
+app.post('/api/chats/:id/messages', async (c) => {
   const chat = findChat(c.req.param('id'))
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
 
-  return c.req.json().then((body) => {
-    const content = String(body.content ?? '').trim()
-    const modelId = body.modelId ? String(body.modelId) : ''
+  const body: any = await c.req.json().catch(() => ({}))
+  const content = String(body.content ?? '').trim()
+  const modelId = body.modelId ? String(body.modelId) : ''
 
-    if (!content) return c.json({ error: 'Message cannot be empty' }, 400)
+  if (!content) return c.json({ error: 'Message cannot be empty' }, 400)
 
-    const db = getDb()
-    const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
-    const resolvedModel = modelEntry ?? db.models[0]
-    if (!resolvedModel) {
-      return c.json({ error: 'No model configured. Add a provider and model in Settings.' }, 400)
-    }
-    const provider = db.providers.find((p) => p.id === resolvedModel.providerId)
-    if (!provider) {
-      return c.json({ error: 'Model has no valid provider' }, 400)
-    }
+  const db = getDb()
+  const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
+  const resolvedModel = modelEntry ?? db.models[0]
+  if (!resolvedModel) {
+    return c.json({ error: 'No model configured. Add a provider and model in Settings.' }, 400)
+  }
+  const provider = db.providers.find((p) => p.id === resolvedModel.providerId)
+  if (!provider) {
+    return c.json({ error: 'Model has no valid provider' }, 400)
+  }
 
-    const project = findProject(chat.projectId)
+  const project = findProject(chat.projectId)
 
-    const userMsg = {
-      id: newId(),
-      chatId: chat.id,
-      role: 'user' as const,
-      content,
-      createdAt: new Date().toISOString()
-    }
-    db.messages.push(userMsg)
-    touchChat(chat)
-    saveDb()
+  const userMsg = {
+    id: newId(),
+    chatId: chat.id,
+    role: 'user' as const,
+    content,
+    createdAt: new Date().toISOString()
+  }
+  db.messages.push(userMsg)
+  touchChat(chat)
+  saveDb()
 
-    const history: LLMMessage[] = [
-      {
-        role: 'system',
-        content:
-          'You are KS Agent, a precise coding assistant by ks warrior. Be concise and correct. Use markdown for code.'
-      },
-      ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
-      ...messagesOf(chat.id).map((m) => ({ role: m.role as LLMMessage['role'], content: m.content }))
-    ]
+  const history: LLMMessage[] = [
+    {
+      role: 'system',
+      content:
+        'You are KS Agent, a precise coding assistant by ks warrior. Be concise and correct. Use markdown for code.'
+    },
+    ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
+    ...messagesOf(chat.id).map((m) => ({ role: m.role as LLMMessage['role'], content: m.content }))
+  ]
 
-    return streamSSE(c, async (stream) => {
+  return streamSSE(c, async (stream) => {
       const assistantId = newId()
       await stream.writeSSE({
         event: 'meta',
