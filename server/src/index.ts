@@ -222,13 +222,12 @@ async function persistAssistantSafe(job: GenerationJob, content: string, isError
 }
 
 interface AgentSpec {
-  baseUrl: string
-  apiKey: string
   projectPath: string
 }
 
 async function runGeneration(
   job: GenerationJob,
+  provider: { baseUrl: string; apiKey: string },
   model: string,
   history: LLMMessage[],
   agent: AgentSpec | null
@@ -236,8 +235,8 @@ async function runGeneration(
   try {
     if (agent) {
       await runAgentLoop({
-        baseUrl: agent.baseUrl,
-        apiKey: agent.apiKey,
+        baseUrl: provider.baseUrl,
+        apiKey: provider.apiKey,
         model,
         history,
         projectPath: agent.projectPath,
@@ -250,7 +249,7 @@ async function runGeneration(
         onEvent: (event, data) => emitTo(job, event, data)
       })
     } else {
-      for await (const delta of streamChat(agentlessBaseUrl(agent, job), agentApiKey(agent, job), model, history, job.controller.signal)) {
+      for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal)) {
         job.content += delta
         emitTo(job, 'delta', JSON.stringify(delta))
       }
@@ -278,15 +277,6 @@ async function runGeneration(
   job.status = 'done'
   if (job.content.trim()) await persistAssistantSafe(job, job.content, false)
   emitTo(job, 'done', JSON.stringify({ messageId: job.assistantId }))
-}
-
-// The plain (non-agent) stream needs the provider credentials too; both are
-// supplied together through AgentSpec, so these helpers stay total.
-function agentlessBaseUrl(agent: AgentSpec | null, job: GenerationJob): string {
-  throw new Error(`internal error: unexpected non-agent generation for ${job.chatId}`)
-}
-function agentApiKey(agent: AgentSpec | null, job: GenerationJob): string {
-  throw new Error(`internal error: unexpected non-agent generation for ${job.chatId}`)
 }
 
 app.get('/api/generations', (c) => {
