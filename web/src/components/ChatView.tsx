@@ -207,50 +207,50 @@ export function ChatView(props: Props) {
                 <div className="model-dd">
                   {props.models.length > 0 && (
                     <div className="dd-toolbar">
-                    <div className="search-box">
-                      <IconSearch size={14} />
-                      <input
-                        className="search-input"
-                        placeholder="Search models…"
-                        value={modelQuery}
-                        onChange={(e) => setModelQuery(e.target.value)}
-                      />
-                    </div>
-                    <div className="prov-filter-wrap">
-                      <button
-                        className={`filter-chip${provFilterId ? ' active' : ''}`}
-                        onClick={() => setProvOpen((v) => !v)}
-                        title="Filter by provider"
-                      >
-                        <span>{provFilterName ?? 'All'}</span>
-                        <IconChevronDown size={12} />
-                      </button>
-                      {provOpen && (
-                        <div className="prov-pop">
-                          <button
-                            className={`dd-item${provFilterId === null ? ' active' : ''}`}
-                            onClick={() => {
-                              setProvFilterId(null)
-                              setProvOpen(false)
-                            }}
-                          >
-                            <span>All providers</span>
-                          </button>
-                          {providers.map(([id, name]) => (
+                      <div className="search-box">
+                        <IconSearch size={14} />
+                        <input
+                          className="search-input"
+                          placeholder="Search models…"
+                          value={modelQuery}
+                          onChange={(e) => setModelQuery(e.target.value)}
+                        />
+                      </div>
+                      <div className="prov-filter-wrap">
+                        <button
+                          className={`filter-chip${provFilterId ? ' active' : ''}`}
+                          onClick={() => setProvOpen((v) => !v)}
+                          title="Filter by provider"
+                        >
+                          <span>{provFilterName ?? 'All'}</span>
+                          <IconChevronDown size={12} />
+                        </button>
+                        {provOpen && (
+                          <div className="prov-pop">
                             <button
-                              key={id}
-                              className={`dd-item${provFilterId === id ? ' active' : ''}`}
+                              className={`dd-item${provFilterId === null ? ' active' : ''}`}
                               onClick={() => {
-                                setProvFilterId(id)
+                                setProvFilterId(null)
                                 setProvOpen(false)
                               }}
                             >
-                              <span>{name}</span>
+                              <span>All providers</span>
                             </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                            {providers.map(([id, name]) => (
+                              <button
+                                key={id}
+                                className={`dd-item${provFilterId === id ? ' active' : ''}`}
+                                onClick={() => {
+                                  setProvFilterId(id)
+                                  setProvOpen(false)
+                                }}
+                              >
+                                <span>{name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                   <div className="model-dd-list">
