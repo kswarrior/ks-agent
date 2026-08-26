@@ -335,13 +335,6 @@ export function FilesPane({ projectId }: FilesPaneProps) {
           </div>
           {subPage.tab === 'local' && (
             <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                style={{ display: 'none' }}
-                onChange={(e) => pickLocal(e.target.files)}
-              />
               <button className="btn btn-primary fp-submit" disabled={busy} onClick={() => fileInputRef.current?.click()}>
                 <IconUpload size={15} style={{ marginRight: 6 }} />
                 Choose files
