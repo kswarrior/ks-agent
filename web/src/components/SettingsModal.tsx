@@ -425,19 +425,27 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
 
           {tab === 'prompt' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
-              <h4>System prompt</h4>
+              <h4>Plan prompt</h4>
               <p className="hint" style={{ marginTop: 2, marginBottom: 10 }}>
-                Sent to the model at the start of every conversation. Leave blank to use the default KS Agent prompt.
+                Instructions for the agent when it plans and executes work (creating plan steps, using tools,
+                marking them complete). Leave blank to use the built-in default.
               </p>
               <textarea
                 className="input"
                 rows={10}
-                placeholder="You are a precise coding assistant…"
-                value={systemDraft}
-                onChange={(e) => setSystemDraft(e.target.value)}
+                placeholder="You are working in PLAN mode…"
+                value={planDraft}
+                onChange={(e) => setPlanDraft(e.target.value)}
               />
+              <p className="hint" style={{ marginTop: 8 }}>
+                The primary system prompt is built into KS Agent and cannot be viewed or edited.
+              </p>
               <div className="dialog-actions">
-                <button className="btn btn-primary" onClick={submitSystemPrompt}>
+                <button
+                  className="btn btn-primary"
+                  onClick={submitPlanPrompt}
+                  disabled={planDraft.trim() === planPrompt}
+                >
                   Save
                 </button>
               </div>
