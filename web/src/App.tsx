@@ -132,6 +132,28 @@ function KsAgent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId])
 
+  // load the chat's plan for the right sidebar
+  useEffect(() => {
+    if (!activeChatId) return
+    let cancelled = false
+    api
+      .getPlan(activeChatId)
+      .then((plan) => {
+        if (cancelled) return
+        setPlans((prev) => {
+          const next = { ...prev }
+          if (plan) next[activeChatId] = plan
+          else delete next[activeChatId]
+          return next
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChatId])
+
   // load models (+ keep selection valid)
   const refreshModels = useCallback(async () => {
     try {
