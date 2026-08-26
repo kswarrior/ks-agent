@@ -199,6 +199,7 @@ app.post('/api/chats/:id/messages', async (c) => {
     {
       role: 'system',
       content:
+        getDb().systemPrompt.trim() ||
         'You are KS Agent, a precise coding assistant by ks warrior. Be concise and correct. Use markdown for code.'
     },
     ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),

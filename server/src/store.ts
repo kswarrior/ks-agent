@@ -48,12 +48,13 @@ interface DB {
   messages: Message[]
   providers: Provider[]
   models: ModelEntry[]
+  systemPrompt: string
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '' }
 
 export function loadDb(): void {
   try {
@@ -64,10 +65,11 @@ export function loadDb(): void {
       chats: Array.isArray(parsed.chats) ? parsed.chats : [],
       messages: Array.isArray(parsed.messages) ? parsed.messages : [],
       providers: Array.isArray(parsed.providers) ? parsed.providers : [],
-      models: Array.isArray(parsed.models) ? parsed.models : []
+      models: Array.isArray(parsed.models) ? parsed.models : [],
+      systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : ''
     }
   } catch {
-    db = { projects: [], chats: [], messages: [], providers: [], models: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '' }
   }
 }
 
