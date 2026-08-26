@@ -187,13 +187,15 @@ export async function streamChatWithTools(
   messages: LLMMessage[],
   tools: ToolDef[],
   onDelta: (text: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  retrySettings?: RetrySettings
 ): Promise<AgentStreamResult> {
   const reader = await openStream(
     baseUrl,
     apiKey,
     { model, messages, stream: true, tools, tool_choice: 'auto' },
-    signal
+    signal,
+    retrySettings
   )
   const decoder = new TextDecoder()
   let buf = ''

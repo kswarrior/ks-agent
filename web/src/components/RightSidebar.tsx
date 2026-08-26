@@ -35,8 +35,10 @@ function PlanView({ plan }: { plan: Plan }) {
         </span>
       </div>
       {plan.steps.map((step, i) => (
-        <div key={step.id} className={`plan-card${step.status === 'done' ? ' done' : ''}`}>
-          <span className="plan-check">{step.status === 'done' && <IconCheck size={11} />}</span>
+        <div key={step.id} className={`plan-card${step.status === 'done' ? ' done' : ''}${step.status === 'working' ? ' working' : ''}`}>
+          <span className="plan-check">
+            {step.status === 'done' ? <IconCheck size={11} /> : step.status === 'working' ? <IconRotate size={11} className="spin" /> : null}
+          </span>
           <span className="plan-step">{step.title}</span>
           <span className="plan-num">{i + 1}</span>
         </div>
