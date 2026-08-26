@@ -5,6 +5,7 @@ import { IconChevronDown, IconSend, IconStop } from '../icons'
 
 interface Props {
   chat: Chat | null
+  hasProject: boolean
   messages: Message[]
   streaming: boolean
   streamText: string

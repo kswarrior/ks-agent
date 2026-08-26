@@ -201,20 +201,52 @@ function KsAgent() {
 
   // ---- sending ----
   async function send(content: string) {
-    if (!activeChatId) return
     if (!selectedModelId) {
       toast('No model selected. Add one in Settings.', 'error')
       return
     }
-
-    const tempUserMsg: Message = {
-      id: 'tmp-' + Date.now(),
-      chatId: activeChatId,
-      role: 'user',
-      content,
-      createdAt: new Date().toISOString()
+    if (!activeProjectId) {
+      toast('Select a project first', 'error')
+      return
     }
-    setMessages((prev) => [...prev, tempUserMsg])
+    if (creatingChatRef.current) return
+
+    let chatId = activeChatId
+
+    if (!chatId) {
+      creatingChatRef.current = true
+      try {
+        const chat = await api.createChat(activeProjectId)
+        chatId = chat.id
+        skipLoadForRef.current = chat.id
+        setChats((prev) => [chat, ...prev])
+        setActiveChatId(chat.id)
+        setMessages([
+          {
+            id: 'tmp-' + Date.now(),
+            chatId: chat.id,
+            role: 'user',
+            content,
+            createdAt: new Date().toISOString()
+          }
+        ])
+      } catch (e: any) {
+        toast(e.message, 'error')
+        return
+      } finally {
+        creatingChatRef.current = false
+      }
+    } else {
+      const tempUserMsg: Message = {
+        id: 'tmp-' + Date.now(),
+        chatId,
+        role: 'user',
+        content,
+        createdAt: new Date().toISOString()
+      }
+      setMessages((prev) => [...prev, tempUserMsg])
+    }
+
     setStreaming(true)
     setStreamText('')
 
@@ -223,7 +255,7 @@ function KsAgent() {
 
     try {
       await api.sendMessage(
-        activeChatId,
+        chatId,
         content,
         selectedModelId,
         {
@@ -240,11 +272,11 @@ function KsAgent() {
       setStreaming(false)
       setStreamText('')
       try {
-        const fresh = await api.listMessages(activeChatId)
+        const fresh = await api.listMessages(chatId)
         setMessages(fresh)
         setChats((prev) =>
           [...prev].sort((a, b) =>
-            a.id === activeChatId ? -1 : b.id === activeChatId ? 1 : b.updatedAt.localeCompare(a.updatedAt)
+            a.id === chatId ? -1 : b.id === chatId ? 1 : b.updatedAt.localeCompare(a.updatedAt)
           )
         )
       } catch {}
@@ -278,6 +310,7 @@ function KsAgent() {
         <main className="main">
           <ChatView
             chat={activeChat}
+            hasProject={!!activeProject}
             messages={messages}
             streaming={streaming}
             streamText={streamText}
