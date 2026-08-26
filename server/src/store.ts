@@ -198,3 +198,13 @@ export function updateRetrySettings(partial: Partial<RetrySettings>): RetrySetti
   saveDb()
   return db.retrySettings
 }
+
+export function terminalsOf(projectId: string): Terminal[] {
+  return db.terminals
+    .filter((t) => t.projectId === projectId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+export function findTerminal(id: string): Terminal | undefined {
+  return db.terminals.find((t) => t.id === id)
+}
