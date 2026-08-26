@@ -1538,6 +1538,81 @@ button {
   }
 }
 
+/* Terminal pane */
+.tp {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tp-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tp-create {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+
+.tp-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tp-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tp-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 7px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.tp-row:hover {
+  background: var(--btn);
+  color: var(--text);
+}
+
+.tp-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tp-delete {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.tp-row:hover .tp-delete {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tp-delete {
+    opacity: 1;
+  }
+}
+
 /* Plan tab — one card per step */
 .plan-head {
   display: flex;
