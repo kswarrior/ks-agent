@@ -455,7 +455,14 @@ export function FilesPane({ projectId }: FilesPaneProps) {
                       key={entry.name}
                       className={`fp-row${selected === rel ? ' active' : ''}${rowMenu?.entry.name === entry.name ? ' menu-open' : ''}`}
                       role="button"
-                      onClick={() => (entry.type === 'dir' ? openDir(entry.name) : setSelected(rel))}
+                      onClick={() => {
+                        if (entry.type === 'dir') {
+                          openDir(entry.name)
+                        } else {
+                          setSelected(rel)
+                          loadFileContent(rel)
+                        }
+                      }}
                     >
                       {entry.type === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
                       <span className="fp-name">{entry.name}</span>
