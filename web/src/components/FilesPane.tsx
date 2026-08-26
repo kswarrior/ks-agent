@@ -386,48 +386,63 @@ export function FilesPane({ projectId }: FilesPaneProps) {
           </div>
 
           <div className="fp-list">
-            {dir !== '' && (
-              <div
-                className="fp-row"
-                role="button"
-                onClick={() => {
-                  setDir(parentOf(dir))
-                  setSelected(null)
-                  setQuery('')
-                }}
-              >
-                <IconChevronLeft size={15} />
-                <span className="fp-name">..</span>
+            {loading ? (
+              <div className="fp-skel" aria-label="Loading files">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="fp-skel-row">
+                    <span className="fp-skel-icon" style={{ animationDelay: `${i * 70}ms` }} />
+                    <span
+                      className="fp-skel-bar"
+                      style={{ width: `${52 + ((i * 17) % 34)}%`, animationDelay: `${i * 70}ms` }}
+                    />
+                  </div>
+                ))}
               </div>
-            )}
-            {loading && <div className="dd-empty">Loading…</div>}
-            {!loading && filtered.length === 0 && (
-              <div className="dd-empty">{entries.length === 0 ? 'No files yet' : 'No matches'}</div>
-            )}
-            {filtered.map((entry) => {
-              const rel = joinRel(dir, entry.name)
-              return (
-                <div
-                  key={entry.name}
-                  className={`fp-row${selected === rel ? ' active' : ''}${rowMenu?.entry.name === entry.name ? ' menu-open' : ''}`}
-                  role="button"
-                  onClick={() => (entry.type === 'dir' ? openDir(entry.name) : setSelected(rel))}
-                >
-                  {entry.type === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
-                  <span className="fp-name">{entry.name}</span>
-                  <span
-                    className="icon-btn row-menu"
+            ) : (
+              <>
+                {dir !== '' && (
+                  <div
+                    className="fp-row"
                     role="button"
-                    aria-label={`${entry.type} options`}
-                    data-fp-menu="trigger"
-                    style={{ width: 26, height: 26 }}
-                    onClick={(e) => toggleRowMenu(e, entry)}
+                    onClick={() => {
+                      setDir(parentOf(dir))
+                      setSelected(null)
+                      setQuery('')
+                    }}
                   >
-                    <IconDots size={15} />
-                  </span>
-                </div>
-              )
-            })}
+                    <IconChevronLeft size={15} />
+                    <span className="fp-name">..</span>
+                  </div>
+                )}
+                {filtered.length === 0 && (
+                  <div className="dd-empty">{entries.length === 0 ? 'No files yet' : 'No matches'}</div>
+                )}
+                {filtered.map((entry) => {
+                  const rel = joinRel(dir, entry.name)
+                  return (
+                    <div
+                      key={entry.name}
+                      className={`fp-row${selected === rel ? ' active' : ''}${rowMenu?.entry.name === entry.name ? ' menu-open' : ''}`}
+                      role="button"
+                      onClick={() => (entry.type === 'dir' ? openDir(entry.name) : setSelected(rel))}
+                    >
+                      {entry.type === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
+                      <span className="fp-name">{entry.name}</span>
+                      <span
+                        className="icon-btn row-menu"
+                        role="button"
+                        aria-label={`${entry.type} options`}
+                        data-fp-menu="trigger"
+                        style={{ width: 26, height: 26 }}
+                        onClick={(e) => toggleRowMenu(e, entry)}
+                      >
+                        <IconDots size={15} />
+                      </span>
+                    </div>
+                  )
+                })}
+              </>
+            )}
           </div>
         </>
       )}

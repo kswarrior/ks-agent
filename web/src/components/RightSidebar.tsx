@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Plan } from '../types'
+import type { Plan, Project } from '../types'
 import { IconCheck, IconX } from '../icons'
 import { FilesPane } from './FilesPane'
 
@@ -7,7 +7,7 @@ type RsTab = 'plan' | 'files' | 'terminal' | 'settings'
 
 interface RightSidebarProps {
   open: boolean
-  activeProject: import('../types').Project | null
+  activeProject: Project | null
   plan: Plan | null
   onClose: () => void
   onOpenSettings: () => void
