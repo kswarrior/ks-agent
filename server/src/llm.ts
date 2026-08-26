@@ -47,27 +47,66 @@ async function openStream(
   baseUrl: string,
   apiKey: string,
   body: Record<string, unknown>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  retrySettings?: RetrySettings
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
-  const res = await fetch(endpoint(baseUrl), {
-    method: 'POST',
-    signal,
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body)
-  })
-
-  if (!res.ok) {
-    let detail = ''
-    try {
-      detail = (await res.text()).slice(0, 300)
-    } catch {}
-    throw new Error(`Provider responded ${res.status}${detail ? `: ${detail}` : ''}`)
+  const settings = retrySettings ?? {
+    enabled: true,
+    maxRetries: 3,
+    baseDelayMs: 1000,
+    maxDelayMs: 30000,
+    retryOnStatusCodes: [429, 503],
+    stopOnStatusCodes: [404]
   }
-  if (!res.body) throw new Error('Provider returned an empty response body')
-  return res.body.getReader()
+
+  let attempt = 0
+  while (true) {
+    const res = await fetch(endpoint(baseUrl), {
+      method: 'POST',
+      signal,
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(body)
+    })
+
+    if (!res.ok) {
+      let detail = ''
+      try {
+        detail = (await res.text()).slice(0, 300)
+      } catch {}
+      const status = res.status
+      const errorMsg = `Provider responded ${status}${detail ? `: ${detail}` : ''}`
+      
+      // Check if we should stop immediately (e.g., 404 model not found)
+      if (settings.stopOnStatusCodes.includes(status)) {
+        throw new Error(errorMsg)
+      }
+      
+      // Check if we should retry
+      const shouldRetry = settings.enabled &&
+        settings.retryOnStatusCodes.includes(status) &&
+        attempt < settings.maxRetries
+      
+      if (!shouldRetry) {
+        throw new Error(errorMsg)
+      }
+      
+      // Calculate delay with exponential backoff and jitter
+      const delay = Math.min(
+        settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 1000,
+        settings.maxDelayMs
+      )
+      
+      await new Promise(resolve => setTimeout(resolve, delay))
+      attempt++
+      continue
+    }
+    
+    if (!res.body) throw new Error('Provider returned an empty response body')
+    return res.body.getReader()
+  }
 }
 
 /** Parses one SSE `data:` payload into deltas, or null for keep-alives. */
