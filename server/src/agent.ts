@@ -42,17 +42,18 @@ interface ToolContext {
   onEvent: (event: string, data: string) => void
 }
 
+function err(message: string): ToolExecResult {
+  return { ok: false, result: `Error: ${message}`, summary: message.slice(0, 160) }
+}
+
 function ok(resultText: string, summary: string): ToolExecResult {
   return { ok: true, result: resultText, summary }
 }
 
+/** Resolves a tool-supplied relative path inside the project; null when invalid. */
 function safeJoin(ctx: ToolContext, rel: unknown): string | null {
-  if (typeof rel !== 'string' || !rel.trim()) return null
+  if (typeof rel !== 'string') return null
   return resolveInProject(ctx.projectPath, rel)
-}
-
-function emitPlanChanged(ctx: ToolContext, plan: Plan, emitEvent: (event: string, data: string) => void): void {
-  emitEvent('plan', JSON.stringify(plan))
 }
 
 const AGENT_TOOLS: ToolDef[] = [
