@@ -181,7 +181,8 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
 
   switch (name) {
     case 'list_files': {
-      const abs = safeJoin(ctx, args.path ?? '') ?? (args.path ? null : ctx.projectPath)
+      const rel = typeof args.path === 'string' ? args.path : ''
+      const abs = rel.trim() ? safeJoin(ctx, rel) : resolveInProject(ctx.projectPath, '.')
       if (!abs) return err('path escapes the project root')
       let dirents: fs.Dirent[]
       try {
@@ -193,8 +194,8 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
         .sort((a, b) => a.name.localeCompare(b.name))
         .slice(0, LIST_MAX_ENTRIES)
         .map((d) => (d.isDirectory() ? `[dir] ${d.name}` : d.name))
-      const rel = relWithin(ctx.projectPath, abs)
-      return ok(`${rel || '.'}\n${lines.join('\n')}`, `${rel || '/'} (${lines.length} entries)`)
+      const shown = relWithin(ctx.projectPath, abs)
+      return ok(`${shown || '.'}\n${lines.join('\n')}`, `${shown || '/'} (${lines.length} entries)`)
     }
 
     case 'read_file': {
@@ -282,7 +283,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       }
       db.plans.push(plan)
       saveDb()
-      emitPlanChanged(ctx, plan, () => {})
+      ctx.onEvent('plan', JSON.stringify(plan))
       return ok(`OK plan created with ${plan.steps.length} steps`, `plan: ${title}`)
     }
 
