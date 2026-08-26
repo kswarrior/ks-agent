@@ -186,6 +186,16 @@ export async function uploadLocalFiles(projectId: string, dir: string, files: Fi
 export const uploadFromUrl = (projectId: string, p: { url: string; path: string }) =>
   req<{ ok: true; name: string }>(`/api/projects/${projectId}/files/upload-url`, json('POST', p))
 
+// Terminals
+export const listTerminals = (projectId: string) =>
+  req<Terminal[]>(`/api/projects/${projectId}/terminals`)
+export const createTerminal = (projectId: string, name: string) =>
+  req<Terminal>(`/api/projects/${projectId}/terminals`, json('POST', { name }))
+export const renameTerminal = (id: string, name: string) =>
+  req<Terminal>(`/api/terminals/${id}`, json('PATCH', { name }))
+export const deleteTerminal = (id: string) =>
+  req<{ ok: true }>(`/api/terminals/${id}`, { method: 'DELETE' })
+
 // Settings
 export const listProviders = () => req<Provider[]>('/api/settings/providers')
 export const createProvider = (p: { name: string; baseUrl: string; apiKey: string }) =>
