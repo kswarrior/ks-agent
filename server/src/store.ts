@@ -59,6 +59,15 @@ export interface Plan {
   updatedAt: string
 }
 
+export interface RetrySettings {
+  enabled: boolean
+  maxRetries: number
+  baseDelayMs: number
+  maxDelayMs: number
+  retryOnStatusCodes: number[]
+  stopOnStatusCodes: number[]
+}
+
 interface DB {
   projects: Project[]
   chats: Chat[]
@@ -68,6 +77,7 @@ interface DB {
   systemPrompt: string
   planPrompt: string
   plans: Plan[]
+  retrySettings: RetrySettings
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
