@@ -39,10 +39,7 @@ export interface ToolExecResult {
 interface ToolContext {
   projectPath: string
   chatId: string
-}
-
-function err(message: string): ToolExecResult {
-  return { ok: false, result: `Error: ${message}`, summary: message.slice(0, 160) }
+  onEvent: (event: string, data: string) => void
 }
 
 function ok(resultText: string, summary: string): ToolExecResult {
