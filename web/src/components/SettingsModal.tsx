@@ -179,7 +179,35 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
         <div className="tab-body">
           {error && <p className="field-error" style={{ marginBottom: 10 }}>{error}</p>}
 
-          {tab === 'providers' && (
+          {tab === 'providers' && providerPicker ? (
+            <>
+              <div className="list-head">
+                <button
+                  className="icon-btn"
+                  aria-label="Back to providers"
+                  onClick={() => { setProviderPicker(false); setError(null) }}
+                >
+                  <IconChevronLeft size={16} />
+                </button>
+                <h3>Add provider</h3>
+              </div>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                Pick a provider to start with its base URL pre-filled — you only need to enter your API key.
+              </p>
+              <div className="preset-grid">
+                {PROVIDER_PRESETS.map((pr) => (
+                  <button key={pr.name} type="button" className="preset-card" onClick={() => chooseProvider(pr.name, pr.baseUrl)}>
+                    <span className="preset-name">{pr.name}</span>
+                    <span className="preset-url">{pr.baseUrl}</span>
+                  </button>
+                ))}
+                <button type="button" className="preset-card" onClick={() => chooseProvider('', '')}>
+                  <span className="preset-name">Custom</span>
+                  <span className="preset-url">Any OpenAI-compatible endpoint</span>
+                </button>
+              </div>
+            </>
+          ) : tab === 'providers' ? (
             <>
               <div className="list-head">
                 <h3>Providers ({providers.length})</h3>
