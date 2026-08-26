@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Chat, Project } from '../types'
 import {
   IconChat,
@@ -41,14 +42,59 @@ function useClickOutside(onOutside: () => void) {
   return ref
 }
 
+interface MenuState {
+  id: string
+  top: number
+  left: number
+}
+
 export function Sidebar(props: SidebarProps) {
   const [projOpen, setProjOpen] = useState(false)
   const [projQuery, setProjQuery] = useState('')
   const [chatQuery, setChatQuery] = useState('')
-  const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [menuFor, setMenuFor] = useState<MenuState | null>(null)
 
   const ddRef = useClickOutside(() => setProjOpen(false))
-  const menuRef = useClickOutside(() => setMenuFor(null))
+
+  useEffect(() => {
+    if (!menuFor) return
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null
+      if (!t || !t.closest('[data-row-menu]')) setMenuFor(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuFor(null)
+    }
+    const dismiss = () => setMenuFor(null)
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', dismiss, true)
+    window.addEventListener('resize', dismiss)
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', dismiss, true)
+      window.removeEventListener('resize', dismiss)
+    }
+  }, [menuFor])
+
+  function toggleMenu(e: React.MouseEvent<HTMLSpanElement>, id: string) {
+    e.stopPropagation()
+    if (menuFor?.id === id) {
+      setMenuFor(null)
+      return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    const width = 150
+    const height = 96
+    setMenuFor({
+      id,
+      top: Math.min(rect.bottom + 6, window.innerHeight - height - 8),
+      left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+    })
+  }
+
+  const menuChat = menuFor ? props.chats.find((c) => c.id === menuFor.id) : null
 
   const filteredProjects = props.projects.filter((p) =>
     p.name.toLowerCase().includes(projQuery.trim().toLowerCase())
