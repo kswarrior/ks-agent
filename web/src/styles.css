@@ -420,7 +420,9 @@ button {
 
 .chat-row:hover .row-menu,
 .chat-row.menu-open .row-menu,
-.chat-row.active .row-menu {
+.chat-row.active .row-menu,
+.dd-item:hover .row-menu,
+.dd-item.menu-open .row-menu {
   opacity: 1;
 }
 

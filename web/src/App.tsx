@@ -150,7 +150,42 @@ function KsAgent() {
     }
   }
 
-  async function renameChat(chat: Chat) {    const title = await prompt({ title: 'Rename chat', label: 'Title', value: chat.title })
+  async function renameProject(project: Project) {
+    const name = await prompt({ title: 'Rename project', label: 'Name', value: project.name })
+    if (!name || name === project.name) return
+    try {
+      const updated = await api.renameProject(project.id, name)
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  async function deleteProject(project: Project) {
+    const ok = await confirm({
+      title: `Delete "${project.name}"?`,
+      message: 'All chats and messages in this project will be permanently removed.',
+      danger: true,
+      confirmText: 'Delete'
+    })
+    if (!ok) return
+    try {
+      await api.deleteProject(project.id)
+      setProjects((prev) => prev.filter((p) => p.id !== project.id))
+      if (activeProjectId === project.id) {
+        if (streaming) abortRef.current?.abort()
+        setActiveProjectId(null)
+        setActiveChatId(null)
+        setMessages([])
+      }
+      toast('Project deleted', 'success')
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  async function renameChat(chat: Chat) {
+    const title = await prompt({ title: 'Rename chat', label: 'Title', value: chat.title })
     if (!title || title === chat.title) return
     try {
       const updated = await api.renameChat(chat.id, title)
@@ -301,6 +336,8 @@ function KsAgent() {
           onNewChat={newChat}
           onRenameChat={renameChat}
           onDeleteChat={deleteChat}
+          onRenameProject={renameProject}
+          onDeleteProject={deleteProject}
           onAddProject={() => setAddProjectOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
           onCloseMobile={() => setSidebarOpen(false)}
