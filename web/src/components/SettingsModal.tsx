@@ -30,8 +30,6 @@ interface ProviderForm {
   apiKey: string
 }
 
-const emptyProviderForm: ProviderForm = { editingId: null, name: '', baseUrl: '', apiKey: '' }
-
 export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [tab, setTab] = useState<Tab>('providers')
   const [providers, setProviders] = useState<Provider[]>([])
