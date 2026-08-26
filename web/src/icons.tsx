@@ -151,3 +151,11 @@ export const IconCheck = ({ size, className, style }: IconProps) => (
     <polyline points="4.5 12.5 10 18 19.5 6.5" />
   </svg>
 )
+
+export const IconRotate = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)}>
+    <path d="M23 4v6h-6" />
+    <path d="M1 20v-6h6" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+)
