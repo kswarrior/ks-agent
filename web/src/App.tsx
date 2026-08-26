@@ -193,6 +193,9 @@ function KsAgent() {
               acc += text
               setStreams((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? '') + text }))
             },
+            onPlan: (plan) => {
+              setPlans((prev) => ({ ...prev, [chatId]: plan }))
+            },
             onError: (message) => toast(message.split('\n')[0], 'error'),
             onDone: () => {}
           },
@@ -473,6 +476,7 @@ function KsAgent() {
         <RightSidebar
           open={rsbOpen}
           activeProject={activeProject}
+          plan={activeChat ? plans[activeChat.id] ?? null : null}
           onClose={() => setRsbOpen(false)}
           onOpenSettings={() => setSettingsOpen(true)}
         />
