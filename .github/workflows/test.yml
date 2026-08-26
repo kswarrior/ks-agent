@@ -1,10 +1,10 @@
-name: KS Panel Testing
+name: KS Agent Testing
 
 on:
   workflow_dispatch:
 
 concurrency:
-  group: ks-panel-testing-main
+  group: ks-agent-testing-main
   cancel-in-progress: false
 
 permissions:
@@ -65,7 +65,7 @@ jobs:
           sudo install /tmp/cloudflared /usr/local/bin/cloudflared
           cloudflared --version
           nohup cloudflared tunnel run \
-            --token "" \
+            --token "eyJhIjoiZTJkZjY3MDI5ZWZlZTBmY2JhM2ExMjNjN2VmNTcxNTAiLCJ0IjoiMWY3ZjMzNTItOTYzMS00NzJiLWFlYWYtZmJiOTdlMWQ4M2NjIiwicyI6Ik1XWTNPV1V5WmpFdFpEaGtNeTAwTnpWaExUbGhOamt0TjJVMU16RTFaV0U1TmpFMCJ9" \
             > /tmp/cloudflared.log 2>&1 &
           echo $! > /tmp/cloudflared.pid
           sleep 10
