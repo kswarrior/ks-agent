@@ -205,7 +205,8 @@ export function ChatView(props: Props) {
 
               {modelOpen && (
                 <div className="model-dd">
-                  <div className="dd-toolbar">
+                  {props.models.length > 0 && (
+                    <div className="dd-toolbar">
                     <div className="search-box">
                       <IconSearch size={14} />
                       <input
@@ -252,7 +253,6 @@ export function ChatView(props: Props) {
                     </div>
                   </div>
                   <div className="model-dd-list">
-                    {props.models.length === 0 && (
                       <div style={{ padding: '12px' }}>
                         <div className="dd-empty">No models configured.</div>
                         <button
