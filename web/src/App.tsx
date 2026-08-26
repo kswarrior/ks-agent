@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from './api'
-import type { Chat, Message, ModelEntry, Plan, Project } from './types'
+import type { Chat, Message, ModelEntry, Plan, Project, Activity } from './types'
 import { DialogsProvider, useDialogs } from './dialogs'
 import { ToastProvider, useToast } from './toast'
 import { Header } from './components/Header'
