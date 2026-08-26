@@ -492,6 +492,125 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
               </div>
             </div>
           )}
+
+          {retryDraft && tab === 'retry' && (
+            <div className="inline-form" style={{ marginTop: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h4>Retry behavior</h4>
+                <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={resetRetryDefaults}>
+                  <IconRotateCw size={14} /> Reset to defaults
+                </button>
+              </div>
+              <p className="hint" style={{ marginBottom: 16 }}>
+                Configure how KS Agent handles temporary provider errors (rate limits, overload).
+                Errors like 404 (model not found) will always stop immediately.
+              </p>
+
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <input
+                  type="checkbox"
+                  checked={retryDraft.enabled}
+                  onChange={(e) => setRetryDraft({ ...retryDraft!, enabled: e.target.checked })}
+                />
+                Enable automatic retries
+              </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label className="field-label">Max retries</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={retryDraft.maxRetries}
+                    onChange={(e) => setRetryDraft({ ...retryDraft!, maxRetries: Math.max(0, Math.min(10, parseInt(e.target.value) || 0)) })}
+                  />
+                </div>
+                <div>
+                  <label className="field-label">Base delay (ms)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min="100"
+                    max="60000"
+                    value={retryDraft.baseDelayMs}
+                    onChange={(e) => setRetryDraft({ ...retryDraft!, baseDelayMs: Math.max(100, Math.min(60000, parseInt(e.target.value) || 100)) })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label className="field-label">Max delay (ms)</label>
+                <input
+                  className="input"
+                  type="number"
+                  min="1000"
+                  max="300000"
+                  value={retryDraft.maxDelayMs}
+                  onChange={(e) => setRetryDraft({ ...retryDraft!, maxDelayMs: Math.max(1000, Math.min(300000, parseInt(e.target.value) || 1000)) })}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label className="field-label">Retry on status codes (comma-separated)</label>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="e.g. 429, 503"
+                  value={retryDraft.retryOnStatusCodes.join(', ')}
+                  onChange={(e) => {
+                    const codes = e.target.value
+                      .split(',')
+                      .map(s => parseInt(s.trim(), 10))
+                      .filter(n => Number.isInteger(n) && n >= 100 && n < 600)
+                    setRetryDraft({ ...retryDraft!, retryOnStatusCodes: codes })
+                  }}
+                />
+                <p className="hint" style={{ marginTop: 4 }}>
+                  HTTP status codes that should trigger a retry (e.g., 429 Too Many Requests, 503 Service Unavailable)
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label className="field-label">Stop immediately on status codes (comma-separated)</label>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="e.g. 404"
+                  value={retryDraft.stopOnStatusCodes.join(', ')}
+                  onChange={(e) => {
+                    const codes = e.target.value
+                      .split(',')
+                      .map(s => parseInt(s.trim(), 10))
+                      .filter(n => Number.isInteger(n) && n >= 100 && n < 600)
+                    setRetryDraft({ ...retryDraft!, stopOnStatusCodes: codes })
+                  }}
+                />
+                <p className="hint" style={{ marginTop: 4 }}>
+                  HTTP status codes that should stop immediately without retry (e.g., 404 Not Found)
+                </p>
+              </div>
+
+              <div className="dialog-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={submitRetrySettings}
+                  disabled={
+                    !retrySettings ||
+                    retryDraft.enabled === retrySettings.enabled &&
+                    retryDraft.maxRetries === retrySettings.maxRetries &&
+                    retryDraft.baseDelayMs === retrySettings.baseDelayMs &&
+                    retryDraft.maxDelayMs === retrySettings.maxDelayMs &&
+                    JSON.stringify(retryDraft.retryOnStatusCodes.sort()) === JSON.stringify(retrySettings.retryOnStatusCodes.sort()) &&
+                    JSON.stringify(retryDraft.stopOnStatusCodes.sort()) === JSON.stringify(retrySettings.stopOnStatusCodes.sort())
+                  }
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
