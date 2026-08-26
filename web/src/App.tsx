@@ -33,6 +33,8 @@ function KsAgent() {
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState('')
   const abortRef = useRef<AbortController | null>(null)
+  const skipLoadForRef = useRef<string | null>(null)
+  const creatingChatRef = useRef(false)
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null
   const activeChat = chats.find((c) => c.id === activeChatId) ?? null
