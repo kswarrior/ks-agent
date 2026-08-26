@@ -331,8 +331,7 @@ export interface AgentRunOutcome {
  */
 export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutcome> {
   const messages: LLMMessage[] = [...opts.history]
-  const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId }
-  const emitEvent = opts.onEvent
+  const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent }
   let content = ''
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -352,7 +351,6 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
 
     if (outcome.toolCalls.length === 0) break
 
-    // Plan mutations need to reach subscribers: wrap executeTool for the two plan tools.
     messages.push({
       role: 'assistant',
       content: outcome.text,
@@ -364,12 +362,12 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
     })
 
     for (const call of outcome.toolCalls) {
-      emitEvent(
+      opts.onEvent(
         'tool',
         JSON.stringify({ callId: call.id, name: call.name, args: call.args.slice(0, 300) })
       )
-      const res = await executeToolWithEvents(call.name, call.args, ctx, emitEvent)
-      emitEvent(
+      const res = await executeTool(call.name, call.args, ctx)
+      opts.onEvent(
         'tool_result',
         JSON.stringify({ callId: call.id, ok: res.ok, summary: res.summary })
       )
@@ -384,20 +382,4 @@ function abortError(): Error {
   const e = new Error('Aborted')
   e.name = 'AbortError'
   return e
-}
-
-async function executeToolWithEvents(
-  name: string,
-  args: string,
-  ctx: ToolContext,
-  emitEvent: (event: string, data: string) => void
-): Promise<ToolExecResult> {
-  if (name === 'create_plan' || name === 'complete_plan_step') {
-    const before = findPlanForChat(ctx.chatId)
-    const res = await executeTool(name, args, ctx)
-    const after = findPlanForChat(ctx.chatId)
-    if (after && after !== before) emitEvent('plan', JSON.stringify(after))
-    return res
-  }
-  return executeTool(name, args, ctx)
 }
