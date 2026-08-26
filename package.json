@@ -5,7 +5,7 @@
   "owner": "ks warrior",
   "type": "module",
   "scripts": {
-    "dev:server": "node --watch -r tsx/cjs server/src/index.ts",
+    "dev:server": "tsx watch server/src/index.ts",
     "dev:web": "vite",
     "build": "tsc -p server/tsconfig.json && vite build",
     "typecheck": "tsc --noEmit && tsc -p server/tsconfig.json --noEmit",
