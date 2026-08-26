@@ -5,18 +5,25 @@ import { streamSSE } from 'hono/streaming'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { Readable } from 'node:stream'
+import type { Context } from 'hono'
 import {
   chatsOf,
   findChat,
+  findPlanForChat,
   findProject,
   getDb,
   loadDb,
   messagesOf,
   newId,
   saveDb,
-  touchChat
+  touchChat,
+  type Chat,
+  type Project
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
+import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, runAgentLoop } from './agent.js'
+import { relWithin, resolveInProject, validSegment } from './fsx.js'
 
 loadDb()
 
@@ -102,6 +109,11 @@ app.delete('/api/projects/:id', (c) => {
   const chatIds = new Set(db.chats.filter((ch) => ch.projectId === removed.id).map((ch) => ch.id))
   db.chats = db.chats.filter((ch) => ch.projectId !== removed.id)
   db.messages = db.messages.filter((m) => !chatIds.has(m.chatId))
+  db.plans = db.plans.filter((p) => !chatIds.has(p.chatId))
+  for (const cid of chatIds) {
+    generations.get(cid)?.controller.abort()
+    generations.delete(cid)
+  }
   saveDb()
   return c.json({ ok: true })
 })
@@ -149,8 +161,205 @@ app.delete('/api/chats/:id', (c) => {
   if (idx === -1) return c.json({ error: 'Chat not found' }, 404)
   db.chats.splice(idx, 1)
   db.messages = db.messages.filter((m) => m.chatId !== id)
+  db.plans = db.plans.filter((p) => p.chatId !== id)
+  generations.get(id)?.controller.abort()
+  generations.delete(id)
   saveDb()
   return c.json({ ok: true })
+})
+
+// ---------------- Plans ----------------
+
+app.get('/api/chats/:id/plan', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  return c.json(findPlanForChat(chat.id) ?? null)
+})
+
+// ---------------- Background generation ----------------
+
+interface GenerationJob {
+  chatId: string
+  assistantId: string
+  model: string
+  content: string
+  status: 'running' | 'done' | 'stopped' | 'error'
+  errorMessage?: string
+  controller: AbortController
+  listeners: Set<(event: string, data: string) => void>
+}
+
+const generations = new Map<string, GenerationJob>()
+
+function emitTo(job: GenerationJob, event: string, data: string): void {
+  for (const notify of [...job.listeners]) {
+    try {
+      notify(event, data)
+    } catch {
+      job.listeners.delete(notify)
+    }
+  }
+}
+
+// Persistence failures must never leave subscribers hanging without a terminal event.
+async function persistAssistantSafe(job: GenerationJob, content: string, isError: boolean): Promise<void> {
+  try {
+    const chat = findChat(job.chatId)
+    if (!chat) return
+    getDb().messages.push({
+      id: job.assistantId,
+      chatId: job.chatId,
+      role: 'assistant',
+      content,
+      createdAt: new Date().toISOString(),
+      error: isError || undefined
+    })
+    touchChat(chat)
+    saveDb()
+  } catch (e) {
+    console.error('Failed to persist assistant message:', e)
+  }
+}
+
+interface AgentSpec {
+  baseUrl: string
+  apiKey: string
+  projectPath: string
+}
+
+async function runGeneration(
+  job: GenerationJob,
+  model: string,
+  history: LLMMessage[],
+  agent: AgentSpec | null
+): Promise<void> {
+  try {
+    if (agent) {
+      await runAgentLoop({
+        baseUrl: agent.baseUrl,
+        apiKey: agent.apiKey,
+        model,
+        history,
+        projectPath: agent.projectPath,
+        chatId: job.chatId,
+        signal: job.controller.signal,
+        onDelta: (text) => {
+          job.content += text
+          emitTo(job, 'delta', JSON.stringify(text))
+        },
+        onEvent: (event, data) => emitTo(job, event, data)
+      })
+    } else {
+      for await (const delta of streamChat(agentlessBaseUrl(agent, job), agentApiKey(agent, job), model, history, job.controller.signal)) {
+        job.content += delta
+        emitTo(job, 'delta', JSON.stringify(delta))
+      }
+    }
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      job.status = 'stopped'
+      if (job.content.trim()) {
+        await persistAssistantSafe(job, job.content + '\n\n_[stopped]_', false)
+      } else {
+        await persistAssistantSafe(job, '\n\n_[stopped]_', true)
+      }
+      emitTo(job, 'stopped', '{}')
+      return
+    }
+    job.status = 'error'
+    const message = job.content
+      ? `${job.content}\n\n_[stream interrupted: ${String(e?.message || e)}]_`
+      : `Error: ${String(e?.message || e)}`
+    await persistAssistantSafe(job, message, true)
+    job.errorMessage = message
+    emitTo(job, 'error', JSON.stringify({ message }))
+    return
+  }
+  job.status = 'done'
+  if (job.content.trim()) await persistAssistantSafe(job, job.content, false)
+  emitTo(job, 'done', JSON.stringify({ messageId: job.assistantId }))
+}
+
+// The plain (non-agent) stream needs the provider credentials too; both are
+// supplied together through AgentSpec, so these helpers stay total.
+function agentlessBaseUrl(agent: AgentSpec | null, job: GenerationJob): string {
+  throw new Error(`internal error: unexpected non-agent generation for ${job.chatId}`)
+}
+function agentApiKey(agent: AgentSpec | null, job: GenerationJob): string {
+  throw new Error(`internal error: unexpected non-agent generation for ${job.chatId}`)
+}
+
+app.get('/api/generations', (c) => {
+  return c.json([...generations.values()].filter((j) => j.status === 'running').map((j) => j.chatId))
+})
+
+app.post('/api/chats/:id/stop', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  const job = generations.get(chat.id)
+  if (!job || job.status !== 'running') return c.json({ error: 'No active generation in this chat' }, 409)
+  job.controller.abort()
+  return c.json({ ok: true })
+})
+
+app.get('/api/chats/:id/events', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  return streamSSE(c, async (stream) => {
+    const job = generations.get(chat.id)
+    if (!job) {
+      await stream.writeSSE({ event: 'idle', data: '{}' })
+      return
+    }
+    await stream.writeSSE({
+      event: 'meta',
+      data: JSON.stringify({ assistantId: job.assistantId, model: job.model })
+    })
+    await stream.writeSSE({ event: 'snapshot', data: JSON.stringify(job.content) })
+
+    let settle = () => {}
+    const finished = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    const terminal = (event: string) => event === 'done' || event === 'stopped' || event === 'error'
+    let closed = false
+    const markClosed = () => {
+      if (!closed) {
+        closed = true
+        settle()
+      }
+    }
+    const listener = (event: string, data: string) => {
+      if (closed) return
+      stream
+        .writeSSE({ event, data })
+        .then(() => {
+          if (terminal(event)) markClosed()
+        })
+        .catch(markClosed)
+    }
+    job.listeners.add(listener)
+    const onAbort = () => markClosed()
+    c.req.raw.signal.addEventListener('abort', onAbort)
+    const ping = setInterval(() => {
+      if (closed) return
+      stream.writeSSE({ event: 'ping', data: '' }).catch(markClosed)
+    }, 15000)
+
+    if (job.status !== 'running') {
+      if (job.status === 'done') listener('done', JSON.stringify({ messageId: job.assistantId }))
+      else if (job.status === 'stopped') listener('stopped', '{}')
+      else listener('error', JSON.stringify({ message: job.errorMessage ?? 'Generation failed' }))
+    }
+
+    try {
+      await finished
+    } finally {
+      clearInterval(ping)
+      job.listeners.delete(listener)
+      c.req.raw.signal.removeEventListener('abort', onAbort)
+    }
+  })
 })
 
 // ---------------- Messages ----------------
@@ -165,7 +374,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   const chat = findChat(c.req.param('id'))
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
 
-  const body: any = await c.req.json().catch(() => ({}))
+  const body = await c.req.json().catch(() => ({}))
   const content = String(body.content ?? '').trim()
   const modelId = body.modelId ? String(body.modelId) : ''
 
@@ -182,6 +391,13 @@ app.post('/api/chats/:id/messages', async (c) => {
     return c.json({ error: 'Model has no valid provider' }, 400)
   }
 
+  // From here to the response there are no awaits, so two concurrent posts to the
+  // same chat cannot both slip past this guard and register a job.
+  const runningJob = generations.get(chat.id)
+  if (runningJob && runningJob.status === 'running') {
+    return c.json({ error: 'This chat is already generating a reply' }, 409)
+  }
+
   const project = findProject(chat.projectId)
 
   const userMsg = {
@@ -195,69 +411,35 @@ app.post('/api/chats/:id/messages', async (c) => {
   touchChat(chat)
   saveDb()
 
+  // Primary prompt is built-in and fixed; the plan prompt is user-editable.
+  const planPrompt = getDb().planPrompt.trim() || DEFAULT_PLAN_PROMPT
   const history: LLMMessage[] = [
-    {
-      role: 'system',
-      content:
-        getDb().systemPrompt.trim() ||
-        'You are KS Agent, a precise coding assistant by ks warrior. Be concise and correct. Use markdown for code.'
-    },
+    { role: 'system', content: PRIMARY_SYSTEM_PROMPT },
     ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
+    ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
     ...messagesOf(chat.id).map((m) => ({ role: m.role as LLMMessage['role'], content: m.content }))
   ]
 
-  return streamSSE(c, async (stream) => {
-      const assistantId = newId()
-      await stream.writeSSE({
-        event: 'meta',
-        data: JSON.stringify({ userMsgId: userMsg.id, assistantId, model: resolvedModel.model })
-      })
+  const job: GenerationJob = {
+    chatId: chat.id,
+    assistantId: newId(),
+    model: resolvedModel.model,
+    content: '',
+    status: 'running',
+    controller: new AbortController(),
+    listeners: new Set()
+  }
+  generations.set(chat.id, job)
 
-      let full = ''
-      let aborted = false
-      try {
-        for await (const delta of streamChat(provider.baseUrl, provider.apiKey, resolvedModel.model, history, c.req.raw.signal)) {
-          full += delta
-          await stream.writeSSE({ event: 'delta', data: JSON.stringify(delta) })
-        }
-      } catch (e: any) {
-        if (e?.name === 'AbortError') {
-          aborted = true
-        } else {
-          const message = full
-            ? `${full}\n\n_[stream interrupted: ${String(e?.message || e)}]_`
-            : `Error: ${String(e?.message || e)}`
-          const msg = {
-            id: assistantId,
-            chatId: chat.id,
-            role: 'assistant' as const,
-            content: message,
-            createdAt: new Date().toISOString(),
-            error: true
-          }
-          getDb().messages.push(msg)
-          touchChat(chat)
-          saveDb()
-          await stream.writeSSE({ event: 'error', data: JSON.stringify({ message }) })
-          return
-        }
-      }
+  const agent: AgentSpec | null = project
+    ? { baseUrl: provider.baseUrl, apiKey: provider.apiKey, projectPath: project.path }
+    : null
 
-      const msg = {
-        id: assistantId,
-        chatId: chat.id,
-        role: 'assistant' as const,
-        content: aborted ? full + '\n\n_[stopped]_' : full,
-        createdAt: new Date().toISOString(),
-        error: aborted && !full ? true : undefined
-      }
-      if (msg.content.trim()) {
-        getDb().messages.push(msg)
-        touchChat(chat)
-        saveDb()
-      }
-      await stream.writeSSE({ event: 'done', data: JSON.stringify({ messageId: assistantId }) })
+  void runGeneration(job, resolvedModel.model, history, agent).finally(() => {
+    if (generations.get(job.chatId) === job) generations.delete(job.chatId)
   })
+
+  return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
 })
 
 // ---------------- Settings: providers & models ----------------
@@ -340,17 +522,238 @@ app.delete('/api/settings/models/:id', (c) => {
   return c.json({ ok: true })
 })
 
-app.get('/api/settings/system-prompt', (c) => {
-  return c.json({ systemPrompt: getDb().systemPrompt })
+// ---------------- Settings: prompts ----------------
+// The primary system prompt is intentionally not readable or editable here.
+
+app.get('/api/settings/plan-prompt', (c) => {
+  return c.json({ planPrompt: getDb().planPrompt })
 })
 
-app.patch('/api/settings/system-prompt', async (c) => {
+app.patch('/api/settings/plan-prompt', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const systemPrompt = String(body.systemPrompt ?? '').trim()
-  getDb().systemPrompt = systemPrompt
+  const planPrompt = String(body.planPrompt ?? '').trim()
+  getDb().planPrompt = planPrompt
   saveDb()
-  return c.json({ ok: true, systemPrompt })
+  return c.json({ ok: true, planPrompt })
 })
+
+// ---------------- Project files ----------------
+
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+const MAX_LIST_ENTRIES = 500
+
+type FileTarget = { error: ReturnType<Context['json']> } | { abs: string; stat: fs.Stats }
+
+function fileTarget(c: Context, project: Project, rel: string): FileTarget {
+  const abs = resolveInProject(project.path, rel)
+  if (!abs) return { error: c.json({ error: 'Invalid path' }, 400) }
+  let stat: fs.Stats
+  try {
+    stat = fs.statSync(abs)
+  } catch {
+    return { error: c.json({ error: 'Path not found' }, 400) }
+  }
+  return { abs, stat }
+}
+
+app.get('/api/projects/:id/files', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const t = fileTarget(c, project, String(c.req.query('path') ?? ''))
+  if ('error' in t) return t.error
+  if (!t.stat.isDirectory()) return c.json({ error: 'Not a directory' }, 400)
+  const dirs = []
+  const files = []
+  for (const ent of fs.readdirSync(t.abs, { withFileTypes: true })) {
+    if (ent.isDirectory()) dirs.push({ name: ent.name, type: 'dir' })
+    else {
+      let size = 0
+      try {
+        size = fs.statSync(path.join(t.abs, ent.name)).size
+      } catch {}
+      files.push({ name: ent.name, type: 'file', size })
+    }
+  }
+  const byName = (x: { name: string }, y: { name: string }) => x.name.localeCompare(y.name)
+  dirs.sort(byName)
+  files.sort(byName)
+  return c.json({
+    path: relWithin(project.path, t.abs),
+    entries: [...dirs, ...files].slice(0, MAX_LIST_ENTRIES)
+  })
+})
+
+app.post('/api/projects/:id/files', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const kind = body.kind === 'folder' ? 'folder' : body.kind === 'file' ? 'file' : null
+  const rel = String(body.path ?? '')
+  if (!kind) return c.json({ error: 'kind must be "file" or "folder"' }, 400)
+  if (!validSegment(rel)) return c.json({ error: 'Invalid name' }, 400)
+  const abs = resolveInProject(project.path, rel)
+  if (!abs) return c.json({ error: 'Invalid path' }, 400)
+  if (fs.existsSync(abs)) return c.json({ error: `"${rel}" already exists` }, 400)
+  try {
+    if (kind === 'folder') fs.mkdirSync(abs)
+    else fs.writeFileSync(abs, '', { flag: 'wx' })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to create' }, 400)
+  }
+  return c.json({ ok: true }, 201)
+})
+
+app.patch('/api/projects/:id/files', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const from = String(body.from ?? '')
+  const to = String(body.to ?? '')
+  const fromParts = from.split('/').filter(Boolean)
+  if (fromParts.length === 0 || !fromParts.every(validSegment)) {
+    return c.json({ error: 'Invalid source path' }, 400)
+  }
+  if (!validSegment(to)) return c.json({ error: 'Invalid new name' }, 400)
+  const fromAbs = resolveInProject(project.path, from)
+  if (!fromAbs) return c.json({ error: 'Invalid path' }, 400)
+  const toAbs = path.join(path.dirname(fromAbs), to)
+  if (!fs.existsSync(fromAbs)) return c.json({ error: `"${from}" not found` }, 400)
+  if (fs.existsSync(toAbs)) return c.json({ error: `"${to}" already exists` }, 400)
+  try {
+    fs.renameSync(fromAbs, toAbs)
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Rename failed' }, 400)
+  }
+  return c.json({ ok: true })
+})
+
+app.delete('/api/projects/:id/files', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const rel = String(c.req.query('path') ?? '')
+  if (!rel || rel === '.') return c.json({ error: 'Cannot delete the project root' }, 400)
+  const abs = resolveInProject(project.path, rel)
+  if (!abs) return c.json({ error: 'Invalid path' }, 400)
+  try {
+    fs.rmSync(abs, { recursive: true })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Delete failed' }, 400)
+  }
+  return c.json({ ok: true })
+})
+
+app.get('/api/projects/:id/files/download', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const t = fileTarget(c, project, String(c.req.query('path') ?? ''))
+  if ('error' in t) return t.error
+  if (!t.stat.isFile()) return c.json({ error: 'Not a file' }, 400)
+  const filename = path.basename(t.abs)
+  const ascii =
+    filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_') || 'download'
+  c.header('Content-Type', 'application/octet-stream')
+  c.header('Content-Length', String(t.stat.size))
+  c.header(
+    'Content-Disposition',
+    `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+  )
+  return c.body(Readable.toWeb(fs.createReadStream(t.abs)))
+})
+
+app.post('/api/projects/:id/files/upload', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const form = await c.req.parseBody({ all: true }).catch(() => null)
+  if (!form) return c.json({ error: 'Expected multipart form data' }, 400)
+  const dirRel = typeof form.path === 'string' ? form.path : ''
+  const t = fileTarget(c, project, dirRel)
+  if ('error' in t) return t.error
+  if (!t.stat.isDirectory()) return c.json({ error: 'Target is not a directory' }, 400)
+  const raw = form.file
+  const list = Array.isArray(raw) ? raw : [raw]
+  const saved = []
+  for (const item of list) {
+    if (!(item instanceof File)) continue
+    if (!validSegment(item.name)) return c.json({ error: `Invalid file name: "${item.name}"` }, 400)
+    if (item.size > MAX_UPLOAD_BYTES) return c.json({ error: `"${item.name}" exceeds size limit` }, 400)
+    const buf = Buffer.from(await item.arrayBuffer())
+    fs.writeFileSync(path.join(t.abs, item.name), buf)
+    saved.push(item.name)
+  }
+  if (saved.length === 0) return c.json({ error: 'No files in upload' }, 400)
+  return c.json({ ok: true, saved }, 201)
+})
+
+app.post('/api/projects/:id/files/upload-url', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const urlStr = String(body.url ?? '').trim()
+  const destDir = String(body.path ?? '')
+  let name = String(body.name ?? '').trim()
+  let parsed: URL
+  try {
+    parsed = new URL(urlStr)
+  } catch {
+    return c.json({ error: 'Invalid URL' }, 400)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return c.json({ error: 'Only http(s) URLs are allowed' }, 400)
+  }
+  if (isBlockedHost(parsed.hostname)) return c.json({ error: 'Blocked host' }, 400)
+  const t = fileTarget(c, project, destDir)
+  if ('error' in t) return t.error
+  if (!t.stat.isDirectory()) return c.json({ error: 'Target is not a directory' }, 400)
+  if (!name) {
+    const base = path.basename(decodeURIComponent(parsed.pathname))
+    name = base && base !== '/' && base !== '.' ? base : 'download'
+  }
+  if (!validSegment(name)) return c.json({ error: 'Invalid file name' }, 400)
+  let res: Response
+  try {
+    res = await fetch(parsed, { redirect: 'follow', signal: AbortSignal.timeout(30_000) })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to fetch URL' }, 400)
+  }
+  if (isBlockedHost(new URL(res.url).hostname)) return c.json({ error: 'Blocked host' }, 400)
+  if (!res.ok) return c.json({ error: `Failed to fetch URL (${res.status})` }, 400)
+  if (!res.body) return c.json({ error: 'Empty download' }, 400)
+  const chunks = []
+  let total = 0
+  try {
+    for await (const chunk of res.body) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      total += buf.length
+      if (total > MAX_UPLOAD_BYTES) return c.json({ error: 'Download exceeds size limit' }, 400)
+      chunks.push(buf)
+    }
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Download failed' }, 400)
+  }
+  try {
+    fs.writeFileSync(path.join(t.abs, name), Buffer.concat(chunks), { flag: 'wx' })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to save file' }, 400)
+  }
+  return c.json({ ok: true, name }, 201)
+})
+
+function isBlockedHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, '').replace(/^\[/, '').replace(/\]$/, '')
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal'))
+    return true
+  if (h === '::1' || h === '::') return true
+  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!m) return false
+  const a = Number(m[1])
+  const b = Number(m[2])
+  if (a === 127 || a === 10 || a === 0) return true
+  if (a === 169 && b === 254) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  return false
+}
 
 // ---------------- Static frontend ----------------
 
