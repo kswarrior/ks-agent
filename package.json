@@ -7,16 +7,17 @@
   "scripts": {
     "dev:server": "node --watch -r tsx/cjs server/src/index.ts",
     "dev:web": "vite",
-    "dev": "npm run build && npm run start",
-    "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "build": "tsc -p server/tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit && tsc -p server/tsconfig.json --noEmit",
     "start": "node dist-server/index.js"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "hono": "^4.6.10",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
