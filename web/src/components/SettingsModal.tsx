@@ -105,8 +105,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     if (!modelForm.providerId) return setError('Select a provider')
     if (!modelForm.model.trim()) return setError('Model id is required')
     try {
-      await api.createModel({ providerId: modelForm.providerId, model: modelForm.model.trim() })
-      setModelForm({ providerId: '', model: '' })
+      await api.createModel({
+        providerId: modelForm.providerId,
+        model: modelForm.model.trim(),
+        ...(modelForm.displayName.trim() ? { displayName: modelForm.displayName.trim() } : {})
+      })
+      setModelForm({ providerId: '', model: '', displayName: '' })
       setShowModelForm(false)
       toast('Model added', 'success')
       await refresh()
