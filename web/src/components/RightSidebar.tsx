@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Plan, Project, Terminal } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
-import { IconCheck, IconX, IconPlus, IconSearch } from '../icons'
+import { IconCheck, IconX, IconPlus, IconSearch, IconRotate } from '../icons'
 import { FilesPane } from './FilesPane'
 
 type RsTab = 'plan' | 'files' | 'terminal' | 'settings'

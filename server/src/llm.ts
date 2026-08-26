@@ -143,9 +143,10 @@ export async function* streamChat(
   apiKey: string,
   model: string,
   messages: LLMMessage[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  retrySettings?: RetrySettings
 ): AsyncGenerator<string> {
-  const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true }, signal)
+  const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true }, signal, retrySettings)
   const decoder = new TextDecoder()
   let buf = ''
 
