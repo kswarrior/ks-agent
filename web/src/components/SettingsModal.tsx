@@ -243,6 +243,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           <button className={`tab${tab === 'prompt' ? ' active' : ''}`} onClick={() => { setTab('prompt'); setError(null) }}>
             Prompts
           </button>
+          <button className={`tab${tab === 'retry' ? ' active' : ''}`} onClick={() => { setTab('retry'); setError(null) }}>
+            Retry
+          </button>
         </div>
 
         <div className="tab-body">
