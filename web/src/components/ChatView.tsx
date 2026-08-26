@@ -50,7 +50,7 @@ export function ChatView(props: Props) {
 
   function send() {
     const content = input.trim()
-    if (!content || props.streaming || !props.chat) return
+    if (!content || props.streaming || !props.hasProject) return
     setInput('')
     requestAnimationFrame(() => {
       autoGrow()
@@ -60,7 +60,8 @@ export function ChatView(props: Props) {
   }
 
   const selectedModel = props.models.find((m) => m.id === props.selectedModelId)
-  const canSend = input.trim().length > 0 && !props.streaming
+  const selectedModelLabel = selectedModel ? selectedModel.displayName || selectedModel.model : null
+  const canSend = input.trim().length > 0 && !props.streaming && props.hasProject
 
   return (
     <>
