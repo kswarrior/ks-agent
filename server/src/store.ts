@@ -42,7 +42,7 @@ export interface ModelEntry {
   displayName?: string
 }
 
-export type PlanStepStatus = 'pending' | 'done'
+export type PlanStepStatus = 'pending' | 'working' | 'done'
 
 export interface PlanStep {
   id: string

@@ -360,7 +360,8 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         content += text
         opts.onDelta(text)
       },
-      opts.signal
+      opts.signal,
+      opts.retrySettings
     )
 
     if (outcome.toolCalls.length === 0) break
