@@ -39,6 +39,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [providerPicker, setProviderPicker] = useState(false)
   const [showModelForm, setShowModelForm] = useState(false)
   const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '' })
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [systemDraft, setSystemDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()
@@ -46,6 +48,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   useEffect(() => {
     if (open) {
       refresh()
+      loadSystemPrompt()
       setProviderForm(null)
       setProviderPicker(false)
       setShowModelForm(false)
@@ -60,6 +63,28 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       setModels(m)
     } catch (e: any) {
       toast(e.message, 'error')
+    }
+  }
+
+  async function loadSystemPrompt() {
+    try {
+      const { systemPrompt } = await api.getSystemPrompt()
+      setSystemPrompt(systemPrompt)
+      setSystemDraft(systemPrompt)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  async function submitSystemPrompt() {
+    setError(null)
+    try {
+      const { systemPrompt } = await api.saveSystemPrompt(systemDraft.trim())
+      setSystemPrompt(systemPrompt)
+      setSystemDraft(systemPrompt)
+      toast('System prompt saved', 'success')
+    } catch (e: any) {
+      setError(e.message)
     }
   }
 
