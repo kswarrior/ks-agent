@@ -142,9 +142,9 @@ export function Sidebar(props: SidebarProps) {
                   <div className="dd-empty">{props.projects.length === 0 ? 'No projects yet — add one' : 'No matches'}</div>
                 )}
                 {filteredProjects.map((p) => (
-                  <button
+                  <div
                     key={p.id}
-                    className={`dd-item${props.activeProject?.id === p.id ? ' active' : ''}`}
+                    className={`dd-item${props.activeProject?.id === p.id ? ' active' : ''}${menuFor?.kind === 'project' && menuFor.id === p.id ? ' menu-open' : ''}`}
                     onClick={() => {
                       props.onSelectProject(p.id)
                       setProjOpen(false)
@@ -153,7 +153,17 @@ export function Sidebar(props: SidebarProps) {
                   >
                     <IconFolder size={15} />
                     <span>{p.name}</span>
-                  </button>
+                    <span
+                      className="icon-btn row-menu"
+                      role="button"
+                      aria-label="Project options"
+                      data-row-menu="trigger"
+                      style={{ width: 28, height: 28 }}
+                      onClick={(e) => toggleMenu(e, 'project', p.id)}
+                    >
+                      <IconDots size={16} />
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
