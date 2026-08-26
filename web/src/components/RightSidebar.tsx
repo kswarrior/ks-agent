@@ -197,6 +197,7 @@ export function RightSidebar({ open, activeProject, plan, onClose, onOpenSetting
         <div className="rsb-body">
           {tab === 'plan' && (plan ? <PlanView plan={plan} /> : <div className="rsb-empty">Nothing here yet</div>)}
           {tab === 'terminal' && <TerminalPane projectId={activeProject?.id ?? null} />}
+          {tab === 'activity' && <ActivityPane activities={activities} />}
           {tab === 'settings' && (
             <div className="rsb-settings">
               <p>Providers, models and prompts are managed in Settings.</p>
