@@ -76,6 +76,7 @@ interface DB {
   systemPrompt: string
   planPrompt: string
   plans: Plan[]
+  terminals: Terminal[]
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
