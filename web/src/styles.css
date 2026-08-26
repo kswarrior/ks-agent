@@ -1649,6 +1649,11 @@ button {
   transition: border-color 0.15s ease, opacity 0.15s ease;
 }
 
+.plan-card.working {
+  border-color: #eab308;
+  box-shadow: 0 0 0 1px #eab308, 0 0 12px rgba(234, 179, 8, 0.25);
+}
+
 .plan-check {
   width: 18px;
   height: 18px;
@@ -1669,6 +1674,15 @@ button {
   color: #0a0a0a;
 }
 
+.plan-card.working .plan-check {
+  border-color: #eab308;
+  color: #eab308;
+}
+
+.plan-card.working .plan-check .spin {
+  color: #eab308;
+}
+
 .plan-step {
   flex: 1;
   min-width: 0;
@@ -1683,11 +1697,26 @@ button {
   color: var(--text-faint);
 }
 
+.plan-card.working .plan-step {
+  color: #eab308;
+  font-weight: 500;
+}
+
 .plan-num {
   flex-shrink: 0;
   font-size: 11px;
   color: var(--text-faint);
   margin-top: 2px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
 }
 
 /* ---------------- Responsive ---------------- */
