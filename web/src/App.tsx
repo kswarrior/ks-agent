@@ -176,7 +176,7 @@ function KsAgent() {
           controller.signal
         )
         .catch((e: any) => {
-          if (e?.name !== 'AbortError') toast(e.message)
+          if (e?.name !== 'AbortError') toast(e.message, 'error')
         })
         .finally(async () => {
           subsRef.current.delete(chatId)
