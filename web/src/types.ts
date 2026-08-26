@@ -37,14 +37,3 @@ export interface ModelEntry {
   providerId: string
   providerName: string
 }
-
-export interface FileEntry {
-  name: string
-  type: 'file' | 'dir'
-  size?: number
-}
-
-export interface FileListing {
-  path: string
-  entries: FileEntry[]
-}

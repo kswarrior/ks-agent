@@ -1,4 +1,4 @@
-import type { Chat, FileListing, Message, ModelEntry, Project, Provider } from './types'
+import type { Chat, Message, ModelEntry, Project, Provider } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -33,36 +33,28 @@ export const deleteChat = (id: string) => req<{ ok: true }>(`/api/chats/${id}`, 
 // Messages
 export const listMessages = (chatId: string) => req<Message[]>(`/api/chats/${chatId}/messages`)
 
-export interface SendResult {
-  userMsgId: string
-  assistantId: string
-  model: string
-}
-
-/** Sends a user message; generation runs in background on the server. */
-export const sendMessage = (chatId: string, content: string, modelId: string | null) =>
-  req<SendResult>(`/api/chats/${chatId}/messages`, json('POST', { content, modelId }))
-
-/** Aborts the background generation of a chat server-side. */
-export const stopGeneration = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/stop`, { method: 'POST' })
-
-export const listGenerations = () => req<string[]>('/api/generations')
-
-export interface GenerationHandlers {
+export interface StreamHandlers {
   onMeta?: (meta: { assistantId: string; model: string }) => void
-  onSnapshot: (text: string) => void
   onDelta: (text: string) => void
   onError: (message: string) => void
   onDone: () => void
 }
 
-/** Subscribes to a chat's background generation: snapshot so far + live deltas. */
-export async function streamChatEvents(
+/** Sends a user message and consumes the SSE stream from the server. */
+export async function sendMessage(
   chatId: string,
-  handlers: GenerationHandlers,
+  content: string,
+  modelId: string | null,
+  handlers: StreamHandlers,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch(`/api/chats/${chatId}/events`, { signal })
+  const res = await fetch(`/api/chats/${chatId}/messages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content, modelId }),
+    signal
+  })
+
   if (!res.ok) {
     let msg = `Request failed (${res.status})`
     try {
@@ -76,56 +68,52 @@ export async function streamChatEvents(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buf = ''
-  let terminated = false
 
-  const dispatch = (frame: string): boolean => {
-    let event = 'message'
-    let data = ''
-    for (const line of frame.split('\n')) {
-      if (line.startsWith('event:')) event = line.slice(6).trim()
-      else if (line.startsWith('data:')) data = line.slice(5).trim()
-    }
-    let parsed: any = null
-    try {
-      parsed = JSON.parse(data)
-    } catch {}
-    switch (event) {
-      case 'meta':
-        handlers.onMeta?.({ assistantId: parsed?.assistantId ?? '', model: parsed?.model ?? '' })
-        return false
-      case 'snapshot':
-        handlers.onSnapshot(typeof parsed === 'string' ? parsed : '')
-        return false
-      case 'delta':
-        handlers.onDelta(typeof parsed === 'string' ? parsed : '')
-        return false
-      case 'error':
-        handlers.onError(parsed?.message || 'Generation failed')
-        terminated = true
-        return true
-      case 'done':
-      case 'stopped':
-      case 'idle':
-        handlers.onDone()
-        terminated = true
-        return true
-      default:
-        return false
-    }
-  }
-
-  while (!terminated) {
+  while (true) {
     const { done, value } = await reader.read()
     if (done) break
     buf += decoder.decode(value, { stream: true })
-    let idx: number
-    while ((idx = buf.indexOf('\n\n')) >= 0) {
-      const frame = buf.slice(0, idx)
-      buf = buf.slice(idx + 2)
-      if (dispatch(frame)) return
+    let nl: number
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trimEnd()
+      buf = buf.slice(nl + 1)
+      if (!line.startsWith('event:') && !line.startsWith('data:')) continue
+
+      // Collect event + data pair
+      let event = 'message'
+      let data = ''
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim()
+        const nextNl = buf.indexOf('\n')
+        if (nextNl >= 0) {
+          const nextLine = buf.slice(0, nextNl).trimEnd()
+          buf = buf.slice(nextNl + 1)
+          if (nextLine.startsWith('data:')) data = nextLine.slice(5).trim()
+        }
+      } else {
+        data = line.slice(5).trim()
+      }
+
+      try {
+        const parsed = JSON.parse(data)
+        switch (event) {
+          case 'meta':
+            handlers.onMeta?.({ assistantId: parsed.assistantId, model: parsed.model })
+            break
+          case 'delta':
+            handlers.onDelta(parsed)
+            break
+          case 'error':
+            handlers.onError(parsed.message)
+            break
+          case 'done':
+            handlers.onDone()
+            break
+        }
+      } catch {}
     }
   }
-  if (!terminated) handlers.onDone()
+  handlers.onDone()
 }
 
 // Settings
@@ -148,39 +136,3 @@ export const deleteModel = (id: string) =>
 export const getSystemPrompt = () => req<{ systemPrompt: string }>('/api/settings/system-prompt')
 export const saveSystemPrompt = (systemPrompt: string) =>
   req<{ ok: true; systemPrompt: string }>('/api/settings/system-prompt', json('PATCH', { systemPrompt }))
-
-// Project files
-async function formReq<T>(url: string, form: FormData): Promise<T> {
-  const res = await fetch(url, { method: 'POST', body: form })
-  let data: any = null
-  try {
-    data = await res.json()
-  } catch {}
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
-  return data as T
-}
-
-export const listFiles = (projectId: string, path = '') =>
-  req<FileListing>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`)
-
-export const createFileEntry = (projectId: string, kind: 'file' | 'folder', path: string) =>
-  req<{ ok: true }>(`/api/projects/${projectId}/files`, json('POST', { kind, path }))
-
-export const renameFileEntry = (projectId: string, from: string, to: string) =>
-  req<{ ok: true }>(`/api/projects/${projectId}/files`, json('PATCH', { from, to }))
-
-export const deleteFileEntry = (projectId: string, path: string) =>
-  req<{ ok: true }>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
-
-export const downloadUrl = (projectId: string, path: string) =>
-  `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`
-
-export function uploadLocalFiles(projectId: string, dir: string, files: File[]) {
-  const form = new FormData()
-  form.set('path', dir)
-  for (const f of files) form.append('file', f, f.name)
-  return formReq<{ ok: true; saved: string[] }>(`/api/projects/${projectId}/files/upload`, form)
-}
-
-export const uploadFromUrl = (projectId: string, p: { url: string; path?: string; name?: string }) =>
-  req<{ ok: true; name: string }>(`/api/projects/${projectId}/files/upload-url`, json('POST', p))
