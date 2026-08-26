@@ -146,9 +146,59 @@ function KsAgent() {
     refreshModels()
   }, [refreshModels])
 
+  // ---- background generation tracking ----
+  const trackGeneration = useCallback(
+    (chatId: string) => {
+      if (subsRef.current.has(chatId)) return
+      const controller = new AbortController()
+      subsRef.current.set(chatId, controller)
+      setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
+      api
+        .streamChatEvents(
+          chatId,
+          {
+            onSnapshot: (text) => setStreams((prev) => ({ ...prev, [chatId]: text })),
+            onDelta: (text) => setStreams((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? '') + text })),
+            onError: (message) => toast(message.split('\n')[0], 'error'),
+            onDone: () => {}
+          },
+          controller.signal
+        )
+        .catch((e: any) => {
+          if (e?.name !== 'AbortError') toast(e.message, 'error')
+        })
+        .finally(async () => {
+          subsRef.current.delete(chatId)
+          setStreams((prev) => {
+            const next = { ...prev }
+            delete next[chatId]
+            return next
+          })
+          try {
+            const fresh = await api.listMessages(chatId)
+            if (activeChatIdRef.current === chatId) setMessages(fresh)
+            setChats((prev) =>
+              [...prev].sort((a, b) =>
+                a.id === chatId ? -1 : b.id === chatId ? 1 : b.updatedAt.localeCompare(a.updatedAt)
+              )
+            )
+          } catch {}
+        })
+    },
+    [toast]
+  )
+
+  // resume watching generations still running on the server (e.g. after tab reopen)
+  useEffect(() => {
+    api
+      .listGenerations()
+      .then((ids) => ids.forEach(trackGeneration))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ---- actions ----
   function selectProject(id: string) {
-    if (streaming) abortRef.current?.abort()
     setActiveProjectId(id)
     setActiveChatId(null)
     setMessages([])
