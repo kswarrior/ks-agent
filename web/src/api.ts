@@ -33,28 +33,36 @@ export const deleteChat = (id: string) => req<{ ok: true }>(`/api/chats/${id}`, 
 // Messages
 export const listMessages = (chatId: string) => req<Message[]>(`/api/chats/${chatId}/messages`)
 
-export interface StreamHandlers {
+export interface SendResult {
+  userMsgId: string
+  assistantId: string
+  model: string
+}
+
+/** Sends a user message; generation runs in background on the server. */
+export const sendMessage = (chatId: string, content: string, modelId: string | null) =>
+  req<SendResult>(`/api/chats/${chatId}/messages`, json('POST', { content, modelId }))
+
+/** Aborts the background generation of a chat server-side. */
+export const stopGeneration = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/stop`, { method: 'POST' })
+
+export const listGenerations = () => req<string[]>('/api/generations')
+
+export interface GenerationHandlers {
   onMeta?: (meta: { assistantId: string; model: string }) => void
+  onSnapshot: (text: string) => void
   onDelta: (text: string) => void
   onError: (message: string) => void
   onDone: () => void
 }
 
-/** Sends a user message and consumes the SSE stream from the server. */
-export async function sendMessage(
+/** Subscribes to a chat's background generation: snapshot so far + live deltas. */
+export async function streamChatEvents(
   chatId: string,
-  content: string,
-  modelId: string | null,
-  handlers: StreamHandlers,
+  handlers: GenerationHandlers,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch(`/api/chats/${chatId}/messages`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, modelId }),
-    signal
-  })
-
+  const res = await fetch(`/api/chats/${chatId}/events`, { signal })
   if (!res.ok) {
     let msg = `Request failed (${res.status})`
     try {
@@ -68,52 +76,56 @@ export async function sendMessage(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buf = ''
+  let terminated = false
 
-  while (true) {
+  const dispatch = (frame: string): boolean => {
+    let event = 'message'
+    let data = ''
+    for (const line of frame.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim()
+      else if (line.startsWith('data:')) data = line.slice(5).trim()
+    }
+    let parsed: any = null
+    try {
+      parsed = JSON.parse(data)
+    } catch {}
+    switch (event) {
+      case 'meta':
+        handlers.onMeta?.({ assistantId: parsed?.assistantId ?? '', model: parsed?.model ?? '' })
+        return false
+      case 'snapshot':
+        handlers.onSnapshot(typeof parsed === 'string' ? parsed : '')
+        return false
+      case 'delta':
+        handlers.onDelta(typeof parsed === 'string' ? parsed : '')
+        return false
+      case 'error':
+        handlers.onError(parsed?.message || 'Generation failed')
+        terminated = true
+        return true
+      case 'done':
+      case 'stopped':
+      case 'idle':
+        handlers.onDone()
+        terminated = true
+        return true
+      default:
+        return false
+    }
+  }
+
+  while (!terminated) {
     const { done, value } = await reader.read()
     if (done) break
     buf += decoder.decode(value, { stream: true })
-    let nl: number
-    while ((nl = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, nl).trimEnd()
-      buf = buf.slice(nl + 1)
-      if (!line.startsWith('event:') && !line.startsWith('data:')) continue
-
-      // Collect event + data pair
-      let event = 'message'
-      let data = ''
-      if (line.startsWith('event:')) {
-        event = line.slice(6).trim()
-        const nextNl = buf.indexOf('\n')
-        if (nextNl >= 0) {
-          const nextLine = buf.slice(0, nextNl).trimEnd()
-          buf = buf.slice(nextNl + 1)
-          if (nextLine.startsWith('data:')) data = nextLine.slice(5).trim()
-        }
-      } else {
-        data = line.slice(5).trim()
-      }
-
-      try {
-        const parsed = JSON.parse(data)
-        switch (event) {
-          case 'meta':
-            handlers.onMeta?.({ assistantId: parsed.assistantId, model: parsed.model })
-            break
-          case 'delta':
-            handlers.onDelta(parsed)
-            break
-          case 'error':
-            handlers.onError(parsed.message)
-            break
-          case 'done':
-            handlers.onDone()
-            break
-        }
-      } catch {}
+    let idx: number
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const frame = buf.slice(0, idx)
+      buf = buf.slice(idx + 2)
+      if (dispatch(frame)) return
     }
   }
-  handlers.onDone()
+  if (!terminated) handlers.onDone()
 }
 
 // Settings
