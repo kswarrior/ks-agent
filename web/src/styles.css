@@ -424,6 +424,12 @@ button {
   opacity: 1;
 }
 
+@media (hover: none) {
+  .row-menu {
+    opacity: 1;
+  }
+}
+
 .menu-pop {
   position: absolute;
   right: 6px;
@@ -461,6 +467,11 @@ button {
 .menu-pop button.danger:hover {
   background: var(--danger-bg);
   color: var(--danger);
+}
+
+.menu-pop-fixed {
+  position: fixed;
+  z-index: 130;
 }
 
 /* ---------------- Main / chat ---------------- */
@@ -1198,6 +1209,12 @@ button {
 }
 
 /* ---------------- Responsive ---------------- */
+
+@media (min-width: 900px) {
+  .shell.sb-closed .sidebar {
+    display: none;
+  }
+}
 
 @media (max-width: 899px) {
   .sidebar {

@@ -220,7 +220,7 @@ export function Sidebar(props: SidebarProps) {
         </div>
       </aside>
       <div className={`scrim${props.open ? ' show' : ''}`} onClick={props.onCloseMobile} />
-      {menuFor && menuChat && props.activeChatId !== undefined &&
+      {menuFor && menuChat &&
         createPortal(
           <div
             className="menu-pop menu-pop-fixed"

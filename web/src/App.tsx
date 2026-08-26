@@ -253,7 +253,7 @@ function KsAgent() {
   return (
     <div className="app">
       <Header onMenu={() => setSidebarOpen((v) => !v)} />
-      <div className="shell">
+      <div className={`shell${sidebarOpen ? '' : ' sb-closed'}`}>
         <Sidebar
           open={sidebarOpen}
           projects={projects}
