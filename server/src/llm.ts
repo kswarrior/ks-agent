@@ -39,7 +39,7 @@ async function openStream(
   apiKey: string,
   body: Record<string, unknown>,
   signal?: AbortSignal
-): Promise<AsyncIterableIterator<string>> {
+): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const res = await fetch(endpoint(baseUrl), {
     method: 'POST',
     signal,
