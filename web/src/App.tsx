@@ -286,13 +286,22 @@ function KsAgent() {
     const controller = new AbortController()
     abortRef.current = controller
 
+    let acc = ''
+    let assistantId: string | null = null
+
     try {
       await api.sendMessage(
         chatId,
         content,
         selectedModelId,
         {
-          onDelta: (text) => setStreamText((prev) => prev + text),
+          onMeta: (meta) => {
+            assistantId = meta.assistantId
+          },
+          onDelta: (text) => {
+            acc += text
+            setStreamText((prev) => prev + text)
+          },
           onError: (message) => toast(message.split('\n')[0], 'error'),
           onDone: () => {}
         },
@@ -302,6 +311,23 @@ function KsAgent() {
       if (e.name !== 'AbortError') toast(e.message, 'error')
     } finally {
       abortRef.current = null
+      if (acc.trim()) {
+        setMessages((prev) => {
+          const id = assistantId ?? 'tmp-assistant-' + Date.now()
+          return prev.some((m) => m.id === id)
+            ? prev
+            : [
+                ...prev,
+                {
+                  id,
+                  chatId,
+                  role: 'assistant' as const,
+                  content: acc,
+                  createdAt: new Date().toISOString()
+                }
+              ]
+        })
+      }
       setStreaming(false)
       setStreamText('')
       try {
