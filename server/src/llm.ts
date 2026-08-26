@@ -22,6 +22,15 @@ export interface ParsedToolCall {
   args: string
 }
 
+export interface RetrySettings {
+  enabled: boolean
+  maxRetries: number
+  baseDelayMs: number
+  maxDelayMs: number
+  retryOnStatusCodes: number[]
+  stopOnStatusCodes: number[]
+}
+
 interface RawChunk {
   text?: string
   finishReason?: string | null
