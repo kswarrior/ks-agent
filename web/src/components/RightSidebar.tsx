@@ -177,7 +177,7 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
   )
 }
 
-export function RightSidebar({ open, activeProject, plan, onClose, onOpenSettings }: RightSidebarProps) {
+export function RightSidebar({ open, activeProject, plan, activities, onClose, onOpenSettings }: RightSidebarProps) {
   const [tab, setTab] = useState<RsTab>('plan')
 
   return (
