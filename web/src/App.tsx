@@ -241,7 +241,6 @@ function KsAgent() {
       await api.deleteProject(project.id)
       setProjects((prev) => prev.filter((p) => p.id !== project.id))
       if (activeProjectId === project.id) {
-        if (streaming) abortRef.current?.abort()
         setActiveProjectId(null)
         setActiveChatId(null)
         setMessages([])
@@ -273,6 +272,13 @@ function KsAgent() {
     if (!ok) return
     try {
       await api.deleteChat(chat.id)
+      subsRef.current.get(chat.id)?.abort()
+      subsRef.current.delete(chat.id)
+      setStreams((prev) => {
+        const next = { ...prev }
+        delete next[chat.id]
+        return next
+      })
       setChats((prev) => prev.filter((c) => c.id !== chat.id))
       if (activeChatId === chat.id) {
         setActiveChatId(null)
@@ -295,7 +301,6 @@ function KsAgent() {
   }
 
   function selectChat(id: string) {
-    if (streaming) abortRef.current?.abort()
     setActiveChatId(id)
     if (window.innerWidth < 900) setSidebarOpen(false)
   }
