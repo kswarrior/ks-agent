@@ -45,6 +45,7 @@ function useClickOutside(onOutside: () => void) {
 }
 
 interface MenuState {
+  kind: 'chat' | 'project'
   id: string
   top: number
   left: number
