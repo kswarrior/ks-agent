@@ -1,9 +1,0 @@
-node_modules/
-dist/
-build/
-*.log
-.DS_Store
-data/*.db
-data/*.db-journal
-.env
-.env.local
