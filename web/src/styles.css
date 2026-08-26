@@ -535,6 +535,39 @@ button {
   color: var(--danger);
 }
 
+/* Collapsed message clamp + read more */
+.msg-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+
+.msg-clamp.open {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+.read-more-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 5px;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.read-more-btn:hover {
+  color: var(--text);
+  background: var(--btn);
+}
+
 .md {
   line-height: 1.65;
   font-size: 14.5px;
@@ -690,7 +723,7 @@ button {
 }
 
 .composer-input {
-  width: 100%;
+  width: 75%;
   resize: none;
   background: var(--input);
   border: 1px solid var(--border);
@@ -797,7 +830,8 @@ button {
   left: 0;
   width: min(340px, 88vw);
   max-height: 300px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -805,6 +839,69 @@ button {
   padding: 6px;
   animation: pop 0.12s ease;
   z-index: 50;
+}
+
+.model-dd .dd-toolbar {
+  flex-shrink: 0;
+}
+
+.model-dd-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.prov-filter-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 118px;
+  height: 34px;
+  padding: 0 9px;
+  background: var(--btn);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-chip:hover {
+  background: var(--btn-hover);
+  color: var(--text);
+}
+
+.filter-chip.active {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.filter-chip span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prov-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  min-width: 150px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  padding: 4px;
+  animation: pop 0.12s ease;
 }
 
 .model-group {
