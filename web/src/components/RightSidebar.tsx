@@ -12,6 +12,7 @@ interface RightSidebarProps {
   open: boolean
   activeProject: Project | null
   plan: Plan | null
+  activities: Activity[]
   onClose: () => void
   onOpenSettings: () => void
 }
