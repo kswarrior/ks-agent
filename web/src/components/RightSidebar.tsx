@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Plan, Project, Terminal } from '../types'
+import type { Plan, Project, Terminal, Activity } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
-import { IconCheck, IconX, IconPlus, IconSearch, IconRotate } from '../icons'
+import { IconCheck, IconX, IconPlus, IconSearch, IconActivity } from '../icons'
 import { FilesPane } from './FilesPane'
+import { ActivityPane } from './ActivityPane'
 
-type RsTab = 'plan' | 'files' | 'terminal' | 'settings'
+type RsTab = 'plan' | 'files' | 'terminal' | 'settings' | 'activity'
 
 interface RightSidebarProps {
   open: boolean
