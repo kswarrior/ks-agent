@@ -1,8 +1,8 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { findPlanForChat, getDb, newId, saveDb, type Plan } from './store.js'
-import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef } from './llm.js'
+import { findPlanForChat, getDb, getRetrySettings, newId, saveDb, type Plan } from './store.js'
+import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 
 /**
