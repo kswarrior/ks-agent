@@ -643,7 +643,7 @@ app.get('/api/projects/:id/files/download', (c) => {
 app.post('/api/projects/:id/files/upload', async (c) => {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
-  const form = await c.req.parseBody().catch(() => null)
+  const form = await c.req.parseBody({ all: true }).catch(() => null)
   if (!form) return c.json({ error: 'Expected multipart form data' }, 400)
   const dirRel = typeof form.path === 'string' ? form.path : ''
   const t = fileTarget(c, project, dirRel)
