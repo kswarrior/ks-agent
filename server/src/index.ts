@@ -421,11 +421,9 @@ app.post('/api/chats/:id/messages', async (c) => {
   }
   generations.set(chat.id, job)
 
-  const agent: AgentSpec | null = project
-    ? { baseUrl: provider.baseUrl, apiKey: provider.apiKey, projectPath: project.path }
-    : null
+  const agent: AgentSpec | null = project ? { projectPath: project.path } : null
 
-  void runGeneration(job, resolvedModel.model, history, agent).finally(() => {
+  void runGeneration(job, provider, resolvedModel.model, history, agent).finally(() => {
     if (generations.get(job.chatId) === job) generations.delete(job.chatId)
   })
 
