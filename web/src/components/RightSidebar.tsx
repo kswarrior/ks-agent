@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Plan, Project, Terminal, Activity } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
-import { IconCheck, IconX, IconPlus, IconSearch, IconActivity } from '../icons'
+import { IconCheck, IconX, IconPlus, IconSearch, IconActivity, IconRotate } from '../icons'
 import { FilesPane } from './FilesPane'
 import { ActivityPane } from './ActivityPane'
 
