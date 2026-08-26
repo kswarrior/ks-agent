@@ -66,6 +66,11 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
 
   if (!open) return null
 
+  function chooseProvider(name: string, baseUrl: string) {
+    setProviderForm({ editingId: null, name, baseUrl, apiKey: '' })
+    setProviderPicker(false)
+  }
+
   async function submitProvider() {
     if (!providerForm) return
     setError(null)
@@ -181,7 +186,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 <button
                   className="btn"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  onClick={() => setProviderForm(emptyProviderForm)}
+                  onClick={() => { setError(null); setProviderPicker(true) }}
                 >
                   <IconPlus size={15} /> Add
                 </button>
