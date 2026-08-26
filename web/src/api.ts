@@ -136,3 +136,39 @@ export const deleteModel = (id: string) =>
 export const getSystemPrompt = () => req<{ systemPrompt: string }>('/api/settings/system-prompt')
 export const saveSystemPrompt = (systemPrompt: string) =>
   req<{ ok: true; systemPrompt: string }>('/api/settings/system-prompt', json('PATCH', { systemPrompt }))
+
+// Project files
+async function formReq<T>(url: string, form: FormData): Promise<T> {
+  const res = await fetch(url, { method: 'POST', body: form })
+  let data: any = null
+  try {
+    data = await res.json()
+  } catch {}
+  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
+  return data as T
+}
+
+export const listFiles = (projectId: string, path = '') =>
+  req<FileListing>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`)
+
+export const createFileEntry = (projectId: string, kind: 'file' | 'folder', path: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files`, json('POST', { kind, path }))
+
+export const renameFileEntry = (projectId: string, from: string, to: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files`, json('PATCH', { from, to }))
+
+export const deleteFileEntry = (projectId: string, path: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
+
+export const downloadUrl = (projectId: string, path: string) =>
+  `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`
+
+export function uploadLocalFiles(projectId: string, dir: string, files: File[]) {
+  const form = new FormData()
+  form.set('path', dir)
+  for (const f of files) form.append('file', f, f.name)
+  return formReq<{ ok: true; saved: string[] }>(`/api/projects/${projectId}/files/upload`, form)
+}
+
+export const uploadFromUrl = (projectId: string, p: { url: string; path?: string; name?: string }) =>
+  req<{ ok: true; name: string }>(`/api/projects/${projectId}/files/upload-url`, json('POST', p))
