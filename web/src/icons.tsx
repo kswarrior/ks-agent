@@ -85,9 +85,9 @@ export const IconGear = ({ size, className, style }: IconProps) => (
 )
 
 export const IconSend = ({ size, className, style }: IconProps) => (
-  <svg {...base(size, style)} className={className}>
-    <path d="M4.5 12h13" />
-    <polyline points="12 5.5 18.5 12 12 18.5" transform="rotate(45 12 12)" />
+  <svg {...base(size, style)} className={className} strokeWidth={1.9}>
+    <path d="M22 2 11 13" />
+    <path d="M22 2 15 22 11 13 2 9 22 2z" />
   </svg>
 )
 
