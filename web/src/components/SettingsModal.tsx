@@ -598,12 +598,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   onClick={submitRetrySettings}
                   disabled={
                     !retrySettings ||
-                    retryDraft.enabled === retrySettings.enabled &&
+                    (retryDraft.enabled === retrySettings.enabled &&
                     retryDraft.maxRetries === retrySettings.maxRetries &&
                     retryDraft.baseDelayMs === retrySettings.baseDelayMs &&
                     retryDraft.maxDelayMs === retrySettings.maxDelayMs &&
-                    JSON.stringify(retryDraft.retryOnStatusCodes.sort()) === JSON.stringify(retrySettings.retryOnStatusCodes.sort()) &&
-                    JSON.stringify(retryDraft.stopOnStatusCodes.sort()) === JSON.stringify(retrySettings.stopOnStatusCodes.sort())
+                    JSON.stringify([...retryDraft.retryOnStatusCodes].sort((a,b)=>a-b)) === JSON.stringify([...retrySettings.retryOnStatusCodes].sort((a,b)=>a-b)) &&
+                    JSON.stringify([...retryDraft.stopOnStatusCodes].sort((a,b)=>a-b)) === JSON.stringify([...retrySettings.stopOnStatusCodes].sort((a,b)=>a-b)))
                   }
                 >
                   Save
