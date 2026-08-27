@@ -2374,16 +2374,18 @@ textarea {
 }
 
 .q-card {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0;
-  animation: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  animation: pop 0.18s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
 }
 
 .q-card.pending {
-  border: none;
-  box-shadow: none;
+  border-color: #eab30855;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.28), 0 0 0 1px #eab30822;
+  background: var(--surface-2);
 }
 
 .q-card.answered {
