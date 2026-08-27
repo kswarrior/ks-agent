@@ -77,7 +77,11 @@ function applyFilters() {
     if (av > bv) return dir === "asc" ? 1 : -1;
     return 0;
   });
+}
+
+function resetPageAndRender() {
   state.page = 0;
+  render();
 }
 
 /* ─── Render ─────────────────────────────────────────────────── */
@@ -166,11 +170,11 @@ function init() {
   render();
 
   const searchInput = document.getElementById("searchInput");
-  searchInput.addEventListener("input", debounce(e => { state.search = e.target.value.trim(); render(); }, 180));
+  searchInput.addEventListener("input", debounce(e => { state.search = e.target.value.trim(); resetPageAndRender(); }, 180));
 
-  document.getElementById("statusFilter").addEventListener("change", e => { state.filter = e.target.value; render(); });
-  document.getElementById("tagFilter").addEventListener("change", e => { state.tag = e.target.value; render(); });
-  document.getElementById("sortSelect").addEventListener("change", e => { state.sort = e.target.value; render(); });
+  document.getElementById("statusFilter").addEventListener("change", e => { state.filter = e.target.value; resetPageAndRender(); });
+  document.getElementById("tagFilter").addEventListener("change", e => { state.tag = e.target.value; resetPageAndRender(); });
+  document.getElementById("sortSelect").addEventListener("change", e => { state.sort = e.target.value; resetPageAndRender(); });
 
   document.getElementById("selectAll").addEventListener("change", e => {
     document.querySelectorAll("#tableBody input[type=checkbox]").forEach(cb => cb.checked = e.target.checked);
