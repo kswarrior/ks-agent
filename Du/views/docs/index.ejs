@@ -1,0 +1,15 @@
+<h2>Documentation</h2>
+<p class="lead">Browse all documentation sections and pages below.</p>
+<div class="sections-grid">
+  <% sections.forEach(section => { %>
+    <div class="docs-card">
+      <h3><%= section.title %></h3>
+      <p><%= section.description %></p>
+      <ul class="docs-list">
+        <% section.pages.forEach(page => { %>
+          <li><a href="<%= page.url %>"><%= page.title %></a></li>
+        <% }) %>
+      </ul>
+    </div>
+  <% }) %>
+</div>
