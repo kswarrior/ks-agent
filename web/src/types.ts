@@ -83,7 +83,23 @@ export interface RetrySettings {
   stopOnStatusCodes: number[]
 }
 
-export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step'
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question'
+
+export interface Question {
+  id: string
+  chatId: string
+  header: string
+  question: string
+  options: string[]
+  allowCustom: boolean
+  customPlaceholder?: string
+  status: 'pending' | 'answered'
+  answer?: string
+  selectedOption?: string | null
+  createdAt: string
+  answeredAt?: string
+  toolCallId?: string
+}
 
 export interface Activity {
   id: string

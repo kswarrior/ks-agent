@@ -1,4 +1,4 @@
-import type { Chat, FileListing, Message, ModelEntry, Plan, Project, Provider, RetrySettings, Terminal } from './types'
+import type { Chat, FileListing, Message, ModelEntry, Plan, Project, Provider, Question, RetrySettings, Terminal } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -61,6 +61,7 @@ export interface StreamHandlers {
   onTool?: (tool: { callId: string; name: string; args: string }) => void
   onToolResult?: (result: { callId: string; ok: boolean; summary: string }) => void
   onPlan?: (plan: Plan) => void
+  onQuestion?: (question: Question) => void
   onError: (message: string) => void
   onDone: () => void
 }
@@ -133,6 +134,9 @@ export async function streamChatEvents(
           case 'plan':
             handlers.onPlan?.(parsed)
             break
+          case 'question':
+            handlers.onQuestion?.(parsed)
+            break
           case 'error':
             handlers.onError(parsed.message)
             break
@@ -154,6 +158,11 @@ export const stopGeneration = (chatId: string) =>
 
 // Plans
 export const getPlan = (chatId: string) => req<Plan | null>(`/api/chats/${chatId}/plan`)
+
+// Questions
+export const listQuestions = (chatId: string) => req<Question[]>(`/api/chats/${chatId}/questions`)
+export const answerQuestion = (chatId: string, questionId: string, answer: string) =>
+  req<Question>(`/api/chats/${chatId}/questions/${questionId}/answer`, json('POST', { answer }))
 
 // Project files
 export const listFiles = (projectId: string, path = '') =>
