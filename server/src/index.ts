@@ -1526,6 +1526,7 @@ app.post('/api/projects/:id/preview/stop', async (c) => {
 // Reverse-proxy for preview: forwards to http://127.0.0.1:<port> so iframe can use same origin
 // Must be registered before the static fallback.
 app.all('/api/projects/:id/preview/proxy', async (c) => proxyPreview(c, ''))
+app.all('/api/projects/:id/preview/proxy/', async (c) => proxyPreview(c, ''))
 app.all('/api/projects/:id/preview/proxy/*', async (c) => {
   const suffix = c.req.path.replace(/^\/api\/projects\/[^/]+\/preview\/proxy\/?/, '')
   return proxyPreview(c, suffix)

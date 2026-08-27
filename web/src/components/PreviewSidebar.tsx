@@ -100,7 +100,22 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
   }
 
   const handleOpenExternal = () => {
-    const target = directUrl || url
+    let target = url
+    // Prefer proxied URL (same-origin) as requested: /api/projects/:id/preview/proxy/
+    if (activeProject) {
+      const proxied = api.previewProxyUrl(activeProject.id)
+      // If current url is the proxied one (or empty), use absolute proxied URL
+      if (!target || target.includes('/api/projects/') || target === proxied) {
+        target = `${window.location.origin}${proxied}`
+      } else if (target.startsWith('/')) {
+        // relative custom proxy path — make absolute
+        target = `${window.location.origin}${target}`
+      }
+      // If user typed a full http://...:3000 custom URL, respect it
+      // otherwise we already set proxied
+    } else if (!target) {
+      target = directUrl
+    }
     if (target) {
       window.open(target, '_blank', 'noopener,noreferrer')
     }
