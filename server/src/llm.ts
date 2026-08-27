@@ -52,58 +52,87 @@ async function openStream(
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const settings = retrySettings ?? {
     enabled: true,
-    maxRetries: 3,
-    baseDelayMs: 1000,
+    maxRetries: 5,
+    baseDelayMs: 1200,
     maxDelayMs: 30000,
-    retryOnStatusCodes: [429, 503],
-    stopOnStatusCodes: [404]
+    retryOnStatusCodes: [429, 503, 502],
+    stopOnStatusCodes: [400, 401, 403, 404]
   }
 
   let attempt = 0
   while (true) {
-    const res = await fetch(endpoint(baseUrl), {
-      method: 'POST',
-      signal,
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(body)
-    })
+    if (signal?.aborted) throw new Error('Aborted')
+    let res: Response
+    try {
+      res = await fetch(endpoint(baseUrl), {
+        method: 'POST',
+        signal,
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(body)
+      })
+    } catch (e: any) {
+      if (e?.name === 'AbortError') throw e
+      const shouldRetryNet = settings.enabled && attempt < settings.maxRetries
+      if (!shouldRetryNet) throw e
+      const delayNet = Math.min(settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 800, settings.maxDelayMs)
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(resolve, delayNet)
+        signal?.addEventListener('abort', () => { clearTimeout(t); reject(new Error('Aborted')) }, { once: true })
+      })
+      attempt++
+      continue
+    }
 
     if (!res.ok) {
       let detail = ''
       try {
-        detail = (await res.text()).slice(0, 300)
+        detail = (await res.text()).slice(0, 400)
       } catch {}
       const status = res.status
       const errorMsg = `Provider responded ${status}${detail ? `: ${detail}` : ''}`
-      
-      // Check if we should stop immediately (e.g., 404 model not found)
+
       if (settings.stopOnStatusCodes.includes(status)) {
         throw new Error(errorMsg)
       }
-      
-      // Check if we should retry
+
       const shouldRetry = settings.enabled &&
         settings.retryOnStatusCodes.includes(status) &&
         attempt < settings.maxRetries
-      
+
       if (!shouldRetry) {
         throw new Error(errorMsg)
       }
-      
-      // Calculate delay with exponential backoff and jitter
-      const delay = Math.min(
-        settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 1000,
+
+      let delay = Math.min(
+        settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 800,
         settings.maxDelayMs
       )
-      
-      await new Promise(resolve => setTimeout(resolve, delay))
+      // Respect Retry-After header if present (seconds or http-date)
+      const retryAfter = res.headers.get('retry-after')
+      if (retryAfter) {
+        const secs = Number(retryAfter)
+        if (!Number.isNaN(secs) && secs >= 0 && secs < 300) {
+          delay = Math.max(delay, secs * 1000)
+        } else {
+          const dateMs = Date.parse(retryAfter)
+          if (!Number.isNaN(dateMs)) {
+            const diff = dateMs - Date.now()
+            if (diff > 0 && diff < 300000) delay = Math.max(delay, diff)
+          }
+        }
+      }
+
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(resolve, delay)
+        signal?.addEventListener('abort', () => { clearTimeout(t); reject(new Error('Aborted')) }, { once: true })
+      })
       attempt++
       continue
     }
-    
+
     if (!res.body) throw new Error('Provider returned an empty response body')
     return res.body.getReader()
   }
