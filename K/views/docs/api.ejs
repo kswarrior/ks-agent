@@ -1,0 +1,102 @@
+<%- include('../partials/header') %>
+
+<%
+  const docsPages = [
+    { href: '/docs',         label: 'Overview',     icon: 'fas fa-book-open',    active: 'docs' },
+    { href: '/docs/api',     label: 'API Reference', icon: 'fas fa-plug',        active: 'docs-api' },
+    { href: '/docs/plugins', label: 'Plugins',       icon: 'fas fa-puzzle-piece', active: 'docs-plugins' },
+    { href: '/docs/server',  label: 'Server Setup',  icon: 'fas fa-server',       active: 'docs-server' },
+  ];
+  function isActive(label) { return active === (docsPages.find(p => p.label === label)?.active || '') ? ' active' : ''; }
+%>
+
+<div class="main-content">
+  <nav class="breadcrumbs">
+    <a href="/docs">Documentation</a>
+    <span class="sep"><i class="fas fa-chevron-right"></i></span>
+    <span class="current">API Reference</span>
+  </nav>
+
+  <div class="doc-layout">
+    <aside class="doc-sidebar-nav">
+      <h4>Pages</h4>
+      <nav class="doc-nav-list">
+        <% docsPages.forEach(p => { %>
+          <a href="<%= p.href %>" class="<%= isActive(p.label) %>">
+            <i class="<%= p.icon %>"></i>
+            <%= p.label %>
+          </a>
+        <% }) %>
+      </nav>
+    </aside>
+
+    <article class="doc-content">
+      <h1><i class="fas fa-plug" style="color: var(--accent-light);"></i> API Reference</h1>
+      <p class="doc-desc">
+        All endpoints are prefixed with <code>/api/v1</code> unless noted. Every request must include your API key in the <code>Authorization</code> header.
+      </p>
+
+      <div class="info-callout">
+        <strong>Base URL</strong> &mdash; <code>https://YOUR_HOST/api/v1</code><br>
+        Authentication header: <code>Authorization: Bearer YOUR_API_KEY</code>
+      </div>
+
+      <h2><i class="fas fa-user"></i> Players</h2>
+
+      <h3>Get Current Player</h3>
+      <p>Returns the profile of the authenticated player.</p>
+      <div class="content-block" style="background:var(--bg-primary); border:1px solid var(--border-color);">
+        <code>GET /api/v1/player/me</code>
+      </div>
+      <p>Response <code>200 OK</code>:</p>
+      <div class="content-block" style="background:var(--bg-primary); border:1px solid var(--border-color);">
+<pre style="color:var(--text-secondary); font-size:0.9rem; line-height:1.7;">{
+  "username": "KS_Warrior",
+  "rank": "Diamond",
+  "level": 87,
+  "coins": 124500,
+  "online": true
+}</pre>
+      </div>
+
+      <h3>Search Player</h3>
+      <div class="content-block" style="background:var(--bg-primary); border:1px solid var(--border-color);">
+        <code>GET /api/v1/player/search?q=<query></code>
+      </div>
+
+      <h2><i class="fas fa-server"></i> Servers</h2>
+
+      <h3>List Servers</h3>
+      <div class="content-block" style="background:var(--bg-primary); border:1px solid var(--border-color);">
+        <code>GET /api/v1/servers</code>
+      </div>
+      <p>Returns an array of registered servers with status indicators.</p>
+
+      <h3>Server Status</h3>
+      <div class="content-block" style="background:var(--bg-primary); border:1px solid var(--border-color);">
+        <code>GET /api/v1/servers/:id/status</code>
+      </div>
+
+      <h2><i class="fas fa-shield-alt"></i> Clans</h2>
+      <div class="content-block" style="background:var(--bg-primary); border:1px solid var(--border-color);">
+        <code>GET /api/v1/clans/:tag/members</code>
+      </div>
+      <p>Returns a list of members, their roles, and last-seen timestamps.</p>
+
+      <h2><i class="fas fa-exclamation-triangle"></i> Error Codes</h2>
+      <ul>
+        <li><code>200</code> — Success</li>
+        <li><code>400</code> — Bad request (missing or invalid params)</li>
+        <li><code>401</code> — Unauthorized (missing or invalid API key)</li>
+        <li><code>403</code> — Forbidden (insufficient permissions)</li>
+        <li><code>404</code> — Not found</li>
+        <li><code>429</code> — Rate limit exceeded</li>
+        <li><code>500</code> — Internal server error</li>
+      </ul>
+    </article>
+  </div>
+</div>
+
+<script src="/javascripts/main.js"></script>
+</body>
+</html>
