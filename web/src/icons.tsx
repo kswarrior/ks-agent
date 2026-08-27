@@ -130,6 +130,210 @@ export const IconFile = ({ size, className, style }: IconProps) => (
   </svg>
 )
 
+// ── File-type icons: distinct shape per kind, colour via currentColor ──
+
+export const IconFileCode = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <polyline points="9.5 14 7.5 16 9.5 18" />
+    <polyline points="14.5 14 16.5 16 14.5 18" />
+    <line x1="11" y1="18.5" x2="13" y2="13.5" />
+  </svg>
+)
+
+export const IconFileJs = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <text x="12" y="17.2" fontSize="6.2" fontWeight="800" textAnchor="middle" fontFamily="ui-monospace,monospace" fill="currentColor" stroke="none">JS</text>
+  </svg>
+)
+
+export const IconFileTs = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <text x="12" y="17.2" fontSize="6.2" fontWeight="800" textAnchor="middle" fontFamily="ui-monospace,monospace" fill="currentColor" stroke="none">TS</text>
+  </svg>
+)
+
+export const IconFileJson = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <text x="12" y="17.5" fontSize="7" fontWeight="700" textAnchor="middle" fontFamily="ui-monospace,monospace" fill="currentColor" stroke="none">{'{}'}</text>
+  </svg>
+)
+
+export const IconFileCss = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <text x="12" y="17.2" fontSize="6.5" fontWeight="800" textAnchor="middle" fontFamily="ui-monospace,monospace" fill="currentColor" stroke="none">#</text>
+  </svg>
+)
+
+export const IconFileHtml = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <text x="12" y="17.5" fontSize="6" fontWeight="800" textAnchor="middle" fontFamily="ui-monospace,monospace" fill="currentColor" stroke="none">{'<>'}</text>
+  </svg>
+)
+
+export const IconFileMd = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="8" y1="13.5" x2="16" y2="13.5" strokeWidth={1.4} />
+    <line x1="8" y1="16" x2="16" y2="16" strokeWidth={1.4} />
+    <line x1="8" y1="18.5" x2="13" y2="18.5" strokeWidth={1.4} />
+  </svg>
+)
+
+export const IconFilePy = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <text x="12" y="17.2" fontSize="5.5" fontWeight="800" textAnchor="middle" fontFamily="ui-monospace,monospace" fill="currentColor" stroke="none">PY</text>
+  </svg>
+)
+
+export const IconFileImage = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9.2" r="1.8" fill="currentColor" stroke="none" />
+    <path d="M5 18.5 L10.5 12.5 L13.5 15.5 L16 13 L19 18.5" fill="none" />
+  </svg>
+)
+
+export const IconFileArchive = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <rect x="3" y="7" width="18" height="12" rx="1.5" />
+    <path d="M3 7 L12 12 L21 7" />
+    <line x1="12" y1="12" x2="12" y2="19" />
+    <line x1="9" y1="15.5" x2="15" y2="15.5" />
+  </svg>
+)
+
+export const IconFilePdf = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <text x="12" y="17" fontSize="5" fontWeight="800" textAnchor="middle" fontFamily="ui-monospace,monospace" fill="currentColor" stroke="none">PDF</text>
+  </svg>
+)
+
+export const IconFileShell = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <polyline points="8.5 14.5 10.5 16.5 8.5 18.5" />
+    <line x1="12" y1="18.5" x2="16" y2="18.5" />
+  </svg>
+)
+
+export const IconFileYaml = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <text x="12" y="17" fontSize="4.5" fontWeight="800" textAnchor="middle" fontFamily="ui-monospace,monospace" fill="currentColor" stroke="none">YML</text>
+  </svg>
+)
+
+export const IconFileConfig = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <circle cx="12" cy="15.5" r="2" />
+    <path d="M12 13.5 v1 M12 16.5 v1 M13.3 14.2 l0.7 -0.7 M10 17.8 l0.7 -0.7 M13.3 16.8 l0.7 0.7 M10 14.2 l0.7 0.7 M14 15.5 h1 M9 15.5 h1" strokeWidth={1.2} />
+  </svg>
+)
+
+export const IconFileDocker = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <rect x="7" y="13" width="10" height="5" rx="0.8" />
+    <rect x="8.2" y="11" width="2" height="2" rx="0.3" />
+    <rect x="10.8" y="11" width="2" height="2" rx="0.3" />
+    <rect x="13.5" y="11" width="2" height="2" rx="0.3" />
+  </svg>
+)
+
+// ── File-type meta helper ──
+
+export type FileMeta = {
+  color: string
+  language: string
+  label: string
+  Icon: (p: IconProps) => JSX.Element
+}
+
+function extOf(name: string): string {
+  const base = (name.split('/').pop() ?? name).toLowerCase()
+  // special basenames
+  if (base === 'dockerfile' || base === 'makefile' || base === 'jenkinsfile') return base
+  if (base === '.gitignore' || base === '.gitattributes' || base === '.gitmodules' || base === '.env' || base.startsWith('.env.')) return base
+  const dot = base.lastIndexOf('.')
+  if (dot === -1 || dot === 0) return base
+  return base.slice(dot + 1).toLowerCase()
+}
+
+export function getFileMeta(filename: string): FileMeta {
+  const ext = extOf(filename)
+  const lower = filename.toLowerCase()
+  // image
+  if (['png','jpg','jpeg','gif','webp','bmp','ico','tiff','svg'].includes(ext)) {
+    // svg could be markup but treat as image when extension is svg and not sure; keep as image colour
+    if (ext === 'svg') return { color: '#e37933', language: 'xml', label: 'SVG', Icon: IconFileImage }
+    return { color: '#a855f7', language: 'image', label: ext.toUpperCase(), Icon: IconFileImage }
+  }
+  if (['mp4','mov','avi','mkv','mp3','wav','flac','ogg','webm'].includes(ext)) return { color: '#f472b6', language: 'media', label: ext.toUpperCase(), Icon: IconFileImage }
+  if (['zip','tar','gz','tgz','rar','7z','bz2','xz'].includes(ext)) return { color: '#f97316', language: 'archive', label: ext.toUpperCase(), Icon: IconFileArchive }
+  if (ext === 'pdf') return { color: '#ef4444', language: 'pdf', label: 'PDF', Icon: IconFilePdf }
+  if (['js','mjs','cjs'].includes(ext)) return { color: '#f7df1e', language: 'javascript', label: 'JS', Icon: IconFileJs }
+  if (ext === 'jsx') return { color: '#61dafb', language: 'javascript', label: 'JSX', Icon: IconFileJs }
+  if (['ts','mts','cts'].includes(ext)) return { color: '#3178c6', language: 'typescript', label: 'TS', Icon: IconFileTs }
+  if (ext === 'tsx') return { color: '#3178c6', language: 'typescript', label: 'TSX', Icon: IconFileTs }
+  if (['json','jsonc'].includes(ext)) return { color: '#f59e0b', language: 'json', label: 'JSON', Icon: IconFileJson }
+  if (['css'].includes(ext)) return { color: '#1572b6', language: 'css', label: 'CSS', Icon: IconFileCss }
+  if (['scss','sass','less'].includes(ext)) return { color: '#c6538c', language: 'css', label: 'SCSS', Icon: IconFileCss }
+  if (['html','htm'].includes(ext)) return { color: '#e34f26', language: 'html', label: 'HTML', Icon: IconFileHtml }
+  if (['md','markdown','mdx'].includes(ext)) return { color: '#519aba', language: 'markdown', label: 'MD', Icon: IconFileMd }
+  if (['py','pyw'].includes(ext)) return { color: '#3572A5', language: 'python', label: 'PY', Icon: IconFilePy }
+  if (ext === 'java') return { color: '#b07219', language: 'java', label: 'JAVA', Icon: IconFileCode }
+  if (ext === 'go') return { color: '#00ADD8', language: 'go', label: 'GO', Icon: IconFileCode }
+  if (ext === 'rs') return { color: '#dea584', language: 'rust', label: 'RS', Icon: IconFileCode }
+  if (ext === 'php') return { color: '#777bb4', language: 'php', label: 'PHP', Icon: IconFileCode }
+  if (ext === 'rb') return { color: '#cc342d', language: 'ruby', label: 'RB', Icon: IconFileCode }
+  if (['sh','bash','zsh','fish','ps1'].includes(ext)) return { color: '#89e051', language: 'shell', label: 'SH', Icon: IconFileShell }
+  if (['yaml','yml'].includes(ext)) return { color: '#f05138', language: 'yaml', label: 'YAML', Icon: IconFileYaml }
+  if (ext === 'toml') return { color: '#9ca3af', language: 'toml', label: 'TOML', Icon: IconFileYaml }
+  if (['xml'].includes(ext)) return { color: '#e37933', language: 'xml', label: 'XML', Icon: IconFileYaml }
+  if (['sql'].includes(ext)) return { color: '#e38c00', language: 'sql', label: 'SQL', Icon: IconFileCode }
+  if (['graphql','gql'].includes(ext)) return { color: '#e535ab', language: 'graphql', label: 'GQL', Icon: IconFileCode }
+  if (['c','h'].includes(ext)) return { color: '#555555', language: 'c', label: 'C', Icon: IconFileCode }
+  if (['cpp','cc','hpp','cxx'].includes(ext)) return { color: '#f34b7d', language: 'cpp', label: 'CPP', Icon: IconFileCode }
+  if (ext === 'cs') return { color: '#178600', language: 'csharp', label: 'CS', Icon: IconFileCode }
+  if (ext === 'swift') return { color: '#ffac45', language: 'swift', label: 'SWIFT', Icon: IconFileCode }
+  if (['kt','kts'].includes(ext)) return { color: '#A97BFF', language: 'kotlin', label: 'KT', Icon: IconFileCode }
+  if (ext === 'dart') return { color: '#00B4AB', language: 'dart', label: 'DART', Icon: IconFileCode }
+  if (ext === 'dockerfile' || lower.endsWith('dockerfile')) return { color: '#2496ed', language: 'dockerfile', label: 'DOCKER', Icon: IconFileDocker }
+  if (ext === '.gitignore' || ext === '.gitattributes' || ext === '.gitmodules') return { color: '#f05032', language: 'gitignore', label: 'GIT', Icon: IconFileConfig }
+  if (ext === '.env' || ext.startsWith('.env.')) return { color: '#ecd53f', language: 'shell', label: 'ENV', Icon: IconFileConfig }
+  if (ext === 'makefile') return { color: '#427819', language: 'makefile', label: 'MAKE', Icon: IconFileShell }
+  // fallback
+  return { color: '#6b6b6b', language: 'plaintext', label: ext ? ext.toUpperCase().slice(0,4) : 'FILE', Icon: IconFile }
+}
+
+export function FileIcon({ name, size, style }: { name: string; size?: number; style?: React.CSSProperties }) {
+  const meta = getFileMeta(name)
+  const Icon = meta.Icon
+  return <Icon size={size} style={{ ...style, color: meta.color }} />
+}
+
 export const IconDownload = ({ size, className, style }: IconProps) => (
   <svg {...base(size, style)} className={className}>
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
