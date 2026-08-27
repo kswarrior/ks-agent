@@ -53,6 +53,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [maxDelayInput, setMaxDelayInput] = useState('')
   const [retryOnInput, setRetryOnInput] = useState('')
   const [stopOnInput, setStopOnInput] = useState('')
+  const [skills, setSkills] = useState<Skill[]>([])
+  const [showSkillForm, setShowSkillForm] = useState(false)
+  const [skillForm, setSkillForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[] })
+  const [skillFileBrowserOpen, setSkillFileBrowserOpen] = useState(false)
+  const [skillFileBrowserProject, setSkillFileBrowserProject] = useState<string | null>(null)
+  const [skillProjects, setSkillProjects] = useState<Project[]>([])
   const [error, setError] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()
@@ -63,10 +69,13 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       loadPlanPrompt()
       loadSystemPrompt()
       loadRetrySettings()
+      loadSkills()
       setProviderForm(null)
       setProviderPicker(false)
       setShowModelForm(false)
       setModelEdit(null)
+      setShowSkillForm(false)
+      setSkillFileBrowserOpen(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -123,6 +132,47 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       setMaxDelayInput(String(settings.maxDelayMs))
       setRetryOnInput(settings.retryOnStatusCodes.join(', '))
       setStopOnInput(settings.stopOnStatusCodes.join(', '))
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  async function loadSkills() {
+    try {
+      const list = await api.listSkills()
+      setSkills(list)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  async function submitSkill() {
+    setError(null)
+    const name = skillForm.name.trim()
+    const note = skillForm.note.trim()
+    const mainFile = skillForm.mainFile.trim()
+    if (!name) return setError('Skill name is required')
+    if (!mainFile) return setError('Main file is required')
+    if (!mainFile.endsWith('.md')) return setError('Main file must be .md')
+    try {
+      await api.createSkill({ name, note, mainFile, files: skillForm.files })
+      toast('Skill added', 'success')
+      setSkillForm({ name: '', note: '', mainFile: '', files: [] })
+      setShowSkillForm(false)
+      setSkillFileBrowserOpen(false)
+      await loadSkills()
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
+  async function removeSkill(id: string) {
+    const ok = await confirm({ title: 'Delete skill?', message: 'This skill will be permanently removed.', danger: true, confirmText: 'Delete' })
+    if (!ok) return
+    try {
+      await api.deleteSkill(id)
+      toast('Skill deleted', 'success')
+      await loadSkills()
     } catch (e: any) {
       toast(e.message, 'error')
     }
