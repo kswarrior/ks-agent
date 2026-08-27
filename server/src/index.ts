@@ -1062,8 +1062,11 @@ app.post('/api/projects/:id/files', async (c) => {
   if (!abs) return c.json({ error: 'Invalid path' }, 400)
   if (fs.existsSync(abs)) return c.json({ error: `"${rel}" already exists` }, 400)
   try {
-    if (kind === 'folder') fs.mkdirSync(abs)
-    else fs.writeFileSync(abs, '', { flag: 'wx' })
+    if (kind === 'folder') fs.mkdirSync(abs, { recursive: true })
+    else {
+      fs.mkdirSync(path.dirname(abs), { recursive: true })
+      fs.writeFileSync(abs, '', { flag: 'wx' })
+    }
   } catch (e: any) {
     return c.json({ error: e?.message || 'Failed to create' }, 400)
   }
@@ -1102,7 +1105,7 @@ app.delete('/api/projects/:id/files', (c) => {
   const abs = resolveInProject(project.path, rel)
   if (!abs) return c.json({ error: 'Invalid path' }, 400)
   try {
-    fs.rmSync(abs, { recursive: true })
+    fs.rmSync(abs, { recursive: true, force: true })
   } catch (e: any) {
     return c.json({ error: e?.message || 'Delete failed' }, 400)
   }

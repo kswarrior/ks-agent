@@ -186,7 +186,7 @@ function init() {
       const tag = el.textContent.trim().toLowerCase();
       state.tag = state.tag === tag ? "all" : tag;
       document.getElementById("tagFilter").value = state.tag;
-      render();
+      resetPageAndRender();
       document.querySelectorAll(".tags-cloud .tag").forEach(t => t.classList.toggle("active", t.textContent.trim().toLowerCase() === state.tag));
     });
   });
@@ -197,7 +197,7 @@ function init() {
       const tag = e.target.dataset.tag;
       state.tag = tag;
       document.getElementById("tagFilter").value = tag;
-      render();
+      resetPageAndRender();
     }
   });
 
