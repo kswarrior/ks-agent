@@ -237,8 +237,8 @@ function isDangerousCommand(command: string): string | null {
   if (/rm\s+(-[a-zA-Z]*\s+)*(\/|~)\s*($|;|&&|\|\|)/.test(c)) {
     return 'Deletes an entire system path (root or home)'
   }
-  // rm -rf with multiple directories (suspicious mass delete)
-  if (/rm\s+-[a-zA-Z]*r/.test(c) && /rm\s+.*\s+\/\w/.test(c)) {
+  // rm -rf with root-absolute paths (recursive delete of system paths)
+  if (/rm\s+-[a-zA-Z]*r/.test(c) && /\s+\/\w/.test(c)) {
     return 'Recursive delete with root-absolute paths'
   }
   // sudo commands
