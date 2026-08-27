@@ -144,11 +144,6 @@ function TerminalPane({ project }: { project: Project | null }) {
   const [detailName, setDetailName] = useState('')
   const [detailBusy, setDetailBusy] = useState(false)
   const [session, setSession] = useState<Terminal | null>(null)
-  const [histories, setHistories] = useState<Record<string, Array<{ command: string; output: string; exitCode: number }>>>({})
-  const [input, setInput] = useState('')
-  const [execBusy, setExecBusy] = useState(false)
-  const outputRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(async () => {
     if (!projectId) return
@@ -175,20 +170,7 @@ function TerminalPane({ project }: { project: Project | null }) {
     setSelected(null)
     setDetailName('')
     setSession(null)
-    setInput('')
   }, [projectId])
-
-  useEffect(() => {
-    if (session && outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight
-    }
-  }, [histories, session])
-
-  useEffect(() => {
-    if (session && inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [session])
 
   const filtered = terminals.filter((t: Terminal) => t.name.toLowerCase().includes(query.trim().toLowerCase()))
 
@@ -201,8 +183,8 @@ function TerminalPane({ project }: { project: Project | null }) {
       setNewName('')
       setShowCreate(false)
       await refresh()
-      setSelected(created)
-      setDetailName(created.name)
+      // auto-open the new terminal as a real PTY
+      setSession(created)
     } catch (e: any) {
       toast(e.message, 'error')
     } finally {
@@ -217,7 +199,6 @@ function TerminalPane({ project }: { project: Project | null }) {
 
   function openSession(terminal: Terminal) {
     setSession(terminal)
-    setInput('')
   }
 
   async function handleRename() {
@@ -230,7 +211,6 @@ function TerminalPane({ project }: { project: Project | null }) {
       toast('Terminal renamed', 'success')
       setSelected(updated)
       setDetailName(updated.name)
-      // keep session in sync if same terminal is open
       setSession((prev) => (prev?.id === updated.id ? updated : prev))
       await refresh()
     } catch (e: any) {
@@ -244,7 +224,7 @@ function TerminalPane({ project }: { project: Project | null }) {
     if (!selected) return
     const ok = await confirm({
       title: `Delete "${selected.name}"?`,
-      message: 'This terminal will be permanently removed.',
+      message: 'This terminal will be permanently removed. Running shell will be killed.',
       danger: true,
       confirmText: 'Delete',
     })
@@ -253,11 +233,6 @@ function TerminalPane({ project }: { project: Project | null }) {
     try {
       await api.deleteTerminal(selected.id)
       toast('Terminal deleted', 'success')
-      setHistories((prev) => {
-        const next = { ...prev }
-        delete next[selected.id]
-        return next
-      })
       if (session?.id === selected.id) setSession(null)
       setSelected(null)
       setDetailName('')
@@ -269,93 +244,24 @@ function TerminalPane({ project }: { project: Project | null }) {
     }
   }
 
-  async function handleExec() {
-    if (!session || !input.trim() || execBusy) return
-    const command = input.trim()
-    if (command === 'clear') {
-      setHistories((prev) => ({ ...prev, [session.id]: [] }))
-      setInput('')
-      return
-    }
-    setExecBusy(true)
-    const prevHistory = histories[session.id] ?? []
-    // optimistic: show command immediately with placeholder
-    setHistories((prev) => ({
-      ...prev,
-      [session.id]: [...prevHistory, { command, output: '…', exitCode: 0 }],
-    }))
-    setInput('')
-    try {
-      const res = await api.execTerminal(session.id, command)
-      setHistories((prev) => {
-        const list = [...(prev[session.id] ?? [])]
-        // replace last placeholder
-        list[list.length - 1] = { command, output: res.output, exitCode: res.exitCode }
-        return { ...prev, [session.id]: list }
-      })
-    } catch (e: any) {
-      setHistories((prev) => {
-        const list = [...(prev[session.id] ?? [])]
-        list[list.length - 1] = { command, output: e.message || 'Failed to execute', exitCode: 1 }
-        return { ...prev, [session.id]: list }
-      })
-    } finally {
-      setExecBusy(false)
-      setTimeout(() => inputRef.current?.focus(), 0)
-    }
-  }
-
   if (!projectId) {
     return <div className="rsb-empty">Select a project to manage terminals</div>
   }
 
   if (session) {
-    const history = histories[session.id] ?? []
     return (
-      <div className="tp tp-session-wrap">
-        <div className="fp-subhead" style={{ background: '#000', borderBottom: '1px solid #1a1a1a', margin: '-12px -12px 0 -12px', padding: '8px 12px' }}>
+      <div className="tp tp-session-wrap" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, background: '#000', margin: '-12px', overflow: 'hidden' }}>
+        <div className="fp-subhead" style={{ background: '#000', borderBottom: '1px solid #1a1a1a', margin: 0, padding: '8px 12px', flexShrink: 0 }}>
           <button className="icon-btn" aria-label="Back to terminals" onClick={() => setSession(null)} style={{ color: '#e8e8e8' }}>
             <IconChevronLeft size={17} />
           </button>
-          <span style={{ color: '#e8e8e8', fontSize: 13 }}>{session.name}</span>
+          <span style={{ color: '#e8e8e8', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.name}</span>
           <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b6b6b', fontFamily: 'ui-monospace, monospace', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={projectPath}>
             {projectPath}
           </span>
         </div>
-        <div className="tp-session" ref={outputRef} onClick={() => inputRef.current?.focus()}>
-          <div className="tp-session-output">
-            {history.length === 0 && (
-              <div className="tp-session-hint">Type a command and press Enter. Try `ls`, `pwd`, `clear`.</div>
-            )}
-            {history.map((h, i) => (
-              <div key={i} className="tp-session-entry">
-                <div className="tp-session-line">
-                  <span className="tp-session-prompt">{projectPath} |</span>
-                  <span className="tp-session-cmd">{h.command}</span>
-                </div>
-                <pre className={`tp-session-out${h.exitCode !== 0 ? ' error' : ''}`}>{h.output}</pre>
-              </div>
-            ))}
-            {execBusy && history.length > 0 && history[history.length - 1]?.output === '…' && null}
-          </div>
-          <div className="tp-session-inputRow">
-            <span className="tp-session-prompt">{projectPath} |</span>
-            <input
-              ref={inputRef}
-              className="tp-session-input"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleExec()
-                if (e.key === 'Escape') setSession(null)
-              }}
-              placeholder="enter command"
-              autoFocus
-              disabled={execBusy}
-              spellCheck={false}
-              autoComplete="off"
-            />
-          </div>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: '#000' }}>
+          <XTermTerminal terminalId={session.id} projectPath={projectPath} />
         </div>
       </div>
     )
@@ -456,7 +362,7 @@ function TerminalPane({ project }: { project: Project | null }) {
           </div>
         ) : (
           filtered.length === 0 ? (
-            <div className="dd-empty">{terminals.length === 0 ? 'No terminals yet' : 'No matches'}</div>
+            <div className="dd-empty">{terminals.length === 0 ? 'No terminals yet — create one for a real Linux shell' : 'No matches'}</div>
           ) : (
             filtered.map((terminal: Terminal) => (
               <div
@@ -483,14 +389,11 @@ function TerminalPane({ project }: { project: Project | null }) {
                   title="Delete terminal"
                   onClick={async (e) => {
                     e.stopPropagation()
+                    const ok = await confirm({ title: `Delete "${terminal.name}"?`, message: 'Running shell will be killed.', danger: true, confirmText: 'Delete' })
+                    if (!ok) return
                     try {
                       await api.deleteTerminal(terminal.id)
                       toast('Terminal deleted', 'success')
-                      setHistories((prev) => {
-                        const next = { ...prev }
-                        delete next[terminal.id]
-                        return next
-                      })
                       if ((session as Terminal | null)?.id === terminal.id) setSession(null)
                       if ((selected as Terminal | null)?.id === terminal.id) { setSelected(null); setDetailName('') }
                       await refresh()
