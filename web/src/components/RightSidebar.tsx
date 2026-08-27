@@ -25,32 +25,34 @@ const TABS: Array<{ id: RsTab; label: string }> = [
   { id: 'activity', label: 'Activity' }
 ]
 
-function PlanView({ plan, activities }: { plan: Plan | null; activities: Activity[] }) {
+function PlanView({ plan, activities, streaming }: { plan: Plan | null; activities: Activity[]; streaming: boolean }) {
   // Derive flow stage from plan + activities
-  const hasExplore = activities.some(a => ['list_files','read_file','run_shell'].includes(a.toolType) && a.summary)
+  // Only treat explore as active when the agent has actually called an explore tool.
+  // Use any explore activity (not just those with summary) so the stage switches as soon as the tool is invoked.
+  const hasExplore = activities.some(a => ['list_files','read_file','run_shell'].includes(a.toolType))
   const hasPlan = !!plan
   const workingStep = plan?.steps.find(s => s.status === 'working')
   const workingIdx = workingStep ? plan!.steps.indexOf(workingStep) : -1
   const done = plan ? plan.steps.filter(s => s.status === 'done').length : 0
 
-  type Stage = 'understand' | 'explore' | 'planning' | 'executing' | 'done'
-  let stage: Stage = 'understand'
+  type Stage = 'understand' | 'explore' | 'planning' | 'executing' | 'done' | 'idle'
+  let stage: Stage = 'idle'
   let stageDetail = ''
-  if (!hasPlan && !hasExplore) stage = 'understand'
-  else if (!hasPlan && hasExplore) stage = 'explore'
-  else if (hasPlan && !workingStep && done === 0) stage = 'planning'
+  if (!hasPlan && !hasExplore) stage = streaming ? 'understand' : 'idle'
+  else if (!hasPlan && hasExplore) stage = streaming ? 'explore' : 'idle'
+  else if (hasPlan && !workingStep && done === 0) stage = streaming ? 'planning' : 'planning'
   else if (hasPlan && workingStep) { stage = 'executing'; stageDetail = `Executing step [${workingIdx + 1}] ${workingStep.title}` }
   else if (hasPlan && done === plan!.steps.length && plan!.steps.length > 0) stage = 'done'
   else if (hasPlan) stage = 'executing'
 
-  const stages: Array<{ id: Stage; label: string }> = [
+  const stages: Array<{ id: Exclude<Stage, 'idle' | 'done'>; label: string }> = [
     { id: 'understand', label: 'Understand' },
     { id: 'explore', label: 'Explore' },
     { id: 'planning', label: 'Planning' },
     { id: 'executing', label: 'Executing' },
   ]
-  const stageOrder: Record<Stage, number> = { understand: 0, explore: 1, planning: 2, executing: 3, done: 3 }
-  const currentOrder = stageOrder[stage]
+  const stageOrder: Record<Exclude<Stage, 'idle'>, number> = { understand: 0, explore: 1, planning: 2, executing: 3, done: 3 }
+  const currentOrder = stage === 'idle' ? -1 : stageOrder[stage as Exclude<Stage, 'idle'>]
 
   if (!plan) {
     return (
@@ -58,21 +60,23 @@ function PlanView({ plan, activities }: { plan: Plan | null; activities: Activit
         <div className="flow">
           <div className="flow-track">
             {stages.map((s, i) => {
-              const state = i < currentOrder ? 'done' : i === currentOrder ? 'active' : 'pending'
+              const state = stage === 'idle' ? 'pending' : i < currentOrder ? 'done' : i === currentOrder ? 'active' : 'pending'
               return (
                 <div key={s.id} className={`flow-node ${state}`}>
-                  <span className="flow-dot">{i < currentOrder ? <IconCheck size={10} /> : i === currentOrder ? <span className="flow-pulse" /> : null}</span>
+                  <span className="flow-dot">{stage !== 'idle' && i < currentOrder ? <IconCheck size={10} /> : stage !== 'idle' && i === currentOrder ? <span className="flow-pulse" /> : null}</span>
                   <span className="flow-label">{s.label}</span>
-                  {i < stages.length - 1 && <span className={`flow-line ${i < currentOrder ? 'done' : ''}`} />}
+                  {i < stages.length - 1 && <span className={`flow-line ${stage !== 'idle' && i < currentOrder ? 'done' : ''}`} />}
                 </div>
               )
             })}
           </div>
-          <div className="flow-detail">
-            {stage === 'understand' && <span>Understanding<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
-            {stage === 'explore' && <span>Exploring<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
-            {stage === 'planning' && <span>Planning<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
-          </div>
+          {stage !== 'idle' && (
+            <div className="flow-detail">
+              {stage === 'understand' && <span>Understanding<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
+              {stage === 'explore' && <span>Exploring<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
+              {stage === 'planning' && <span>Planning<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
+            </div>
+          )}
           <div className="rsb-empty" style={{ marginTop: 16 }}>Nothing here yet — plan will appear after explore</div>
         </div>
       </div>
