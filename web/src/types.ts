@@ -93,15 +93,6 @@ export interface RetrySettings {
   alwaysRetry?: boolean
 }
 
-export interface Skill {
-  id: string
-  name: string
-  note: string
-  mainFile: string
-  files: string[]
-  createdAt: string
-}
-
 export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question'
 
 export interface Question {

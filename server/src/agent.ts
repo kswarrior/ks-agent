@@ -430,10 +430,10 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
         }
 
         // If denied, refuse execution. The AI sees this error and must not retry.
-        if (answer !== 'Yes, run it') {
+        if (!options.includes(answer)) {
           q.status = 'answered'
           q.answer = answer
-          q.selectedOption = options.includes(answer) ? answer : null
+          q.selectedOption = null
           q.answeredAt = new Date().toISOString()
           saveDb()
           ctx.onEvent('question', JSON.stringify(q))
@@ -510,6 +510,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       const allowCustom = args.allow_custom !== false
       if (options.length === 0 && !allowCustom) return err('provide at least one option or allow custom answer')
       if (options.some((o: string) => o.length > 80)) return err('each option must be <=80 chars')
+      if (options.length > 0 && options.length < 1) return err('options invalid')
       const customPlaceholder =
         typeof args.custom_placeholder === 'string' ? args.custom_placeholder.trim().slice(0, 80) : undefined
       const qHeader = (header || 'Question').slice(0, 40)

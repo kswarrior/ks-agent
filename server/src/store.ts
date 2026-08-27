@@ -104,15 +104,6 @@ export interface RetrySettings {
   alwaysRetry?: boolean
 }
 
-export interface Skill {
-  id: string
-  name: string
-  note: string
-  mainFile: string
-  files: string[]
-  createdAt: string
-}
-
 export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question'
 
 export interface Activity {
@@ -141,13 +132,12 @@ interface DB {
   questions: Question[]
   activities: Activity[]
   retrySettings: RetrySettings
-  skills: Skill[]
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false } }
 
 function ensureChatSeqs(chats: Chat[]): boolean {
   let changed = false
@@ -229,8 +219,7 @@ export function loadDb(): void {
               : defaultRetrySettings.stopOnStatusCodes,
             alwaysRetry: Boolean(parsed.retrySettings.alwaysRetry ?? defaultRetrySettings.alwaysRetry)
           }
-        : defaultRetrySettings,
-      skills: Array.isArray(parsed.skills) ? parsed.skills.filter((s: any) => s && typeof s.id === 'string' && typeof s.name === 'string') : []
+        : defaultRetrySettings
     }
     if (ensureChatSeqs(db.chats)) {
       try { saveDb() } catch {}
@@ -245,7 +234,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings }
   }
 }
 
@@ -337,12 +326,4 @@ export function clearActivitiesForChat(chatId: string): void {
   const before = db.activities.length
   db.activities = db.activities.filter((a) => a.chatId !== chatId)
   if (db.activities.length !== before) saveDb()
-}
-
-export function getSkills(): Skill[] {
-  return [...db.skills].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-}
-
-export function findSkill(id: string): Skill | undefined {
-  return db.skills.find((s) => s.id === id)
 }

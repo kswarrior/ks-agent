@@ -19,8 +19,6 @@ import {
   findTerminal,
   getDb,
   getRetrySettings,
-  getSkills,
-  findSkill,
   loadDb,
   messagesOf,
   newId,
@@ -34,8 +32,7 @@ import {
   type Project,
   type Question,
   type Terminal,
-  type RetrySettings,
-  type Skill
+  type RetrySettings
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, resolvePendingQuestion, runAgentLoop } from './agent.js'
@@ -950,59 +947,6 @@ app.patch('/api/settings/retry', async (c) => {
   return c.json(updateRetrySettings(patch))
 })
 
-// ---------------- Skills ----------------
-
-app.get('/api/settings/skills', (c) => {
-  return c.json(getSkills())
-})
-
-app.post('/api/settings/skills', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const name = String(body.name ?? '').trim()
-  const note = String(body.note ?? '').trim()
-  const mainFile = String(body.mainFile ?? '').trim()
-  const files = Array.isArray(body.files) ? body.files.map((f: any) => String(f).trim()).filter(Boolean) : []
-  if (!name) return c.json({ error: 'Skill name is required' }, 400)
-  if (!mainFile) return c.json({ error: 'Main file is required' }, 400)
-  if (!mainFile.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
-  const skill: Skill = { id: newId(), name, note, mainFile, files, createdAt: new Date().toISOString() }
-  getDb().skills.push(skill)
-  saveDb()
-  return c.json(skill, 201)
-})
-
-app.delete('/api/settings/skills/:id', (c) => {
-  const id = c.req.param('id')
-  const idx = getDb().skills.findIndex((s) => s.id === id)
-  if (idx === -1) return c.json({ error: 'Skill not found' }, 404)
-  getDb().skills.splice(idx, 1)
-  saveDb()
-  return c.json({ ok: true })
-})
-
-app.patch('/api/settings/skills/:id', async (c) => {
-  const skill = findSkill(c.req.param('id'))
-  if (!skill) return c.json({ error: 'Skill not found' }, 404)
-  const body = await c.req.json().catch(() => ({}))
-  if (body.name !== undefined) {
-    const v = String(body.name).trim()
-    if (!v) return c.json({ error: 'Name cannot be empty' }, 400)
-    skill.name = v
-  }
-  if (body.note !== undefined) skill.note = String(body.note).trim()
-  if (body.mainFile !== undefined) {
-    const v = String(body.mainFile).trim()
-    if (!v) return c.json({ error: 'Main file cannot be empty' }, 400)
-    if (!v.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
-    skill.mainFile = v
-  }
-  if (body.files !== undefined && Array.isArray(body.files)) {
-    skill.files = body.files.map((f: any) => String(f).trim()).filter(Boolean)
-  }
-  saveDb()
-  return c.json(skill)
-})
-
 // ---------------- Project files ----------------
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -1062,11 +1006,8 @@ app.post('/api/projects/:id/files', async (c) => {
   if (!abs) return c.json({ error: 'Invalid path' }, 400)
   if (fs.existsSync(abs)) return c.json({ error: `"${rel}" already exists` }, 400)
   try {
-    if (kind === 'folder') fs.mkdirSync(abs, { recursive: true })
-    else {
-      fs.mkdirSync(path.dirname(abs), { recursive: true })
-      fs.writeFileSync(abs, '', { flag: 'wx' })
-    }
+    if (kind === 'folder') fs.mkdirSync(abs)
+    else fs.writeFileSync(abs, '', { flag: 'wx' })
   } catch (e: any) {
     return c.json({ error: e?.message || 'Failed to create' }, 400)
   }
@@ -1105,7 +1046,7 @@ app.delete('/api/projects/:id/files', (c) => {
   const abs = resolveInProject(project.path, rel)
   if (!abs) return c.json({ error: 'Invalid path' }, 400)
   try {
-    fs.rmSync(abs, { recursive: true, force: true })
+    fs.rmSync(abs, { recursive: true })
   } catch (e: any) {
     return c.json({ error: e?.message || 'Delete failed' }, 400)
   }
@@ -1396,7 +1337,7 @@ function isBlockedHost(hostname: string): boolean {
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal'))
     return true
   if (h === '::1' || h === '::') return true
-  if (h.includes(':') && (h.startsWith('fe80:') || /^f[cd][0-9a-f]{2}:/.test(h))) return true
+  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
   if (h.startsWith('::ffff:')) {
     const v4 = h.slice(7)
     if (v4) return isBlockedHost(v4)
