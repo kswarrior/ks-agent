@@ -514,7 +514,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
               </button>
             </div>
           </div>
-          <div className="fp-editor-wrap" style={{ borderColor: selectedColor } as React.CSSProperties}>
+          <div className="fp-editor-wrap" style={{ borderColor: selectedColor }}>
             <div className="fp-editor-container">
               <pre ref={highlightRef} className="fp-highlight" aria-hidden="true"><code dangerouslySetInnerHTML={{ __html: highlightedHtml + '<br>' }} /></pre>
               <textarea

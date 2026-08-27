@@ -328,7 +328,7 @@ export function getFileMeta(filename: string): FileMeta {
   return { color: '#6b6b6b', language: 'plaintext', label: ext ? ext.toUpperCase().slice(0,4) : 'FILE', Icon: IconFile }
 }
 
-export function FileIcon({ name, size, style }: { name: string; size?: number; style?: React.CSSProperties }) {
+export function FileIcon({ name, size, style }: { name: string; size?: number; style?: CSSProperties }) {
   const meta = getFileMeta(name)
   const Icon = meta.Icon
   return <Icon size={size} style={{ ...style, color: meta.color }} />
