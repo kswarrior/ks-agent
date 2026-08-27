@@ -173,7 +173,7 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
             </button>
           </div>
         </div>
-        {loading && <div className="psb-loading-bar">Loading…</div>}
+        {loading && <div className="psb-loading" style={{ display: 'block', padding: '6px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>Loading…</div>}
         {error && (
           <div className="psb-error" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ flex: 1 }}>{error}</span>
