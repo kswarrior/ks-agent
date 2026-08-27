@@ -1,0 +1,112 @@
+@extends('layout')
+
+@section('content')
+<div class="dashboard">
+  <div class="page-header">
+    <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+    <p class="subtitle">Welcome to KS Docs — your gateway to understanding our platform.</p>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon"><i class="fas fa-file-alt"></i></div>
+      <div class="stat-info">
+        <h3>6</h3>
+        <p>Documentation Pages</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon"><i class="fas fa-code"></i></div>
+      <div class="stat-info">
+        <h3>v3.0</h3>
+        <p>Latest Version</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon"><i class="fas fa-clock"></i></div>
+      <div class="stat-info">
+        <h3>2m</h3>
+        <p>Avg Read Time</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+      <div class="stat-info">
+        <h3>100%</h3>
+        <p>Up to Date</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="card">
+      <div class="card-header">
+        <h2><i class="fas fa-rocket"></i> Quick Start</h2>
+      </div>
+      <div class="card-body">
+        <p>Get up and running in minutes with our comprehensive guides.</p>
+        <a href="/docs/getting-started" class="btn btn-primary">
+          <i class="fas fa-play"></i> Start Learning
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2><i class="fas fa-code"></i> API Reference</h2>
+      </div>
+      <div class="card-body">
+        <p>Full API documentation with examples and explanations.</p>
+        <a href="/docs/api-reference" class="btn btn-secondary">
+          <i class="fas fa-book"></i> View API Docs
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2><i class="fas fa-cogs"></i> Configuration</h2>
+      </div>
+      <div class="card-body">
+        <p>Learn how to configure and customize the platform.</p>
+        <a href="/docs/configuration" class="btn btn-secondary">
+          <i class="fas fa-sliders-h"></i> Configure
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2><i class="fas fa-cloud-upload-alt"></i> Deployment</h2>
+      </div>
+      <div class="card-body">
+        <p>Deploy your application to production with confidence.</p>
+        <a href="/docs/deployment" class="btn btn-secondary">
+          <i class="fas fa-plane-departure"></i> Deploy
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="recent-activity">
+    <h2><i class="fas fa-history"></i> Recent Documentation Updates</h2>
+    <div class="activity-list">
+      <div class="activity-item">
+        <span class="activity-icon"><i class="fas fa-plus-circle"></i></span>
+        <span class="activity-text">New FAQ section added to docs</span>
+        <span class="activity-time">Just now</span>
+      </div>
+      <div class="activity-item">
+        <span class="activity-icon"><i class="fas fa-edit"></i></span>
+        <span class="activity-text">Updated API endpoint examples</span>
+        <span class="activity-time">2 hours ago</span>
+      </div>
+      <div class="activity-item">
+        <span class="activity-icon"><i class="fas fa-upload"></i></span>
+        <span class="activity-text">Deployment guide published</span>
+        <span class="activity-time">Yesterday</span>
+      </div>
+    </div>
+  </div>
+</div>
+@endsection
