@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { exec } from 'node:child_process'
+import { exec, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -953,6 +953,46 @@ app.get('/api/projects/:id/files/download', (c) => {
     `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
   )
   return c.body(Readable.toWeb(fs.createReadStream(t.abs)))
+})
+
+app.get('/api/projects/:id/archive', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  let stat: fs.Stats
+  try {
+    stat = fs.statSync(project.path)
+  } catch {
+    return c.json({ error: 'Project path not found' }, 404)
+  }
+  if (!stat.isDirectory()) return c.json({ error: 'Project path is not a directory' }, 400)
+
+  const base = path.basename(project.path) || project.name || 'project'
+  const safeBase = base.replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '') || 'project'
+  const filename = `${safeBase}.zip`
+  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+  c.header('Content-Type', 'application/zip')
+  c.header(
+    'Content-Disposition',
+    `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+  )
+
+  const child = spawn('zip', ['-r', '-q', '-', '.'], {
+    cwd: project.path,
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  child.on('error', (err) => {
+    console.error('zip spawn failed:', err)
+  })
+
+  if (!child.stdout) {
+    return c.json({ error: 'Failed to create archive' }, 500)
+  }
+
+  // If zip writes errors to stderr, log them; don't break the stream
+  child.stderr?.on('data', () => {})
+
+  return c.body(Readable.toWeb(child.stdout as any) as any)
 })
 
 app.post('/api/projects/:id/files/upload', async (c) => {

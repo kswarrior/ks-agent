@@ -184,6 +184,9 @@ export const deleteFileEntry = (projectId: string, path: string) =>
 export const downloadUrl = (projectId: string, path: string) =>
   `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`
 
+export const archiveUrl = (projectId: string) =>
+  `/api/projects/${projectId}/archive`
+
 export const readFileContent = (projectId: string, path: string) =>
   req<{ content: string }>(`/api/projects/${projectId}/files/content?path=${encodeURIComponent(path)}`)
 

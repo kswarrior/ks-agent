@@ -211,18 +211,12 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   }
 
   function triggerDownload() {
-    if (!projectId || !selected) {
-      toast('Select a file first', 'error')
-      return
-    }
-    const entry = entries.find((en) => joinRel(dir, en.name) === selected)
-    if (!entry || entry.type !== 'file') {
-      toast('Select a file (not a folder) to download', 'error')
+    if (!projectId) {
+      toast('No project selected', 'error')
       return
     }
     const a = document.createElement('a')
-    a.href = api.downloadUrl(projectId, selected)
-    a.download = entry.name
+    a.href = api.archiveUrl(projectId)
     document.body.appendChild(a)
     a.click()
     a.remove()
