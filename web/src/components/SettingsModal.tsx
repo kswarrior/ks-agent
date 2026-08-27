@@ -46,6 +46,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [systemDraft, setSystemDraft] = useState('')
   const [retrySettings, setRetrySettings] = useState<RetrySettings | null>(null)
   const [retryDraft, setRetryDraft] = useState<RetrySettings | null>(null)
+  // raw strings for editable inputs so typing is not blocked by immediate clamping/parsing
+  const [maxRetriesInput, setMaxRetriesInput] = useState('')
+  const [baseDelayInput, setBaseDelayInput] = useState('')
+  const [maxDelayInput, setMaxDelayInput] = useState('')
+  const [retryOnInput, setRetryOnInput] = useState('')
+  const [stopOnInput, setStopOnInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()
@@ -111,6 +117,11 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       const settings = await api.getRetrySettings()
       setRetrySettings(settings)
       setRetryDraft({ ...settings })
+      setMaxRetriesInput(String(settings.maxRetries))
+      setBaseDelayInput(String(settings.baseDelayMs))
+      setMaxDelayInput(String(settings.maxDelayMs))
+      setRetryOnInput(settings.retryOnStatusCodes.join(', '))
+      setStopOnInput(settings.stopOnStatusCodes.join(', '))
     } catch (e: any) {
       toast(e.message, 'error')
     }
