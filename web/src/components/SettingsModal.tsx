@@ -38,7 +38,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [providerForm, setProviderForm] = useState<ProviderForm | null>(null)
   const [providerPicker, setProviderPicker] = useState(false)
   const [showModelForm, setShowModelForm] = useState(false)
-  const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '' })
+  const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '', maxTokens: '' })
   const [planPrompt, setPlanPrompt] = useState('')
   const [planDraft, setPlanDraft] = useState('')
   const [retrySettings, setRetrySettings] = useState<RetrySettings | null>(null)
@@ -168,12 +168,15 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     if (!modelForm.providerId) return setError('Select a provider')
     if (!modelForm.model.trim()) return setError('Model id is required')
     try {
+      const maxTokens = modelForm.maxTokens.trim() ? parseInt(modelForm.maxTokens.trim(), 10) : undefined
+      if (modelForm.maxTokens.trim() && (isNaN(maxTokens!) || maxTokens! < 1)) return setError('Max tokens must be a positive number')
       await api.createModel({
         providerId: modelForm.providerId,
         model: modelForm.model.trim(),
-        ...(modelForm.displayName.trim() ? { displayName: modelForm.displayName.trim() } : {})
+        ...(modelForm.displayName.trim() ? { displayName: modelForm.displayName.trim() } : {}),
+        ...(maxTokens ? { maxTokens } : {})
       })
-      setModelForm({ providerId: '', model: '', displayName: '' })
+      setModelForm({ providerId: '', model: '', displayName: '', maxTokens: '' })
       setShowModelForm(false)
       toast('Model added', 'success')
       await refresh()
@@ -451,6 +454,16 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                     onChange={(e) => setModelForm({ ...modelForm, displayName: e.target.value })}
                     onKeyDown={(e) => e.key === 'Enter' && submitModel()}
                   />
+                  <label className="field-label">Max tokens (optional)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    placeholder="e.g. 16384 (leave empty for provider default)"
+                    value={modelForm.maxTokens}
+                    onChange={(e) => setModelForm({ ...modelForm, maxTokens: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && submitModel()}
+                  />
+                  <p className="hint">Maximum tokens for AI responses. Higher values allow longer responses.</p>
                   <div className="dialog-actions">
                     <button className="btn" onClick={() => { setShowModelForm(false); setError(null) }}>
                       Cancel
