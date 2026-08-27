@@ -38,15 +38,14 @@ function KsAgent() {
 
   // Keep the right workspace panel always open whenever the screen is wide
   // enough for it to fit next to the left sidebar and the composer input.
-  // But don't auto-reopen it when preview is active — preview takes exclusive right side.
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1200px)')
     const onChange = (e: MediaQueryListEvent) => {
-      if (e.matches && !previewOpen) setRsbOpen(true)
+      if (e.matches) setRsbOpen(true)
     }
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
-  }, [previewOpen])
+  }, [])
 
   // chatId → live text of its background generation (key present = still running)
   const [streams, setStreams] = useState<Record<string, string>>({})
@@ -622,28 +621,8 @@ function KsAgent() {
     [activeChatId, toast]
   )
 
-  const togglePreview = useCallback(() => {
-    setPreviewOpen((prev) => {
-      const next = !prev
-      if (next) setRsbOpen(false)
-      return next
-    })
-  }, [])
-
-  const toggleRight = useCallback(() => {
-    setRsbOpen((prev) => {
-      const next = !prev
-      if (next) setPreviewOpen(false)
-      return next
-    })
-  }, [])
-
-  // Keep preview and right sidebar mutually exclusive — when preview opens, close RSB (user request)
-  // Also when RSB opens, close preview so they don't overlap.
-  // The wide-screen auto-open effect should not reopen RSB if preview is active.
-  useEffect(() => {
-    if (previewOpen && rsbOpen) setRsbOpen(false)
-  }, [previewOpen, rsbOpen])
+  const togglePreview = useCallback(() => setPreviewOpen((v) => !v), [])
+  const toggleRight = useCallback(() => setRsbOpen((v) => !v), [])
 
   // ---- render ----
   return (

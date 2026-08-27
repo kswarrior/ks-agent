@@ -1524,13 +1524,38 @@ textarea {
 /* ---------------- Preview Sidebar ---------------- */
 
 .psb {
+  position: fixed;
+  top: var(--header-h);
+  bottom: 0;
+  right: 0;
   width: min(480px, 100vw);
-  flex-shrink: 0;
+  z-index: 75;
   background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   min-height: 0;
+  transform: translateX(105%);
+  transition: transform 0.2s ease;
+  box-shadow: -24px 0 48px rgba(0, 0, 0, 0.7);
+  max-height: calc(100vh - var(--header-h));
+}
+
+.psb.open {
+  transform: translateX(0);
+}
+
+.psb-scrim {
+  display: none;
+}
+
+.psb-scrim.show {
+  display: block;
+  position: fixed;
+  inset: var(--header-h) 0 0 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 65;
+  animation: fade 0.15s ease;
 }
 
 .psb-header {
