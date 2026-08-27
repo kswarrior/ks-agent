@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import * as api from '../api'
-import type { ModelEntry, Provider, RetrySettings } from '../types'
+import type { ModelEntry, Provider, RetrySettings, Skill, Project, FileEntry } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
-import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate } from '../icons'
+import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate, IconFolder, IconFile } from '../icons'
+import { FilesPane } from './FilesPane'
 
 interface Props {
   open: boolean
@@ -11,7 +12,7 @@ interface Props {
   onDataChanged: () => void
 }
 
-type Tab = 'providers' | 'models' | 'prompt' | 'retry'
+type Tab = 'providers' | 'models' | 'prompt' | 'retry' | 'skills'
 
 const PROVIDER_PRESETS = [
   { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
