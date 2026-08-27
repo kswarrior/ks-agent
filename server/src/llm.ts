@@ -245,7 +245,7 @@ export async function streamChatWithTools(
       buf = buf.slice(nl + 1)
       if (!line.startsWith('data:')) continue
       const payload = line.slice(5).trim()
-      if (payload === '[DONE]') continue
+      if (payload === '[DONE]') break
       const chunk = parseChunk(payload)
       if (!chunk) continue
       if (chunk.text) {
