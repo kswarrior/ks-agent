@@ -38,6 +38,7 @@ export interface ModelEntry {
   providerId: string
   providerName: string
   maxTokens?: number
+  systemPrompt?: string
 }
 
 export interface FileEntry {

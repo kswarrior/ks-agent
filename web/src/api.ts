@@ -238,12 +238,18 @@ export const deleteProvider = (id: string) =>
   req<{ ok: true }>(`/api/settings/providers/${id}`, { method: 'DELETE' })
 
 export const listModels = () => req<ModelEntry[]>('/api/settings/models')
-export const createModel = (m: { providerId: string; model: string; displayName?: string; maxTokens?: number }) =>
+export const createModel = (m: { providerId: string; model: string; displayName?: string; maxTokens?: number; systemPrompt?: string }) =>
   req<ModelEntry>('/api/settings/models', json('POST', m))
+export const updateModel = (id: string, m: { displayName?: string; maxTokens?: number; systemPrompt?: string }) =>
+  req<{ ok: true; model: ModelEntry }>(`/api/settings/models/${id}`, json('PATCH', m))
 export const deleteModel = (id: string) =>
   req<{ ok: true }>(`/api/settings/models/${id}`, { method: 'DELETE' })
 
-// The primary system prompt is built-in and intentionally not exposed.
+// The primary system prompt is built-in and can be overridden here (global + per-model).
+export const getSystemPrompt = () => req<{ systemPrompt: string }>('/api/settings/system-prompt')
+export const saveSystemPrompt = (systemPrompt: string) =>
+  req<{ ok: true; systemPrompt: string }>('/api/settings/system-prompt', json('PATCH', { systemPrompt }))
+
 export const getPlanPrompt = () => req<{ planPrompt: string }>('/api/settings/plan-prompt')
 export const savePlanPrompt = (planPrompt: string) =>
   req<{ ok: true; planPrompt: string }>('/api/settings/plan-prompt', json('PATCH', { planPrompt }))
