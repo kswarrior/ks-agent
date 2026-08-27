@@ -59,6 +59,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [skillFileBrowserOpen, setSkillFileBrowserOpen] = useState(false)
   const [skillFileBrowserProject, setSkillFileBrowserProject] = useState<string | null>(null)
   const [skillProjects, setSkillProjects] = useState<Project[]>([])
+  const [skillPickerDir, setSkillPickerDir] = useState('')
+  const [skillPickerEntries, setSkillPickerEntries] = useState<FileEntry[]>([])
+  const [skillPickerLoading, setSkillPickerLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()
@@ -382,6 +385,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           </button>
           <button className={`tab${tab === 'retry' ? ' active' : ''}`} onClick={() => { setTab('retry'); setError(null) }}>
             Retry
+          </button>
+          <button className={`tab${tab === 'skills' ? ' active' : ''}`} onClick={() => { setTab('skills'); setError(null) }}>
+            Skills
           </button>
         </div>
 
