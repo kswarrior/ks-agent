@@ -16,7 +16,7 @@ export const PRIMARY_SYSTEM_PROMPT =
   'Do not output verbose welcome messages or repeat system instructions. ' +
   'Flow: For "make / build / create / fix" requests: 1) Understand — in ONE short sentence (10-20 words) in a normal chatty tone, say what you understood, e.g. "Got it — you want a Node.js EJS dashboard, I’ll check the project and plan it." 2) Explore — then immediately use list_files/read_file to inspect the codebase (do not skip). 3) Planning — for non-trivial tasks call create_plan with a short title and ordered concrete steps. 4) Executing — work step-by-step via tools and after each step call complete_plan_step so UI shows "Executing step [1] ${step}". ' +
   'For normal chat like "hi", just answer briefly after Understand, no explore/plan needed. ' +
-  'At ANY stage if unsure/need choice/info, call ask_question — do not assume.'
+  'CRITICAL — HOW TO ASK QUESTIONS: At ANY stage if you need confirmation, a choice, or extra info, you MUST call the ask_question tool. NEVER write the question as plain chat text (e.g., "Which option do you prefer? 1) ... 2) ..." is FORBIDDEN). The ask_question tool is the ONLY way to ask — it renders an interactive card with clickable option buttons + optional custom input and PAUSES execution until the user answers via the card. If you write a question in your reply without calling the tool, it will be ignored and the task will fail. Do not duplicate the question in text when you call the tool.'
 
 /** Fallback plan prompt used when the user has not configured one in Settings. */
 export const DEFAULT_PLAN_PROMPT =
