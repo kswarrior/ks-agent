@@ -13,6 +13,14 @@ export interface ConfirmOptions {
   message?: string
   confirmText?: string
   danger?: boolean
+  checkboxLabel?: string
+  checkboxWarning?: string
+  checkboxInitialChecked?: boolean
+}
+
+export type ConfirmResult = {
+  confirmed: boolean
+  checked: boolean
 }
 
 export interface PromptOptions {
@@ -25,7 +33,7 @@ export interface PromptOptions {
 }
 
 interface PendingConfirm extends ConfirmOptions {
-  resolve: (ok: boolean) => void
+  resolve: (value: boolean | ConfirmResult) => void
 }
 
 interface PendingPrompt extends PromptOptions {
@@ -33,12 +41,15 @@ interface PendingPrompt extends PromptOptions {
 }
 
 interface DialogsCtx {
-  confirm: (opts: ConfirmOptions) => Promise<boolean>
+  confirm: {
+    (opts: ConfirmOptions & { checkboxLabel: string }): Promise<ConfirmResult>
+    (opts: ConfirmOptions): Promise<boolean>
+  }
   prompt: (opts: PromptOptions) => Promise<string | null>
 }
 
 const Ctx = createContext<DialogsCtx>({
-  confirm: async () => false,
+  confirm: async () => false as unknown as boolean,
   prompt: async () => null
 })
 
