@@ -173,9 +173,10 @@ export async function* streamChat(
   model: string,
   messages: LLMMessage[],
   signal?: AbortSignal,
-  retrySettings?: RetrySettings
+  retrySettings?: RetrySettings,
+  maxTokens?: number
 ): AsyncGenerator<string> {
-  const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true }, signal, retrySettings)
+  const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true, ...(maxTokens ? { max_tokens: maxTokens } : {}) }, signal, retrySettings)
   const decoder = new TextDecoder()
   let buf = ''
 

@@ -413,7 +413,8 @@ async function runGeneration(
   provider: { baseUrl: string; apiKey: string },
   model: string,
   history: LLMMessage[],
-  agent: AgentSpec | null
+  agent: AgentSpec | null,
+  maxTokens?: number
 ): Promise<void> {
   const retrySettings = getRetrySettings()
   try {
@@ -426,6 +427,7 @@ async function runGeneration(
         projectPath: agent.projectPath,
         chatId: job.chatId,
         signal: job.controller.signal,
+        maxTokens,
         onDelta: (text) => {
           job.content += text
           emitTo(job, 'delta', JSON.stringify(text))
@@ -434,7 +436,7 @@ async function runGeneration(
         retrySettings
       })
     } else {
-      for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings)) {
+      for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings, maxTokens)) {
         job.content += delta
         emitTo(job, 'delta', JSON.stringify(delta))
       }
