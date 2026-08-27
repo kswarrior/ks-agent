@@ -1509,6 +1509,144 @@ textarea {
   line-height: 1.55;
 }
 
+/* ---------------- Preview Sidebar ---------------- */
+
+.psb {
+  width: min(480px, 100vw);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.psb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.psb-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.psb-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.psb-close {
+  margin-left: 4px;
+}
+
+.psb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.psb-url-input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.psb-url-input::placeholder {
+  color: var(--text-faint);
+}
+
+.psb-url-input:focus {
+  border-color: var(--border-strong);
+}
+
+.psb-loading {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 0 4px;
+}
+
+.psb-error {
+  padding: 8px 12px;
+  background: var(--danger-bg);
+  border-bottom: 1px solid #58201f;
+  color: var(--danger);
+  font-size: 12.5px;
+  flex-shrink: 0;
+}
+
+.psb-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.psb-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+  display: block;
+}
+
+/* Responsive for preview sidebar */
+@media (max-width: 1199px) {
+  .psb {
+    position: fixed;
+    top: var(--header-h);
+    bottom: 0;
+    right: 0;
+    z-index: 70;
+    transform: translateX(105%);
+    transition: transform 0.2s ease;
+    box-shadow: -24px 0 48px rgba(0, 0, 0, 0.7);
+    max-height: calc(100vh - var(--header-h));
+  }
+
+  .psb.open {
+    transform: translateX(0);
+  }
+
+  .psb-scrim.show {
+    display: block;
+    position: fixed;
+    inset: var(--header-h) 0 0 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 65;
+    animation: fade 0.15s ease;
+  }
+}
+
+@media (min-width: 1200px) {
+  .psb-toggle {
+    display: inline-flex;
+  }
+
+  .psb-scrim {
+    display: none !important;
+  }
+}
+
 /* Files pane */
 .fp {
   display: flex;
