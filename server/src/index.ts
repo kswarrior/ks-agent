@@ -19,6 +19,7 @@ import {
   loadDb,
   messagesOf,
   newId,
+  nextChatSeq,
   questionsOf,
   saveDb,
   terminalsOf,
@@ -141,10 +142,12 @@ app.post('/api/projects/:id/chats', async (c) => {
   if (!project) return c.json({ error: 'Project not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
   const now = new Date().toISOString()
-  const chat = {
+  const seq = nextChatSeq(project.id)
+  const chat: Chat = {
     id: newId(),
     projectId: project.id,
-    title: String(body.title ?? '').trim() || 'New chat',
+    title: String(body.title ?? '').trim() || `Chat ${seq}`,
+    seq,
     createdAt: now,
     updatedAt: now
   }

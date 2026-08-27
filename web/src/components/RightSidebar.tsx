@@ -68,9 +68,9 @@ function PlanView({ plan, activities }: { plan: Plan | null; activities: Activit
             })}
           </div>
           <div className="flow-detail">
-            {stage === 'understand' && <span>AI is understanding your prompt…</span>}
-            {stage === 'explore' && <span>Exploring codebase…</span>}
-            {stage === 'planning' && <span>Creating plan…</span>}
+            {stage === 'understand' && <span>Understanding<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
+            {stage === 'explore' && <span>Exploring<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
+            {stage === 'planning' && <span>Planning<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
           </div>
           <div className="rsb-empty" style={{ marginTop: 16 }}>Nothing here yet — plan will appear after explore</div>
         </div>
