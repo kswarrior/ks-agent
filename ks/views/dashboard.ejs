@@ -1,0 +1,153 @@
+<% layout('layout') %>
+
+<section class="stats-grid">
+  <div class="card stat-card">
+    <div class="stat-top">
+      <span class="stat-label">Total Users</span>
+      <div class="stat-icon blue"><i class="fa-solid fa-users"></i></div>
+    </div>
+    <div class="stat-value">12,847</div>
+    <div class="stat-change up"><i class="fa-solid fa-arrow-up"></i> 12.5% vs last month</div>
+  </div>
+
+  <div class="card stat-card">
+    <div class="stat-top">
+      <span class="stat-label">Revenue</span>
+      <div class="stat-icon green"><i class="fa-solid fa-dollar-sign"></i></div>
+    </div>
+    <div class="stat-value">$48,290</div>
+    <div class="stat-change up"><i class="fa-solid fa-arrow-up"></i> 8.2% vs last month</div>
+  </div>
+
+  <div class="card stat-card">
+    <div class="stat-top">
+      <span class="stat-label">Active Sessions</span>
+      <div class="stat-icon orange"><i class="fa-solid fa-signal"></i></div>
+    </div>
+    <div class="stat-value">1,423</div>
+    <div class="stat-change down"><i class="fa-solid fa-arrow-down"></i> 3.1% vs last month</div>
+  </div>
+
+  <div class="card stat-card">
+    <div class="stat-top">
+      <span class="stat-label">Bounce Rate</span>
+      <div class="stat-icon red"><i class="fa-solid fa-chart-pie"></i></div>
+    </div>
+    <div class="stat-value">24.8%</div>
+    <div class="stat-change up"><i class="fa-solid fa-arrow-down"></i> 2.4% improvement</div>
+  </div>
+</section>
+
+<section class="content-grid">
+  <div class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">Monthly Revenue</h2>
+      <span class="panel-action">View report →</span>
+    </div>
+    <div class="chart-area">
+      <div class="chart-bars">
+        <% const data = [45, 62, 38, 75, 55, 90, 68, 82, 48, 96, 72, 88]; %>
+        <% const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; %>
+        <% data.forEach((h, i) => { %>
+        <div class="chart-bar-wrap">
+          <div class="chart-bar" style="height:<%= h %>%"></div>
+          <div class="chart-bar-label"><%= labels[i] %></div>
+        </div>
+        <% }) %>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">Recent Activity</h2>
+      <span class="panel-action">View all →</span>
+    </div>
+    <div class="activity-list">
+      <div class="activity-item">
+        <div class="activity-dot" style="background:var(--primary)"></div>
+        <div class="activity-content">
+          <div class="activity-title">New user registered</div>
+          <div class="activity-time">2 min ago</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background:var(--success)"></div>
+        <div class="activity-content">
+          <div class="activity-title">Payment received — $240.00</div>
+          <div class="activity-time">18 min ago</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background:var(--warning)"></div>
+        <div class="activity-content">
+          <div class="activity-title">Server CPU at 82%</div>
+          <div class="activity-time">1 hour ago</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background:var(--danger)"></div>
+        <div class="activity-content">
+          <div class="activity-title">Failed login blocked</div>
+          <div class="activity-time">3 hours ago</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background:var(--accent)"></div>
+        <div class="activity-content">
+          <div class="activity-title">New comment on Project Alpha</div>
+          <div class="activity-time">5 hours ago</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" style="margin-bottom:24px;">
+  <div class="panel-header">
+    <h2 class="panel-title">Recent Transactions</h2>
+    <span class="panel-action">Export CSV →</span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Customer</th>
+        <th>Amount</th>
+        <th>Date</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>John Doe</td>
+        <td>$450.00</td>
+        <td>2024-12-15</td>
+        <td><span class="pill success"><span class="pill-dot"></span> Completed</span></td>
+      </tr>
+      <tr>
+        <td>Jane Smith</td>
+        <td>$230.50</td>
+        <td>2024-12-15</td>
+        <td><span class="pill warning"><span class="pill-dot"></span> Pending</span></td>
+      </tr>
+      <tr>
+        <td>Acme Corp</td>
+        <td>$1,200.00</td>
+        <td>2024-12-14</td>
+        <td><span class="pill success"><span class="pill-dot"></span> Completed</span></td>
+      </tr>
+      <tr>
+        <td>Globex Inc</td>
+        <td>$890.00</td>
+        <td>2024-12-14</td>
+        <td><span class="pill danger"><span class="pill-dot"></span> Failed</span></td>
+      </tr>
+      <tr>
+        <td>Sarah Lee</td>
+        <td>$320.00</td>
+        <td>2024-12-13</td>
+        <td><span class="pill blue"><span class="pill-dot"></span> Processing</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
