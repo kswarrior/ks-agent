@@ -344,7 +344,7 @@ async function generateChatTitleViaLLM(
         authorization: `Bearer ${provider.apiKey}`
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(30000)
     })
     if (!res.ok) return null
     const data: any = await res.json().catch(() => null)
