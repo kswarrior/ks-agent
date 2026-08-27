@@ -4,17 +4,25 @@ import remarkGfm from 'remark-gfm'
 
 function CopyButton({ getText }: { getText: () => string }) {
   const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(getText())
+      setCopied(true)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setCopied(false), 1200)
+    } catch {}
+  }
+
   return (
-    <button
-      className="copy-btn"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(getText())
-          setCopied(true)
-          setTimeout(() => setCopied(false), 1200)
-        } catch {}
-      }}
-    >
+    <button className="copy-btn" onClick={handleCopy}>
       {copied ? 'copied' : 'copy'}
     </button>
   )
