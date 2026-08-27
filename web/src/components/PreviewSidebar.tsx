@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { IconX, IconRefreshCw, IconExternalLink, IconMonitor, IconPlay } from '../icons'
+import { IconX, IconRefreshCw, IconExternalLink, IconMonitor, IconPlay, IconMaximize, IconMinimize } from '../icons'
 import { useToast } from '../toast'
 import * as api from '../api'
 
@@ -16,6 +16,7 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState<boolean | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeKey, setIframeKey] = useState(0)
   const prevProjectIdRef = useRef<string | null>(null)
@@ -154,10 +155,13 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
 
   return (
     <>
-      <aside className="psb open">
+      <aside className={`psb open${isFullscreen ? ' fullscreen' : ''}`}>
         <div className="psb-header">
           <div className="psb-title">Preview{running === false ? ' — stopped' : running ? ' — running' : ''}</div>
           <div className="psb-actions">
+            <button className="icon-btn" aria-label="Fullscreen" onClick={() => setIsFullscreen((v) => !v)} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (100% width)'}>
+              {isFullscreen ? <IconMinimize size={16} /> : <IconMaximize size={16} />}
+            </button>
             <button className="icon-btn" aria-label="Refresh" onClick={handleReload} disabled={loading} title="Reload preview">
               <IconRefreshCw size={16} className={loading ? 'spin' : ''} />
             </button>
