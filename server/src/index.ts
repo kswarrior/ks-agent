@@ -677,7 +677,8 @@ app.get('/api/settings/models', (c) => {
       model: m.model,
       displayName: m.displayName?.trim() ? m.displayName.trim() : m.model,
       providerId: m.providerId,
-      providerName: db.providers.find((p) => p.id === m.providerId)?.name ?? 'Unknown'
+      providerName: db.providers.find((p) => p.id === m.providerId)?.name ?? 'Unknown',
+      maxTokens: m.maxTokens
     }))
   )
 })
