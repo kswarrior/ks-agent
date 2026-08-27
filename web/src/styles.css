@@ -1693,6 +1693,133 @@ textarea {
   border-radius: var(--radius-sm);
 }
 
+.fp-lang-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.fp-editor-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 280px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--input);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fp-editor-wrap:focus-within {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--border-strong) 60%, transparent);
+}
+
+.fp-editor-container {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--input);
+}
+
+.fp-highlight {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.fp-highlight code {
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.fp-editor-textarea--highlighted {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: transparent !important;
+  color: transparent !important;
+  caret-color: var(--text) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  resize: none;
+  outline: none;
+}
+
+.fp-editor-textarea--highlighted::selection {
+  background: rgba(255,255,255,0.18);
+}
+
+.fp-editor-textarea--highlighted::placeholder {
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+.fp-editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.fp-editor-lang {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.fp-editor-hint {
+  color: var(--text-faint);
+}
+
+/* syntax highlight tokens */
+.hl-keyword { color: #569cd6; font-weight: 600; }
+.hl-string { color: #ce9178; }
+.hl-comment { color: #6a9955; font-style: italic; }
+.hl-number { color: #b5cea8; }
+.hl-function { color: #dcdcaa; }
+.hl-tag { color: #4ec9b0; }
+.hl-attr { color: #9cdcfe; }
+
+/* file list: distinct folder colour already via inline, but subtle row accent */
+.fp-row { transition: background 0.12s ease, border-color 0.12s ease; }
+
 /* Files pane loading skeleton */
 .fp-skel {
   display: flex;
