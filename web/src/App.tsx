@@ -350,6 +350,13 @@ function KsAgent() {
             const qs = await api.listQuestions(chatId)
             setQuestions((prev) => ({ ...prev, [chatId]: qs }))
           } catch {}
+          try {
+            const acts = await api.listActivities(chatId)
+            setActivities((prev) => {
+              const other = prev.filter((a) => a.chatId !== chatId)
+              return [...other, ...acts]
+            })
+          } catch {}
         })
     },
     [toast]
@@ -410,6 +417,22 @@ function KsAgent() {
     try {
       await api.deleteProject(project.id, { deleteFolder })
       setProjects((prev) => prev.filter((p) => p.id !== project.id))
+      // clean local state for deleted project's chats
+      const deletedChatIds = new Set(chats.filter((c) => c.projectId === project.id).map((c) => c.id))
+      if (deletedChatIds.size > 0) {
+        setChats((prev) => prev.filter((c) => !deletedChatIds.has(c.id)))
+        setActivities((prev) => prev.filter((a) => !deletedChatIds.has(a.chatId)))
+        setPlans((prev) => {
+          const n = { ...prev }
+          for (const id of deletedChatIds) delete n[id]
+          return n
+        })
+        setQuestions((prev) => {
+          const n = { ...prev }
+          for (const id of deletedChatIds) delete n[id]
+          return n
+        })
+      }
       if (activeProjectId === project.id) {
         setActiveProjectId(null)
         setActiveChatId(null)
@@ -450,6 +473,17 @@ function KsAgent() {
         return next
       })
       setChats((prev) => prev.filter((c) => c.id !== chat.id))
+      setActivities((prev) => prev.filter((a) => a.chatId !== chat.id))
+      setPlans((prev) => {
+        const n = { ...prev }
+        delete n[chat.id]
+        return n
+      })
+      setQuestions((prev) => {
+        const n = { ...prev }
+        delete n[chat.id]
+        return n
+      })
       if (activeChatId === chat.id) {
         setActiveChatId(null)
         setMessages([])
