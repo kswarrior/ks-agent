@@ -110,7 +110,7 @@ function TerminalPane({ project }: { project: Project | null }) {
     }
   }, [session])
 
-  const filtered = terminals.filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()))
+  const filtered = terminals.filter((t: Terminal) => t.name.toLowerCase().includes(query.trim().toLowerCase()))
 
   async function handleCreate() {
     if (!projectId || !newName.trim() || busy) return
@@ -378,7 +378,7 @@ function TerminalPane({ project }: { project: Project | null }) {
           filtered.length === 0 ? (
             <div className="dd-empty">{terminals.length === 0 ? 'No terminals yet' : 'No matches'}</div>
           ) : (
-            filtered.map((terminal) => (
+            filtered.map((terminal: Terminal) => (
               <div
                 key={terminal.id}
                 className="tp-row"
@@ -411,8 +411,8 @@ function TerminalPane({ project }: { project: Project | null }) {
                         delete next[terminal.id]
                         return next
                       })
-                      if (session?.id === terminal.id) setSession(null)
-                      if (selected?.id === terminal.id) { setSelected(null); setDetailName('') }
+                      if ((session as Terminal | null)?.id === terminal.id) setSession(null)
+                      if ((selected as Terminal | null)?.id === terminal.id) { setSelected(null); setDetailName('') }
                       await refresh()
                     } catch (err: any) {
                       toast(err.message, 'error')
