@@ -415,16 +415,39 @@ function TerminalPane({ project }: { project: Project | null }) {
 
 export function RightSidebar({ open, activeProject, plan, activities, streaming, onClose }: RightSidebarProps) {
   const [tab, setTab] = useState<RsTab>('plan')
+  const activityCount = activities.length
+  const writeCount = activities.filter(a => a.toolType === 'write_file').length
+  const editCount = activities.filter(a => a.toolType === 'edit_file').length
+  const readCount = activities.filter(a => a.toolType === 'read_file').length
+  const hasRunning = activities.some(a => a.ok === undefined)
 
   return (
     <>
       <aside className={`rsb${open ? ' open' : ''}`}>
         <div className="tabs rsb-tabs">
-          {TABS.map((t) => (
-            <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-              {t.label}
-            </button>
-          ))}
+          {TABS.map((t) => {
+            const isActivity = t.id === 'activity'
+            return (
+              <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {t.label}
+                  {isActivity && activityCount > 0 && (
+                    <span className="rsb-tab-badge" title={`${writeCount} Write · ${editCount} Edit · ${readCount} Read · ${activityCount} total`}>
+                      {activityCount}
+                      {hasRunning && streaming && <span className="rsb-tab-pulse" />}
+                    </span>
+                  )}
+                  {isActivity && activityCount > 0 && (writeCount + editCount + readCount) > 0 && (
+                    <span className="rsb-tab-dots" aria-hidden>
+                      {writeCount > 0 && <span className="rsb-dot write" title={`${writeCount} Write`} />}
+                      {editCount > 0 && <span className="rsb-dot edit" title={`${editCount} Edit`} />}
+                      {readCount > 0 && <span className="rsb-dot read" title={`${readCount} Read`} />}
+                    </span>
+                  )}
+                </span>
+              </button>
+            )
+          })}
           <button className="icon-btn rsb-close" aria-label="Close panel" onClick={onClose}>
             <IconX size={16} />
           </button>

@@ -2710,3 +2710,202 @@ textarea {
   word-break: break-word;
   color: var(--text-dim);
 }
+
+/* --- Enhanced Activity: Write / Edit / Read filters & badges --- */
+.activity-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 2px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.activity-summary-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.activity-summary-breakdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.act-dot {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.activity-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.act-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  background: var(--btn);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  line-height: 1;
+}
+.act-filter:hover {
+  background: var(--btn-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.act-filter.active {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.act-filter-label {
+  white-space: nowrap;
+}
+.act-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+.act-filter.active .act-filter-count {
+  background: var(--btn);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.activity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid;
+  flex-shrink: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+.activity-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.activity-badge-label {
+  line-height: 1;
+}
+.activity-status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.act-status-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.act-status-icon.ok {
+  background: #86efac1a;
+  border-color: #86efac30;
+  color: #86efac;
+}
+.act-status-icon.error {
+  background: #ef44441a;
+  border-color: #ef444430;
+  color: #ef4444;
+}
+.act-status-icon.running {
+  background: #eab3081a;
+  border-color: #eab30830;
+  color: #eab308;
+}
+.activity-detail-status.ok {
+  background: #86efac14;
+  color: #86efac;
+  border: 1px solid #86efac30;
+}
+.activity-detail-status.running {
+  background: #eab30814;
+  color: #eab308;
+  border: 1px solid #eab30830;
+}
+.act-empty-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+/* Right sidebar tab badge for Activity */
+.rsb-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+}
+.rsb-tab-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #eab308;
+  box-shadow: 0 0 0 0 rgba(234,179,8,0.7);
+  animation: flowPulse 1.4s infinite;
+}
+.rsb-tab-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 1px;
+}
+.rsb-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid transparent;
+}
+.rsb-dot.write { background: #86efac; box-shadow: 0 0 6px rgba(134,239,172,0.45); }
+.rsb-dot.edit { background: #facc15; box-shadow: 0 0 6px rgba(250,204,21,0.45); }
+.rsb-dot.read { background: #60a5fa; box-shadow: 0 0 6px rgba(96,165,250,0.45); }
