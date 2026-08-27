@@ -25,8 +25,8 @@ export const renameProject = (id: string, name: string) =>
 
 // Chats
 export const listChats = (projectId: string) => req<Chat[]>(`/api/projects/${projectId}/chats`)
-export const createChat = (projectId: string, title = 'New chat') =>
-  req<Chat>(`/api/projects/${projectId}/chats`, json('POST', { title }))
+export const createChat = (projectId: string, title?: string) =>
+  req<Chat>(`/api/projects/${projectId}/chats`, json('POST', { title: title ?? '' }))
 export const renameChat = (id: string, title: string) => req<Chat>(`/api/chats/${id}`, json('PATCH', { title }))
 export const deleteChat = (id: string) => req<{ ok: true }>(`/api/chats/${id}`, { method: 'DELETE' })
 

@@ -210,7 +210,8 @@ export function Sidebar(props: SidebarProps) {
                   onClick={() => props.onSelectChat(chat.id)}
                 >
                   <IconChat size={15} />
-                  <span className="chat-title">{chat.title}</span>
+                  {chat.seq != null && <span className="chat-num">#{chat.seq}</span>}
+                  <span className="chat-title" title={`#${chat.seq ?? ''} ${chat.title}`.trim()}>{chat.title}</span>
                   <span
                     className="icon-btn row-menu"
                     role="button"
