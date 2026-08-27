@@ -1885,13 +1885,12 @@ textarea {
   color: #6b6b6b;
 }
 
-/* Plan tab — flow: Understand > Explore > Planning > Executing */
+/* Plan tab — flow: Understand > Explore > Planning > Executing — no card */
 .flow {
   margin: 4px 2px 14px;
-  padding: 10px 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  padding: 0;
+  background: transparent;
+  border: none;
 }
 
 .flow-track {
@@ -1975,26 +1974,28 @@ textarea {
 }
 
 .flow-detail {
-  margin-top: 10px;
-  padding: 8px 10px;
-  background: var(--input);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  margin-top: 8px;
+  padding: 0;
+  background: transparent;
+  border: none;
   font-size: 12.5px;
   color: var(--text-dim);
   line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .flow-detail.executing {
-  color: #eab308;
-  border-color: #eab30830;
-  background: #eab3080a;
+  color: var(--text);
+  border: none;
+  background: transparent;
 }
 
 .flow-detail.done {
-  color: #86efac;
-  border-color: #86efac30;
-  background: #86efac0a;
+  color: var(--text-dim);
+  border: none;
+  background: transparent;
 }
 
 .flow-hint {
