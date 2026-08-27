@@ -1,0 +1,39 @@
+<div class="sidebar" id="sidebar">
+  <div class="mb-3">
+    <a href="/" class="btn btn-outline-primary w-100">
+      <i class="bi bi-speedometer2 me-1"></i> Dashboard
+    </a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-title">Documentation</div>
+    <a href="/docs/getting-started" class="nav-link <%= activePage === 'getting-started' ? 'active' : '' %>">
+      <i class="bi bi-rocket-takeoff"></i> Getting Started
+    </a>
+    <a href="/docs/installation" class="nav-link <%= activePage === 'installation' ? 'active' : '' %>">
+      <i class="bi bi-download"></i> Installation
+    </a>
+    <a href="/docs/api" class="nav-link <%= activePage === 'api' ? 'active' : '' %>">
+      <i class="bi bi-code-slash"></i> API Reference
+    </a>
+    <a href="/docs/examples" class="nav-link <%= activePage === 'examples' ? 'active' : '' %>">
+      <i class="bi bi-collection-play"></i> Examples
+    </a>
+    <a href="/docs/faq" class="nav-link <%= activePage === 'faq' ? 'active' : '' %>">
+      <i class="bi bi-question-circle"></i> FAQ
+    </a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-title">Resources</div>
+    <a href="/docs/community" class="nav-link <%= activePage === 'community' ? 'active' : '' %>">
+      <i class="bi bi-people"></i> Community
+    </a>
+    <a href="/docs/support" class="nav-link <%= activePage === 'support' ? 'active' : '' %>">
+      <i class="bi bi-life-preserver"></i> Support
+    </a>
+    <a href="/docs/changelog" class="nav-link <%= activePage === 'changelog' ? 'active' : '' %>">
+      <i class="bi bi-journal-text"></i> Changelog
+    </a>
+  </div>
+</div>
