@@ -505,6 +505,17 @@ function KsAgent() {
 
     try {
       await api.sendMessage(chatId, content, selectedModelId)
+      // Reset plan + activities for this chat so the next prompt starts
+      // fresh from Understand → Explore → Planning → Executing.
+      // Without this, hasExplore stays true and old plan (done) makes UI
+      // show stale "Executing 7/6" instead of the fresh flow.
+      // Do it after send succeeds so a failed send doesn't lose the old plan.
+      setPlans((prev) => {
+        const n = { ...prev }
+        delete n[chatId]
+        return n
+      })
+      setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
       trackGeneration(chatId)
     } catch (e: any) {
       toast(e.message, 'error')
