@@ -49,7 +49,7 @@ interface DialogsCtx {
 }
 
 const Ctx = createContext<DialogsCtx>({
-  confirm: async () => false as unknown as boolean,
+  confirm: (async () => false) as DialogsCtx['confirm'],
   prompt: async () => null
 })
 
