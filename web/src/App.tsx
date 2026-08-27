@@ -55,6 +55,7 @@ function KsAgent() {
   const activeProjectIdRef = useRef<string | null>(null)
   const skipLoadForRef = useRef<string | null>(null)
   const creatingChatRef = useRef(false)
+  const sendingRef = useRef<Set<string>>(new Set())
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null
   const activeChat = chats.find((c) => c.id === activeChatId) ?? null
