@@ -449,6 +449,23 @@ function markWorkingStep(ctx: ToolContext): void {
   ctx.onEvent('plan', JSON.stringify(plan))
 }
 
+function finalizePlanIfNeeded(ctx: ToolContext): void {
+  const plan = findPlanForChat(ctx.chatId)
+  if (!plan) return
+  let changed = false
+  for (const s of plan.steps) {
+    if (s.status !== 'done') {
+      s.status = 'done'
+      changed = true
+    }
+  }
+  if (changed) {
+    plan.updatedAt = new Date().toISOString()
+    saveDb()
+    ctx.onEvent('plan', JSON.stringify(plan))
+  }
+}
+
 export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutcome> {
   const messages: LLMMessage[] = [...opts.history]
   const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal }
@@ -538,6 +555,14 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       )
       messages.push({ role: 'tool', tool_call_id: call.id, content: res.result })
     }
+  }
+
+  // Agent finished without further tool calls — ensure plan is fully marked done
+  // so UI does not remain stuck on "Executing...". This is a safety net for cases
+  // where the model creates files successfully but forgets to call complete_plan_step
+  // for one or more steps.
+  if (!opts.signal.aborted) {
+    finalizePlanIfNeeded(ctx)
   }
 
   return { content, stopped: false }
