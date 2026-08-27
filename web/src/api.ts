@@ -210,6 +210,8 @@ export const renameTerminal = (id: string, name: string) =>
   req<Terminal>(`/api/terminals/${id}`, json('PATCH', { name }))
 export const deleteTerminal = (id: string) =>
   req<{ ok: true }>(`/api/terminals/${id}`, { method: 'DELETE' })
+export const execTerminal = (id: string, command: string) =>
+  req<{ output: string; exitCode: number; cwd: string }>(`/api/terminals/${id}/exec`, json('POST', { command }))
 
 // Settings
 export const listProviders = () => req<Provider[]>('/api/settings/providers')

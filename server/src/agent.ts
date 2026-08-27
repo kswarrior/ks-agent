@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { findPlanForChat, getDb, getRetrySettings, newId, saveDb, type Plan } from './store.js'
+import { findPlanForChat, getDb, getRetrySettings, newId, saveDb, type Plan, type Question } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 
@@ -356,7 +356,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       const db = getDb()
       const now = new Date().toISOString()
       const qId = newId()
-      const q: import('./store.js').Question = {
+      const q: Question = {
         id: qId,
         chatId: ctx.chatId,
         header: qHeader,

@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -908,6 +909,31 @@ app.delete('/api/terminals/:id', (c) => {
   db.terminals.splice(idx, 1)
   saveDb()
   return c.json({ ok: true })
+})
+
+app.post('/api/terminals/:id/exec', async (c) => {
+  const terminal = findTerminal(c.req.param('id'))
+  if (!terminal) return c.json({ error: 'Terminal not found' }, 404)
+  const project = findProject(terminal.projectId)
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const command = String(body.command ?? '').trim()
+  if (!command) return c.json({ error: 'Command is required' }, 400)
+  if (command.length > 4000) return c.json({ error: 'Command too long' }, 400)
+  const { code, output } = await new Promise<{ code: number; output: string }>((resolve) => {
+    exec(
+      command,
+      { cwd: project.path, timeout: 30_000, maxBuffer: 1024 * 1024, shell: '/bin/bash', windowsHide: true },
+      (error, stdout, stderr) => {
+        const code = error && typeof (error as any).code === 'number' ? (error as any).code : error ? 1 : 0
+        const raw = `${stdout}${stderr}`
+        let out = raw.slice(0, 8192)
+        if (raw.length > 8192) out += '\n…[truncated]'
+        resolve({ code, output: out || '(no output)' })
+      }
+    )
+  })
+  return c.json({ output, exitCode: code, cwd: project.path })
 })
 
 function isBlockedHost(hostname: string): boolean {

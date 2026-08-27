@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Plan, Project, Terminal, Activity } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
