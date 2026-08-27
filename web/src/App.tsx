@@ -259,6 +259,13 @@ function KsAgent() {
                 return { ...prev, [chatId]: nextList }
               })
             },
+            onChatTitle: (data) => {
+              setChats((prev) =>
+                prev.map((c) =>
+                  c.id === data.chatId ? { ...c, title: data.title, seq: data.seq ?? c.seq, updatedAt: new Date().toISOString() } : c
+                )
+              )
+            },
             onError: (message) => toast(message.split('\n')[0], 'error'),
             onDone: () => {}
           },
@@ -299,6 +306,14 @@ function KsAgent() {
                 a.id === chatId ? -1 : b.id === chatId ? 1 : b.updatedAt.localeCompare(a.updatedAt)
               )
             )
+          } catch {}
+          // fallback: ensure chat title/seq synced from server even if SSE chat_title missed
+          try {
+            const pid = activeProjectIdRef.current
+            if (pid) {
+              const list = await api.listChats(pid)
+              if (list.some((c) => c.id === chatId)) setChats(list)
+            }
           } catch {}
           try {
             const plan = await api.getPlan(chatId)
