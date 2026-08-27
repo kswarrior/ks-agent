@@ -1,0 +1,13 @@
+{
+  "name": "ks-docs-site",
+  "version": "1.0.0",
+  "description": "Node.js EJS documentation website with header, sidebar, and dashboard",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "ejs": "^3.1.9",
+    "express": "^4.18.2"
+  }
+}
