@@ -17,11 +17,14 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeKey, setIframeKey] = useState(0)
 
-  const defaultUrl = 'http://localhost:3000'
+  const getDefaultUrl = () => {
+    const hostname = window.location.hostname || 'localhost'
+    return `http://${hostname}:3000`
+  }
 
   useEffect(() => {
     if (open && !url) {
-      setUrl(defaultUrl)
+      setUrl(getDefaultUrl())
     }
   }, [open, url])
 
