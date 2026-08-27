@@ -173,26 +173,7 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
             </button>
           </div>
         </div>
-        <div className="psb-toolbar">
-          <label htmlFor="psb-url" className="visually-hidden">Preview URL</label>
-          <IconMonitor size={14} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
-          <input
-            id="psb-url"
-            type="text"
-            className="psb-url-input"
-            placeholder={activeProject ? 'Preview via proxy (Enter for custom URL)' : 'Enter URL (e.g. http://localhost:3000)'}
-            value={url}
-            onChange={handleUrlChange}
-            onKeyDown={handleUrlSubmit}
-            disabled={loading}
-          />
-          {loading && <span className="psb-loading">Loading…</span>}
-          {!loading && activeProject && url && !url.includes('/api/projects/') && (
-            <button className="btn" style={{ padding: '6px 10px', fontSize: 12, whiteSpace: 'nowrap' }} onClick={handleUseProxied} title="Switch back to proxied preview">
-              Use proxy
-            </button>
-          )}
-        </div>
+        {loading && <div className="psb-loading-bar">Loading…</div>}
         {error && (
           <div className="psb-error" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ flex: 1 }}>{error}</span>
