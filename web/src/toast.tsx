@@ -35,7 +35,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (message: string, type: ToastType = 'info') => {
       const id = nextId++
       setItems((prev) => [...prev.slice(-3), { id, message, type }])
-      timers.current.set(setTimeout(() => dismiss(id), 3500), id)
+      timers.current.set(id, setTimeout(() => dismiss(id), 3500))
     },
     [dismiss]
   )
