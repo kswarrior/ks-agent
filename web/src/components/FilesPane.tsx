@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import * as api from '../api'
 import type { FileEntry } from '../types'
@@ -17,6 +17,74 @@ import {
   FileIcon,
   getFileMeta
 } from '../icons'
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+const KEYWORDS: Record<string, string[]> = {
+  javascript: ['break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','false','finally','for','function','if','import','in','instanceof','let','new','null','return','super','switch','this','throw','true','try','typeof','var','void','while','with','yield','await','async','static','get','set','of','from','as','implements','interface','package','private','protected','public','enum','type'],
+  typescript: ['break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','false','finally','for','function','if','import','in','instanceof','let','new','null','return','super','switch','this','throw','true','try','typeof','var','void','while','with','yield','await','async','static','get','set','of','from','as','implements','interface','package','private','protected','public','enum','type','namespace','module','declare','abstract','readonly','keyof','infer','unknown','any','never','string','number','boolean','bigint','symbol','is','asserts'],
+  python: ['and','as','assert','break','class','continue','def','del','elif','else','except','False','finally','for','from','global','if','import','in','is','lambda','None','nonlocal','not','or','pass','raise','return','True','try','while','with','yield','async','await'],
+  java: ['abstract','assert','boolean','break','byte','case','catch','char','class','const','continue','default','do','double','else','enum','extends','final','finally','float','for','goto','if','implements','import','instanceof','int','interface','long','native','new','package','private','protected','public','return','short','static','strictfp','super','switch','synchronized','this','throw','throws','transient','try','void','volatile','while','true','false','null','var','yield','record','sealed','permits'],
+  go: ['break','case','chan','const','continue','default','defer','else','fallthrough','for','func','go','goto','if','import','interface','map','package','range','return','select','struct','switch','type','var','true','false','nil','iota','make','new','append','len','cap'],
+  rust: ['as','break','const','continue','crate','else','enum','extern','false','fn','for','if','impl','in','let','loop','match','mod','move','mut','pub','ref','return','self','Self','static','struct','super','trait','true','type','unsafe','use','where','while','async','await','dyn','abstract','become','box','do','final','macro','override','priv','typeof','unsized','virtual','yield','try','union'],
+  php: ['__halt_compiler','abstract','and','array','as','break','callable','case','catch','class','clone','const','continue','declare','default','die','do','echo','else','elseif','empty','enddeclare','endfor','endforeach','endif','endswitch','endwhile','eval','exit','extends','final','finally','for','foreach','function','global','goto','if','implements','include','include_once','instanceof','insteadof','interface','isset','list','namespace','new','or','print','private','protected','public','require','require_once','return','static','switch','throw','trait','try','unset','use','var','while','xor','yield','true','false','null'],
+  ruby: ['alias','and','begin','break','case','class','def','defined','do','else','elsif','end','ensure','false','for','if','in','module','next','nil','not','or','redo','rescue','retry','return','self','super','then','true','undef','unless','until','when','while','yield','__ENCODING__','__LINE__','__FILE__'],
+  shell: ['if','then','else','elif','fi','case','esac','for','while','until','do','done','in','function','select','time','coproc','declare','export','local','readonly'],
+  yaml: ['true','false','null','yes','no','on','off'],
+  css: [],
+  json: ['true','false','null'],
+  html: [],
+  xml: [],
+  sql: ['select','from','where','insert','into','values','update','set','delete','create','table','alter','drop','index','view','join','inner','left','right','outer','on','group','by','having','order','asc','desc','limit','offset','union','all','distinct','as','and','or','not','null','is','in','exists','between','like','case','when','then','else','end','primary','key','foreign','references','constraint','unique','check','default'],
+  c: ['auto','break','case','char','const','continue','default','do','double','else','enum','extern','float','for','goto','if','inline','int','long','register','restrict','return','short','signed','sizeof','static','struct','switch','typedef','union','unsigned','void','volatile','while','_Bool','_Complex','_Imaginary','true','false','NULL'],
+  cpp: ['alignas','alignof','and','and_eq','asm','auto','bitand','bitor','bool','break','case','catch','char','char8_t','char16_t','char32_t','class','compl','concept','const','consteval','constexpr','constinit','const_cast','continue','co_await','co_return','co_yield','decltype','default','delete','do','double','dynamic_cast','else','enum','explicit','export','extern','false','float','for','friend','goto','if','inline','int','long','mutable','namespace','new','noexcept','not','not_eq','nullptr','operator','or','or_eq','private','protected','public','register','reinterpret_cast','requires','return','short','signed','sizeof','static','static_assert','static_cast','struct','switch','template','this','thread_local','throw','true','try','typedef','typeid','typename','union','unsigned','using','virtual','void','volatile','wchar_t','while','xor','xor_eq'],
+  csharp: ['abstract','as','base','bool','break','byte','case','catch','char','checked','class','const','continue','decimal','default','delegate','do','double','else','enum','event','explicit','extern','false','finally','fixed','float','for','foreach','goto','if','implicit','in','int','interface','internal','is','lock','long','namespace','new','null','object','operator','out','override','params','private','protected','public','readonly','ref','return','sbyte','sealed','short','sizeof','stackalloc','static','string','struct','switch','this','throw','true','try','typeof','uint','ulong','unchecked','unsafe','ushort','using','virtual','void','volatile','while','add','alias','ascending','async','await','by','descending','dynamic','equals','from','get','global','group','into','join','let','nameof','on','orderby','partial','remove','select','set','value','var','when','where','yield'],
+  swift: ['class','deinit','enum','extension','func','import','init','inout','internal','let','operator','private','protocol','public','static','struct','subscript','typealias','var','break','case','continue','default','defer','do','else','fallthrough','for','guard','if','in','repeat','return','switch','where','while','as','Any','catch','false','is','nil','rethrows','super','self','Self','throw','throws','true','try','associativity','convenience','dynamic','didSet','final','get','infix','indirect','lazy','left','mutating','none','nonmutating','optional','override','postfix','precedence','prefix','Protocol','required','right','set','Type','unowned','weak','willSet'],
+  kotlin: ['as','break','class','continue','do','else','false','for','fun','if','in','interface','is','null','object','package','return','super','this','throw','true','try','typealias','val','var','when','while','by','catch','constructor','delegate','dynamic','field','file','finally','get','import','init','param','property','receiver','set','setparam','where','actual','abstract','annotation','companion','const','crossinline','data','enum','expect','external','final','infix','inline','inner','internal','lateinit','noinline','open','operator','out','override','private','protected','public','reified','sealed','suspend','tailrec','vararg'],
+  dart: ['abstract','as','assert','async','await','break','case','catch','class','const','continue','covariant','default','deferred','do','dynamic','else','enum','export','extends','extension','external','factory','false','final','finally','for','Function','get','hide','if','implements','import','in','interface','is','late','library','mixin','new','null','on','operator','part','required','rethrow','return','set','show','static','super','switch','sync','this','throw','true','try','typedef','var','void','while','with','yield'],
+}
+
+function highlightCode(code: string, lang: string): string {
+  if (!code) return ''
+  const placeholders: string[] = []
+  const store = (s: string, cls: string) => {
+    const token = `__HL_${placeholders.length}__`
+    placeholders.push(`<span class="${cls}">${escapeHtml(s)}</span>`)
+    return token
+  }
+  let working = code
+  working = working.replace(/`(?:\\.|[^`\\])*`/g, m => store(m, 'hl-string'))
+  working = working.replace(/"(?:\\.|[^"\\])*"/g, m => store(m, 'hl-string'))
+  working = working.replace(/'(?:\\.|[^'\\])*'/g, m => store(m, 'hl-string'))
+  working = working.replace(/\/\/.*$/gm, m => store(m, 'hl-comment'))
+  if (['python','shell','yaml','toml','dockerfile','makefile','ruby'].includes(lang)) {
+    working = working.replace(/#.*$/gm, m => store(m, 'hl-comment'))
+  }
+  working = working.replace(/\/\*[\s\S]*?\*\//g, m => store(m, 'hl-comment'))
+  working = working.replace(/<!--[\s\S]*?-->/g, m => store(m, 'hl-comment'))
+  working = working.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const kws = KEYWORDS[lang]
+  if (kws && kws.length) {
+    const pat = new RegExp(`\\b(${kws.join('|')})\\b`, 'g')
+    working = working.replace(pat, '<span class="hl-keyword">$1</span>')
+  }
+  working = working.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="hl-number">$1</span>')
+  working = working.replace(/\b([A-Za-z_]\w*)\s*(?=\()/g, '<span class="hl-function">$1</span>')
+  if (lang === 'html' || lang === 'xml') {
+    working = working.replace(/(&lt;\/?)([\w-]+)/g, '$1<span class="hl-tag">$2</span>')
+    working = working.replace(/\b([\w-:]+)(=)/g, '<span class="hl-attr">$1</span>$2')
+  }
+  if (lang === 'css' || lang === 'scss' || lang === 'less') {
+    working = working.replace(/^(\s*)([\w-]+)(\s*:)/gm, '$1<span class="hl-attr">$2</span>$3')
+  }
+  placeholders.forEach((html, i) => {
+    const token = `__HL_${i}__`
+    working = working.split(token).join(html)
+  })
+  return working
+}
 
 interface FilesPaneProps {
   projectId: string | null
@@ -57,6 +125,8 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   const [editLoading, setEditLoading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const highlightRef = useRef<HTMLPreElement>(null)
 
   useEffect(() => {
     setDir('')
@@ -140,8 +210,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
       return
     }
     setRoomMenu(null)
-    const menuHeight = entry.type === 'file' ? 130 : 96
-    setRowMenu({ entry, pos: placeMenu(e.currentTarget.getBoundingClientRect(), menuHeight) })
+    setRowMenu({ entry, pos: placeMenu(e.currentTarget.getBoundingClientRect(), 96) })
   }
 
   function openDir(name: string) {
@@ -214,6 +283,24 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   }
 
   function triggerDownload() {
+    if (!projectId || !selected) {
+      toast('Select a file first', 'error')
+      return
+    }
+    const entry = entries.find((en) => joinRel(dir, en.name) === selected)
+    if (!entry || entry.type !== 'file') {
+      toast('Select a file (not a folder) to download', 'error')
+      return
+    }
+    const a = document.createElement('a')
+    a.href = api.downloadUrl(projectId, selected)
+    a.download = entry.name
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+
+  function triggerArchiveDownload() {
     if (!projectId) {
       toast('No project selected', 'error')
       return
@@ -289,6 +376,25 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   }
 
   const filtered = entries.filter((e) => e.name.toLowerCase().includes(query.trim().toLowerCase()))
+  const selIsFile =
+    !!selected && entries.some((e) => e.type === 'file' && joinRel(dir, e.name) === selected)
+
+  // editor meta for colour + language + highlight
+  const selectedMeta = selected ? getFileMeta(selected.split('/').pop() ?? selected) : null
+  const selectedColor = selectedMeta?.color ?? 'var(--border)'
+  const selectedLanguage = selectedMeta?.language ?? 'plaintext'
+  const SelectedIcon = selectedMeta?.Icon ?? IconFile
+  const highlightedHtml = useMemo(() => {
+    if (!selected || editLoading) return ''
+    return highlightCode(editContent, selectedLanguage)
+  }, [editContent, selectedLanguage, selected, editLoading])
+
+  function syncScroll() {
+    if (textareaRef.current && highlightRef.current) {
+      highlightRef.current.scrollTop = textareaRef.current.scrollTop
+      highlightRef.current.scrollLeft = textareaRef.current.scrollLeft
+    }
+  }
 
   if (!projectId) {
     return <div className="dd-empty">Select a project to browse its files</div>
@@ -392,11 +498,13 @@ export function FilesPane({ projectId }: FilesPaneProps) {
 
       {!subPage && selected && (
         <div className="fp-edit">
-          <div className="fp-subhead fp-edit-head">
+          <div className="fp-subhead fp-edit-head" style={{ borderLeft: `3px solid ${selectedColor}`, paddingLeft: 8, borderRadius: 6 }}>
             <button className="icon-btn" aria-label="Back to files" onClick={() => { setSelected(null); setEditContent(''); }}>
               <IconChevronLeft size={17} />
             </button>
+            <span style={{ display: 'inline-flex', alignItems: 'center', color: selectedColor }}><SelectedIcon size={15} /></span>
             <span className="fp-edit-title" title={selected}>{selected}</span>
+            <span className="fp-lang-badge" style={{ background: selectedColor, color: selectedColor === '#f7df1e' || selectedColor === '#ecd53f' ? '#000' : '#fff', borderColor: selectedColor }}>{selectedMeta?.label ?? 'FILE'}</span>
             <div className="fp-editor-actions">
               <button className="btn" disabled={editLoading || editSaving} onClick={() => { setSelected(null); setEditContent(''); }}>
                 Cancel
@@ -406,15 +514,26 @@ export function FilesPane({ projectId }: FilesPaneProps) {
               </button>
             </div>
           </div>
-          <textarea
-            className="fp-editor-textarea fp-edit-area"
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            disabled={editLoading}
-            placeholder={editLoading ? 'Loading…' : 'Start typing…'}
-            spellCheck={false}
-            autoFocus
-          />
+          <div className="fp-editor-wrap" style={{ borderColor: selectedColor } as React.CSSProperties}>
+            <div className="fp-editor-container">
+              <pre ref={highlightRef} className="fp-highlight" aria-hidden="true"><code dangerouslySetInnerHTML={{ __html: highlightedHtml + '<br>' }} /></pre>
+              <textarea
+                ref={textareaRef}
+                className="fp-editor-textarea fp-edit-area fp-editor-textarea--highlighted"
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                onScroll={syncScroll}
+                disabled={editLoading}
+                placeholder={editLoading ? 'Loading…' : 'Start typing…'}
+                spellCheck={false}
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="fp-editor-footer" style={{ borderLeft: `3px solid ${selectedColor}`, paddingLeft: 8 }}>
+            <span className="fp-editor-lang" style={{ color: selectedColor }}>{selectedLanguage}</span>
+            <span className="fp-editor-hint">{editLoading ? 'Loading…' : `${editContent.split('\n').length} lines • ${editContent.length} chars`}</span>
+          </div>
         </div>
       )}
 
@@ -486,7 +605,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
                         }
                       }}
                     >
-                      {entry.type === 'dir' ? <IconFolder size={15} /> : <IconFile size={15} />}
+                      {entry.type === 'dir' ? <IconFolder size={15} style={{ color: '#dcad3c' }} /> : <FileIcon name={entry.name} size={15} />}
                       <span className="fp-name">{entry.name}</span>
                       <span
                         className="icon-btn row-menu"
@@ -516,9 +635,18 @@ export function FilesPane({ projectId }: FilesPaneProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <button
+              style={{ opacity: selIsFile ? 1 : 0.6 }}
               onClick={() => {
                 setRoomMenu(null)
                 triggerDownload()
+              }}
+            >
+              <IconDownload size={15} /> Download
+            </button>
+            <button
+              onClick={() => {
+                setRoomMenu(null)
+                triggerArchiveDownload()
               }}
             >
               <IconDownload size={15} /> Download ZIP
