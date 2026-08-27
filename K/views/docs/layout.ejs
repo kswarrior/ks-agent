@@ -1,0 +1,51 @@
+<%- include('../partials/header') %>
+
+<%
+  const docsPages = [
+    { href: '/docs',        label: 'Overview',    icon: 'fas fa-book-open', active: 'docs' },
+    { href: '/docs/api',    label: 'API Reference', icon: 'fas fa-plug',      active: 'docs-api' },
+    { href: '/docs/plugins',label: 'Plugins',      icon: 'fas fa-puzzle-piece', active: 'docs-plugins' },
+    { href: '/docs/server', label: 'Server Setup',  icon: 'fas fa-server',    active: 'docs-server' },
+  ];
+
+  function pageActive(label) { return active === (docsPages.find(p => p.label === label)?.active || '') ? ' active' : ''; }
+
+  function docsHref(label) { return docsPages.find(p => p.label === label)?.href || '#'; }
+%>
+
+<!-- Breadcrumb -->
+<div class="main-content">
+  <nav class="breadcrumbs">
+    <a href="/docs">Documentation</a>
+    <% if (breadcrumb) { %>
+      <span class="sep"><i class="fas fa-chevron-right"></i></span>
+      <span class="current"><%= breadcrumb %></span>
+    <% } %>
+  </nav>
+
+  <!-- Doc 2-column layout -->
+  <div class="doc-layout">
+
+    <!-- In-page sidebar nav -->
+    <aside class="doc-sidebar-nav">
+      <h4>Pages</h4>
+      <nav class="doc-nav-list">
+        <% docsPages.forEach(p => { %>
+          <a href="<%= p.href %>" class="<%= active === p.active ? 'active' : '' %>">
+            <i class="<%= p.icon %>"></i>
+            <%= p.label %>
+          </a>
+        <% }) %>
+      </nav>
+    </aside>
+
+    <!-- Page content -->
+    <main class="doc-content">
+      <%- body %>
+    </main>
+  </div>
+</div>
+
+<script src="/javascripts/main.js"></script>
+</body>
+</html>
