@@ -614,6 +614,11 @@ function KsAgent() {
           streaming={activeChat ? streams[activeChat.id] !== undefined : false}
           onClose={() => setRsbOpen(false)}
         />
+        <PreviewSidebar
+          open={previewOpen}
+          activeProject={activeProject ? { id: activeProject.id, path: activeProject.path } : null}
+          onClose={() => setPreviewOpen(false)}
+        />
       </div>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onDataChanged={refreshModels} />
