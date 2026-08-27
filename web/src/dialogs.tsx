@@ -81,7 +81,10 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (promptState) setTimeout(() => inputRef.current?.focus(), 30)
+    if (promptState) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 30)
+      return () => clearTimeout(timer)
+    }
   }, [promptState])
 
   useEffect(() => {

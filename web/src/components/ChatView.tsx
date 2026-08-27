@@ -68,6 +68,13 @@ function formatTimeShort(iso?: string): string {
 function AssistantMeta({ message }: { message: Message }) {
   const toast = useToast()
   const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
 
   const modelLabel = (message.modelDisplayName?.trim() ? message.modelDisplayName.trim() : '') || message.model || ''
   const providerLabel = message.providerName || ''
@@ -85,7 +92,8 @@ function AssistantMeta({ message }: { message: Message }) {
       await navigator.clipboard.writeText(message.content)
       setCopied(true)
       toast('Copied', 'success')
-      setTimeout(() => setCopied(false), 1400)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setCopied(false), 1400)
     } catch {
       toast('Copy failed', 'error')
     }
