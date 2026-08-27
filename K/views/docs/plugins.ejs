@@ -1,0 +1,105 @@
+<%- include('../partials/header') %>
+
+<%
+  const docsPages = [
+    { href: '/docs',         label: 'Overview',     icon: 'fas fa-book-open',    active: 'docs' },
+    { href: '/docs/api',     label: 'API Reference', icon: 'fas fa-plug',        active: 'docs-api' },
+    { href: '/docs/plugins', label: 'Plugins',       icon: 'fas fa-puzzle-piece', active: 'docs-plugins' },
+    { href: '/docs/server',  label: 'Server Setup',  icon: 'fas fa-server',       active: 'docs-server' },
+  ];
+  function isActive(label) { return active === (docsPages.find(p => p.label === label)?.active || '') ? ' active' : ''; }
+%>
+
+<div class="main-content">
+  <nav class="breadcrumbs">
+    <a href="/docs">Documentation</a>
+    <span class="sep"><i class="fas fa-chevron-right"></i></span>
+    <span class="current">Plugins</span>
+  </nav>
+
+  <div class="doc-layout">
+    <aside class="doc-sidebar-nav">
+      <h4>Pages</h4>
+      <nav class="doc-nav-list">
+        <% docsPages.forEach(p => { %>
+          <a href="<%= p.href %>" class="<%= isActive(p.label) %>">
+            <i class="<%= p.icon %>"></i>
+            <%= p.label %>
+          </a>
+        <% }) %>
+      </nav>
+    </aside>
+
+    <article class="doc-content">
+      <h1><i class="fas fa-puzzle-piece" style="color: var(--warning);"></i> Plugins</h1>
+      <p class="doc-desc">Extend KS Warrior with official and community plugins. Each plugin hooks into runtime events and the plugin registry.</p>
+
+      <div class="info-callout">
+        <strong>Compatibility:</strong> Plugins target <code>KS_Warrior v1.2+</code>. Check the manifest <code>ksw-version</code> field before installing.
+      </div>
+
+      <h2><i class="fas fa-crown"></i> Official Plugins</h2>
+
+      <div class="achievement">
+        <div class="achievement-icon"><i class="fas fa-dice-d20"></i></div>
+        <div>
+          <h3>EconomyX</h3>
+          <p>Virtual currency, shops, balances and transactions.</p>
+          <span class="rarity legendary">Stable</span>
+          <div style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
+            Install: <code>ksw plugin install economyx</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="achievement">
+        <div class="achievement-icon"><i class="fas fa-users"></i></div>
+        <div>
+          <h3>ClanWars</h3>
+          <p>Clan battles, territory claiming and seasonal leaderboards.</p>
+          <span class="rarity epic">Beta</span>
+          <div style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
+            Install: <code>ksw plugin install clanwars</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="achievement">
+        <div class="achievement-icon"><i class="fas fa-shield-alt"></i></div>
+        <div>
+          <h3>AntiCheat Lite</h3>
+          <p>Heuristic detection for movement, combat and inventory anomalies.</p>
+          <span class="rarity rare">Stable</span>
+          <div style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
+            Install: <code>ksw plugin install anticheat-lite</code>
+          </div>
+        </div>
+      </div>
+
+      <h2><i class="fas fa-code"></i> Plugin Manifest</h2>
+      <p>A minimal <code>plugin.json</code>:</p>
+      <div class="content-block" style="background:var(--bg-primary); border:1px solid var(--border-color);">
+<pre style="color:var(--text-secondary); font-size:0.9rem; line-height:1.7;">{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "ksw-version": "^1.2.0",
+  "main": "./dist/index.js",
+  "hooks": ["playerJoin", "playerQuit"],
+  "permissions": ["player.read", "economy.write"]
+}</pre>
+      </div>
+
+      <h2><i class="fas fa-terminal"></i> CLI</h2>
+      <ul>
+        <li><code>ksw plugin list</code> — list installed plugins</li>
+        <li><code>ksw plugin install <name></code> — install from registry</li>
+        <li><code>ksw plugin enable <name></code> / <code>disable</code></li>
+        <li><code>ksw plugin reload <name></code> — hot reload without restart</li>
+      </ul>
+    </article>
+  </div>
+</div>
+
+<script src="/javascripts/main.js"></script>
+</body>
+</html>
