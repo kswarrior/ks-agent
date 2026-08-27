@@ -2720,7 +2720,7 @@ textarea {
   padding: 6px 2px 10px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .activity-summary-count {
   font-size: 12px;
@@ -2728,6 +2728,9 @@ textarea {
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
 }
 .activity-summary-breakdown {
   display: inline-flex;
@@ -2739,6 +2742,114 @@ textarea {
 .act-dot {
   color: var(--text-faint);
   font-weight: 400;
+}
+/* Dropdown for All/Write/Read/Edit on right of events text */
+.act-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+.act-dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--btn);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  line-height: 1;
+  white-space: nowrap;
+}
+.act-dropdown-btn:hover {
+  background: var(--btn-hover);
+  border-color: var(--border-strong);
+}
+.act-dropdown-label {
+  font-weight: 700;
+}
+.act-dropdown-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 99px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-dim);
+}
+.act-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 140px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.75);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: pop 0.12s ease;
+}
+.act-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.act-dropdown-item:hover {
+  background: var(--btn);
+  color: var(--text);
+}
+.act-dropdown-item.active {
+  background: var(--btn-hover);
+  color: var(--text);
+  font-weight: 600;
+}
+.act-dropdown-item-label {
+  flex: 1;
+  white-space: nowrap;
+}
+.act-dropdown-item-count {
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+.act-dropdown-item.active .act-dropdown-item-count {
+  background: var(--btn);
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 .activity-filters {
   display: flex;
