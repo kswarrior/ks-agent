@@ -181,6 +181,43 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
   }
 
+  async function loadSkillProjects() {
+    try {
+      const list = await api.listProjects()
+      setSkillProjects(list)
+      if (list.length > 0 && !skillFileBrowserProject) setSkillFileBrowserProject(list[0].id)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  async function refreshSkillPicker() {
+    if (!skillFileBrowserProject) return
+    setSkillPickerLoading(true)
+    try {
+      const listing = await api.listFiles(skillFileBrowserProject, skillPickerDir)
+      setSkillPickerEntries(listing.entries)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setSkillPickerLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (skillFileBrowserOpen && skillProjects.length === 0) {
+      loadSkillProjects()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skillFileBrowserOpen])
+
+  useEffect(() => {
+    if (skillFileBrowserOpen && skillFileBrowserProject) {
+      refreshSkillPicker()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skillFileBrowserProject, skillPickerDir, skillFileBrowserOpen])
+
   async function submitPlanPrompt() {
     setError(null)
     try {
