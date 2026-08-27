@@ -1,0 +1,12 @@
+<h1>Documentation</h1>
+<div class="breadcrumb">
+  <a href="/">Home</a> / Docs
+</div>
+<div class="doc-grid">
+  <% docs.forEach(function(doc){ %>
+    <a href="/docs/<%= doc.id %>" class="doc-card">
+      <h3><%= doc.title %></h3>
+      <p><%= doc.description %></p>
+    </a>
+  <% }); %>
+</div>
