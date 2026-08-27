@@ -24,10 +24,79 @@ const TABS: Array<{ id: RsTab; label: string }> = [
   { id: 'activity', label: 'Activity' }
 ]
 
-function PlanView({ plan }: { plan: Plan }) {
-  const done = plan.steps.filter((s) => s.status === 'done').length
+function PlanView({ plan, activities }: { plan: Plan | null; activities: Activity[] }) {
+  // Derive flow stage from plan + activities
+  const hasExplore = activities.some(a => ['list_files','read_file','run_shell'].includes(a.toolType) && a.summary)
+  const hasPlan = !!plan
+  const workingStep = plan?.steps.find(s => s.status === 'working')
+  const workingIdx = workingStep ? plan!.steps.indexOf(workingStep) : -1
+  const done = plan ? plan.steps.filter(s => s.status === 'done').length : 0
+
+  type Stage = 'understand' | 'explore' | 'planning' | 'executing' | 'done'
+  let stage: Stage = 'understand'
+  let stageDetail = ''
+  if (!hasPlan && !hasExplore) stage = 'understand'
+  else if (!hasPlan && hasExplore) stage = 'explore'
+  else if (hasPlan && !workingStep && done === 0) stage = 'planning'
+  else if (hasPlan && workingStep) { stage = 'executing'; stageDetail = `Executing step [${workingIdx + 1}] ${workingStep.title}` }
+  else if (hasPlan && done === plan!.steps.length && plan!.steps.length > 0) stage = 'done'
+  else if (hasPlan) stage = 'executing'
+
+  const stages: Array<{ id: Stage; label: string }> = [
+    { id: 'understand', label: 'Understand' },
+    { id: 'explore', label: 'Explore' },
+    { id: 'planning', label: 'Planning' },
+    { id: 'executing', label: 'Executing' },
+  ]
+  const stageOrder: Record<Stage, number> = { understand: 0, explore: 1, planning: 2, executing: 3, done: 3 }
+  const currentOrder = stageOrder[stage]
+
+  if (!plan) {
+    return (
+      <div className="plan">
+        <div className="flow">
+          <div className="flow-track">
+            {stages.map((s, i) => {
+              const state = i < currentOrder ? 'done' : i === currentOrder ? 'active' : 'pending'
+              return (
+                <div key={s.id} className={`flow-node ${state}`}>
+                  <span className="flow-dot">{i < currentOrder ? <IconCheck size={10} /> : i === currentOrder ? <span className="flow-pulse" /> : null}</span>
+                  <span className="flow-label">{s.label}</span>
+                  {i < stages.length - 1 && <span className={`flow-line ${i < currentOrder ? 'done' : ''}`} />}
+                </div>
+              )
+            })}
+          </div>
+          <div className="flow-detail">
+            {stage === 'understand' && <span>AI is understanding your prompt…</span>}
+            {stage === 'explore' && <span>Exploring codebase…</span>}
+            {stage === 'planning' && <span>Creating plan…</span>}
+          </div>
+          <div className="rsb-empty" style={{ marginTop: 16 }}>Nothing here yet — plan will appear after explore</div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="plan">
+      <div className="flow">
+        <div className="flow-track">
+          {stages.map((s, i) => {
+            const state = i < currentOrder ? 'done' : i === currentOrder ? 'active' : 'pending'
+            return (
+              <div key={s.id} className={`flow-node ${state}`}>
+                <span className="flow-dot">{i < currentOrder ? <IconCheck size={10} /> : i === currentOrder ? <span className="flow-pulse" /> : null}</span>
+                <span className="flow-label">{s.label}</span>
+                {i < stages.length - 1 && <span className={`flow-line ${i < currentOrder ? 'done' : ''}`} />}
+              </div>
+            )
+          })}
+        </div>
+        {stageDetail && <div className="flow-detail executing">{stageDetail}</div>}
+        {stage === 'done' && <div className="flow-detail done">All steps completed</div>}
+      </div>
+
       <div className="plan-head">
         <span className="plan-title" title={plan.title}>
           {plan.title}
@@ -45,6 +114,7 @@ function PlanView({ plan }: { plan: Plan }) {
           <span className="plan-num">{i + 1}</span>
         </div>
       ))}
+      <p className="flow-hint">AI can ask questions at any stage via the chat</p>
     </div>
   )
 }
@@ -448,7 +518,7 @@ export function RightSidebar({ open, activeProject, plan, activities, onClose }:
         </div>
 
         <div className="rsb-body">
-          {tab === 'plan' && (plan ? <PlanView plan={plan} /> : <div className="rsb-empty">Nothing here yet</div>)}
+          {tab === 'plan' && <PlanView plan={plan} activities={activities} />}
           {tab === 'terminal' && <TerminalPane project={activeProject} />}
           {tab === 'activity' && <ActivityPane activities={activities} />}
           {tab === 'files' && <FilesPane projectId={activeProject?.id ?? null} />}
