@@ -1,0 +1,80 @@
+const express = require('express');
+const path = require('path');
+const app = express();
+const PORT = 3000;
+
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+app.use(express.json());
+app.use('/public', express.static(path.join(__dirname, 'public')));
+
+// In-memory example store
+const examples = [
+  { id: 1, title: 'Dashboard Widgets', description: 'Sample widgets and cards.', tags: ['dashboard', 'ui'] },
+  { id: 2, title: 'Docs Example Page', description: 'A sample doc article for reference.', tags: ['docs', 'content'] },
+  { id: 3, title: 'Configured Notifications', description: 'Example email/SMS settings.', tags: ['configuration', 'messaging'] },
+  { id: 4, title: 'Edge Case Test', description: 'Out of bounds or invalid request test.', tags: ['testing', 'edge'] },
+];
+const approved = new Set([1, 3]);
+const declined = new Set([4]);
+
+function renderList(res) {
+  res.render('list', { examples });
+}
+
+function renderCard(res, item, status) {
+  res.render('card', { item, status });
+}
+
+// Home
+app.get('/', (req, res) => {
+  res.render('index');
+});
+
+// Docs gallery
+app.get('/docs', (req, res) => {
+  res.render('docs', { examples });
+});
+
+// Declined page (example from your request)
+app.get('/decline', (req, res) => {
+  const item = examples.find((x) => x.id === 2) || null;
+  res.render('decline', { item });
+});
+
+// Search examples by tags or keyword
+app.get('/search', (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  let results = examples;
+  if (q) {
+    results = examples.filter((item) => {
+      const text = `${item.title} ${item.description} ${item.tags.join(' ')}`.toLowerCase();
+      return text.includes(q);
+    });
+  }
+  res.render('search', { q, results });
+});
+
+// public API used by cards
+app.get('/api/examples/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const item = examples.find((x) => x.id === id) || null;
+});
+if (!item) return res.status(404).json({ error: 'not_found' });
+res.json({ item, approved: approved.has(id), declined: declined.has(id) });
+});
+
+app.get('/cards/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const item = examples.find((x) => x.id === id);
+  if (!item) return res.status(404).send('Not found');
+  const status = approved.has(id) ? 'approved' : declined.has(id) ? 'declined' : 'draft';
+  renderCard(res, item, status);
+});
+
+app.get('/list', renderList);
+
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
