@@ -28,7 +28,7 @@ export const DEFAULT_PLAN_PROMPT =
   '3) Planning — call create_plan with a short title and 3-10 ordered concrete steps. Shown as "Executing step [1] ${step}". ' +
   '4) Executing — implement steps one by one, after EACH step call complete_plan_step. ' +
   '5) When done, give a brief summary. ' +
-  'You may call ask_question at ANY point if you need confirmation/choice/info — do not guess. For "hi" just answer briefly, no flow.'
+  'MANDATORY QUESTION RULE: At ANY point if you need confirmation/choice/info, you MUST call the ask_question tool — NEVER write the question in plain text. Example FORBIDDEN: "Which DB? 1) Postgres 2) MySQL — please reply". Correct: call ask_question with header="Choose Database", question="Which database should I use for this project?", options=["Postgres","MySQL","SQLite"], allow_custom=true. The tool shows an interactive card and pauses until the user clicks an option. Do not guess. For "hi" just answer briefly, no flow.'
 
 const MAX_TOOL_ROUNDS = 25
 const READ_MAX_BYTES = 24 * 1024
@@ -181,19 +181,19 @@ const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'ask_question',
       description:
-        'Ask the user a clarifying question when you need confirmation, a choice, or extra information. Shows clickable option buttons + optional custom typed answer. Use when unsure, need approval, or need data before proceeding.',
+        'MANDATORY tool for any clarification — this is the ONLY way to ask the user anything. NEVER write questions/options in your chat reply text; you MUST call this tool instead. It renders an interactive card in the UI with clickable option buttons + optional custom typed input, and PAUSES execution until the user answers. Use it whenever you need confirmation, a choice, or extra info — at ANY stage (Understand, Explore, Planning, Executing). Do not assume or invent. Do not duplicate the question in your text output when you call this tool; just call the tool. Example: header="Choose Framework", question="Which framework should I use for the dashboard?", options=["React","Vue","Plain HTML"], allow_custom=true, custom_placeholder="Or type custom...". The tool blocks until answered and returns the user selection.',
       parameters: {
         type: 'object',
         properties: {
-          header: { type: 'string', description: 'Short title for the question (2-40 chars)' },
-          question: { type: 'string', description: 'The question to ask the user (5-500 chars)' },
+          header: { type: 'string', description: 'Short card title (2-40 chars), e.g., "Choose Framework" or "Confirm Deploy"' },
+          question: { type: 'string', description: 'Full question text to show in the card (5-500 chars). Be specific and concise.' },
           options: {
             type: 'array',
             items: { type: 'string' },
-            description: '1-6 short option labels (2-60 chars each). At least one option or allow_custom true required.'
+            description: '1-6 short clickable option labels (2-60 chars each). Provide meaningful choices like ["Yes, proceed","No, cancel"] or ["Postgres","MySQL","SQLite"]. At least one option or allow_custom=true required.'
           },
-          allow_custom: { type: 'boolean', description: 'Whether to allow custom typed answer (default true)' },
-          custom_placeholder: { type: 'string', description: 'Placeholder for custom input' }
+          allow_custom: { type: 'boolean', description: 'Whether to allow a custom typed answer in addition to options (default true). Set false for strict choice.' },
+          custom_placeholder: { type: 'string', description: 'Placeholder for custom input, e.g., "Type custom framework..."' }
         },
         required: ['question']
       }
