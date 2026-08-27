@@ -67,6 +67,22 @@ export interface Terminal {
   updatedAt: string
 }
 
+export interface Question {
+  id: string
+  chatId: string
+  header: string
+  question: string
+  options: string[]
+  allowCustom: boolean
+  customPlaceholder?: string
+  status: 'pending' | 'answered'
+  answer?: string
+  selectedOption?: string | null
+  createdAt: string
+  answeredAt?: string
+  toolCallId?: string
+}
+
 export interface RetrySettings {
   enabled: boolean
   maxRetries: number
@@ -86,13 +102,14 @@ interface DB {
   planPrompt: string
   plans: Plan[]
   terminals: Terminal[]
+  questions: Question[]
   retrySettings: RetrySettings
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], retrySettings: { enabled: true, maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 30000, retryOnStatusCodes: [429, 503], stopOnStatusCodes: [404] } }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], retrySettings: { enabled: true, maxRetries: 3, baseDelayMs: 1000, maxDelayMs: 30000, retryOnStatusCodes: [429, 503], stopOnStatusCodes: [404] } }
 
 export function loadDb(): void {
   try {
