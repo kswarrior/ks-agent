@@ -39,8 +39,8 @@ function PlanView({ plan, activities, streaming }: { plan: Plan | null; activiti
   let stage: Stage = 'idle'
   let stageDetail = ''
   if (!hasPlan && !hasExplore) stage = streaming ? 'understand' : 'idle'
-  else if (!hasPlan && hasExplore) stage = streaming ? 'explore' : 'idle'
-  else if (hasPlan && !workingStep && done === 0) stage = streaming ? 'planning' : 'planning'
+  else if (!hasPlan && hasExplore) stage = 'explore'
+  else if (hasPlan && !workingStep && done === 0) stage = 'planning'
   else if (hasPlan && workingStep) { stage = 'executing'; stageDetail = `Executing step [${workingIdx + 1}] ${workingStep.title}` }
   else if (hasPlan && done === plan!.steps.length && plan!.steps.length > 0) stage = 'done'
   else if (hasPlan) stage = 'executing'
@@ -55,22 +55,26 @@ function PlanView({ plan, activities, streaming }: { plan: Plan | null; activiti
   const currentOrder = stage === 'idle' ? -1 : stageOrder[stage as Exclude<Stage, 'idle'>]
 
   if (!plan) {
+    const shouldShowDetail = streaming && stage !== 'idle'
     return (
       <div className="plan">
         <div className="flow">
           <div className="flow-track">
             {stages.map((s, i) => {
               const state = stage === 'idle' ? 'pending' : i < currentOrder ? 'done' : i === currentOrder ? 'active' : 'pending'
+              const isActive = stage !== 'idle' && i === currentOrder
+              // Animate the active dot only while streaming (or if executing with a working step — handled in hasPlan branch)
+              const showPulse = isActive && streaming
               return (
                 <div key={s.id} className={`flow-node ${state}`}>
-                  <span className="flow-dot">{stage !== 'idle' && i < currentOrder ? <IconCheck size={10} /> : stage !== 'idle' && i === currentOrder ? <span className="flow-pulse" /> : null}</span>
+                  <span className="flow-dot">{stage !== 'idle' && i < currentOrder ? <IconCheck size={10} /> : showPulse ? <span className="flow-pulse" /> : null}</span>
                   <span className="flow-label">{s.label}</span>
                   {i < stages.length - 1 && <span className={`flow-line ${stage !== 'idle' && i < currentOrder ? 'done' : ''}`} />}
                 </div>
               )
             })}
           </div>
-          {stage !== 'idle' && (
+          {shouldShowDetail && (
             <div className="flow-detail">
               {stage === 'understand' && <span>Understanding<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
               {stage === 'explore' && <span>Exploring<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></span>}
