@@ -229,7 +229,8 @@ export function loadDb(): void {
               : defaultRetrySettings.stopOnStatusCodes,
             alwaysRetry: Boolean(parsed.retrySettings.alwaysRetry ?? defaultRetrySettings.alwaysRetry)
           }
-        : defaultRetrySettings
+        : defaultRetrySettings,
+      skills: Array.isArray(parsed.skills) ? parsed.skills.filter((s: any) => s && typeof s.id === 'string' && typeof s.name === 'string') : []
     }
     if (ensureChatSeqs(db.chats)) {
       try { saveDb() } catch {}
@@ -244,7 +245,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [] }
   }
 }
 
@@ -336,4 +337,12 @@ export function clearActivitiesForChat(chatId: string): void {
   const before = db.activities.length
   db.activities = db.activities.filter((a) => a.chatId !== chatId)
   if (db.activities.length !== before) saveDb()
+}
+
+export function getSkills(): Skill[] {
+  return [...db.skills].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export function findSkill(id: string): Skill | undefined {
+  return db.skills.find((s) => s.id === id)
 }
