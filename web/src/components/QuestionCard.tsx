@@ -138,81 +138,64 @@ export function QuestionList({ questions, onAnswer }: { questions: Question[]; o
   if (total === 0) return null
 
   const pending = sorted.filter(q => q.status === 'pending')
-  // If no pending, all answered -> cards gone (as requested)
   if (pending.length === 0) return null
 
-  // Find first pending index
   const firstPendingIdx = sorted.findIndex(q => q.status === 'pending')
-
   const [currentIdx, setCurrentIdx] = useState<number>(() => (firstPendingIdx >= 0 ? firstPendingIdx : 0))
 
-  // Keep currentIdx in sync when questions change
+  // Keep currentIdx valid when total changes or when current becomes out of bounds
   useEffect(() => {
-    // If current question was just answered and is now not pending, move to next pending
-    const cur = sorted[currentIdx]
-    if (!cur) {
-      const next = sorted.findIndex(q => q.status === 'pending')
-      if (next >= 0 && next !== currentIdx) setCurrentIdx(next)
-      return
-    }
-    if (cur.status === 'answered') {
-      // auto-advance to next pending after a short delay, but only if we just answered the current
-      // Find next pending after currentIdx
-      let nextIdx = -1
-      for (let i = currentIdx + 1; i < sorted.length; i++) if (sorted[i].status === 'pending') { nextIdx = i; break }
-      if (nextIdx === -1) {
-        for (let i = 0; i < currentIdx; i++) if (sorted[i].status === 'pending') { nextIdx = i; break }
-      }
-      if (nextIdx >= 0 && nextIdx !== currentIdx) {
-        // small delay so user sees the confirm feedback, then card disappears and next appears
-        const t = setTimeout(() => setCurrentIdx(nextIdx), 250)
-        return () => clearTimeout(t)
-      } else if (pending.length === 0) {
-        // all done, will return null next render
-      }
-    } else {
-      // current is still pending, keep it
-      // If a new question was added that is earlier than current, keep current
-    }
-    // If total changed and currentIdx out of bounds, clamp
     if (currentIdx >= total) setCurrentIdx(Math.max(0, total - 1))
-  }, [questions, currentIdx, sorted, pending.length, total, firstPendingIdx])
+    // If currentIdx points to a question that no longer exists, jump to first pending
+    if (currentIdx < total && sorted[currentIdx] == null) {
+      const next = sorted.findIndex(q => q.status === 'pending')
+      if (next >= 0) setCurrentIdx(next)
+    }
+    // If there was no pending before but now there is (new question added), jump to it if current is not pending
+    if (pending.length > 0 && sorted[currentIdx]?.status !== 'pending') {
+      // Don't auto-jump if user intentionally went Back to an answered question to edit.
+      // Only auto-jump if the current question was the one that just got answered and we are still on it.
+      // We detect this by checking if the current question's previous status was pending and now answered.
+      // For simplicity, we don't auto-jump here; navigation is handled explicitly in handleConfirm
+    }
+  }, [total, currentIdx, sorted])
 
-  // Ensure currentIdx points to a pending question initially, but allow Back to go to answered ones
-  // If currentIdx points to an answered question (because user went Back), we still show it (editable)
-  // Otherwise, if currentIdx is answered and we are not in Back navigation, we would have auto-advanced above
-  // So we need to decide: show currentIdx even if answered, when user explicitly navigated back
-  // The auto-advance effect above will move away from answered, but we want to allow Back to stay
-  // So we should not auto-advance if the user just navigated back intentionally
-  // To handle this, we track whether the last navigation was Back vs auto
-  // Simpler: only auto-advance if the previous current question just became answered and we are still on it
-  // Our effect above already does that with a timeout, but it will still move away even if user is viewing an answered via Back
-  // We can add a ref to track if user initiated Back
-  // For now, keep simple: show currentIdx as is, even if answered, to allow editing
+  // Ensure initial current points to first pending when component first mounts or when a new batch arrives and current is answered
+  // This is handled by the initial state, and handleConfirm will advance
+
   const current = sorted[currentIdx]
   if (!current) return null
-  // If current is answered and there are still pending, but user is not on a pending, we still show it (for editing)
-  // That's the Back case
 
   const canGoBack = currentIdx > 0
-
   const handleBack = () => {
     if (currentIdx > 0) setCurrentIdx(currentIdx - 1)
   }
 
   const handleConfirm = async (answer: string) => {
+    const curIdx = currentIdx
     await onAnswer(current.id, answer)
-    // onAnswer will update the question to answered, triggering the useEffect to auto-advance
-    // If this was an edit of an already-answered question (via Back), we should move forward to next pending
-    // The effect will handle advancing, but we can also proactively move
-    // Find next pending after currentIdx
-    // Use a timeout to let the state update propagate
-    setTimeout(() => {
-      const updatedSorted = [...questions].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      // This is stale closure, so we rely on the effect to advance; no need to manually set here
-    }, 0)
+    // After answering, move to next pending (card gone)
+    // Find next pending after curIdx in the *current* sorted snapshot where cur is now considered answered
+    // Since onAnswer will cause parent to update questions to answered, we compute next based on the assumption that current will be answered
+    let nextIdx = -1
+    for (let i = curIdx + 1; i < sorted.length; i++) {
+      // current will be answered, so skip it; look for next pending
+      if (sorted[i].status === 'pending') { nextIdx = i; break }
+    }
+    if (nextIdx === -1) {
+      // wrap around to first pending before curIdx
+      for (let i = 0; i < curIdx; i++) if (sorted[i].status === 'pending') { nextIdx = i; break }
+    }
+    if (nextIdx >= 0) {
+      setCurrentIdx(nextIdx)
+    } else {
+      // No more pending after this answer - check if there are other pendings that were not after curIdx
+      // The current question just became answered, so pending will be empty next render and wizard will disappear (cards gone)
+      // Keep currentIdx as is; next render will return null because pending.length===0
+    }
   }
 
+  // If current is answered and user arrived via Back, we still show it (editable). The progress shows [idx+1/total]
   return (
     <div className="q-list">
       <SingleQuestionCard
