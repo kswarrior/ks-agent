@@ -38,9 +38,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [providerForm, setProviderForm] = useState<ProviderForm | null>(null)
   const [providerPicker, setProviderPicker] = useState(false)
   const [showModelForm, setShowModelForm] = useState(false)
-  const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '', maxTokens: '' })
+  const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '', maxTokens: '', systemPrompt: '' })
+  const [modelEdit, setModelEdit] = useState<ModelEntry | null>(null)
   const [planPrompt, setPlanPrompt] = useState('')
   const [planDraft, setPlanDraft] = useState('')
+  const [systemPrompt, setSystemPrompt] = useState('')
+  const [systemDraft, setSystemDraft] = useState('')
   const [retrySettings, setRetrySettings] = useState<RetrySettings | null>(null)
   const [retryDraft, setRetryDraft] = useState<RetrySettings | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -51,10 +54,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     if (open) {
       refresh()
       loadPlanPrompt()
+      loadSystemPrompt()
       loadRetrySettings()
       setProviderForm(null)
       setProviderPicker(false)
       setShowModelForm(false)
+      setModelEdit(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -76,6 +81,28 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       setPlanDraft(planPrompt)
     } catch (e: any) {
       toast(e.message, 'error')
+    }
+  }
+
+  async function loadSystemPrompt() {
+    try {
+      const { systemPrompt } = await api.getSystemPrompt()
+      setSystemPrompt(systemPrompt)
+      setSystemDraft(systemPrompt)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  async function submitSystemPrompt() {
+    setError(null)
+    try {
+      const { systemPrompt } = await api.saveSystemPrompt(systemDraft.trim())
+      setSystemPrompt(systemPrompt)
+      setSystemDraft(systemPrompt)
+      toast('System prompt saved', 'success')
+    } catch (e: any) {
+      setError(e.message)
     }
   }
 
