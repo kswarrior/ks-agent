@@ -1,20 +1,20 @@
 /* ============ KS Agent — dark theme by ks warrior ============ */
 
 :root {
-  --bg: #0a0a0a;
-  --surface: #111111;
-  --surface-2: #161616;
-  --input: #141414;
-  --border: #2c2c2c;
-  --border-strong: #3a3a3a;
-  --btn: #1e1e1e;
-  --btn-hover: #292929;
-  --btn-active: #333333;
+  --bg: #000000;
+  --surface: #050505;
+  --surface-2: #0a0a0a;
+  --input: #080808;
+  --border: #1a1a1a;
+  --border-strong: #252525;
+  --btn: #0f0f0f;
+  --btn-hover: #151515;
+  --btn-active: #1e1e1e;
   --text: #e8e8e8;
   --text-dim: #9a9a9a;
   --text-faint: #6b6b6b;
   --danger: #ef4444;
-  --danger-bg: #2a1214;
+  --danger-bg: #140a0a;
   --radius: 10px;
   --radius-sm: 8px;
   --sidebar-w: 284px;
@@ -50,7 +50,7 @@ button {
   height: 9px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2f2f2f;
+  background: #1a1a1a;
   border-radius: 99px;
   border: 2px solid var(--bg);
 }
@@ -96,8 +96,8 @@ button {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #3f3f3f;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.14);
+  background: #1e1e1e;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.08);
 }
 
 .icon-btn {
@@ -581,7 +581,7 @@ button {
 }
 
 .md pre {
-  background: #0d0d0d;
+  background: #050505;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
@@ -607,7 +607,7 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #101010;
+  background: #070707;
   border: 1px solid var(--border);
   border-bottom: none;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
@@ -679,7 +679,7 @@ button {
   font-weight: 800;
   letter-spacing: 0.03em;
   color: var(--text-dim);
-  box-shadow: 0 0 34px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 34px rgba(255, 255, 255, 0.03);
 }
 
 .empty h2 {
@@ -1074,7 +1074,7 @@ button {
   transform: scale(0);
   transition: transform 0.1s ease;
   clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
-  background: #0a0a0a;
+  background: #000000;
 }
 
 .checkbox-row input[type='checkbox']:checked {
