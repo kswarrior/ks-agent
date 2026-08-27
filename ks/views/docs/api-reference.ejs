@@ -1,0 +1,43 @@
+@extends('layout')
+
+@section('content')
+<div class="docs-page">
+  <div class="docs-header">
+    <h1>API Reference</h1>
+    <p class="lead">Complete documentation for all available API endpoints.</p>
+  </div>
+
+  <div class="docs-content">
+    <h2>Authentication</h2>
+    <p>All API requests require authentication using a Bearer token. Include the token in the Authorization header:</p>
+    <pre><code>Authorization: Bearer YOUR_TOKEN</code></pre>
+
+    <h2>Endpoints</h2>
+    <h3>GET /api/v1/dashboard</h3>
+    <p>Returns the dashboard overview data including statistics and recent activity.</p>
+    <pre><code>GET /api/v1/dashboard
+Headers: Authorization: Bearer TOKEN
+
+Response:
+{
+  "stats": {
+    "pages": 6,
+    "version": "3.0"
+  }
+}</code></pre>
+
+    <h3>GET /api/v1/docs/:slug</h3>
+    <p>Retrieves a specific documentation page by its slug.</p>
+    <pre><code>GET /api/v1/docs/introduction
+Response: { "title": "Introduction", "content": "..." }</code></pre>
+
+    <h2>Error Codes</h2>
+    <ul>
+      <li><code>200</code> — Success</li>
+      <li><code>401</code> — Unauthorized (invalid token)</li>
+      <li><code>404</code> — Resource not found</li>
+      <li><code>500</code> — Server error</li>
+    </ul>
+  </div>
+</div>
+@endsection
