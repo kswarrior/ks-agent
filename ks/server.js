@@ -10,19 +10,6 @@ app.set('view engine', 'ejs');
 app.set('views', join(__dirname, 'views'));
 app.use(express.static(join(__dirname, 'public')));
 
-// EJS Layout plugin (ejs-mate style)
-const ejs = require('ejs');
-
-const originalRenderFile = ejs.__express;
-ejs.__express = function (path, options, ...args) {
-  options = options || {};
-  const fn = ejs.fileLoader(join(__dirname, 'views', path));
-  if (typeof fn === 'function') return fn(options, ...args);
-  return originalRenderFile(path, options, ...args);
-};
-
-app.engine('ejs', ejs.__express);
-
 const docsData = [
   {
     id: 'getting-started',

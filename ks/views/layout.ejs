@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-
     <header class="site-header">
         <div class="header-content">
             <div class="logo">
@@ -23,19 +22,14 @@
     </header>
 
     <div class="page-wrapper">
-
         <aside class="sidebar">
             <div class="sidebar-section">
                 <h3>Documentation</h3>
                 <nav class="sidebar-nav">
-                    <a href="/docs" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === null ? 'active' : '' %>">
-                        Overview
-                    </a>
+                    <a href="/docs" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === null ? 'active' : '' %>">Overview</a>
                     <% if (typeof docs !== 'undefined' && docs) { %>
                         <% docs.forEach(function(doc) { %>
-                            <a href="/docs/<%= doc.id %>" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === doc.id ? 'active' : '' %>">
-                                <%= doc.title %>
-                            </a>
+                            <a href="/docs/<%= doc.id %>" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === doc.id ? 'active' : '' %>"><%= doc.title %></a>
                         <% }); %>
                     <% } %>
                 </nav>
@@ -51,13 +45,12 @@
         </aside>
 
         <main class="main-content">
-            <%- content %>
+            <%- body %>
         </main>
     </div>
 
     <footer class="site-footer">
         <p>&copy; 2024 KS Documentation. All rights reserved.</p>
     </footer>
-
 </body>
 </html>
