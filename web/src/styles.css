@@ -1750,11 +1750,6 @@ button {
   transition: border-color 0.15s ease, opacity 0.15s ease;
 }
 
-.plan-card.working {
-  border-color: #eab308;
-  box-shadow: 0 0 0 1px #eab308, 0 0 12px rgba(234, 179, 8, 0.25);
-}
-
 .plan-check {
   width: 18px;
   height: 18px;
@@ -1796,11 +1791,6 @@ button {
 .plan-card.done .plan-step {
   text-decoration: line-through;
   color: var(--text-faint);
-}
-
-.plan-card.working .plan-step {
-  color: #eab308;
-  font-weight: 500;
 }
 
 .plan-num {
