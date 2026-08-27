@@ -299,14 +299,12 @@ export function ChatView(props: Props) {
             </div>
 
             {props.streaming ? (
-              <button className="send-btn stop-btn" onClick={props.onStop}>
+              <button className="send-btn stop-btn" onClick={props.onStop} aria-label="Stop" title="Stop">
                 <IconStop size={16} />
-                Stop
               </button>
             ) : (
-              <button className="send-btn" onClick={send} disabled={!canSend}>
+              <button className="send-btn" onClick={send} disabled={!canSend} aria-label="Send" title="Send">
                 <IconSend size={15} />
-                <span className="send-label">Send</span>
               </button>
             )}
           </div>
