@@ -150,8 +150,9 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
 
   if (!open) return null
 
-  // iframe src: if it looks like a proxied path, keep as is; otherwise use url
-  const iframeSrc = url || getDefaultProxiedUrl()
+  // iframe src: use url if it's a valid proxied path or absolute URL, otherwise fall back
+  const isValidUrl = (u: string) => u.startsWith('/') || u.startsWith('http://') || u.startsWith('https://')
+  const iframeSrc = (url && isValidUrl(url)) ? url : getDefaultProxiedUrl()
 
   return (
     <>
