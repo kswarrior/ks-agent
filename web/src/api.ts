@@ -95,28 +95,25 @@ export async function streamChatEvents(
     const { done, value } = await reader.read()
     if (done) break
     buf += decoder.decode(value, { stream: true })
-    let nl: number
-    while ((nl = buf.indexOf('\n')) >= 0) {
-      const line = buf.slice(0, nl).trimEnd()
-      buf = buf.slice(nl + 1)
-      if (!line.startsWith('event:') && !line.startsWith('data:')) continue
-
-      // Collect event + data pair
+    let sep: number
+    while ((sep = buf.indexOf('\n\n')) >= 0) {
+      const raw = buf.slice(0, sep)
+      buf = buf.slice(sep + 2)
+      if (!raw.trim()) continue
+      const lines = raw.split('\n')
       let event = 'message'
       let data = ''
-      if (line.startsWith('event:')) {
-        event = line.slice(6).trim()
-        const nextNl = buf.indexOf('\n')
-        if (nextNl >= 0) {
-          const nextLine = buf.slice(0, nextNl).trimEnd()
-          buf = buf.slice(nextNl + 1)
-          if (nextLine.startsWith('data:')) data = nextLine.slice(5).trim()
+      for (const l of lines) {
+        const line = l.trimEnd()
+        if (line.startsWith('event:')) {
+          event = line.slice(6).trim()
+        } else if (line.startsWith('data:')) {
+          const chunk = line.slice(5).trim()
+          data = data ? data + '\n' + chunk : chunk
         }
-      } else {
-        data = line.slice(5).trim()
       }
-
       if (event === 'ping' || event === 'idle') continue
+      if (!data) continue
       try {
         const parsed = JSON.parse(data)
         switch (event) {
