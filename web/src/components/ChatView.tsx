@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Chat, Message, ModelEntry } from '../types'
+import type { Chat, Message, ModelEntry, Question } from '../types'
 import { Markdown } from './Markdown'
 import { IconChevronDown, IconSearch, IconSend, IconStop } from '../icons'
+import { QuestionList } from './QuestionCard'
 
 function ClampedContent({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -41,6 +42,8 @@ interface Props {
   onSend: (content: string) => void
   onStop: () => void
   onRequestSettings: () => void
+  questions: Question[]
+  onAnswerQuestion: (questionId: string, answer: string) => Promise<void>
 }
 
 export function ChatView(props: Props) {
