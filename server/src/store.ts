@@ -42,6 +42,8 @@ export interface ModelEntry {
   model: string
   displayName?: string
   maxTokens?: number
+  /** Per-model system prompt override. When set it replaces the global/built-in system prompt. */
+  systemPrompt?: string
 }
 
 export type PlanStepStatus = 'pending' | 'working' | 'done'
