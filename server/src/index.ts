@@ -979,7 +979,8 @@ app.post('/api/projects/:id/files', async (c) => {
   const kind = body.kind === 'folder' ? 'folder' : body.kind === 'file' ? 'file' : null
   const rel = String(body.path ?? '')
   if (!kind) return c.json({ error: 'kind must be "file" or "folder"' }, 400)
-  if (!validSegment(rel)) return c.json({ error: 'Invalid name' }, 400)
+  const relParts = rel.split('/').filter(Boolean)
+  if (relParts.length === 0 || !relParts.every(validSegment)) return c.json({ error: 'Invalid name' }, 400)
   const abs = resolveInProject(project.path, rel)
   if (!abs) return c.json({ error: 'Invalid path' }, 400)
   if (fs.existsSync(abs)) return c.json({ error: `"${rel}" already exists` }, 400)
