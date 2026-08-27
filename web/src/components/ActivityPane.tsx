@@ -131,7 +131,7 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
     return sortedActivities.filter((a) => a.toolType === filter)
   }, [sortedActivities, filter])
 
-  // Dropdown options: All, Write, Read, Edit, Shell — per latest request (write/read/shell etc)
+  // Dropdown options: All, Write, Read, Edit, Shell — per latest request (write/read/shell etc) + List for explore
   const dropdownFilters: Array<{ key: FilterKey; label: string; count: number }> = useMemo(() => {
     return [
       { key: 'all' as FilterKey, label: 'All', count: counts.all || 0 },
