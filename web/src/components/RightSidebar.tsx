@@ -93,7 +93,7 @@ function PlanView({ plan, activities }: { plan: Plan | null; activities: Activit
             )
           })}
         </div>
-        {stageDetail && <div className="flow-detail executing">{stageDetail}</div>}
+        {stageDetail && <div className="flow-detail executing">{stageDetail}<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></div>}
         {stage === 'done' && <div className="flow-detail done">All steps completed</div>}
       </div>
 

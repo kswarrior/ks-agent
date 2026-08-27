@@ -270,6 +270,118 @@ function emitTo(job: GenerationJob, event: string, data: string): void {
   }
 }
 
+// ---------------- Chat title generator ----------------
+
+function isDefaultChatTitle(chat: Chat): boolean {
+  const t = chat.title.trim()
+  if (t === 'New chat') return true
+  if (chat.seq != null && t === `Chat ${chat.seq}`) return true
+  if (/^Chat #?\d+$/.test(t)) return true
+  return false
+}
+
+function heuristicTitle(content: string): string {
+  const cleaned = content.replace(/\s+/g, ' ').trim()
+  if (!cleaned) return 'New chat'
+  let words = cleaned.split(' ').slice(0, 6).join(' ')
+  if (words.length > 50) words = words.slice(0, 47) + '...'
+  words = words.replace(/[:\.!\?]+$/, '')
+  if (words.length < 3) words = cleaned.slice(0, 40)
+  // Capitalize first letter of each word for a title-like look, keep rest as is
+  const titled = words
+    .split(' ')
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ')
+  return titled.slice(0, 50)
+}
+
+function sanitizeLLMTitle(raw: string): string | null {
+  let t = raw.trim()
+  // strip surrounding quotes
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) t = t.slice(1, -1).trim()
+  // strip common prefix
+  t = t.replace(/^(title\s*:\s*)/i, '').trim()
+  t = t.replace(/^["'`]+|["'`]+$/g, '').trim()
+  // first line only
+  t = t.split('\n')[0].trim()
+  // remove trailing period
+  t = t.replace(/[.。]+$/, '').trim()
+  if (t.length < 2 || t.length > 60) return null
+  // ensure not too generic like "Chat Title"
+  if (/^(untitled|new chat|chat title)$/i.test(t)) return null
+  return t.slice(0, 50)
+}
+
+function chatTitleEndpoint(baseUrl: string): string {
+  const clean = baseUrl.replace(/\/+$/, '')
+  if (/\/chat\/completions$/.test(clean)) return clean
+  return clean + '/chat/completions'
+}
+
+async function generateChatTitleViaLLM(
+  provider: { baseUrl: string; apiKey: string },
+  model: string,
+  userContent: string
+): Promise<string | null> {
+  const prompt = `Generate a concise chat title (3-6 words, max 40 characters, Title Case, no quotes, no period, no prefix) for this user prompt. Only output the title.\n\nUser prompt: "${userContent.slice(0, 400).replace(/"/g, "'")}"`
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: 'You are a chat title generator. Output only the title.' },
+      { role: 'user', content: prompt }
+    ],
+    max_tokens: 30,
+    temperature: 0.4,
+    stream: false
+  }
+  try {
+    const res = await fetch(chatTitleEndpoint(provider.baseUrl), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${provider.apiKey}`
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!res.ok) return null
+    const data: any = await res.json().catch(() => null)
+    const raw = data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? ''
+    if (typeof raw !== 'string' || !raw.trim()) return null
+    return sanitizeLLMTitle(raw)
+  } catch {
+    return null
+  }
+}
+
+async function generateAndPersistTitle(
+  chat: Chat,
+  userContent: string,
+  provider: { baseUrl: string; apiKey: string },
+  model: string
+): Promise<void> {
+  if (!isDefaultChatTitle(chat)) return
+  // Only generate on first user message; if chat already has many messages but still default, we still allow one attempt
+  const count = messagesOf(chat.id).length
+  // heuristic: if count > 3 (multiple turns) and still default, still generate from first user message but use current prompt as fallback
+  // Allow generation if count <= 5 to avoid overwriting later deliberate default
+  if (count > 5) return
+  let title: string | null = null
+  if (provider?.baseUrl && provider?.apiKey && model) {
+    title = await generateChatTitleViaLLM(provider, model, userContent)
+  }
+  if (!title) title = heuristicTitle(userContent)
+  if (!title || title === chat.title) return
+  // avoid race: re-check default before overwrite (user may have renamed in the meantime)
+  if (!isDefaultChatTitle(chat)) return
+  chat.title = title
+  // touchChat would update updatedAt to now, but we want to preserve original ordering somewhat? Use touch.
+  chat.updatedAt = new Date().toISOString()
+  saveDb()
+  const job = generations.get(chat.id)
+  if (job) emitTo(job, 'chat_title', JSON.stringify({ chatId: chat.id, title: chat.title, seq: chat.seq }))
+}
+
 // Persistence failures must never leave subscribers hanging without a terminal event.
 async function persistAssistantSafe(job: GenerationJob, content: string, isError: boolean): Promise<void> {
   try {
@@ -469,6 +581,12 @@ app.post('/api/chats/:id/messages', async (c) => {
     createdAt: new Date().toISOString()
   }
   db.messages.push(userMsg)
+  // Ensure legacy chats without seq get one assigned now
+  if (chat.seq == null || !Number.isInteger(chat.seq)) {
+    chat.seq = nextChatSeq(chat.projectId)
+    // keep title in sync if it was the generic placeholder before migration
+    if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
+  }
   touchChat(chat)
   saveDb()
 
@@ -491,6 +609,9 @@ app.post('/api/chats/:id/messages', async (c) => {
     listeners: new Set()
   }
   generations.set(chat.id, job)
+
+  // Fire-and-forget chat title generation (AI understands prompt and numbers the chat)
+  void generateAndPersistTitle(chat, content, provider, resolvedModel.model).catch(() => {})
 
   const agent: AgentSpec | null = project ? { projectPath: project.path } : null
 
