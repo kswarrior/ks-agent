@@ -1646,39 +1646,8 @@ textarea {
   display: block;
 }
 
-/* Responsive for preview sidebar */
-@media (max-width: 1199px) {
-  .psb {
-    position: fixed;
-    top: var(--header-h);
-    bottom: 0;
-    right: 0;
-    z-index: 70;
-    transform: translateX(105%);
-    transition: transform 0.2s ease;
-    box-shadow: -24px 0 48px rgba(0, 0, 0, 0.7);
-    max-height: calc(100vh - var(--header-h));
-  }
-
-  .psb.open {
-    transform: translateX(0);
-  }
-
-  .psb-scrim.show {
-    display: block;
-    position: fixed;
-    inset: var(--header-h) 0 0 0;
-    background: rgba(0, 0, 0, 0.72);
-    z-index: 65;
-    animation: fade 0.15s ease;
-  }
-}
-
+/* Preview sidebar always overlays — on desktop it sits over the right sidebar (z-index 75 vs rsb 70), on mobile with scrim */
 @media (min-width: 1200px) {
-  .psb-toggle {
-    display: inline-flex;
-  }
-
   .psb-scrim {
     display: none !important;
   }
