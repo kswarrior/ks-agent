@@ -50,6 +50,7 @@ function KsAgent() {
   const [activities, setActivities] = useState<Activity[]>([])
   const subsRef = useRef(new Map<string, AbortController>())
   const activeChatIdRef = useRef<string | null>(null)
+  const activeProjectIdRef = useRef<string | null>(null)
   const skipLoadForRef = useRef<string | null>(null)
   const creatingChatRef = useRef(false)
 
@@ -59,6 +60,10 @@ function KsAgent() {
   useEffect(() => {
     activeChatIdRef.current = activeChatId
   }, [activeChatId])
+
+  useEffect(() => {
+    activeProjectIdRef.current = activeProjectId
+  }, [activeProjectId])
 
   // ---- initial load ----
   useEffect(() => {

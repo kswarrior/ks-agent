@@ -143,10 +143,12 @@ app.post('/api/projects/:id/chats', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const now = new Date().toISOString()
   const seq = nextChatSeq(project.id)
+  const rawTitle = String(body.title ?? '').trim()
+  const title = !rawTitle || rawTitle === 'New chat' ? `Chat ${seq}` : rawTitle
   const chat: Chat = {
     id: newId(),
     projectId: project.id,
-    title: String(body.title ?? '').trim() || `Chat ${seq}`,
+    title,
     seq,
     createdAt: now,
     updatedAt: now
