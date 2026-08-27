@@ -687,11 +687,15 @@ app.post('/api/settings/models', async (c) => {
   const model = String(body.model ?? '').trim()
   const providerId = String(body.providerId ?? '').trim()
   const displayName = String(body.displayName ?? '').trim()
+  const maxTokens = body.maxTokens != null ? Number(body.maxTokens) : undefined
   if (!model) return c.json({ error: 'Model id is required' }, 400)
   if (!getDb().providers.some((p) => p.id === providerId)) {
     return c.json({ error: 'Select a valid provider' }, 400)
   }
-  const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}) }
+  if (maxTokens != null && (isNaN(maxTokens) || maxTokens < 1)) {
+    return c.json({ error: 'Max tokens must be a positive number' }, 400)
+  }
+  const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}), ...(maxTokens ? { maxTokens } : {}) }
   getDb().models.push(entry)
   saveDb()
   return c.json(entry, 201)

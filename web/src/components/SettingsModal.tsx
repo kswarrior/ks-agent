@@ -408,6 +408,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                         {m.displayName && m.displayName !== m.model && (
                           <small style={{ color: 'var(--text-faint)', marginLeft: 6 }}>{m.model}</small>
                         )}
+                        {m.maxTokens && (
+                          <small style={{ color: 'var(--text-faint)', marginLeft: 6 }}>({m.maxTokens.toLocaleString()} tokens)</small>
+                        )}
                       </span>
                       <button
                         className="icon-btn"
