@@ -29,6 +29,7 @@ export interface RetrySettings {
   maxDelayMs: number
   retryOnStatusCodes: number[]
   stopOnStatusCodes: number[]
+  alwaysRetry?: boolean
 }
 
 interface RawChunk {
@@ -56,7 +57,8 @@ async function openStream(
     baseDelayMs: 1200,
     maxDelayMs: 30000,
     retryOnStatusCodes: [429, 503, 502],
-    stopOnStatusCodes: [400, 401, 403, 404]
+    stopOnStatusCodes: [400, 401, 403, 404],
+    alwaysRetry: false
   }
 
   let attempt = 0
@@ -94,13 +96,12 @@ async function openStream(
       const status = res.status
       const errorMsg = `Provider responded ${status}${detail ? `: ${detail}` : ''}`
 
-      if (settings.stopOnStatusCodes.includes(status)) {
+      if (!settings.alwaysRetry && settings.stopOnStatusCodes.includes(status)) {
         throw new Error(errorMsg)
       }
 
-      const shouldRetry = settings.enabled &&
-        settings.retryOnStatusCodes.includes(status) &&
-        attempt < settings.maxRetries
+      const isRetryable = !!settings.alwaysRetry || settings.retryOnStatusCodes.includes(status)
+      const shouldRetry = settings.enabled && isRetryable && attempt < settings.maxRetries
 
       if (!shouldRetry) {
         throw new Error(errorMsg)
