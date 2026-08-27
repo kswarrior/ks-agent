@@ -10,6 +10,7 @@ import { Readable } from 'node:stream'
 import * as pty from 'node-pty'
 import { WebSocketServer, WebSocket } from 'ws'
 import {
+  activitiesOf,
   chatsOf,
   findChat,
   findPlanForChat,
@@ -229,6 +230,8 @@ app.delete('/api/projects/:id', async (c) => {
   db.messages = db.messages.filter((m) => !chatIds.has(m.chatId))
   db.plans = db.plans.filter((p) => !chatIds.has(p.chatId))
   db.questions = db.questions.filter((q) => !chatIds.has(q.chatId))
+  // @ts-ignore - activities may not exist in old DB files
+  db.activities = (db.activities || []).filter((a: any) => !chatIds.has(a.chatId))
   for (const cid of chatIds) {
     generations.get(cid)?.controller.abort()
     generations.delete(cid)
@@ -290,6 +293,8 @@ app.delete('/api/chats/:id', (c) => {
   db.messages = db.messages.filter((m) => m.chatId !== id)
   db.plans = db.plans.filter((p) => p.chatId !== id)
   db.questions = db.questions.filter((q) => q.chatId !== id)
+  // @ts-ignore
+  db.activities = (db.activities || []).filter((a: any) => a.chatId !== id)
   generations.get(id)?.controller.abort()
   generations.delete(id)
   saveDb()
@@ -302,6 +307,14 @@ app.get('/api/chats/:id/plan', (c) => {
   const chat = findChat(c.req.param('id'))
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
   return c.json(findPlanForChat(chat.id) ?? null)
+})
+
+// ---------------- Activities ----------------
+
+app.get('/api/chats/:id/activities', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  return c.json(activitiesOf(chat.id))
 })
 
 // ---------------- Questions ----------------
@@ -704,6 +717,10 @@ app.post('/api/chats/:id/messages', async (c) => {
     if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
   }
   touchChat(chat)
+  // Clear previous activities for this chat so next run starts fresh (like client does)
+  // Persisted per chat, so refresh after sending shows empty until new activity arrives
+  // @ts-ignore
+  db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
   saveDb()
 
   // Resolve the system prompt: per-model override > global setting > built-in default.
