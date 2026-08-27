@@ -14,6 +14,7 @@ interface RightSidebarProps {
   activeProject: Project | null
   plan: Plan | null
   activities: Activity[]
+  streaming: boolean
   onClose: () => void
 }
 
