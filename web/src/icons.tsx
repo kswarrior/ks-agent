@@ -383,3 +383,11 @@ export const IconTerminal = ({ size, className, style }: IconProps) => (
     <line x1="12" y1="19" x2="20" y2="19" />
   </svg>
 )
+
+export const IconMonitor = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <rect x="2" y="3" width="20" height="14" rx="2" />
+    <line x1="8" y1="21" x2="16" y2="21" />
+    <line x1="12" y1="17" x2="12" y2="21" />
+  </svg>
+)
