@@ -138,7 +138,8 @@ export function FilesPane({ projectId }: FilesPaneProps) {
       return
     }
     setRoomMenu(null)
-    setRowMenu({ entry, pos: placeMenu(e.currentTarget.getBoundingClientRect(), 96) })
+    const menuHeight = entry.type === 'file' ? 130 : 96
+    setRowMenu({ entry, pos: placeMenu(e.currentTarget.getBoundingClientRect(), menuHeight) })
   }
 
   function openDir(name: string) {
@@ -286,8 +287,6 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   }
 
   const filtered = entries.filter((e) => e.name.toLowerCase().includes(query.trim().toLowerCase()))
-  const selIsFile =
-    !!selected && entries.some((e) => e.type === 'file' && joinRel(dir, e.name) === selected)
 
   if (!projectId) {
     return <div className="dd-empty">Select a project to browse its files</div>
@@ -515,13 +514,12 @@ export function FilesPane({ projectId }: FilesPaneProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              style={{ opacity: selIsFile ? 1 : 0.6 }}
               onClick={() => {
                 setRoomMenu(null)
                 triggerDownload()
               }}
             >
-              <IconDownload size={15} /> Download
+              <IconDownload size={15} /> Download ZIP
             </button>
             <button
               onClick={() => {
@@ -551,6 +549,24 @@ export function FilesPane({ projectId }: FilesPaneProps) {
             style={{ top: rowMenu.pos.top, left: rowMenu.pos.left }}
             onClick={(e) => e.stopPropagation()}
           >
+            {rowMenu.entry.type === 'file' && (
+              <button
+                onClick={() => {
+                  const entry = rowMenu.entry
+                  const rel = joinRel(dir, entry.name)
+                  setRowMenu(null)
+                  if (!projectId) return
+                  const a = document.createElement('a')
+                  a.href = api.downloadUrl(projectId, rel)
+                  a.download = entry.name
+                  document.body.appendChild(a)
+                  a.click()
+                  a.remove()
+                }}
+              >
+                <IconDownload size={15} /> Download
+              </button>
+            )}
             <button
               onClick={() => {
                 const entry = rowMenu.entry
