@@ -112,6 +112,40 @@ const dbFile = path.join(dataDir, 'db.json')
 
 let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404] } }
 
+function ensureChatSeqs(chats: Chat[]): boolean {
+  let changed = false
+  const byProject = new Map<string, Chat[]>()
+  for (const c of chats) {
+    if (!byProject.has(c.projectId)) byProject.set(c.projectId, [])
+    byProject.get(c.projectId)!.push(c)
+  }
+  for (const [, list] of byProject) {
+    list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    const used = new Set<number>()
+    for (const c of list) if (Number.isInteger(c.seq) && (c.seq as number) > 0) used.add(c.seq as number)
+    let next = 1
+    while (used.has(next)) next++
+    for (const c of list) {
+      if (!Number.isInteger(c.seq) || (c.seq as number) <= 0 || used.has(c.seq as number) === false) {
+        // if already valid integer we keep it, otherwise assign next
+        if (Number.isInteger(c.seq) && (c.seq as number) > 0) continue
+        while (used.has(next)) next++
+        c.seq = next
+        used.add(next)
+        changed = true
+        next++
+        while (used.has(next)) next++
+      }
+    }
+  }
+  return changed
+}
+
+export function nextChatSeq(projectId: string): number {
+  const seqs = db.chats.filter((c) => c.projectId === projectId).map((c) => c.seq).filter((n): n is number => Number.isInteger(n) && (n as number) > 0)
+  return seqs.length ? Math.max(...seqs) + 1 : 1
+}
+
 export function loadDb(): void {
   try {
     const raw = fs.readFileSync(dbFile, 'utf8')
@@ -150,6 +184,9 @@ export function loadDb(): void {
               : defaultRetrySettings.stopOnStatusCodes
           }
         : defaultRetrySettings
+    }
+    if (ensureChatSeqs(db.chats)) {
+      try { saveDb() } catch {}
     }
   } catch {
     const defaultRetrySettings: RetrySettings = {
