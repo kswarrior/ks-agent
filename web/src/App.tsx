@@ -34,6 +34,7 @@ function KsAgent() {
   const [rsbOpen, setRsbOpen] = useState(() => window.matchMedia('(min-width: 1200px)').matches)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
 
   // Keep the right workspace panel always open whenever the screen is wide
   // enough for it to fit next to the left sidebar and the composer input.
