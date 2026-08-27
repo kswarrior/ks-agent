@@ -117,11 +117,11 @@ export function loadDb(): void {
     const parsed = JSON.parse(raw)
     const defaultRetrySettings: RetrySettings = {
       enabled: true,
-      maxRetries: 3,
-      baseDelayMs: 1000,
+      maxRetries: 5,
+      baseDelayMs: 1200,
       maxDelayMs: 30000,
-      retryOnStatusCodes: [429, 503],
-      stopOnStatusCodes: [404]
+      retryOnStatusCodes: [429, 502, 503],
+      stopOnStatusCodes: [400, 401, 403, 404]
     }
     db = {
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
@@ -153,11 +153,11 @@ export function loadDb(): void {
   } catch {
     const defaultRetrySettings: RetrySettings = {
       enabled: true,
-      maxRetries: 3,
-      baseDelayMs: 1000,
+      maxRetries: 5,
+      baseDelayMs: 1200,
       maxDelayMs: 30000,
-      retryOnStatusCodes: [429, 503],
-      stopOnStatusCodes: [404]
+      retryOnStatusCodes: [429, 502, 503],
+      stopOnStatusCodes: [400, 401, 403, 404]
     }
     db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], retrySettings: defaultRetrySettings }
   }
