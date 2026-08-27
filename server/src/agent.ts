@@ -339,6 +339,66 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       return ok(`OK step ${idx} marked complete`, `done: ${plan.steps[idx].title.slice(0, 60)}`)
     }
 
+    case 'ask_question': {
+      const header = typeof args.header === 'string' ? args.header.trim().slice(0, 40) : ''
+      const question = typeof args.question === 'string' ? args.question.trim() : ''
+      if (!question) return err('question is required')
+      if (question.length < 5 || question.length > 500) return err('question must be 5-500 chars')
+      const rawOptions = Array.isArray(args.options) ? args.options : []
+      const options = rawOptions.map((o: unknown) => String(o ?? '').trim()).filter(Boolean).slice(0, 6)
+      const allowCustom = args.allow_custom !== false
+      if (options.length === 0 && !allowCustom) return err('provide at least one option or allow custom answer')
+      if (options.some((o) => o.length > 80)) return err('each option must be <=80 chars')
+      if (options.length > 0 && options.length < 1) return err('options invalid')
+      const customPlaceholder =
+        typeof args.custom_placeholder === 'string' ? args.custom_placeholder.trim().slice(0, 80) : undefined
+      const qHeader = (header || 'Question').slice(0, 40)
+      const db = getDb()
+      const now = new Date().toISOString()
+      const qId = newId()
+      const q: import('./store.js').Question = {
+        id: qId,
+        chatId: ctx.chatId,
+        header: qHeader,
+        question,
+        options,
+        allowCustom,
+        customPlaceholder,
+        status: 'pending',
+        createdAt: now,
+        toolCallId: ctx.toolCallId
+      }
+      db.questions.push(q)
+      saveDb()
+      ctx.onEvent('question', JSON.stringify(q))
+
+      let answer: string
+      try {
+        answer = await new Promise<string>((resolve, reject) => {
+          const onAbort = () => {
+            pendingQuestionResolvers.delete(qId)
+            reject(abortError())
+          }
+          if (ctx.signal.aborted) {
+            onAbort()
+            return
+          }
+          ctx.signal.addEventListener('abort', onAbort, { once: true })
+          pendingQuestionResolvers.set(qId, (ans: string) => {
+            ctx.signal.removeEventListener('abort', onAbort)
+            resolve(ans)
+          })
+        })
+      } catch (e: any) {
+        if (e?.name === 'AbortError') throw e
+        return err(String(e?.message || e))
+      }
+
+      const isOption = options.includes(answer)
+      const display = isOption ? `selected "${answer}"` : `answered "${answer}"`
+      return ok(`User ${display}: "${answer}"`, `user ${display.slice(0, 80)}`)
+    }
+
     default:
       return err(`unknown tool "${name}"`)
   }
@@ -382,7 +442,7 @@ function markWorkingStep(ctx: ToolContext): void {
 
 export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutcome> {
   const messages: LLMMessage[] = [...opts.history]
-  const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent }
+  const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal }
   let content = ''
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -419,6 +479,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         'tool',
         JSON.stringify({ callId: call.id, name: call.name, args: call.args.slice(0, 300) })
       )
+      ctx.toolCallId = call.id
       const res = await executeTool(call.name, call.args, ctx)
       opts.onEvent(
         'tool_result',
