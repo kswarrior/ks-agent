@@ -407,7 +407,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
               <button className="btn" disabled={editLoading || editSaving} onClick={() => { setSelected(null); setEditContent(''); }}>
                 Cancel
               </button>
-              <button className="btn btn-primary" disabled={editLoading || editSaving || editLoading} onClick={() => saveFileContent(selected)}>
+              <button className="btn btn-primary" disabled={editLoading || editSaving} onClick={() => saveFileContent(selected)}>
                 {editSaving ? 'Saving…' : 'Save'}
               </button>
             </div>
