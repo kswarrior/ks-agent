@@ -339,11 +339,21 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       if (!Number.isInteger(idx) || idx < 0 || idx >= plan.steps.length) {
         return err(`index out of range (plan has ${plan.steps.length} steps)`)
       }
-      plan.steps[idx].status = 'done'
+      const step = plan.steps[idx]
+      if (step.status === 'done') {
+        return ok(`OK step ${idx} already complete`, `done: ${step.title.slice(0, 60)}`)
+      }
+      // Enforce sequential completion: all previous steps must be done
+      for (let i = 0; i < idx; i++) {
+        if (plan.steps[i].status !== 'done') {
+          return err(`cannot complete step ${idx} before step ${i} is done — complete steps sequentially`)
+        }
+      }
+      step.status = 'done'
       plan.updatedAt = new Date().toISOString()
       saveDb()
       ctx.onEvent('plan', JSON.stringify(plan))
-      return ok(`OK step ${idx} marked complete`, `done: ${plan.steps[idx].title.slice(0, 60)}`)
+      return ok(`OK step ${idx} marked complete`, `done: ${step.title.slice(0, 60)}`)
     }
 
     case 'ask_question': {
