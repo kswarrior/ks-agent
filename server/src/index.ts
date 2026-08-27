@@ -185,10 +185,44 @@ app.patch('/api/projects/:id', async (c) => {
   return c.json(project)
 })
 
-app.delete('/api/projects/:id', (c) => {
+app.delete('/api/projects/:id', async (c) => {
   const db = getDb()
   const idx = db.projects.findIndex((p) => p.id === c.req.param('id'))
   if (idx === -1) return c.json({ error: 'Project not found' }, 404)
+  const project = db.projects[idx]
+
+  // Determine whether to also delete the project folder from disk
+  let shouldDeleteFolder = false
+  const q = c.req.query('deleteFolder')
+  if (q === 'true' || q === '1') shouldDeleteFolder = true
+  else {
+    try {
+      const body = await c.req.json() as any
+      if (body && (body.deleteFolder === true || body.deleteFolder === 'true' || body.deleteFolder === '1')) {
+        shouldDeleteFolder = true
+      }
+    } catch {}
+  }
+
+  if (shouldDeleteFolder && project.path) {
+    const resolved = path.resolve(project.path)
+    const home = path.resolve(os.homedir())
+    if (resolved === '/' || resolved === home || resolved === path.resolve('/home')) {
+      return c.json({ error: 'Refusing to delete protected path: ' + resolved }, 400)
+    }
+    try {
+      if (fs.existsSync(resolved)) {
+        const stat = fs.statSync(resolved)
+        if (!stat.isDirectory()) {
+          return c.json({ error: 'Project path is not a directory' }, 400)
+        }
+        fs.rmSync(resolved, { recursive: true, force: true })
+      }
+    } catch (e: any) {
+      return c.json({ error: e?.message || 'Failed to delete project folder' }, 500)
+    }
+  }
+
   const [removed] = db.projects.splice(idx, 1)
   const chatIds = new Set(db.chats.filter((ch) => ch.projectId === removed.id).map((ch) => ch.id))
   db.chats = db.chats.filter((ch) => ch.projectId !== removed.id)

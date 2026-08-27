@@ -19,7 +19,10 @@ const json = (method: string, body: unknown): RequestInit => ({ method, body: JS
 export const listProjects = () => req<Project[]>('/api/projects')
 export const createProject = (p: { name: string; path: string; mkdir: boolean }) =>
   req<Project>('/api/projects', json('POST', p))
-export const deleteProject = (id: string) => req<{ ok: true }>(`/api/projects/${id}`, { method: 'DELETE' })
+export const deleteProject = (id: string, opts?: { deleteFolder?: boolean }) => {
+  const qs = opts?.deleteFolder ? '?deleteFolder=true' : ''
+  return req<{ ok: true }>(`/api/projects/${id}${qs}`, { method: 'DELETE' })
+}
 export const renameProject = (id: string, name: string) =>
   req<Project>(`/api/projects/${id}`, json('PATCH', { name }))
 
