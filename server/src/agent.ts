@@ -419,6 +419,8 @@ export interface AgentRunOptions {
   projectPath: string
   chatId: string
   signal: AbortSignal
+  /** Maximum tokens for LLM response (optional). */
+  maxTokens?: number
   /** Live text deltas for the UI. */
   onDelta: (text: string) => void
   /** Named SSE events forwarded verbatim to subscribed clients (tool, tool_result, plan). */

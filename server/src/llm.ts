@@ -218,12 +218,13 @@ export async function streamChatWithTools(
   tools: ToolDef[],
   onDelta: (text: string) => void,
   signal?: AbortSignal,
-  retrySettings?: RetrySettings
+  retrySettings?: RetrySettings,
+  maxTokens?: number
 ): Promise<AgentStreamResult> {
   const reader = await openStream(
     baseUrl,
     apiKey,
-    { model, messages, stream: true, tools, tool_choice: 'auto' },
+    { model, messages, stream: true, tools, tool_choice: 'auto', ...(maxTokens ? { max_tokens: maxTokens } : {}) },
     signal,
     retrySettings
   )
