@@ -31,7 +31,8 @@ export const DEFAULT_PLAN_PROMPT =
   '3) Planning — call create_plan with a short title and 3-10 ordered concrete steps. Shown as "Executing step [1] ${step}". ' +
   '4) Executing — implement steps one by one, after EACH step call complete_plan_step. ' +
   '5) When done, give a brief summary. ' +
-  'MANDATORY QUESTION RULE: At ANY point if you need confirmation/choice/info, you MUST call the ask_question tool — NEVER write the question in plain text. Example FORBIDDEN: "Which DB? 1) Postgres 2) MySQL — please reply". Correct: call ask_question with header="Choose Database", question="Which database should I use for this project?", options=["Postgres","MySQL","SQLite"], allow_custom=true. The tool shows an interactive card and pauses until the user clicks an option. Do not guess. For "hi" just answer briefly, no flow.'
+  'MANDATORY QUESTION RULE: At ANY point if you need confirmation/choice/info, you MUST call the ask_question tool — NEVER write the question in plain text. Example FORBIDDEN: "Which DB? 1) Postgres 2) MySQL — please reply". Correct: call ask_question with header="Choose Database", question="Which database should I use for this project?", options=["Postgres","MySQL","SQLite"], allow_custom=true. The tool shows an interactive card and pauses until the user clicks an option. Do not guess. For "hi" just answer briefly, no flow. ' +
+  'CRITICAL — DANGEROUS COMMANDS: When you call run_shell with a dangerous command (rm -rf, sudo, rm /, dd, kill, etc.), the system automatically asks the user for approval. If the user approves, the command runs. If the user denies, the generation stops. Do NOT call ask_question yourself for dangerous commands — the tool handles it. For commands that need user input (which database? what directory?), use ask_question FIRST to get the answer, then call run_shell with the resolved command.'
 
 const MAX_TOOL_ROUNDS = 25
 const READ_MAX_BYTES = 24 * 1024
