@@ -223,6 +223,9 @@ export const deleteTerminal = (id: string) =>
 export const execTerminal = (id: string, command: string) =>
   req<{ output: string; exitCode: number; cwd: string }>(`/api/terminals/${id}/exec`, json('POST', { command }))
 
+export const startPreview = (projectId: string) =>
+  req<{ url: string }>(`/api/projects/${projectId}/preview/start`, json('POST', {}))
+
 // Settings
 export const listProviders = () => req<Provider[]>('/api/settings/providers')
 export const createProvider = (p: { name: string; baseUrl: string; apiKey: string }) =>

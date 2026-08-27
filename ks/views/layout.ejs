@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title || 'KS Docs' %></title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="top-header">
+    <div class="header-left">
+      <button class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+      </button>
+      <a href="/" class="logo">
+        <i class="fas fa-book"></i> KS Docs
+      </a>
+    </div>
+    <nav class="header-nav">
+      <a href="/" class="nav-link <%= currentPage === 'dashboard' ? 'active' : '' %>">
+        <i class="fas fa-home"></i> Dashboard
+      </a>
+      <a href="/docs/introduction" class="nav-link <%= currentPage === 'docs' ? 'active' : '' %>">
+        <i class="fas fa-file-alt"></i> Docs
+      </a>
+      <a href="javascript:void(0)" class="nav-link">
+        <i class="fas fa-search"></i>
+      </a>
+    </nav>
+    <div class="header-right">
+      <a class="nav-link" href="https://ks-warrior.github.io/ks/" target="_blank">
+        <i class="fas fa-code"></i>
+      </a>
+    </div>
+  </header>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <h3 class="sidebar-title">Documentation</h3>
+      <ul class="sidebar-nav">
+        <li class="sidebar-item">
+          <a href="/docs/introduction" class="sidebar-link <%= (currentSection === 'introduction') ? 'active' : '' %>">
+            <i class="fas fa-angle-right"></i> Introduction
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="/docs/getting-started" class="sidebar-link <%= (currentSection === 'getting-started') ? 'active' : '' %>">
+            <i class="fas fa-angle-right"></i> Getting Started
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="/docs/api-reference" class="sidebar-link <%= (currentSection === 'api-reference') ? 'active' : '' %>">
+            <i class="fas fa-angle-right"></i> API Reference
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="/docs/configuration" class="sidebar-link <%= (currentSection === 'configuration') ? 'active' : '' %>">
+            <i class="fas fa-angle-right"></i> Configuration
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="/docs/deployment" class="sidebar-link <%= (currentSection === 'deployment') ? 'active' : '' %>">
+            <i class="fas fa-angle-right"></i> Deployment
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="/docs/faq" class="sidebar-link <%= (currentSection === 'faq') ? 'active' : '' %>">
+            <i class="fas fa-angle-right"></i> FAQ
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <div class="sidebar-section">
+      <h3 class="sidebar-title">Resources</h3>
+      <ul class="sidebar-nav">
+        <li class="sidebar-item">
+          <a href="#" class="sidebar-link">
+            <i class="fas fa-external-link-alt"></i> GitHub Repo
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#" class="sidebar-link">
+            <i class="fas fa-external-link-alt"></i> Issue Tracker
+          </a>
+        </li>
+        <li class="sidebar-item">
+          <a href="#" class="sidebar-link">
+            <i class="fas fa-external-link-alt"></i> Changelog
+          </a>
+        </li>
+      </ul>
+    </div>
+  </aside>
+
+  <main class="main-content" id="mainContent">
+    <%- body %>
+  </main>
+
+  <script>
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.getElementById('sidebarToggle');
+    const main = document.getElementById('mainContent');
+
+    toggle.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+    });
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+      if (window.innerWidth <= 768) {
+        if (!sidebar.contains(e.target) && !toggle.contains(e.target)) {
+          sidebar.classList.remove('open');
+        }
+      }
+    });
+  </script>
+</body>
+</html>
