@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Activity, Chat, Message, ModelEntry, Plan, Question } from '../types'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconRotate, IconSearch, IconSend, IconStop } from '../icons'
+import { IconChevronDown, IconRotate, IconSearch, IconSend, IconStop, IconCopy, IconClock, IconCheck } from '../icons'
 import { QuestionList } from './QuestionCard'
+import { useToast } from '../toast'
 
 function ClampedContent({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -27,6 +28,113 @@ function ClampedContent({ children }: { children: ReactNode }) {
         </button>
       )}
     </>
+  )
+}
+
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  if (ms < 1000) return `${ms}ms`
+  const totalSec = Math.floor(ms / 1000)
+  const msRem = ms % 1000
+  if (totalSec < 60) {
+    const sec = (ms / 1000).toFixed(ms < 10000 ? 1 : 0)
+    return `${sec}s`
+  }
+  const mins = Math.floor(totalSec / 60)
+  const secs = totalSec % 60
+  if (mins < 60) return secs ? `${mins}m ${secs}s` : `${mins}m`
+  const hrs = Math.floor(mins / 60)
+  const minsRem = mins % 60
+  return minsRem ? `${hrs}h ${minsRem}m` : `${hrs}h`
+}
+
+function formatTime(iso?: string): string {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' ' + d.toLocaleDateString()
+  } catch { return '' }
+}
+function formatTimeShort(iso?: string): string {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  } catch { return '' }
+}
+
+function AssistantMeta({ message }: { message: Message }) {
+  const toast = useToast()
+  const [copied, setCopied] = useState(false)
+
+  const modelLabel = (message.modelDisplayName?.trim() ? message.modelDisplayName.trim() : '') || message.model || ''
+  const providerLabel = message.providerName || ''
+  const startIso = message.startedAt
+  const endIso = message.finishedAt || message.createdAt
+  const durationMs = message.durationMs ?? (startIso && endIso ? Date.parse(endIso) - Date.parse(startIso) : undefined)
+  const durationStr = durationMs != null && Number.isFinite(durationMs) && durationMs >= 0 ? formatDuration(durationMs) : ''
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setCopied(true)
+      toast('Copied', 'success')
+      setTimeout(() => setCopied(false), 1400)
+    } catch {
+      toast('Copy failed', 'error')
+    }
+  }
+
+  return (
+    <div className="msg-meta">
+      <div className="msg-meta-row">
+        <button className="msg-meta-copy" onClick={handleCopy} title="Copy response">
+          {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+          <span>{copied ? 'Copied' : 'Copy'}</span>
+        </button>
+        {modelLabel && (
+          <span className="msg-meta-model" title={modelLabel !== message.model ? `${modelLabel} · ${message.model}` : modelLabel}>
+            <span className="msg-meta-label">Model</span>
+            <span className="msg-meta-value">{modelLabel}</span>
+            {providerLabel && <span className="msg-meta-provider">· {providerLabel}</span>}
+          </span>
+        )}
+        {!modelLabel && providerLabel && (
+          <span className="msg-meta-model">
+            <span className="msg-meta-label">Model</span>
+            <span className="msg-meta-value">{providerLabel}</span>
+          </span>
+        )}
+      </div>
+      {(startIso || endIso || durationStr) && (
+        <div className="msg-meta-row msg-meta-times">
+          <IconClock size={12} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
+          {startIso && (
+            <span title={formatTime(startIso)}>Started {formatTimeShort(startIso)}</span>
+          )}
+          {endIso && (
+            <>
+              <span className="msg-meta-dot">·</span>
+              <span title={formatTime(endIso)}>Ended {formatTimeShort(endIso)}</span>
+            </>
+          )}
+          {durationStr && (
+            <>
+              <span className="msg-meta-dot">·</span>
+              <span className="msg-meta-duration">{durationStr}</span>
+            </>
+          )}
+          {!durationStr && startIso && endIso && (
+            <>
+              <span className="msg-meta-dot">·</span>
+              <span>{formatDuration(Date.parse(endIso) - Date.parse(startIso))}</span>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -190,6 +298,7 @@ export function ChatView(props: Props) {
                   <ClampedContent>
                     <Markdown content={m.content} />
                   </ClampedContent>
+                  <AssistantMeta message={m} />
                 </div>
               )
             )}

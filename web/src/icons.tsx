@@ -412,3 +412,24 @@ export const IconPlay = ({ size, className, style }: IconProps) => (
     <polygon points="5 3 19 12 5 21 5 3" />
   </svg>
 )
+
+export const IconCopy = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M15 9V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+  </svg>
+)
+
+export const IconClock = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <circle cx="12" cy="12" r="9" />
+    <polyline points="12 7 12 12 15 15" />
+  </svg>
+)
+
+export const IconCheckCircle = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+)
