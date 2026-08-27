@@ -65,7 +65,7 @@ export function ChatView(props: Props) {
     if (stickToBottom.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [props.messages.length, props.streamText])
+  }, [props.messages.length, props.streamText, props.questions.length])
 
   function onScroll() {
     const el = scrollRef.current

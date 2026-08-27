@@ -49,7 +49,9 @@ function PlanView({ plan }: { plan: Plan }) {
   )
 }
 
-function TerminalPane({ projectId }: { projectId: string | null }) {
+function TerminalPane({ project }: { project: Project | null }) {
+  const projectId = project?.id ?? null
+  const projectPath = project?.path ?? ''
   const toast = useToast()
   const { confirm } = useDialogs()
   const [terminals, setTerminals] = useState<Terminal[]>([])
@@ -61,6 +63,12 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
   const [selected, setSelected] = useState<Terminal | null>(null)
   const [detailName, setDetailName] = useState('')
   const [detailBusy, setDetailBusy] = useState(false)
+  const [session, setSession] = useState<Terminal | null>(null)
+  const [histories, setHistories] = useState<Record<string, Array<{ command: string; output: string; exitCode: number }>>>({})
+  const [input, setInput] = useState('')
+  const [execBusy, setExecBusy] = useState(false)
+  const outputRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(async () => {
     if (!projectId) return
@@ -86,7 +94,21 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
     setBusy(false)
     setSelected(null)
     setDetailName('')
+    setSession(null)
+    setInput('')
   }, [projectId])
+
+  useEffect(() => {
+    if (session && outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight
+    }
+  }, [histories, session])
+
+  useEffect(() => {
+    if (session && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [session])
 
   const filtered = terminals.filter((t) => t.name.toLowerCase().includes(query.trim().toLowerCase()))
 
@@ -99,7 +121,6 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
       setNewName('')
       setShowCreate(false)
       await refresh()
-      // auto-open the newly created terminal like Files opens file/folder
       setSelected(created)
       setDetailName(created.name)
     } catch (e: any) {
@@ -109,9 +130,14 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
     }
   }
 
-  function openTerminal(terminal: Terminal) {
+  function openEdit(terminal: Terminal) {
     setSelected(terminal)
     setDetailName(terminal.name)
+  }
+
+  function openSession(terminal: Terminal) {
+    setSession(terminal)
+    setInput('')
   }
 
   async function handleRename() {
@@ -124,6 +150,8 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
       toast('Terminal renamed', 'success')
       setSelected(updated)
       setDetailName(updated.name)
+      // keep session in sync if same terminal is open
+      setSession((prev) => (prev?.id === updated.id ? updated : prev))
       await refresh()
     } catch (e: any) {
       toast(e.message, 'error')
@@ -145,6 +173,12 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
     try {
       await api.deleteTerminal(selected.id)
       toast('Terminal deleted', 'success')
+      setHistories((prev) => {
+        const next = { ...prev }
+        delete next[selected.id]
+        return next
+      })
+      if (session?.id === selected.id) setSession(null)
       setSelected(null)
       setDetailName('')
       await refresh()
@@ -155,8 +189,96 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
     }
   }
 
+  async function handleExec() {
+    if (!session || !input.trim() || execBusy) return
+    const command = input.trim()
+    if (command === 'clear') {
+      setHistories((prev) => ({ ...prev, [session.id]: [] }))
+      setInput('')
+      return
+    }
+    setExecBusy(true)
+    const prevHistory = histories[session.id] ?? []
+    // optimistic: show command immediately with placeholder
+    setHistories((prev) => ({
+      ...prev,
+      [session.id]: [...prevHistory, { command, output: '…', exitCode: 0 }],
+    }))
+    setInput('')
+    try {
+      const res = await api.execTerminal(session.id, command)
+      setHistories((prev) => {
+        const list = [...(prev[session.id] ?? [])]
+        // replace last placeholder
+        list[list.length - 1] = { command, output: res.output, exitCode: res.exitCode }
+        return { ...prev, [session.id]: list }
+      })
+    } catch (e: any) {
+      setHistories((prev) => {
+        const list = [...(prev[session.id] ?? [])]
+        list[list.length - 1] = { command, output: e.message || 'Failed to execute', exitCode: 1 }
+        return { ...prev, [session.id]: list }
+      })
+    } finally {
+      setExecBusy(false)
+      setTimeout(() => inputRef.current?.focus(), 0)
+    }
+  }
+
   if (!projectId) {
     return <div className="rsb-empty">Select a project to manage terminals</div>
+  }
+
+  if (session) {
+    const history = histories[session.id] ?? []
+    return (
+      <div className="tp tp-session-wrap">
+        <div className="fp-subhead" style={{ background: '#000', borderBottom: '1px solid #1a1a1a', margin: '-12px -12px 0 -12px', padding: '8px 12px' }}>
+          <button className="icon-btn" aria-label="Back to terminals" onClick={() => setSession(null)} style={{ color: '#e8e8e8' }}>
+            <IconChevronLeft size={17} />
+          </button>
+          <span style={{ color: '#e8e8e8', fontSize: 13 }}>{session.name}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b6b6b', fontFamily: 'ui-monospace, monospace', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={projectPath}>
+            {projectPath}
+          </span>
+        </div>
+        <div className="tp-session" ref={outputRef} onClick={() => inputRef.current?.focus()}>
+          <div className="tp-session-output">
+            {history.length === 0 && (
+              <div className="tp-session-hint">Type a command and press Enter. Try `ls`, `pwd`, `clear`.</div>
+            )}
+            {history.map((h, i) => (
+              <div key={i} className="tp-session-entry">
+                <div className="tp-session-line">
+                  <span className="tp-session-prompt">{projectPath} |</span>
+                  <span className="tp-session-cmd">{h.command}</span>
+                </div>
+                <pre className={`tp-session-out${h.exitCode !== 0 ? ' error' : ''}`}>{h.output}</pre>
+              </div>
+            ))}
+            {execBusy && history.length > 0 && history[history.length - 1]?.output === '…' && null}
+          </div>
+          <div className="tp-session-inputRow">
+            <span className="tp-session-prompt">{projectPath} |</span>
+            <input
+              ref={inputRef}
+              className="tp-session-input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleExec()
+                if (e.key === 'Escape') setSession(null)
+              }}
+              placeholder="enter command"
+              autoFocus
+              disabled={execBusy}
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (showCreate) {
@@ -217,18 +339,10 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
           </button>
         </div>
         <p className="fp-hint">Created {new Date(selected.createdAt).toLocaleString()}</p>
-        <div style={{ marginTop: 12, padding: '12px', background: 'var(--input)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', minHeight: 100, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-faint)', fontSize: 12 }}>
-            <IconTerminal size={14} />
-            <span>Terminal</span>
-            <span style={{ marginLeft: 'auto', fontFamily: 'ui-monospace, monospace', fontSize: 11 }}>{selected.id.slice(0, 8)}</span>
-          </div>
-          <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>
-            $ echo &quot;connected to {selected.name}&quot;
-            <br />
-            connected to {selected.name}
-          </div>
-        </div>
+        <button className="btn" style={{ width: '100%', marginTop: 8 }} onClick={() => { const t = selected; setSelected(null); setSession(t) }}>
+          <IconTerminal size={14} style={{ marginRight: 6 }} />
+          Open terminal
+        </button>
       </div>
     )
   }
@@ -268,6 +382,10 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
               <div
                 key={terminal.id}
                 className="tp-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => openSession(terminal)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSession(terminal) } }}
               >
                 <IconTerminal size={15} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
                 <span className="tp-name">{terminal.name}</span>
@@ -275,7 +393,7 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
                   className="icon-btn tp-action tp-edit"
                   aria-label="Edit terminal"
                   title="Edit terminal"
-                  onClick={() => openTerminal(terminal)}
+                  onClick={(e) => { e.stopPropagation(); openEdit(terminal) }}
                 >
                   <IconPencil size={14} />
                 </button>
@@ -288,6 +406,13 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
                     try {
                       await api.deleteTerminal(terminal.id)
                       toast('Terminal deleted', 'success')
+                      setHistories((prev) => {
+                        const next = { ...prev }
+                        delete next[terminal.id]
+                        return next
+                      })
+                      if (session?.id === terminal.id) setSession(null)
+                      if (selected?.id === terminal.id) { setSelected(null); setDetailName('') }
                       await refresh()
                     } catch (err: any) {
                       toast(err.message, 'error')
@@ -324,7 +449,7 @@ export function RightSidebar({ open, activeProject, plan, activities, onClose }:
 
         <div className="rsb-body">
           {tab === 'plan' && (plan ? <PlanView plan={plan} /> : <div className="rsb-empty">Nothing here yet</div>)}
-          {tab === 'terminal' && <TerminalPane projectId={activeProject?.id ?? null} />}
+          {tab === 'terminal' && <TerminalPane project={activeProject} />}
           {tab === 'activity' && <ActivityPane activities={activities} />}
           {tab === 'files' && <FilesPane projectId={activeProject?.id ?? null} />}
         </div>
