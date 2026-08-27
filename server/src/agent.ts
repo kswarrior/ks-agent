@@ -644,10 +644,6 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         const msg = String(e?.message || e)
         // if we already streamed some text for this round, don't retry (would duplicate)
         if (roundText.length > 0) throw e
-        // revert the content that was optimistically appended (should be 0 in this branch, but be safe)
-        if (roundText.length > 0) {
-          content = content.slice(0, -roundText.length)
-        }
         const isRetryableStatus = (opts.retrySettings?.retryOnStatusCodes ?? [429, 502, 503]).some((code) => msg.includes(String(code)))
         const isStopStatus = (opts.retrySettings?.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
         const shouldRetry = (opts.retrySettings?.enabled ?? true) && isRetryableStatus && !isStopStatus && attempt < maxAttempts

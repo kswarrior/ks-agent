@@ -141,13 +141,19 @@ function ensureChatSeqs(chats: Chat[]): boolean {
   for (const [, list] of byProject) {
     list.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     const used = new Set<number>()
-    for (const c of list) if (Number.isInteger(c.seq) && (c.seq as number) > 0) used.add(c.seq as number)
     let next = 1
-    while (used.has(next)) next++
     for (const c of list) {
-      if (!Number.isInteger(c.seq) || (c.seq as number) <= 0 || used.has(c.seq as number) === false) {
-        // if already valid integer we keep it, otherwise assign next
-        if (Number.isInteger(c.seq) && (c.seq as number) > 0) continue
+      const isValid = Number.isInteger(c.seq) && (c.seq as number) > 0
+      const val = c.seq as number
+      if (isValid && !used.has(val)) {
+        used.add(val)
+        if (val >= next) {
+          next = val + 1
+          while (used.has(next)) next++
+        } else {
+          while (used.has(next)) next++
+        }
+      } else {
         while (used.has(next)) next++
         c.seq = next
         used.add(next)
