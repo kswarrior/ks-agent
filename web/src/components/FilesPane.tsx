@@ -48,15 +48,13 @@ const KEYWORDS: Record<string, string[]> = {
 
 function highlightCode(code: string, lang: string): string {
   if (!code) return ''
-  // Escape FIRST - this is the key to XSS prevention
-  let working = escapeHtml(code)
   const placeholders: string[] = []
   const store = (s: string, cls: string) => {
     const token = `__HL_${placeholders.length}__`
-    placeholders.push(`<span class="${cls}">${s}</span>`)
+    placeholders.push(`<span class="${cls}">${escapeHtml(s)}</span>`)
     return token
   }
-  // Protect strings and comments by replacing with placeholders
+  let working = code
   working = working.replace(/`(?:\\.|[^`\\])*`/g, m => store(m, 'hl-string'))
   working = working.replace(/"(?:\\.|[^"\\])*"/g, m => store(m, 'hl-string'))
   working = working.replace(/'(?:\\.|[^'\\])*'/g, m => store(m, 'hl-string'))
@@ -66,22 +64,21 @@ function highlightCode(code: string, lang: string): string {
   }
   working = working.replace(/\/\*[\s\S]*?\*\//g, m => store(m, 'hl-comment'))
   working = working.replace(/<!--[\s\S]*?-->/g, m => store(m, 'hl-comment'))
-  // Now add syntax highlighting on the ALREADY ESCAPED content
+  working = working.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const kws = KEYWORDS[lang]
   if (kws && kws.length) {
     const pat = new RegExp(`\\b(${kws.join('|')})\\b`, 'g')
     working = working.replace(pat, '<span class="hl-keyword">$1</span>')
   }
-  working = working.replace(/\\b(\\d+(\\.\\d+)?)\\b/g, '<span class="hl-number">$1</span>')
-  working = working.replace(/\\b([A-Za-z_]\\w*)\\s*(?=\()/g, '<span class="hl-function">$1</span>')
+  working = working.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="hl-number">$1</span>')
+  working = working.replace(/\b([A-Za-z_]\w*)\s*(?=\()/g, '<span class="hl-function">$1</span>')
   if (lang === 'html' || lang === 'xml') {
-    working = working.replace(/(<\\/?)([\w-]+)/g, '$1<span class="hl-tag">$2</span>')
-    working = working.replace(/\\b([\w-:]+)(=)/g, '<span class="hl-attr">$1</span>$2')
+    working = working.replace(/(&lt;\/?)([\w-]+)/g, '$1<span class="hl-tag">$2</span>')
+    working = working.replace(/\b([\w-:]+)(=)/g, '<span class="hl-attr">$1</span>$2')
   }
   if (lang === 'css' || lang === 'scss' || lang === 'less') {
-    working = working.replace(/^(\\s*)([\w-]+)(\\s*:)/gm, '$1<span class="hl-attr">$2</span>$3')
+    working = working.replace(/^(\s*)([\w-]+)(\s*:)/gm, '$1<span class="hl-attr">$2</span>$3')
   }
-  // Restore protected strings/comments
   placeholders.forEach((html, i) => {
     const token = `__HL_${i}__`
     working = working.split(token).join(html)
