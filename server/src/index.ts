@@ -1334,29 +1334,276 @@ function isBlockedHost(hostname: string): boolean {
 
 // ---------------- Preview ----------------
 
+// Detect port from multiple sources: package.json dev script, vite/next config, env files
+function detectPreviewPort(projectPath: string): number {
+  let port = 3000
+  const packageJsonPath = path.join(projectPath, 'package.json')
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
+      const scripts: Record<string, string> = pkg.scripts ?? {}
+      const devLike = scripts.dev ?? scripts.start ?? scripts.preview ?? ''
+      if (devLike) {
+        const m1 = devLike.match(/--port[=\s]+(\d{2,5})/)
+        const m2 = devLike.match(/(?:^|\s)-p[=\s]+(\d{2,5})/)
+        const m3 = devLike.match(/:(\d{4})\b/)
+        const m4 = devLike.match(/PORT[=\s]+(\d{2,5})/)
+        const raw = m1?.[1] || m2?.[1] || m3?.[1] || m4?.[1]
+        if (raw) {
+          const n = parseInt(raw, 10)
+          if (n >= 1 && n <= 65535) port = n
+        }
+      }
+      // framework defaults: vite default 5173 if vite present
+      const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
+      if (deps['vite'] && port === 3000) {
+        // leave 5173 as vite default unless overridden by dev script
+        // check vite config for explicit port
+        let vitePort: number | null = null
+        for (const fname of ['vite.config.ts', 'vite.config.js', 'vite.config.mjs']) {
+          const vp = path.join(projectPath, fname)
+          if (fs.existsSync(vp)) {
+            try {
+              const content = fs.readFileSync(vp, 'utf8')
+              const mp = content.match(/port\s*:\s*(\d{2,5})/)
+              if (mp) vitePort = parseInt(mp[1], 10)
+            } catch {}
+          }
+        }
+        if (vitePort) port = vitePort
+        else if (!deps['next'] && !deps['react-scripts']) port = 5173
+      }
+      if (deps['next'] && port === 3000) port = 3000 // next default
+    } catch {}
+  }
+  // Also check vite.config outside of package.json case
+  if (port === 3000) {
+    for (const fname of ['vite.config.ts', 'vite.config.js', 'vite.config.mjs']) {
+      const vp = path.join(projectPath, fname)
+      if (fs.existsSync(vp)) {
+        try {
+          const content = fs.readFileSync(vp, 'utf8')
+          const mp = content.match(/port\s*:\s*(\d{2,5})/)
+          if (mp) {
+            const n = parseInt(mp[1], 10)
+            if (n >= 1 && n <= 65535) { port = n; break }
+          }
+        } catch {}
+      }
+    }
+  }
+  return port
+}
+
+async function isPortReachable(port: number, timeoutMs = 1500): Promise<boolean> {
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), timeoutMs)
+    const res = await fetch(`http://127.0.0.1:${port}/`, { signal: ctrl.signal, redirect: 'manual' } as any)
+    clearTimeout(t)
+    // any response (even 404) means port is listening
+    return !!res
+  } catch {
+    return false
+  }
+}
+
+const previewProcs = new Map<string, { port: number; child: ReturnType<typeof spawn> | null; startedAt: number }>()
+
+app.get('/api/projects/:id/preview/status', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const port = detectPreviewPort(project.path)
+  const running = await isPortReachable(port)
+  const proc = previewProcs.get(project.id)
+  return c.json({
+    port,
+    url: `http://127.0.0.1:${port}`,
+    proxiedUrl: `/api/projects/${project.id}/preview/proxy/`,
+    running,
+    managed: !!proc?.child
+  })
+})
+
 app.post('/api/projects/:id/preview/start', async (c) => {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
 
-  // Try to detect port from package.json dev script
-  let detectedPort = 3000
-  const packageJsonPath = path.join(project.path, 'package.json')
+  const detectedPort = detectPreviewPort(project.path)
 
-  if (fs.existsSync(packageJsonPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
-      if (pkg.scripts?.dev) {
-        const devScript = pkg.scripts.dev
-        const portMatch = devScript.match(/--port\s+(\d+)|-p\s+(\d+)|:(\d{4})/)
-        if (portMatch) {
-          detectedPort = parseInt(portMatch[1] || portMatch[2] || portMatch[3], 10)
-        }
-      }
-    } catch {}
+  // If already reachable, return immediately
+  if (await isPortReachable(detectedPort, 1000)) {
+    return c.json({
+      port: detectedPort,
+      url: `http://127.0.0.1:${detectedPort}`,
+      proxiedUrl: `/api/projects/${project.id}/preview/proxy/`,
+      running: true
+    })
   }
 
-  return c.json({ port: detectedPort })
+  // Try to auto-start dev server if package.json has dev script
+  const packageJsonPath = path.join(project.path, 'package.json')
+  let hasDevScript = false
+  try {
+    if (fs.existsSync(packageJsonPath)) {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
+      hasDevScript = !!pkg.scripts?.dev
+    }
+  } catch {}
+
+  if (hasDevScript && !previewProcs.get(project.id)?.child) {
+    try {
+      const child = spawn('npm', ['run', 'dev', '--', '--host', '0.0.0.0', '--port', String(detectedPort)], {
+        cwd: project.path,
+        shell: true,
+        detached: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PORT: String(detectedPort), HOST: '0.0.0.0' } as any
+      })
+      previewProcs.set(project.id, { port: detectedPort, child, startedAt: Date.now() })
+      child.on('exit', () => {
+        const cur = previewProcs.get(project.id)
+        if (cur?.child === child) previewProcs.delete(project.id)
+      })
+      child.on('error', () => {
+        const cur = previewProcs.get(project.id)
+        if (cur?.child === child) previewProcs.delete(project.id)
+      })
+      // Wait up to 8s for port to become reachable
+      for (let i = 0; i < 16; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        if (await isPortReachable(detectedPort, 800)) {
+          return c.json({
+            port: detectedPort,
+            url: `http://127.0.0.1:${detectedPort}`,
+            proxiedUrl: `/api/projects/${project.id}/preview/proxy/`,
+            running: true,
+            started: true
+          })
+        }
+        if (child.exitCode !== null) break
+      }
+      // Even if not yet reachable, return proxied url so frontend can retry/poll
+      return c.json({
+        port: detectedPort,
+        url: `http://127.0.0.1:${detectedPort}`,
+        proxiedUrl: `/api/projects/${project.id}/preview/proxy/`,
+        running: false,
+        started: true,
+        message: 'Dev server starting…'
+      })
+    } catch (e: any) {
+      return c.json({
+        port: detectedPort,
+        url: `http://127.0.0.1:${detectedPort}`,
+        proxiedUrl: `/api/projects/${project.id}/preview/proxy/`,
+        running: false,
+        error: e?.message || 'Failed to start dev server'
+      })
+    }
+  }
+
+  return c.json({
+    port: detectedPort,
+    url: `http://127.0.0.1:${detectedPort}`,
+    proxiedUrl: `/api/projects/${project.id}/preview/proxy/`,
+    running: false,
+    ...(hasDevScript ? {} : { message: 'No dev server running. Start it with: npm run dev' })
+  })
 })
+
+app.post('/api/projects/:id/preview/stop', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const entry = previewProcs.get(project.id)
+  if (entry?.child) {
+    try { entry.child.kill('SIGTERM') } catch {}
+    previewProcs.delete(project.id)
+  }
+  return c.json({ ok: true })
+})
+
+// Reverse-proxy for preview: forwards to http://127.0.0.1:<port> so iframe can use same origin
+// Must be registered before the static fallback.
+app.all('/api/projects/:id/preview/proxy', async (c) => proxyPreview(c, ''))
+app.all('/api/projects/:id/preview/proxy/*', async (c) => {
+  const suffix = c.req.path.replace(/^\/api\/projects\/[^/]+\/preview\/proxy\/?/, '')
+  return proxyPreview(c, suffix)
+})
+
+async function proxyPreview(c: any, suffix: string): Promise<Response> {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const port = detectPreviewPort(project.path)
+  const query = c.req.query() as Record<string, string>
+  const qs = new URLSearchParams(query).toString()
+  let targetPath = '/' + suffix
+  // preserve original query string if any leftover
+  const url = new URL(c.req.url)
+  const rawQuery = url.search
+  if (qs && !rawQuery) targetPath += '?' + qs
+  else if (rawQuery) targetPath = '/' + suffix + rawQuery
+  // ensure we don't double-slash
+  targetPath = targetPath.replace(/\/\//g, '/')
+  if (!targetPath.startsWith('/')) targetPath = '/' + targetPath
+  const target = `http://127.0.0.1:${port}${targetPath}`
+
+  // Quick reachability check to give helpful error instead of hanging
+  if (!(await isPortReachable(port, 800))) {
+    return c.json({ error: `Preview not reachable on port ${port}. Run "npm run dev" in ${project.path}` }, 502)
+  }
+
+  try {
+    const method = c.req.method
+    const headers = new Headers()
+    // copy safe headers
+    for (const [k, v] of Object.entries(c.req.header())) {
+      const lk = k.toLowerCase()
+      if (['host', 'connection', 'content-length'].includes(lk)) continue
+      if (typeof v === 'string') headers.set(k, v)
+    }
+    // For proxy, we need to forward body if present
+    let body: BodyInit | undefined
+    if (!['GET', 'HEAD'].includes(method)) {
+      try { body = await c.req.arrayBuffer() as any } catch {}
+    }
+    const proxied = await fetch(target, {
+      method,
+      headers,
+      body,
+      redirect: 'manual'
+    } as any)
+
+    // Build response headers, filter hop-by-hop and security headers that break iframe embedding
+    const outHeaders = new Headers()
+    proxied.headers.forEach((v: string, k: string) => {
+      const lk = k.toLowerCase()
+      if (['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(lk)) return
+      if (lk === 'x-frame-options') return // allow embedding
+      if (lk === 'content-security-policy') return // strip to allow iframe
+      outHeaders.set(k, v)
+    })
+    // Ensure we allow framing from same origin
+    outHeaders.set('X-Frame-Options', 'ALLOWALL')
+
+    // Handle redirect location rewriting: map absolute localhost:port redirects back to proxied path
+    const location = proxied.headers.get('location')
+    if (location) {
+      try {
+        const locUrl = new URL(location, target)
+        if (locUrl.hostname === '127.0.0.1' && String(locUrl.port) === String(port)) {
+          const newLoc = `/api/projects/${project.id}/preview/proxy${locUrl.pathname}${locUrl.search}`
+          outHeaders.set('location', newLoc)
+        }
+      } catch {}
+    }
+
+    const buf = await proxied.arrayBuffer()
+    return new Response(buf, { status: proxied.status, headers: outHeaders })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Proxy fetch failed' }, 502)
+  }
+}
 
 // ---------------- Static frontend ----------------
 
