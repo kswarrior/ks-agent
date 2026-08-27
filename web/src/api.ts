@@ -62,7 +62,7 @@ export interface StreamHandlers {
   onSnapshot?: (text: string) => void
   onDelta: (text: string) => void
   onTool?: (tool: { callId: string; name: string; args: string }) => void
-  onToolResult?: (result: { callId: string; ok: boolean; summary: string }) => void
+  onToolResult?: (result: { callId: string; ok: boolean; summary: string; result?: string }) => void
   onPlan?: (plan: Plan) => void
   onQuestion?: (question: Question) => void
   onChatTitle?: (data: { chatId: string; title: string; seq?: number }) => void

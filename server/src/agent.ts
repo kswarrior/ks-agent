@@ -564,7 +564,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       const res = await executeTool(call.name, call.args, ctx)
       opts.onEvent(
         'tool_result',
-        JSON.stringify({ callId: call.id, ok: res.ok, summary: res.summary })
+        JSON.stringify({ callId: call.id, ok: res.ok, summary: res.summary, result: res.result })
       )
       messages.push({ role: 'tool', tool_call_id: call.id, content: res.result })
     }

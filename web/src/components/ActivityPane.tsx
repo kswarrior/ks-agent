@@ -131,13 +131,14 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
     return sortedActivities.filter((a) => a.toolType === filter)
   }, [sortedActivities, filter])
 
-  // Dropdown options: All, Write, Read, Edit — exact order requested
+  // Dropdown options: All, Write, Read, Edit, Shell — per latest request (write/read/shell etc)
   const dropdownFilters: Array<{ key: FilterKey; label: string; count: number }> = useMemo(() => {
     return [
       { key: 'all' as FilterKey, label: 'All', count: counts.all || 0 },
       { key: 'write_file' as FilterKey, label: 'Write', count: counts['write_file'] || 0 },
       { key: 'read_file' as FilterKey, label: 'Read', count: counts['read_file'] || 0 },
       { key: 'edit_file' as FilterKey, label: 'Edit', count: counts['edit_file'] || 0 },
+      { key: 'run_shell' as FilterKey, label: 'Shell', count: counts['run_shell'] || 0 },
     ]
   }, [counts])
 

@@ -235,14 +235,14 @@ function KsAgent() {
               setActivities((prev) => [...prev, activity])
             },
             onToolResult: (result) => {
-              const { callId, ok, summary } = result
+              const { callId, ok, summary, result: fullResult } = result as { callId: string; ok: boolean; summary: string; result?: string }
               const pending = pendingTools.get(callId)
               pendingTools.delete(callId)
               if (pending) {
                 setActivities((prev) =>
                   prev.map((a) =>
                     a.toolCallId === callId
-                      ? { ...a, summary, ok, result: summary }
+                      ? { ...a, summary, ok, result: fullResult ?? summary }
                       : a
                   )
                 )
