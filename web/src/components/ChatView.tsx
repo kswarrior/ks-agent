@@ -71,8 +71,12 @@ function AssistantMeta({ message }: { message: Message }) {
 
   const modelLabel = (message.modelDisplayName?.trim() ? message.modelDisplayName.trim() : '') || message.model || ''
   const providerLabel = message.providerName || ''
+  const displayModel = modelLabel || providerLabel
+  const fullModelTitle = modelLabel && message.model && modelLabel !== message.model ? `${modelLabel} · ${message.model}` : modelLabel || providerLabel
   const startIso = message.startedAt
   const endIso = message.finishedAt || message.createdAt
+  const startShort = formatTimeShort(startIso)
+  const endShort = formatTimeShort(endIso)
   const durationMs = message.durationMs ?? (startIso && endIso ? Date.parse(endIso) - Date.parse(startIso) : undefined)
   const durationStr = durationMs != null && Number.isFinite(durationMs) && durationMs >= 0 ? formatDuration(durationMs) : ''
 
@@ -90,50 +94,32 @@ function AssistantMeta({ message }: { message: Message }) {
   return (
     <div className="msg-meta">
       <div className="msg-meta-row">
-        <button className="msg-meta-copy" onClick={handleCopy} title="Copy response">
-          {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
-          <span>{copied ? 'Copied' : 'Copy'}</span>
+        <button className="msg-meta-copy" onClick={handleCopy} title={copied ? 'Copied' : 'Copy'} aria-label={copied ? 'Copied' : 'Copy'}>
+          {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
         </button>
-        {modelLabel && (
-          <span className="msg-meta-model" title={modelLabel !== message.model ? `${modelLabel} · ${message.model}` : modelLabel}>
-            <span className="msg-meta-label">Model</span>
-            <span className="msg-meta-value">{modelLabel}</span>
-            {providerLabel && <span className="msg-meta-provider">· {providerLabel}</span>}
+        {displayModel && (
+          <span className="msg-meta-model" title={fullModelTitle}>
+            <span className="msg-meta-value msg-meta-ellipsis">{displayModel}</span>
           </span>
         )}
-        {!modelLabel && providerLabel && (
-          <span className="msg-meta-model">
-            <span className="msg-meta-label">Model</span>
-            <span className="msg-meta-value">{providerLabel}</span>
+        {(startShort || endShort || durationStr) && (
+          <span className="msg-meta-times-inline">
+            {startShort && endShort ? (
+              <span title={`${formatTime(startIso)} > ${formatTime(endIso)}`}>{startShort} &gt; {endShort}</span>
+            ) : startShort ? (
+              <span title={formatTime(startIso)}>{startShort}</span>
+            ) : endShort ? (
+              <span title={formatTime(endIso)}>{endShort}</span>
+            ) : null}
+            {durationStr && (
+              <>
+                <span className="msg-meta-dot">·</span>
+                <span className="msg-meta-duration" title={`${durationMs}ms`}>{durationStr}</span>
+              </>
+            )}
           </span>
         )}
       </div>
-      {(startIso || endIso || durationStr) && (
-        <div className="msg-meta-row msg-meta-times">
-          <IconClock size={12} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
-          {startIso && (
-            <span title={formatTime(startIso)}>Started {formatTimeShort(startIso)}</span>
-          )}
-          {endIso && (
-            <>
-              <span className="msg-meta-dot">·</span>
-              <span title={formatTime(endIso)}>Ended {formatTimeShort(endIso)}</span>
-            </>
-          )}
-          {durationStr && (
-            <>
-              <span className="msg-meta-dot">·</span>
-              <span className="msg-meta-duration">{durationStr}</span>
-            </>
-          )}
-          {!durationStr && startIso && endIso && (
-            <>
-              <span className="msg-meta-dot">·</span>
-              <span>{formatDuration(Date.parse(endIso) - Date.parse(startIso))}</span>
-            </>
-          )}
-        </div>
-      )}
     </div>
   )
 }
