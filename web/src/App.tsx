@@ -562,6 +562,8 @@ function KsAgent() {
             onRequestSettings={() => setSettingsOpen(true)}
             questions={activeChat ? questions[activeChat.id] ?? [] : []}
             onAnswerQuestion={handleAnswerQuestion}
+            plan={activeChat ? plans[activeChat.id] ?? null : null}
+            activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
           />
         </main>
         <RightSidebar
