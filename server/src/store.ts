@@ -134,6 +134,7 @@ export function loadDb(): void {
       planPrompt: typeof parsed.planPrompt === 'string' ? parsed.planPrompt : '',
       plans: Array.isArray(parsed.plans) ? parsed.plans : [],
       terminals: Array.isArray(parsed.terminals) ? parsed.terminals : [],
+      questions: Array.isArray(parsed.questions) ? parsed.questions : [],
       retrySettings: parsed.retrySettings && typeof parsed.retrySettings === 'object'
         ? {
             enabled: Boolean(parsed.retrySettings.enabled ?? defaultRetrySettings.enabled),
@@ -158,7 +159,7 @@ export function loadDb(): void {
       retryOnStatusCodes: [429, 503],
       stopOnStatusCodes: [404]
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], retrySettings: defaultRetrySettings }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], retrySettings: defaultRetrySettings }
   }
 }
 
@@ -224,4 +225,16 @@ export function terminalsOf(projectId: string): Terminal[] {
 
 export function findTerminal(id: string): Terminal | undefined {
   return db.terminals.find((t) => t.id === id)
+}
+
+export function questionsOf(chatId: string): Question[] {
+  return db.questions.filter((q) => q.chatId === chatId).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+export function findQuestion(id: string): Question | undefined {
+  return db.questions.find((q) => q.id === id)
+}
+
+export function pendingQuestionsOf(chatId: string): Question[] {
+  return questionsOf(chatId).filter((q) => q.status === 'pending')
 }
