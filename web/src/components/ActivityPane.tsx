@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import type { Activity } from '../types'
 import { IconActivity, IconFile, IconTerminal, IconEdit, IconPlus, IconChevronDown, IconCheck, IconX, IconRotate } from '../icons'
 
@@ -112,6 +112,8 @@ function formatTime(ts: string): string {
 export function ActivityPane({ activities }: { activities: Activity[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterKey>('all')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement | null>(null)
 
   const sortedActivities = useMemo(
     () => [...activities].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
@@ -129,26 +131,43 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
     return sortedActivities.filter((a) => a.toolType === filter)
   }, [sortedActivities, filter])
 
-  const availableFilters: Array<{ key: FilterKey; label: string; count: number }> = useMemo(() => {
-    const primary: Activity['toolType'][] = ['write_file', 'edit_file', 'read_file', 'run_shell']
-    const secondary: Activity['toolType'][] = ['list_files', 'create_plan', 'complete_plan_step', 'ask_question']
-    const list: Array<{ key: FilterKey; label: string; count: number }> = [{ key: 'all', label: 'All', count: counts.all || 0 }]
-    // Always show Write, Edit, Read, Shell so user sees those categories even when idle (per request)
-    for (const k of primary) {
-      list.push({ key: k, label: getToolLabel(k), count: counts[k] || 0 })
-    }
-    for (const k of secondary) {
-      if (counts[k]) list.push({ key: k, label: getToolLabel(k), count: counts[k] })
-    }
-    // also include any other tool types not in primary/secondary
-    for (const k of Object.keys(counts)) {
-      if (k === 'all') continue
-      if (!primary.includes(k as Activity['toolType']) && !secondary.includes(k as Activity['toolType'])) {
-        list.push({ key: k as FilterKey, label: getToolLabel(k as Activity['toolType']), count: counts[k] })
+  // Dropdown options: All, Write, Read, Edit — exact order requested
+  const dropdownFilters: Array<{ key: FilterKey; label: string; count: number }> = useMemo(() => {
+    return [
+      { key: 'all' as FilterKey, label: 'All', count: counts.all || 0 },
+      { key: 'write_file' as FilterKey, label: 'Write', count: counts['write_file'] || 0 },
+      { key: 'read_file' as FilterKey, label: 'Read', count: counts['read_file'] || 0 },
+      { key: 'edit_file' as FilterKey, label: 'Edit', count: counts['edit_file'] || 0 },
+    ]
+  }, [counts])
+
+  const activeFilterLabel = useMemo(() => {
+    const found = dropdownFilters.find((f) => f.key === filter)
+    return found ? found.label : getToolLabel(filter as Activity['toolType'])
+  }, [filter, dropdownFilters])
+
+  const activeFilterCount = useMemo(() => {
+    const found = dropdownFilters.find((f) => f.key === filter)
+    return found ? found.count : filtered.length
+  }, [filter, dropdownFilters, filtered.length])
+
+  useEffect(() => {
+    if (!dropdownOpen) return
+    function onClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
       }
     }
-    return list
-  }, [counts])
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [dropdownOpen])
 
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id))
@@ -174,29 +193,44 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
   return (
     <div className="activity-pane">
       <div className="activity-summary">
-        <span className="activity-summary-count">{activities.length} event{activities.length !== 1 ? 's' : ''}</span>
-        <span className="activity-summary-breakdown">
-          {counts['write_file'] ? <span style={{ color: '#86efac' }}>{counts['write_file']} Write</span> : null}
-          {counts['write_file'] && counts['edit_file'] ? <span className="act-dot">·</span> : null}
-          {counts['edit_file'] ? <span style={{ color: '#facc15' }}>{counts['edit_file']} Edit</span> : null}
-          {(counts['write_file'] || counts['edit_file']) && counts['read_file'] ? <span className="act-dot">·</span> : null}
-          {counts['read_file'] ? <span style={{ color: '#60a5fa' }}>{counts['read_file']} Read</span> : null}
+        <span className="activity-summary-count">
+          {activities.length} event{activities.length !== 1 ? 's' : ''}
         </span>
-      </div>
 
-      <div className="activity-filters" role="tablist" aria-label="Filter activity">
-        {availableFilters.map((f) => (
+        <div className="act-dropdown" ref={dropdownRef}>
           <button
-            key={f.key}
-            role="tab"
-            aria-selected={filter === f.key}
-            className={`act-filter${filter === f.key ? ' active' : ''}`}
-            onClick={() => setFilter(f.key)}
+            className="act-dropdown-btn"
+            aria-haspopup="menu"
+            aria-expanded={dropdownOpen}
+            onClick={() => setDropdownOpen((v) => !v)}
           >
-            <span className="act-filter-label">{f.label}</span>
-            <span className="act-filter-count">{f.count}</span>
+            <span className="act-dropdown-label">{activeFilterLabel}</span>
+            <span className="act-dropdown-count">{activeFilterCount}</span>
+            <IconChevronDown size={12} style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
           </button>
-        ))}
+          {dropdownOpen && (
+            <div className="act-dropdown-menu" role="menu" aria-label="Filter activity">
+              {dropdownFilters.map((f) => {
+                const isActive = filter === f.key
+                return (
+                  <button
+                    key={f.key}
+                    role="menuitem"
+                    className={`act-dropdown-item${isActive ? ' active' : ''}`}
+                    onClick={() => {
+                      setFilter(f.key)
+                      setDropdownOpen(false)
+                    }}
+                  >
+                    <span className="act-dropdown-item-label">{f.label}</span>
+                    <span className="act-dropdown-item-count">{f.count}</span>
+                    {isActive && <IconCheck size={12} style={{ marginLeft: 4, flexShrink: 0 }} />}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="activity-list">
