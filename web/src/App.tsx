@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from './api'
-import type { Chat, Message, ModelEntry, Plan, Project, Activity } from './types'
+import type { Chat, Message, ModelEntry, Plan, Project, Activity, Question } from './types'
 import { DialogsProvider, useDialogs } from './dialogs'
 import { ToastProvider, useToast } from './toast'
 import { Header } from './components/Header'
@@ -23,6 +23,7 @@ function KsAgent() {
   const [messages, setMessages] = useState<Message[]>([])
   const [models, setModels] = useState<ModelEntry[]>([])
   const [plans, setPlans] = useState<Record<string, Plan>>({})
+  const [questions, setQuestions] = useState<Record<string, Question[]>>({})
 
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => localStorage.getItem(LS_PROJECT))
   const [activeChatId, setActiveChatId] = useState<string | null>(() => localStorage.getItem(LS_CHAT))

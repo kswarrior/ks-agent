@@ -167,6 +167,14 @@ export function ChatView(props: Props) {
                 <span className="cursor-blink" />
               </div>
             )}
+            {props.questions.length > 0 && (
+              <QuestionList questions={props.questions} onAnswer={props.onAnswerQuestion} />
+            )}
+          </div>
+        )}
+        {props.questions.length > 0 && (!props.chat || props.messages.length === 0) && !props.streaming && (
+          <div className="msg-col" style={{ marginTop: 18 }}>
+            <QuestionList questions={props.questions} onAnswer={props.onAnswerQuestion} />
           </div>
         )}
       </div>
