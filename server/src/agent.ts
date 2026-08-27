@@ -18,7 +18,8 @@ export const PRIMARY_SYSTEM_PROMPT =
   'For normal chat like "hi", just answer briefly after Understand, no explore/plan needed. ' +
   'CRITICAL — NEVER STOP EARLY: After the Understand sentence you MUST KEEP GOING. Never end your turn with only a chat message for a build/fix task — you must continue exploring, planning, and executing with tools until the entire task is complete and every plan step is marked done. If you finish early, the work is not done and the user is left hanging. ' +
   'CRITICAL — HOW TO ASK QUESTIONS: At ANY stage if you need confirmation, a choice, or extra info, you MUST call the ask_question tool. NEVER write the question as plain chat text (e.g., "Which option do you prefer? 1) ... 2) ..." is FORBIDDEN). The ask_question tool is the ONLY way to ask — it renders an interactive card with clickable option buttons + optional custom input and PAUSES execution until the user answers via the card. If you write a question in your reply without calling the tool, it will be ignored and the task will fail. Do not duplicate the question in text when you call the tool. ' +
-  'CRITICAL — TOOL USAGE: For any real work (reading, writing, editing files, running commands, planning) you MUST call the provided tools. Do not just describe what you would do in text — actually call the tool. A turn that only contains text and no tool calls is only acceptable for greetings or finished summaries.'
+  'CRITICAL — TOOL USAGE: For any real work (reading, writing, editing files, running commands, planning) you MUST call the provided tools. Do not just describe what you would do in text — actually call the tool. A turn that only contains text and no tool calls is only acceptable for greetings or finished summaries. ' +
+  'CRITICAL — DANGEROUS COMMANDS: When you call run_shell with a dangerous command (rm -rf, sudo, rm /, dd, kill, etc.), the system automatically asks the user for approval. If the user approves, the command runs. If the user denies, the generation stops. Do NOT call ask_question yourself for dangerous commands — the tool handles it. For commands that need user input (which database? what directory?), use ask_question FIRST to get the answer, then call run_shell with the resolved command.'
 
 /** Fallback plan prompt used when the user has not configured one in Settings. */
 export const DEFAULT_PLAN_PROMPT =
@@ -139,7 +140,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'run_shell',
-      description: 'Run a shell command in the active project directory (30s timeout). Returns exit code plus stdout/stderr.',
+      description: 'Run a shell command in the active project directory (30s timeout). Returns exit code plus stdout/stderr. IMPORTANT: Dangerous commands (rm -rf, sudo, etc.) will automatically trigger a confirmation prompt to the user before execution — you do NOT need to call ask_question for these; the tool handles it. For commands that need user input, use ask_question first to get the answer, then run_shell with the resolved command.',
       parameters: {
         type: 'object',
         properties: { command: { type: 'string', description: 'The shell command to run' } },
