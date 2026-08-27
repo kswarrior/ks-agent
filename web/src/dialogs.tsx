@@ -62,10 +62,14 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
   const [promptState, setPromptState] = useState<PendingPrompt | null>(null)
   const [promptValue, setPromptValue] = useState('')
   const [promptError, setPromptError] = useState<string | null>(null)
+  const [confirmChecked, setConfirmChecked] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const confirm = useCallback((opts: ConfirmOptions) => {
-    return new Promise<boolean>((resolve) => setConfirmState({ ...opts, resolve }))
+  const confirm = useCallback((opts: ConfirmOptions): Promise<any> => {
+    return new Promise<boolean | ConfirmResult>((resolve) => {
+      setConfirmChecked(!!opts.checkboxInitialChecked)
+      setConfirmState({ ...opts, resolve: resolve as (v: boolean | ConfirmResult) => void })
+    })
   }, [])
 
   const prompt = useCallback((opts: PromptOptions) => {
@@ -84,19 +88,34 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
     if (!confirmState && !promptState) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        confirmState?.resolve(false)
-        setConfirmState(null)
+        if (confirmState) {
+          const hasCheckbox = !!confirmState.checkboxLabel
+          if (hasCheckbox) {
+            ;(confirmState.resolve as (v: ConfirmResult) => void)({ confirmed: false, checked: confirmChecked })
+          } else {
+            ;(confirmState.resolve as (v: boolean) => void)(false)
+          }
+          setConfirmState(null)
+          setConfirmChecked(false)
+        }
         promptState?.resolve(null)
         setPromptState(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [confirmState, promptState])
+  }, [confirmState, promptState, confirmChecked])
 
   const closeConfirm = (ok: boolean) => {
-    confirmState?.resolve(ok)
+    if (!confirmState) return
+    const hasCheckbox = !!confirmState.checkboxLabel
+    if (hasCheckbox) {
+      ;(confirmState.resolve as (v: ConfirmResult) => void)({ confirmed: ok, checked: confirmChecked })
+    } else {
+      ;(confirmState.resolve as (v: boolean) => void)(ok)
+    }
     setConfirmState(null)
+    setConfirmChecked(false)
   }
 
   const closePrompt = (value: string | null) => {
@@ -125,6 +144,22 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
           <div className="dialog" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <h3 className="dialog-title">{confirmState.title}</h3>
             {confirmState.message && <p className="dialog-message">{confirmState.message}</p>}
+            {confirmState.checkboxLabel && (
+              <label className="checkbox-row" style={{ marginTop: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={confirmChecked}
+                  onChange={(e) => setConfirmChecked(e.target.checked)}
+                />
+                <span>{confirmState.checkboxLabel}</span>
+              </label>
+            )}
+            {confirmState.checkboxLabel && confirmChecked && confirmState.checkboxWarning && (
+              <div className="dialog-warning">
+                <span className="dialog-warning-icon">⚠️</span>
+                <span>{confirmState.checkboxWarning}</span>
+              </div>
+            )}
             <div className="dialog-actions">
               <button className="btn" onClick={() => closeConfirm(false)}>
                 Cancel
