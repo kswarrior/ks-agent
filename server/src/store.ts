@@ -296,3 +296,17 @@ export function findQuestion(id: string): Question | undefined {
 export function pendingQuestionsOf(chatId: string): Question[] {
   return questionsOf(chatId).filter((q) => q.status === 'pending')
 }
+
+export function activitiesOf(chatId: string): Activity[] {
+  return db.activities.filter((a) => a.chatId === chatId).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+}
+
+export function findActivityByToolCallId(toolCallId: string): Activity | undefined {
+  return db.activities.find((a) => a.toolCallId === toolCallId)
+}
+
+export function clearActivitiesForChat(chatId: string): void {
+  const before = db.activities.length
+  db.activities = db.activities.filter((a) => a.chatId !== chatId)
+  if (db.activities.length !== before) saveDb()
+}

@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { findPlanForChat, getDb, getRetrySettings, newId, saveDb, type Plan, type Question } from './store.js'
+import { findPlanForChat, getDb, getRetrySettings, newId, saveDb, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 
@@ -558,12 +558,43 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
     })
 
     for (const call of outcome.toolCalls) {
+      // Persist activity for this tool call (per chat, like plan) so it survives refresh
+      let parsedArgs: Record<string, unknown> = {}
+      try { parsedArgs = JSON.parse(call.args || '{}') } catch {}
+      // truncate large content fields to avoid DB bloat but keep full for small args
+      const storedArgs: Record<string, unknown> = { ...parsedArgs }
+      if (typeof storedArgs.content === 'string' && (storedArgs.content as string).length > 8000) {
+        storedArgs.content = (storedArgs.content as string).slice(0, 8000) + '\n…[truncated for storage]'
+      }
+      const activity: Activity = {
+        id: call.id,
+        chatId: ctx.chatId,
+        toolType: call.name as Activity['toolType'],
+        toolCallId: call.id,
+        args: storedArgs,
+        summary: '',
+        timestamp: new Date().toISOString(),
+      }
+      try {
+        getDb().activities.push(activity)
+        saveDb()
+      } catch {}
       opts.onEvent(
         'tool',
         JSON.stringify({ callId: call.id, name: call.name, args: call.args.slice(0, 300) })
       )
       ctx.toolCallId = call.id
       const res = await executeTool(call.name, call.args, ctx)
+      // Update persisted activity with result
+      try {
+        const act = getDb().activities.find((a) => a.toolCallId === call.id)
+        if (act) {
+          act.summary = res.summary
+          act.result = res.result
+          act.ok = res.ok
+          saveDb()
+        }
+      } catch {}
       opts.onEvent(
         'tool_result',
         JSON.stringify({ callId: call.id, ok: res.ok, summary: res.summary, result: res.result })
