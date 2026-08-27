@@ -396,7 +396,35 @@ export function FilesPane({ projectId }: FilesPaneProps) {
         </>
       )}
 
-      {!subPage && (
+      {!subPage && selected && (
+        <div className="fp-edit">
+          <div className="fp-subhead fp-edit-head">
+            <button className="icon-btn" aria-label="Back to files" onClick={() => { setSelected(null); setEditContent(''); }}>
+              <IconChevronLeft size={17} />
+            </button>
+            <span className="fp-edit-title" title={selected}>{selected}</span>
+            <div className="fp-editor-actions">
+              <button className="btn" disabled={editLoading || editSaving} onClick={() => { setSelected(null); setEditContent(''); }}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" disabled={editLoading || editSaving || editLoading} onClick={() => saveFileContent(selected)}>
+                {editSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+          <textarea
+            className="fp-editor-textarea fp-edit-area"
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            disabled={editLoading}
+            placeholder={editLoading ? 'Loading…' : 'Start typing…'}
+            spellCheck={false}
+            autoFocus
+          />
+        </div>
+      )}
+
+      {!subPage && !selected && (
         <>
           <div className="fp-path" title={dir === '' ? '/' : dir}>
             {dir === '' ? '/' : dir}
@@ -415,31 +443,6 @@ export function FilesPane({ projectId }: FilesPaneProps) {
               <IconDots size={16} />
             </button>
           </div>
-
-          {selected && (
-            <div className="fp-editor">
-              <div className="fp-editor-head">
-                <span className="fp-editor-title">{selected}</span>
-                <div className="fp-editor-actions">
-                  <button className="btn btn-ghost" disabled={editLoading || editSaving} onClick={() => { setSelected(null); setEditContent(''); }}>
-                    <IconX size={14} /> Cancel
-                  </button>
-                  <button className="btn btn-primary" disabled={editLoading || editSaving} onClick={() => saveFileContent(selected)}>
-                    {editSaving ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
-              </div>
-              <textarea
-                className="fp-editor-textarea"
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                disabled={editLoading}
-                placeholder={editLoading ? 'Loading…' : ''}
-                spellCheck={false}
-                autoFocus
-              />
-            </div>
-          )}
 
           <div className="fp-list">
             {loading ? (
