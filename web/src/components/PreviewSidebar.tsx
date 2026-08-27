@@ -34,11 +34,10 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
     try {
       if (activeProject) {
         const res = await api.startPreview(activeProject.id)
-        if (res.url) {
-          const detectedUrl = new URL(res.url)
+        if (res.port) {
           const hostname = window.location.hostname || 'localhost'
-          detectedUrl.hostname = hostname
-          setUrl(detectedUrl.toString())
+          const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:'
+          setUrl(`${protocol}//${hostname}:${res.port}`)
           return
         }
       }

@@ -412,15 +412,15 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
           return err(String(e?.message || e))
         }
 
-        // If denied, abort the entire generation — do not fall back to plan mode.
+        // If denied, refuse execution. The AI sees this error and must not retry.
         if (!options.includes(answer)) {
           q.status = 'answered'
           q.answer = answer
           q.selectedOption = null
           q.answeredAt = new Date().toISOString()
           saveDb()
-          ctx.signal.abort()
-          return err(`Command rejected by user: "${answer}". Aborting generation.`)
+          ctx.onEvent('question', JSON.stringify(q))
+          return err(`User DENIED this dangerous command. You must NOT attempt to run this command again. Continue with an alternative approach or stop.`)
         }
 
         q.status = 'answered'
