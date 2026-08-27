@@ -163,6 +163,26 @@ function KsAgent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId])
 
+  // load activities for the chat (persisted per chat like plan)
+  useEffect(() => {
+    if (!activeChatId) return
+    let cancelled = false
+    api
+      .listActivities(activeChatId)
+      .then((list) => {
+        if (cancelled) return
+        setActivities((prev) => {
+          const other = prev.filter((a) => a.chatId !== activeChatId)
+          return [...other, ...list]
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChatId])
+
   // load questions for the chat
   useEffect(() => {
     if (!activeChatId) return

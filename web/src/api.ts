@@ -163,6 +163,9 @@ export const listGenerations = () => req<string[]>('/api/generations')
 export const stopGeneration = (chatId: string) =>
   req<{ ok: true }>(`/api/chats/${chatId}/stop`, json('POST', {}))
 
+// Activities
+export const listActivities = (chatId: string) => req<Activity[]>(`/api/chats/${chatId}/activities`)
+
 // Plans
 export const getPlan = (chatId: string) => req<Plan | null>(`/api/chats/${chatId}/plan`)
 
