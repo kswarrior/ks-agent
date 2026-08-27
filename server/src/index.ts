@@ -1195,5 +1195,86 @@ app.use('*', serveStatic({ root: distDir }))
 app.get('*', serveStatic({ root: distDir, rewriteRequestPath: () => '/index.html' }))
 
 const port = Number(process.env.PORT || 8787)
-serve({ fetch: app.fetch, port, hostname: process.env.HOST || '0.0.0.0' })
+const server = serve({ fetch: app.fetch, port, hostname: process.env.HOST || '0.0.0.0' })
 console.log(`KS Agent listening on http://localhost:${port}`)
+
+// ---------------- WebSocket PTY ----------------
+
+const wss = new WebSocketServer({ noServer: true })
+
+// Attach upgrade handler for /api/terminals/:id/pty
+server.on('upgrade', (req: any, socket: any, head: any) => {
+  try {
+    const host = req.headers.host || `localhost:${port}`
+    const url = new URL(req.url || '', `http://${host}`)
+    const m = url.pathname.match(/^\/api\/terminals\/([^/]+)\/pty$/)
+    if (!m) return
+    const terminalId = m[1]
+    const terminal = findTerminal(terminalId)
+    if (!terminal) {
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+      socket.destroy()
+      return
+    }
+    const project = findProject(terminal.projectId)
+    if (!project) {
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+      socket.destroy()
+      return
+    }
+    // optional cols/rows from query
+    const cols = Number(url.searchParams.get('cols') || 80)
+    const rows = Number(url.searchParams.get('rows') || 24)
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req, terminalId, project.path, terminal, cols, rows)
+    })
+  } catch (e) {
+    try { socket.destroy() } catch {}
+  }
+})
+
+wss.on('connection', (ws: WebSocket, _req: any, terminalId: string, projectPath: string, terminal: Terminal, cols: number, rows: number) => {
+  const c = Number.isInteger(cols) && cols > 0 && cols <= 500 ? cols : 80
+  const r = Number.isInteger(rows) && rows > 0 && rows <= 500 ? rows : 24
+  const sess = getOrCreatePty(terminalId, projectPath, terminal.projectId, c, r)
+  sess.clients.add(ws)
+
+  // replay buffer so new client sees previous output
+  if (sess.buffer) {
+    try { ws.send(sess.buffer) } catch {}
+  }
+
+  ws.on('message', (msg: any) => {
+    const str = msg.toString()
+    // Try JSON control messages: {type:'resize', cols, rows} or {type:'data', data}
+    if (str.startsWith('{')) {
+      try {
+        const obj = JSON.parse(str)
+        if (obj && obj.type === 'resize' && Number.isInteger(obj.cols) && Number.isInteger(obj.rows)) {
+          try { sess.pty.resize(obj.cols, obj.rows) } catch {}
+          return
+        }
+        if (obj && obj.type === 'data' && typeof obj.data === 'string') {
+          try { sess.pty.write(obj.data) } catch {}
+          return
+        }
+      } catch {}
+    }
+    // raw bytes -> write directly
+    try { sess.pty.write(str) } catch {}
+  })
+
+  ws.on('close', () => {
+    sess.clients.delete(ws)
+  })
+  ws.on('error', () => {
+    sess.clients.delete(ws)
+  })
+})
+
+// Graceful cleanup
+process.on('exit', () => {
+  for (const sess of ptySessions.values()) {
+    try { sess.pty.kill() } catch {}
+  }
+})
