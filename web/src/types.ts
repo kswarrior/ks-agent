@@ -9,6 +9,7 @@ export interface Chat {
   id: string
   projectId: string
   title: string
+  seq?: number
   createdAt: string
   updatedAt: string
 }

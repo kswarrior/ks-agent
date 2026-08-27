@@ -62,6 +62,7 @@ export interface StreamHandlers {
   onToolResult?: (result: { callId: string; ok: boolean; summary: string }) => void
   onPlan?: (plan: Plan) => void
   onQuestion?: (question: Question) => void
+  onChatTitle?: (data: { chatId: string; title: string; seq?: number }) => void
   onError: (message: string) => void
   onDone: () => void
 }
@@ -136,6 +137,9 @@ export async function streamChatEvents(
             break
           case 'question':
             handlers.onQuestion?.(parsed)
+            break
+          case 'chat_title':
+            handlers.onChatTitle?.(parsed)
             break
           case 'error':
             handlers.onError(parsed.message)

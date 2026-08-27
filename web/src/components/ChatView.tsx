@@ -187,12 +187,12 @@ export function ChatView(props: Props) {
                 <div className="role-tag">KS Agent</div>
                 {chatStage !== 'idle' ? (
                   <div className="chat-status">
-                    <IconRotate size={12} className="spin" />
                     <span>
                       {chatStageLabel}
                       {chatStage === 'executing' && totalSteps > 0 ? ` • Step [${workingIdx >= 0 ? workingIdx + 1 : doneSteps + 1}/${totalSteps}]` : ''}
                       {chatStage === 'planning' && totalSteps > 0 ? ` • ${totalSteps} steps` : ''}
                     </span>
+                    <span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span>
                   </div>
                 ) : null}
                 {props.streamText ? <Markdown content={props.streamText} /> : null}
@@ -202,8 +202,8 @@ export function ChatView(props: Props) {
             {!props.streaming && plan && workingStep && (
               <div className="msg-assistant" style={{ border: 'none', background: 'transparent', padding: 0 }}>
                 <div className="chat-status" style={{ margin: '0' }}>
-                  <IconRotate size={12} className="spin" />
                   <span>Executing • Step [{workingIdx + 1}/{totalSteps}] {workingStep.title}</span>
+                  <span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span>
                 </div>
               </div>
             )}
