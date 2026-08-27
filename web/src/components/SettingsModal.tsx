@@ -142,10 +142,29 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   async function submitRetrySettings() {
     if (!retryDraft) return
     setError(null)
+    // parse raw strings - allow user to have typed anything, clamp and validate here
+    const parsedMaxRetries = Math.max(0, Math.min(10, parseInt(maxRetriesInput, 10) || 0))
+    const parsedBaseDelay = Math.max(100, Math.min(60000, parseInt(baseDelayInput, 10) || 100))
+    const parsedMaxDelay = Math.max(1000, Math.min(300000, parseInt(maxDelayInput, 10) || 1000))
+    const parsedRetryOn = retryOnInput.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n >= 100 && n < 600)
+    const parsedStopOn = stopOnInput.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n >= 100 && n < 600)
+    const toSave: RetrySettings = {
+      ...retryDraft,
+      maxRetries: parsedMaxRetries,
+      baseDelayMs: parsedBaseDelay,
+      maxDelayMs: parsedMaxDelay,
+      retryOnStatusCodes: parsedRetryOn,
+      stopOnStatusCodes: parsedStopOn
+    }
     try {
-      const settings = await api.updateRetrySettings(retryDraft)
+      const settings = await api.updateRetrySettings(toSave)
       setRetrySettings(settings)
       setRetryDraft({ ...settings })
+      setMaxRetriesInput(String(settings.maxRetries))
+      setBaseDelayInput(String(settings.baseDelayMs))
+      setMaxDelayInput(String(settings.maxDelayMs))
+      setRetryOnInput(settings.retryOnStatusCodes.join(', '))
+      setStopOnInput(settings.stopOnStatusCodes.join(', '))
       toast('Retry settings saved', 'success')
     } catch (e: any) {
       setError(e.message)
@@ -159,9 +178,15 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       baseDelayMs: 1000,
       maxDelayMs: 30000,
       retryOnStatusCodes: [429, 503],
-      stopOnStatusCodes: [404]
+      stopOnStatusCodes: [404],
+      alwaysRetry: false
     }
     setRetryDraft(defaults)
+    setMaxRetriesInput(String(defaults.maxRetries))
+    setBaseDelayInput(String(defaults.baseDelayMs))
+    setMaxDelayInput(String(defaults.maxDelayMs))
+    setRetryOnInput(defaults.retryOnStatusCodes.join(', '))
+    setStopOnInput(defaults.stopOnStatusCodes.join(', '))
   }
 
   if (!open) return null
@@ -691,11 +716,10 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 </button>
               </div>
               <p className="hint" style={{ marginBottom: 16 }}>
-                Configure how KS Agent handles temporary provider errors (rate limits, overload).
-                Errors like 404 (model not found) will always stop immediately.
+                Configure how KS Agent handles temporary provider errors. When retry is enabled it will respect the delay below.
               </p>
 
-              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <input
                   type="checkbox"
                   checked={retryDraft.enabled}
@@ -704,27 +728,65 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 Enable automatic retries
               </label>
 
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <input
+                  type="checkbox"
+                  checked={!!retryDraft.alwaysRetry}
+                  onChange={(e) => setRetryDraft({ ...retryDraft!, alwaysRetry: e.target.checked })}
+                />
+                Retry always — retry on any error (ignores status codes), also uses delay below
+              </label>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
                   <label className="field-label">Max retries</label>
                   <input
                     className="input"
-                    type="number"
-                    min="0"
-                    max="10"
-                    value={retryDraft.maxRetries}
-                    onChange={(e) => setRetryDraft({ ...retryDraft!, maxRetries: Math.max(0, Math.min(10, parseInt(e.target.value) || 0)) })}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0-10"
+                    value={maxRetriesInput}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      // allow typing: keep raw, only update draft if numeric or empty
+                      setMaxRetriesInput(raw)
+                      if (raw === '') {
+                        setRetryDraft({ ...retryDraft!, maxRetries: 0 })
+                      } else {
+                        const n = parseInt(raw, 10)
+                        if (!Number.isNaN(n)) setRetryDraft({ ...retryDraft!, maxRetries: n })
+                      }
+                    }}
+                    onBlur={() => {
+                      const n = Math.max(0, Math.min(10, parseInt(maxRetriesInput, 10) || 0))
+                      setMaxRetriesInput(String(n))
+                      setRetryDraft({ ...retryDraft!, maxRetries: n })
+                    }}
                   />
                 </div>
                 <div>
                   <label className="field-label">Base delay (ms)</label>
                   <input
                     className="input"
-                    type="number"
-                    min="100"
-                    max="60000"
-                    value={retryDraft.baseDelayMs}
-                    onChange={(e) => setRetryDraft({ ...retryDraft!, baseDelayMs: Math.max(100, Math.min(60000, parseInt(e.target.value) || 100)) })}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="100-60000"
+                    value={baseDelayInput}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setBaseDelayInput(raw)
+                      if (raw === '') {
+                        // keep draft as-is while typing empty
+                      } else {
+                        const n = parseInt(raw, 10)
+                        if (!Number.isNaN(n)) setRetryDraft({ ...retryDraft!, baseDelayMs: n })
+                      }
+                    }}
+                    onBlur={() => {
+                      const n = Math.max(100, Math.min(60000, parseInt(baseDelayInput, 10) || 100))
+                      setBaseDelayInput(String(n))
+                      setRetryDraft({ ...retryDraft!, baseDelayMs: n })
+                    }}
                   />
                 </div>
               </div>
@@ -733,53 +795,60 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 <label className="field-label">Max delay (ms)</label>
                 <input
                   className="input"
-                  type="number"
-                  min="1000"
-                  max="300000"
-                  value={retryDraft.maxDelayMs}
-                  onChange={(e) => setRetryDraft({ ...retryDraft!, maxDelayMs: Math.max(1000, Math.min(300000, parseInt(e.target.value) || 1000)) })}
-                />
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label className="field-label">Retry on status codes (comma-separated)</label>
-                <input
-                  className="input"
                   type="text"
-                  placeholder="e.g. 429, 503"
-                  value={retryDraft.retryOnStatusCodes.join(', ')}
+                  inputMode="numeric"
+                  placeholder="1000-300000"
+                  value={maxDelayInput}
                   onChange={(e) => {
-                    const codes = e.target.value
-                      .split(',')
-                      .map(s => parseInt(s.trim(), 10))
-                      .filter(n => Number.isInteger(n) && n >= 100 && n < 600)
-                    setRetryDraft({ ...retryDraft!, retryOnStatusCodes: codes })
+                    const raw = e.target.value
+                    setMaxDelayInput(raw)
+                    if (raw === '') {
+                    } else {
+                      const n = parseInt(raw, 10)
+                      if (!Number.isNaN(n)) setRetryDraft({ ...retryDraft!, maxDelayMs: n })
+                    }
+                  }}
+                  onBlur={() => {
+                    const n = Math.max(1000, Math.min(300000, parseInt(maxDelayInput, 10) || 1000))
+                    setMaxDelayInput(String(n))
+                    setRetryDraft({ ...retryDraft!, maxDelayMs: n })
                   }}
                 />
-                <p className="hint" style={{ marginTop: 4 }}>
-                  HTTP status codes that should trigger a retry (e.g., 429 Too Many Requests, 503 Service Unavailable)
-                </p>
+                <p className="hint" style={{ marginTop: 4 }}>Delay between retries (exponential backoff, capped by max delay).</p>
               </div>
 
-              <div style={{ marginBottom: 16 }}>
-                <label className="field-label">Stop immediately on status codes (comma-separated)</label>
-                <input
-                  className="input"
-                  type="text"
-                  placeholder="e.g. 404"
-                  value={retryDraft.stopOnStatusCodes.join(', ')}
-                  onChange={(e) => {
-                    const codes = e.target.value
-                      .split(',')
-                      .map(s => parseInt(s.trim(), 10))
-                      .filter(n => Number.isInteger(n) && n >= 100 && n < 600)
-                    setRetryDraft({ ...retryDraft!, stopOnStatusCodes: codes })
-                  }}
-                />
-                <p className="hint" style={{ marginTop: 4 }}>
-                  HTTP status codes that should stop immediately without retry (e.g., 404 Not Found)
+              {!retryDraft.alwaysRetry && (
+                <div style={{ marginBottom: 16 }}>
+                  <label className="field-label">Retry on status codes (comma-separated)</label>
+                  <input
+                    className="input"
+                    type="text"
+                    placeholder="e.g. 429, 503, 502"
+                    value={retryOnInput}
+                    onChange={(e) => {
+                      const raw = e.target.value
+                      setRetryOnInput(raw)
+                      // update draft live but don't lose typing: parse what we can
+                      const codes = raw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n >= 100 && n < 600)
+                      setRetryDraft({ ...retryDraft!, retryOnStatusCodes: codes })
+                    }}
+                    onBlur={() => {
+                      const codes = retryOnInput.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n >= 100 && n < 600)
+                      setRetryOnInput(codes.join(', '))
+                      setRetryDraft({ ...retryDraft!, retryOnStatusCodes: codes })
+                    }}
+                  />
+                  <p className="hint" style={{ marginTop: 4 }}>
+                    HTTP status codes that should trigger a retry (e.g., 429 Too Many Requests, 503 Service Unavailable). When “Retry always” is on, this is ignored.
+                  </p>
+                </div>
+              )}
+
+              {retryDraft.alwaysRetry && (
+                <p className="hint" style={{ marginBottom: 16, color: 'var(--text-dim)' }}>
+                  “Retry always” is on — the agent will retry on any error up to Max retries, using the delay above. Status-code filters are ignored.
                 </p>
-              </div>
+              )}
 
               <div className="dialog-actions">
                 <button
@@ -788,6 +857,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   disabled={
                     !retrySettings ||
                     (retryDraft.enabled === retrySettings.enabled &&
+                    !!retryDraft.alwaysRetry === !!retrySettings.alwaysRetry &&
                     retryDraft.maxRetries === retrySettings.maxRetries &&
                     retryDraft.baseDelayMs === retrySettings.baseDelayMs &&
                     retryDraft.maxDelayMs === retrySettings.maxDelayMs &&
