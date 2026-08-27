@@ -211,33 +211,38 @@ export function ChatView(props: Props) {
   // Flow status for chat (replaces rectangular while AI writes)
   const plan = (props as any).plan as Plan | null | undefined
   const activities = ((props as any).activities as Activity[] | undefined) ?? []
-  const hasExplore = activities.some(a => ['list_files','read_file','run_shell'].includes(a.toolType))
-  const workingStep = plan?.steps.find(s => s.status === 'working')
-  const workingIdx = workingStep && plan ? plan.steps.indexOf(workingStep) : -1
-  const totalSteps = plan?.steps.length ?? 0
-  const doneSteps = plan ? plan.steps.filter(s => s.status === 'done').length : 0
-  const isPlanDone = !!plan && totalSteps > 0 && doneSteps === totalSteps
-  let chatStage: 'understand' | 'explore' | 'planning' | 'executing' | 'done' | 'idle' = 'idle'
-  let chatStageLabel = ''
-  if (props.streaming) {
-    // When a previous plan is already done and a new prompt just started,
-    // treat it as a fresh run (no plan yet) until a new plan is created.
-    // This prevents stale plan (done) from forcing "Executing 7/6" and
-    // allows Understand → Explore → Planning to show again.
-    if (isPlanDone && !workingStep) {
-      if (!hasExplore) { chatStage = 'understand'; chatStageLabel = 'Understanding' }
-      else { chatStage = 'explore'; chatStageLabel = 'Exploring' }
-    } else if (!plan && !hasExplore) { chatStage = 'understand'; chatStageLabel = 'Understanding' }
-    else if (!plan && hasExplore) { chatStage = 'explore'; chatStageLabel = 'Exploring' }
-    else if (plan && !workingStep && doneSteps === 0) { chatStage = 'planning'; chatStageLabel = 'Planning' }
-    else if (plan && workingStep) { chatStage = 'executing'; chatStageLabel = 'Executing' }
-    else if (isPlanDone) { chatStage = 'done'; chatStageLabel = 'Done' }
-    else if (plan) { chatStage = 'executing'; chatStageLabel = 'Executing' }
-  } else if (plan && workingStep) {
-    chatStage = 'executing'; chatStageLabel = 'Executing'
-  } else if (isPlanDone) {
-    chatStage = 'done'; chatStageLabel = 'Done'
-  }
+
+  const flowStatus = useMemo(() => {
+    const hasExplore = activities.some(a => ['list_files', 'read_file', 'run_shell'].includes(a.toolType))
+    const workingStep = plan?.steps.find(s => s.status === 'working')
+    const workingIdx = workingStep && plan ? plan.steps.indexOf(workingStep) : -1
+    const totalSteps = plan?.steps.length ?? 0
+    const doneSteps = plan ? plan.steps.filter(s => s.status === 'done').length : 0
+    const isPlanDone = !!plan && totalSteps > 0 && doneSteps === totalSteps
+
+    let chatStage: 'understand' | 'explore' | 'planning' | 'executing' | 'done' | 'idle' = 'idle'
+    let chatStageLabel = ''
+
+    if (props.streaming) {
+      if (isPlanDone && !workingStep) {
+        if (!hasExplore) { chatStage = 'understand'; chatStageLabel = 'Understanding' }
+        else { chatStage = 'explore'; chatStageLabel = 'Exploring' }
+      } else if (!plan && !hasExplore) { chatStage = 'understand'; chatStageLabel = 'Understanding' }
+      else if (!plan && hasExplore) { chatStage = 'explore'; chatStageLabel = 'Exploring' }
+      else if (plan && !workingStep && doneSteps === 0) { chatStage = 'planning'; chatStageLabel = 'Planning' }
+      else if (plan && workingStep) { chatStage = 'executing'; chatStageLabel = 'Executing' }
+      else if (isPlanDone) { chatStage = 'done'; chatStageLabel = 'Done' }
+      else if (plan) { chatStage = 'executing'; chatStageLabel = 'Executing' }
+    } else if (plan && workingStep) {
+      chatStage = 'executing'; chatStageLabel = 'Executing'
+    } else if (isPlanDone) {
+      chatStage = 'done'; chatStageLabel = 'Done'
+    }
+
+    return { hasExplore, workingStep, workingIdx, totalSteps, doneSteps, isPlanDone, chatStage, chatStageLabel }
+  }, [plan, activities, props.streaming])
+
+  const { hasExplore, workingStep, workingIdx, totalSteps, doneSteps, isPlanDone, chatStage, chatStageLabel } = flowStatus
 
   return (
     <>
