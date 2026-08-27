@@ -1337,7 +1337,7 @@ function isBlockedHost(hostname: string): boolean {
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal'))
     return true
   if (h === '::1' || h === '::') return true
-  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
+  if (h.includes(':') && (h.startsWith('fe80:') || /^f[cd][0-9a-f]{2}:/.test(h))) return true
   if (h.startsWith('::ffff:')) {
     const v4 = h.slice(7)
     if (v4) return isBlockedHost(v4)
