@@ -364,6 +364,21 @@ export const IconRotate = ({ size, className, style }: IconProps) => (
   </svg>
 )
 
+export const IconRefreshCw = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M21 12a9 9 0 1 1-9 9 9.75 9.75 0 0 1 6.74-2.74L21 16" />
+  </svg>
+)
+
+export const IconExternalLink = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+)
+
 export const IconActivity = ({ size, className, style }: IconProps) => (
   <svg {...base(size, style)}>
     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
