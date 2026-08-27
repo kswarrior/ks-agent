@@ -617,7 +617,7 @@ app.post('/api/chats/:id/messages', async (c) => {
 
   const agent: AgentSpec | null = project ? { projectPath: project.path } : null
 
-  void runGeneration(job, provider, resolvedModel.model, history, agent).finally(() => {
+  void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
     job.finishedAt = new Date().toISOString()
   })
 

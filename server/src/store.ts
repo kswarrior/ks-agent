@@ -41,6 +41,7 @@ export interface ModelEntry {
   providerId: string
   model: string
   displayName?: string
+  maxTokens?: number
 }
 
 export type PlanStepStatus = 'pending' | 'working' | 'done'
