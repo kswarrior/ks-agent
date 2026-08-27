@@ -35,15 +35,22 @@ function PlanView({ plan, activities, streaming }: { plan: Plan | null; activiti
   const workingStep = plan?.steps.find(s => s.status === 'working')
   const workingIdx = workingStep ? plan!.steps.indexOf(workingStep) : -1
   const done = plan ? plan.steps.filter(s => s.status === 'done').length : 0
+  const isPlanDone = !!plan && plan.steps.length > 0 && done === plan.steps.length
 
   type Stage = 'understand' | 'explore' | 'planning' | 'executing' | 'done' | 'idle'
   let stage: Stage = 'idle'
   let stageDetail = ''
-  if (!hasPlan && !hasExplore) stage = streaming ? 'understand' : 'idle'
+  // When a previous plan is already done and a new prompt is streaming,
+  // treat it as a fresh run so Understand → Explore → Planning shows again
+  // instead of staying stuck on "done" or false "executing 7/6".
+  if (streaming && isPlanDone && !workingStep) {
+    stage = !hasExplore ? 'understand' : 'explore'
+    // keep stageDetail empty for fresh run; new plan will arrive via SSE
+  } else if (!hasPlan && !hasExplore) stage = streaming ? 'understand' : 'idle'
   else if (!hasPlan && hasExplore) stage = 'explore'
   else if (hasPlan && !workingStep && done === 0) stage = 'planning'
   else if (hasPlan && workingStep) { stage = 'executing'; stageDetail = `Executing step [${workingIdx + 1}] ${workingStep.title}` }
-  else if (hasPlan && done === plan!.steps.length && plan!.steps.length > 0) stage = 'done'
+  else if (isPlanDone) stage = 'done'
   else if (hasPlan) stage = 'executing'
 
   const stages: Array<{ id: Exclude<Stage, 'idle' | 'done'>; label: string }> = [

@@ -122,16 +122,27 @@ export function ChatView(props: Props) {
   const workingIdx = workingStep && plan ? plan.steps.indexOf(workingStep) : -1
   const totalSteps = plan?.steps.length ?? 0
   const doneSteps = plan ? plan.steps.filter(s => s.status === 'done').length : 0
-  let chatStage: 'understand' | 'explore' | 'planning' | 'executing' | 'idle' = 'idle'
+  const isPlanDone = !!plan && totalSteps > 0 && doneSteps === totalSteps
+  let chatStage: 'understand' | 'explore' | 'planning' | 'executing' | 'done' | 'idle' = 'idle'
   let chatStageLabel = ''
   if (props.streaming) {
-    if (!plan && !hasExplore) { chatStage = 'understand'; chatStageLabel = 'Understanding' }
+    // When a previous plan is already done and a new prompt just started,
+    // treat it as a fresh run (no plan yet) until a new plan is created.
+    // This prevents stale plan (done) from forcing "Executing 7/6" and
+    // allows Understand → Explore → Planning to show again.
+    if (isPlanDone && !workingStep) {
+      if (!hasExplore) { chatStage = 'understand'; chatStageLabel = 'Understanding' }
+      else { chatStage = 'explore'; chatStageLabel = 'Exploring' }
+    } else if (!plan && !hasExplore) { chatStage = 'understand'; chatStageLabel = 'Understanding' }
     else if (!plan && hasExplore) { chatStage = 'explore'; chatStageLabel = 'Exploring' }
     else if (plan && !workingStep && doneSteps === 0) { chatStage = 'planning'; chatStageLabel = 'Planning' }
     else if (plan && workingStep) { chatStage = 'executing'; chatStageLabel = 'Executing' }
+    else if (isPlanDone) { chatStage = 'done'; chatStageLabel = 'Done' }
     else if (plan) { chatStage = 'executing'; chatStageLabel = 'Executing' }
   } else if (plan && workingStep) {
     chatStage = 'executing'; chatStageLabel = 'Executing'
+  } else if (isPlanDone) {
+    chatStage = 'done'; chatStageLabel = 'Done'
   }
 
   return (
@@ -185,11 +196,11 @@ export function ChatView(props: Props) {
             {props.streaming && (
               <div className="msg-assistant">
                 <div className="role-tag">KS Agent</div>
-                {chatStage !== 'idle' ? (
+                {chatStage !== 'idle' && chatStage !== 'done' ? (
                   <div className="chat-status">
                     <span>
                       {chatStageLabel}
-                      {chatStage === 'executing' && totalSteps > 0 ? ` • Step [${workingIdx >= 0 ? workingIdx + 1 : doneSteps + 1}/${totalSteps}]` : ''}
+                      {chatStage === 'executing' && totalSteps > 0 ? ` • Step [${workingIdx >= 0 ? workingIdx + 1 : Math.min(doneSteps + 1, totalSteps)}/${totalSteps}]` : ''}
                       {chatStage === 'planning' && totalSteps > 0 ? ` • ${totalSteps} steps` : ''}
                     </span>
                     <span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span>
