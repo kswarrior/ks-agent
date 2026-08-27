@@ -130,15 +130,20 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
   }, [sortedActivities, filter])
 
   const availableFilters: Array<{ key: FilterKey; label: string; count: number }> = useMemo(() => {
-    const order: Activity['toolType'][] = ['write_file', 'edit_file', 'read_file', 'run_shell', 'list_files', 'create_plan', 'complete_plan_step', 'ask_question']
+    const primary: Activity['toolType'][] = ['write_file', 'edit_file', 'read_file', 'run_shell']
+    const secondary: Activity['toolType'][] = ['list_files', 'create_plan', 'complete_plan_step', 'ask_question']
     const list: Array<{ key: FilterKey; label: string; count: number }> = [{ key: 'all', label: 'All', count: counts.all || 0 }]
-    for (const k of order) {
+    // Always show Write, Edit, Read, Shell so user sees those categories even when idle (per request)
+    for (const k of primary) {
+      list.push({ key: k, label: getToolLabel(k), count: counts[k] || 0 })
+    }
+    for (const k of secondary) {
       if (counts[k]) list.push({ key: k, label: getToolLabel(k), count: counts[k] })
     }
-    // also include any other tool types not in order
+    // also include any other tool types not in primary/secondary
     for (const k of Object.keys(counts)) {
       if (k === 'all') continue
-      if (!order.includes(k as Activity['toolType'])) {
+      if (!primary.includes(k as Activity['toolType']) && !secondary.includes(k as Activity['toolType'])) {
         list.push({ key: k as FilterKey, label: getToolLabel(k as Activity['toolType']), count: counts[k] })
       }
     }
