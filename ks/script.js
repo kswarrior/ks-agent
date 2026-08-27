@@ -43,35 +43,37 @@ const fmtDate = (iso) => {
 const fmtViews = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k` : n.toString());
 
 const initials = (name) =>
-  name
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  name.split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
+
+const highlight = (text, query) => {
+  if (!query) return text;
+  const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${q})`, 'ig');
+  return text.replace(re, '<mark>$1</mark>');
+};
+
+const debounce = (fn, wait=180) => {
+  let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); };
+};
 
 /* ─── Filters / Sort ─────────────────────────────────────────── */
 function applyFilters() {
   const s = state.search.toLowerCase();
-
-  state.data = DOCS.filter((d) => {
+  state.data = DOCS.filter(d => {
     const matchSearch = !s || d.title.toLowerCase().includes(s) || d.author.toLowerCase().includes(s);
     const matchStatus = state.filter === "all" || d.status === state.filter;
     const matchTag = state.tag === "all" || d.tags.includes(state.tag);
     return matchSearch && matchStatus && matchTag;
   });
-
   const [key, dir] = state.sort.split("-");
-  state.data.sort((a, b) => {
-    let av = a[key];
-    let bv = b[key];
+  state.data.sort((a,b) => {
+    let av = a[key]; let bv = b[key];
     if (key === "date") { av = new Date(av).getTime(); bv = new Date(bv).getTime(); }
     if (typeof av === "string") { av = av.toLowerCase(); bv = bv.toLowerCase(); }
     if (av < bv) return dir === "asc" ? -1 : 1;
     if (av > bv) return dir === "asc" ? 1 : -1;
     return 0;
   });
-
   state.page = 0;
 }
 
@@ -97,18 +99,19 @@ function render() {
   document.querySelector(".table-wrap").style.display = "block";
   document.getElementById("pager").style.display = "flex";
 
-  page.forEach((d) => {
+  page.forEach((d, i) => {
     const tr = document.createElement("tr");
+    tr.style.animationDelay = `${i * 25}ms`;
     tr.innerHTML = `
       <td class="checkbox-cell"><input type="checkbox" /></td>
       <td>
-        <span class="cell-title" title="Open ${d.title}">${d.title}</span>
+        <span class="cell-title" title="Open ${d.title}">${highlight(d.title, state.search)}</span>
       </td>
       <td><span class="badge ${d.status}">${d.status}</span></td>
       <td><span class="cell-category">${d.category}</span></td>
       <td>
         <div class="tags-cell">
-          ${d.tags.map((t) => `<span class="mini-tag">${t}</span>`).join("")}
+          ${d.tags.map(t => `<span class="mini-tag" data-tag="${t}">${t}</span>`).join("")}
         </div>
       </td>
       <td>
@@ -134,21 +137,17 @@ function render() {
     <button id="nextBtn" ${to >= total ? "disabled" : ""}>Next →</button>
   `;
 
-  document.getElementById("prevBtn")?.addEventListener("click", () => {
-    if (state.page > 0) { state.page--; render(); }
-  });
-  document.getElementById("nextBtn")?.addEventListener("click", () => {
-    if ((state.page + 1) * PAGE_SIZE < total) { state.page++; render(); }
-  });
+  document.getElementById("prevBtn")?.addEventListener("click", () => { if (state.page > 0){ state.page--; render(); }});
+  document.getElementById("nextBtn")?.addEventListener("click", () => { if ((state.page+1)*PAGE_SIZE < total){ state.page++; render(); }});
 
-  document.getElementById("resultCount").textContent = `${total} page${total !== 1 ? "s" : ""}`;
+  document.getElementById("resultCount").textContent = `${total} page${total!==1?"s":""}`;
 }
 
-/* ─── Populate tag dropdown from data ────────────────────────── */
+/* Populate tag dropdown */
 function populateTagFilter() {
-  const tags = Array.from(new Set(DOCS.flatMap((d) => d.tags))).sort();
+  const tags = Array.from(new Set(DOCS.flatMap(d => d.tags))).sort();
   const sel = document.getElementById("tagFilter");
-  tags.forEach((t) => {
+  tags.forEach(t => {
     const opt = document.createElement("option");
     opt.value = t;
     opt.textContent = t[0].toUpperCase() + t.slice(1);
@@ -156,33 +155,72 @@ function populateTagFilter() {
   });
 }
 
-/* ─── Init ───────────────────────────────────────────────────── */
+/* Init */
 function init() {
   populateTagFilter();
   render();
 
-  document.getElementById("searchInput").addEventListener("input", (e) => {
-    state.search = e.target.value.trim();
-    render();
-  });
-  document.getElementById("statusFilter").addEventListener("change", (e) => {
-    state.filter = e.target.value;
-    render();
-  });
-  document.getElementById("tagFilter").addEventListener("change", (e) => {
-    state.tag = e.target.value;
-    render();
-  });
-  document.getElementById("sortSelect").addEventListener("change", (e) => {
-    state.sort = e.target.value;
-    render();
+  const searchInput = document.getElementById("searchInput");
+  searchInput.addEventListener("input", debounce(e => { state.search = e.target.value.trim(); render(); }, 180));
+
+  document.getElementById("statusFilter").addEventListener("change", e => { state.filter = e.target.value; render(); });
+  document.getElementById("tagFilter").addEventListener("change", e => { state.tag = e.target.value; render(); });
+  document.getElementById("sortSelect").addEventListener("change", e => { state.sort = e.target.value; render(); });
+
+  document.getElementById("selectAll").addEventListener("change", e => {
+    document.querySelectorAll("#tableBody input[type=checkbox]").forEach(cb => cb.checked = e.target.checked);
   });
 
-  document.getElementById("selectAll").addEventListener("change", (e) => {
-    document.querySelectorAll("#tableBody input[type=checkbox]").forEach((cb) => {
-      cb.checked = e.target.checked;
+  // Sidebar tag cloud click
+  document.querySelectorAll(".tags-cloud .tag").forEach(el => {
+    el.addEventListener("click", () => {
+      const tag = el.textContent.trim().toLowerCase();
+      state.tag = state.tag === tag ? "all" : tag;
+      document.getElementById("tagFilter").value = state.tag;
+      render();
+      document.querySelectorAll(".tags-cloud .tag").forEach(t => t.classList.toggle("active", t.textContent.trim().toLowerCase() === state.tag));
     });
+  });
+
+  // Mini tag click
+  document.addEventListener("click", e => {
+    if (e.target.classList.contains("mini-tag")) {
+      const tag = e.target.dataset.tag;
+      state.tag = tag;
+      document.getElementById("tagFilter").value = tag;
+      render();
+    }
+  });
+
+  // Ripple for buttons
+  document.addEventListener("click", e => {
+    const btn = e.target.closest(".btn");
+    if (!btn) return;
+    const ripple = document.createElement("span");
+    const rect = btn.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    ripple.style.width = ripple.style.height = size + "px";
+    ripple.style.left = (e.clientX - rect.left - size/2) + "px";
+    ripple.style.top = (e.clientY - rect.top - size/2) + "px";
+    ripple.style.position = "absolute";
+    ripple.style.borderRadius = "50%";
+    ripple.style.background = "rgba(255,255,255,0.35)";
+    ripple.style.transform = "scale(0)";
+    ripple.style.pointerEvents = "none";
+    ripple.style.animation = "ripple .6s ease-out";
+    btn.style.position = "relative"; btn.style.overflow = "hidden";
+    btn.appendChild(ripple);
+    setTimeout(()=> ripple.remove(), 600);
   });
 }
 
 init();
+
+/* CSS for mark and ripple added via style tag */
+const extraCss = document.createElement("style");
+extraCss.textContent = `
+mark { background: #fef08a; color: #1f2937; padding: 0 .15em; border-radius: 3px; }
+.tags-cloud .tag.active { background: var(--primary-100); color: var(--primary-600); border-color: var(--primary-200); }
+@keyframes ripple { to { transform: scale(2.5); opacity: 0; } }
+`;
+document.head.appendChild(extraCss);
