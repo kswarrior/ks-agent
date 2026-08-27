@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { Plan, Project, Terminal, Activity } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
 import { IconCheck, IconX, IconPlus, IconSearch, IconActivity, IconRotate, IconChevronLeft, IconTerminal, IconTrash, IconPencil } from '../icons'
 import { FilesPane } from './FilesPane'
 import { ActivityPane } from './ActivityPane'
+import { XTermTerminal } from './XTermTerminal'
 import { useDialogs } from '../dialogs'
 
 type RsTab = 'plan' | 'files' | 'terminal' | 'activity'
