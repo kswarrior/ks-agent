@@ -45,11 +45,14 @@ const fmtViews = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, ""
 const initials = (name) =>
   name.split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
 
+const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 const highlight = (text, query) => {
-  if (!query) return text;
+  const escaped = escapeHtml(text);
+  if (!query) return escaped;
   const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`(${q})`, 'ig');
-  return text.replace(re, '<mark>$1</mark>');
+  return escaped.replace(re, '<mark>$1</mark>');
 };
 
 const debounce = (fn, wait=180) => {
@@ -102,32 +105,34 @@ function render() {
   page.forEach((d, i) => {
     const tr = document.createElement("tr");
     tr.style.animationDelay = `${i * 25}ms`;
+    const safeTitle = escapeHtml(d.title);
     tr.innerHTML = `
       <td class="checkbox-cell"><input type="checkbox" /></td>
       <td>
-        <span class="cell-title" title="Open ${d.title}">${highlight(d.title, state.search)}</span>
+        <span class="cell-title" title="Open ${safeTitle}">${highlight(d.title, state.search)}</span>
       </td>
-      <td><span class="badge ${d.status}">${d.status}</span></td>
-      <td><span class="cell-category">${d.category}</span></td>
+      <td><span class="badge ${escapeHtml(d.status)}">${escapeHtml(d.status)}</span></td>
+      <td><span class="cell-category">${escapeHtml(d.category)}</span></td>
       <td>
         <div class="tags-cell">
-          ${d.tags.map(t => `<span class="mini-tag" data-tag="${t}">${t}</span>`).join("")}
+          ${d.tags.map(t => `<span class="mini-tag" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</span>`).join("")}
         </div>
       </td>
       <td>
         <div class="author-cell">
-          <div class="avatar-sm">${d.initials || initials(d.author)}</div>
-          <span>${d.author}</span>
+          <div class="avatar-sm">${escapeHtml(d.initials || initials(d.author))}</div>
+          <span>${escapeHtml(d.author)}</span>
         </div>
       </td>
-      <td><span class="date-cell">${fmtDate(d.date)}</span></td>
-      <td class="views-cell">${fmtViews(d.views)}</td>
+      <td><span class="date-cell">${escapeHtml(fmtDate(d.date))}</span></td>
+      <td class="views-cell">${escapeHtml(fmtViews(d.views))}</td>
     `;
     tbody.appendChild(tr);
   });
 
   const total = state.data.length;
-  const from = start + 1;
+  const clampedStart = Math.min(start, Math.max(0, total - 1));
+  const from = total === 0 ? 0 : clampedStart + 1;
   const to = Math.min(start + PAGE_SIZE, total);
   document.querySelector(".pager-info").textContent = `${from}–${to} of ${total}`;
 
