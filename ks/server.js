@@ -17,6 +17,7 @@ app.set('layout extractStyles', true);
 app.get('/', (req, res) => res.render('dashboard', { page: 'dashboard' }));
 app.get('/about', (req, res) => res.render('about', { page: 'about' }));
 app.get('/dashboard', (req, res) => res.render('dashboard', { page: 'dashboard' }));
+app.get('/hosting', (req, res) => res.render('hosting', { page: 'hosting' }));
 
 app.listen(PORT, () => {
   console.log(`Server running ✓ http://localhost:${PORT}`);

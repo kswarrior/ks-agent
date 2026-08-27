@@ -94,16 +94,19 @@ function PlanView({ plan, activities, streaming }: { plan: Plan | null; activiti
         <div className="flow-track">
           {stages.map((s, i) => {
             const state = i < currentOrder ? 'done' : i === currentOrder ? 'active' : 'pending'
+            const isActive = i === currentOrder
+            // Only animate pulse while streaming or when a step is actively working
+            const showPulse = isActive && (streaming || !!workingStep)
             return (
               <div key={s.id} className={`flow-node ${state}`}>
-                <span className="flow-dot">{i < currentOrder ? <IconCheck size={10} /> : i === currentOrder ? <span className="flow-pulse" /> : null}</span>
+                <span className="flow-dot">{i < currentOrder ? <IconCheck size={10} /> : showPulse ? <span className="flow-pulse" /> : null}</span>
                 <span className="flow-label">{s.label}</span>
                 {i < stages.length - 1 && <span className={`flow-line ${i < currentOrder ? 'done' : ''}`} />}
               </div>
             )
           })}
         </div>
-        {stageDetail && <div className="flow-detail executing">{stageDetail}<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></div>}
+        {stageDetail && streaming && <div className="flow-detail executing">{stageDetail}<span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span></div>}
         {stage === 'done' && <div className="flow-detail done">All steps completed</div>}
       </div>
 
