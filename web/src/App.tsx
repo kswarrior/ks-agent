@@ -564,7 +564,11 @@ function KsAgent() {
   // ---- render ----
   return (
     <div className="app">
-      <Header onMenu={() => setSidebarOpen((v) => !v)} onToggleRight={() => setRsbOpen((v) => !v)} />
+      <Header
+        onMenu={() => setSidebarOpen((v) => !v)}
+        onToggleRight={() => setRsbOpen((v) => !v)}
+        onTogglePreview={() => setPreviewOpen((v) => !v)}
+      />
       <div className={`shell${sidebarOpen ? '' : ' sb-closed'}`}>
         <Sidebar
           open={sidebarOpen}
