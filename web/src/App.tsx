@@ -156,6 +156,23 @@ function KsAgent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId])
 
+  // load questions for the chat
+  useEffect(() => {
+    if (!activeChatId) return
+    let cancelled = false
+    api
+      .listQuestions(activeChatId)
+      .then((list) => {
+        if (cancelled) return
+        setQuestions((prev) => ({ ...prev, [activeChatId]: list }))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChatId])
+
   // load models (+ keep selection valid)
   const refreshModels = useCallback(async () => {
     try {
@@ -229,6 +246,14 @@ function KsAgent() {
             onPlan: (plan) => {
               setPlans((prev) => ({ ...prev, [chatId]: plan }))
             },
+            onQuestion: (question) => {
+              setQuestions((prev) => {
+                const list = prev[chatId] ?? []
+                const idx = list.findIndex((q) => q.id === question.id)
+                const nextList = idx >= 0 ? list.map((q) => (q.id === question.id ? question : q)) : [...list, question]
+                return { ...prev, [chatId]: nextList }
+              })
+            },
             onError: (message) => toast(message.split('\n')[0], 'error'),
             onDone: () => {}
           },
@@ -278,6 +303,10 @@ function KsAgent() {
               else delete next[chatId]
               return next
             })
+          } catch {}
+          try {
+            const qs = await api.listQuestions(chatId)
+            setQuestions((prev) => ({ ...prev, [chatId]: qs }))
           } catch {}
         })
     },
@@ -478,6 +507,24 @@ function KsAgent() {
     }
   }
 
+  const handleAnswerQuestion = useCallback(
+    async (questionId: string, answer: string) => {
+      const chatId = activeChatId
+      if (!chatId) return
+      try {
+        const updated = await api.answerQuestion(chatId, questionId, answer)
+        setQuestions((prev) => {
+          const list = prev[chatId] ?? []
+          return { ...prev, [chatId]: list.map((q) => (q.id === updated.id ? updated : q)) }
+        })
+      } catch (e: any) {
+        toast(e.message, 'error')
+        throw e
+      }
+    },
+    [activeChatId, toast]
+  )
+
   // ---- render ----
   return (
     <div className="app">
@@ -513,6 +560,8 @@ function KsAgent() {
             onSend={send}
             onStop={stopStreaming}
             onRequestSettings={() => setSettingsOpen(true)}
+            questions={activeChat ? questions[activeChat.id] ?? [] : []}
+            onAnswerQuestion={handleAnswerQuestion}
           />
         </main>
         <RightSidebar
