@@ -203,6 +203,65 @@ const AGENT_TOOLS: ToolDef[] = [
   }
 ]
 
+/**
+ * Detects whether a shell command is dangerous/destructive and should require
+ * user approval before execution. Returns null if safe, or a description of
+ * why it's dangerous.
+ */
+function isDangerousCommand(command: string): string | null {
+  const c = command.trim()
+
+  // Full wildcard rm
+  if (/rm\s+(-[a-zA-Z]*\s+)?\*\s*$/.test(c) || /rm\s+(-[a-zA-Z]*\s+)?\/\*\s*$/.test(c)) {
+    return 'Deletes ALL files in the current directory'
+  }
+  // rm -rf / or rm -rf ~ (system-wide destructive)
+  if (/rm\s+(-[a-zA-Z]*\s+)*(\/|~)\s*($|;|&&|\|\|)/.test(c)) {
+    return 'Deletes an entire system path (root or home)'
+  }
+  // rm -rf with multiple directories (suspicious mass delete)
+  if (/rm\s+-[a-zA-Z]*r/.test(c) && /rm\s+.*\s+\/\w/.test(c)) {
+    return 'Recursive delete with root-absolute paths'
+  }
+  // sudo commands
+  if (/^sudo\s/.test(c) || /;\s*sudo\s/.test(c) || /&&\s*sudo\s/.test(c) || /\|\|\s*sudo\s/.test(c)) {
+    return 'Runs a command as root (sudo)'
+  }
+  // dd (disk destroyer)
+  if (/\bdd\s+/.test(c)) {
+    return 'Direct disk write (dd)'
+  }
+  // Format commands
+  if (/\bmkfs\b/.test(c) || /\bformat\b/.test(c)) {
+    return 'Formats a filesystem'
+  }
+  // System halt/power
+  if (/\b(shutdown|reboot|halt|poweroff|init\s+[06])\b/.test(c)) {
+    return 'Shuts down or reboots the system'
+  }
+  // mv to system dirs (silent overwrite possible)
+  if (/\bmv\s+.*\s+\/(etc|bin|sbin|lib|usr|boot|root|var)\b/.test(c)) {
+    return 'Moves files into a critical system directory'
+  }
+  // chmod/chown recursively on system paths
+  if (/\b(chmod|chown)\s+.*\s+\/(etc|bin|sbin|lib|usr|boot|root|var)\b/.test(c)) {
+    return 'Changes permissions/ownership on system directories'
+  }
+  // kill -9 all / killall
+  if (/\bkill\s+-9?\s+-1\b/.test(c) || /\bkillall\b/.test(c)) {
+    return 'Force-kills processes system-wide'
+  }
+  // git push --force
+  if (/\bgit\s+push\s+.*--force\b/.test(c) || /\bgit\s+push\s+.*-f\b/.test(c)) {
+    return 'Force-pushes to git (can overwrite remote history)'
+  }
+  // Package manager install/update system packages
+  if (/\b(apt|apt-get|yum|dnf|pacman|apk)\s+(install|remove|purge|upgrade|dist-upgrade)\b/.test(c)) {
+    return 'Modifies system packages'
+  }
+  return null
+}
+
 async function execShell(command: string, cwd: string): Promise<{ code: number; output: string }> {
   return await new Promise((resolve) => {
     exec(
@@ -306,6 +365,71 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
     case 'run_shell': {
       const command = typeof args.command === 'string' ? args.command.trim() : ''
       if (!command) return err('command is required')
+      const danger = isDangerousCommand(command)
+      if (danger) {
+        // Force approval before executing any dangerous command.
+        const header = '⚠ Danger'
+        const question = `${danger}.\n\nCommand: \`${command}\`\n\nAllow this command to run?`
+        const options = ['Yes, run it', 'No, cancel']
+        const db = getDb()
+        const now = new Date().toISOString()
+        const qId = newId()
+        const q: Question = {
+          id: qId,
+          chatId: ctx.chatId,
+          header,
+          question,
+          options,
+          allowCustom: false,
+          status: 'pending',
+          createdAt: now,
+          toolCallId: ctx.toolCallId
+        }
+        db.questions.push(q)
+        saveDb()
+        ctx.onEvent('question', JSON.stringify(q))
+
+        let answer: string
+        try {
+          answer = await new Promise<string>((resolve, reject) => {
+            const onAbort = () => {
+              pendingQuestionResolvers.delete(qId)
+              reject(abortError())
+            }
+            if (ctx.signal.aborted) {
+              onAbort()
+              return
+            }
+            ctx.signal.addEventListener('abort', onAbort, { once: true })
+            pendingQuestionResolvers.set(qId, (ans: string) => {
+              ctx.signal.removeEventListener('abort', onAbort)
+              resolve(ans)
+            })
+          })
+        } catch (e: any) {
+          if (e?.name === 'AbortError') throw e
+          return err(String(e?.message || e))
+        }
+
+        // If denied, abort the entire generation — do not fall back to plan mode.
+        if (!options.includes(answer)) {
+          q.status = 'answered'
+          q.answer = answer
+          q.selectedOption = null
+          q.answeredAt = new Date().toISOString()
+          saveDb()
+          ctx.signal.abort()
+          return err(`Command rejected by user: "${answer}". Aborting generation.`)
+        }
+
+        q.status = 'answered'
+        q.answer = answer
+        q.selectedOption = answer
+        q.answeredAt = new Date().toISOString()
+        saveDb()
+        ctx.onEvent('question', JSON.stringify(q))
+      }
+
       const { code, output } = await execShell(command, ctx.projectPath)
       return ok(`exit ${code}\n${output || '(no output)'}`, `$ ${command.slice(0, 80)} → exit ${code}`)
     }
