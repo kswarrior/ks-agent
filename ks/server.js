@@ -4,20 +4,20 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 
-// Serve static files from the current directory, but block sensitive files
+// Block sensitive files before static serving
+app.use((req, res, next) => {
+  const blocked = ['/server.js', '/package.json', '/package-lock.json'];
+  if (blocked.includes(req.path) || req.path.startsWith('/node_modules')) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+
+// Serve static files from the current directory
 app.use(express.static(path.join(__dirname), {
   dotfiles: 'ignore',
-  index: ['index.html'],
-  setHeaders(res, filePath) {
-    if (filePath.endsWith('server.js') || filePath.includes('node_modules')) {
-      res.statusCode = 404;
-    }
-  }
+  index: ['index.html']
 }));
-// Block direct access to sensitive files
-app.use('/server.js', (req, res) => res.status(404).send('Not found'));
-app.use('/package.json', (req, res) => res.status(404).send('Not found'));
-app.use('/package-lock.json', (req, res) => res.status(404).send('Not found'));
 
 // Start server
 app.listen(PORT, () => {
