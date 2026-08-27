@@ -199,6 +199,10 @@ app.delete('/api/projects/:id', (c) => {
     generations.get(cid)?.controller.abort()
     generations.delete(cid)
   }
+  // kill terminals + ptys for this project
+  const termIds = db.terminals.filter((t) => t.projectId === removed.id).map((t) => t.id)
+  db.terminals = db.terminals.filter((t) => t.projectId !== removed.id)
+  for (const tid of termIds) killPty(tid)
   saveDb()
   return c.json({ ok: true })
 })
@@ -1115,10 +1119,12 @@ app.patch('/api/terminals/:id', async (c) => {
 
 app.delete('/api/terminals/:id', (c) => {
   const db = getDb()
-  const idx = db.terminals.findIndex((t) => t.id === c.req.param('id'))
+  const id = c.req.param('id')
+  const idx = db.terminals.findIndex((t) => t.id === id)
   if (idx === -1) return c.json({ error: 'Terminal not found' }, 404)
   db.terminals.splice(idx, 1)
   saveDb()
+  killPty(id)
   return c.json({ ok: true })
 })
 
@@ -1145,6 +1151,23 @@ app.post('/api/terminals/:id/exec', async (c) => {
     )
   })
   return c.json({ output, exitCode: code, cwd: project.path })
+})
+
+// PTY resize via HTTP (also supported via WS JSON message)
+app.post('/api/terminals/:id/resize', async (c) => {
+  const terminal = findTerminal(c.req.param('id'))
+  if (!terminal) return c.json({ error: 'Terminal not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const cols = Number(body.cols)
+  const rows = Number(body.rows)
+  if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols <= 0 || rows <= 0 || cols > 500 || rows > 500) {
+    return c.json({ error: 'Invalid cols/rows' }, 400)
+  }
+  const sess = ptySessions.get(terminal.id)
+  if (sess) {
+    try { sess.pty.resize(cols, rows) } catch {}
+  }
+  return c.json({ ok: true })
 })
 
 function isBlockedHost(hostname: string): boolean {
