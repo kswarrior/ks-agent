@@ -477,7 +477,8 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
             opts.onDelta(text)
           },
           opts.signal,
-          opts.retrySettings
+          opts.retrySettings,
+          opts.maxTokens
         )
         break
       } catch (e: any) {

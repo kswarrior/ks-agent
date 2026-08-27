@@ -521,7 +521,7 @@ app.get('/api/chats/:id/events', (c) => {
     const ping = setInterval(() => {
       if (closed) return
       stream.writeSSE({ event: 'ping', data: '' }).catch(markClosed)
-    }, 15000)
+    }, 10000)
 
     if (job.status !== 'running') {
       if (job.status === 'done') listener('done', JSON.stringify({ messageId: job.assistantId }))
