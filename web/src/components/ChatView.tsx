@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Chat, Message, ModelEntry, Question } from '../types'
+import type { Activity, Chat, Message, ModelEntry, Plan, Question } from '../types'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconSearch, IconSend, IconStop } from '../icons'
+import { IconChevronDown, IconRotate, IconSearch, IconSend, IconStop } from '../icons'
 import { QuestionList } from './QuestionCard'
 
 function ClampedContent({ children }: { children: ReactNode }) {
@@ -44,6 +44,8 @@ interface Props {
   onRequestSettings: () => void
   questions: Question[]
   onAnswerQuestion: (questionId: string, answer: string) => Promise<void>
+  plan?: Plan | null
+  activities?: Activity[]
 }
 
 export function ChatView(props: Props) {
@@ -111,6 +113,26 @@ export function ChatView(props: Props) {
       setModelQuery('')
     }
   }, [modelOpen])
+
+  // Flow status for chat (replaces rectangular while AI writes)
+  const plan = (props as any).plan as Plan | null | undefined
+  const activities = ((props as any).activities as Activity[] | undefined) ?? []
+  const hasExplore = activities.some(a => ['list_files','read_file','run_shell'].includes(a.toolType))
+  const workingStep = plan?.steps.find(s => s.status === 'working')
+  const workingIdx = workingStep && plan ? plan.steps.indexOf(workingStep) : -1
+  const totalSteps = plan?.steps.length ?? 0
+  const doneSteps = plan ? plan.steps.filter(s => s.status === 'done').length : 0
+  let chatStage: 'understand' | 'explore' | 'planning' | 'executing' | 'idle' = 'idle'
+  let chatStageLabel = ''
+  if (props.streaming) {
+    if (!plan && !hasExplore) { chatStage = 'understand'; chatStageLabel = 'Understanding' }
+    else if (!plan && hasExplore) { chatStage = 'explore'; chatStageLabel = 'Exploring' }
+    else if (plan && !workingStep && doneSteps === 0) { chatStage = 'planning'; chatStageLabel = 'Planning' }
+    else if (plan && workingStep) { chatStage = 'executing'; chatStageLabel = 'Executing' }
+    else if (plan) { chatStage = 'executing'; chatStageLabel = 'Executing' }
+  } else if (plan && workingStep) {
+    chatStage = 'executing'; chatStageLabel = 'Executing'
+  }
 
   return (
     <>
