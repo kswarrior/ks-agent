@@ -51,7 +51,7 @@ function PlanView({ plan, activities, streaming }: { plan: Plan | null; activiti
     { id: 'planning', label: 'Planning' },
     { id: 'executing', label: 'Executing' },
   ]
-  const stageOrder: Record<Exclude<Stage, 'idle'>, number> = { understand: 0, explore: 1, planning: 2, executing: 3, done: 3 }
+  const stageOrder: Record<Exclude<Stage, 'idle'>, number> = { understand: 0, explore: 1, planning: 2, executing: 3, done: 4 }
   const currentOrder = stage === 'idle' ? -1 : stageOrder[stage as Exclude<Stage, 'idle'>]
 
   if (!plan) {
