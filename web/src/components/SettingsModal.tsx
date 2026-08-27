@@ -382,7 +382,69 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
             </>
           ) : null}
 
-          {tab === 'models' && (
+          {tab === 'models' && showModelForm ? (
+            <>
+              <div className="list-head">
+                <button
+                  className="icon-btn"
+                  aria-label="Back to models"
+                  onClick={() => { setShowModelForm(false); setError(null) }}
+                >
+                  <IconChevronLeft size={16} />
+                </button>
+                <h3>Create model</h3>
+              </div>
+              <div className="inline-form" style={{ marginTop: 0 }}>
+                <label className="field-label">Provider</label>
+                <select
+                  className="input"
+                  value={modelForm.providerId}
+                  onChange={(e) => setModelForm({ ...modelForm, providerId: e.target.value })}
+                >
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <label className="field-label">Model id</label>
+                <input
+                  className="input"
+                  placeholder="minimax-ai/minimax-m3"
+                  value={modelForm.model}
+                  onChange={(e) => setModelForm({ ...modelForm, model: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && submitModel()}
+                />
+                <p className="hint">Use the provider's model identifier, e.g. minimax-ai/minimax-m3</p>
+                <label className="field-label">Display name</label>
+                <input
+                  className="input"
+                  placeholder="e.g. MiniMax M3 (optional)"
+                  value={modelForm.displayName}
+                  onChange={(e) => setModelForm({ ...modelForm, displayName: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && submitModel()}
+                />
+                <label className="field-label">Max tokens (optional)</label>
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="e.g. 16384 (leave empty for provider default)"
+                  value={modelForm.maxTokens}
+                  onChange={(e) => setModelForm({ ...modelForm, maxTokens: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && submitModel()}
+                />
+                <p className="hint">Maximum tokens for AI responses. Higher values allow longer responses.</p>
+                <div className="dialog-actions">
+                  <button className="btn" onClick={() => { setShowModelForm(false); setError(null) }}>
+                    Cancel
+                  </button>
+                  <button className="btn btn-primary" onClick={submitModel}>
+                    Add model
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : tab === 'models' ? (
             <>
               <div className="list-head">
                 <h3>Models ({models.length})</h3>
@@ -400,7 +462,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 </button>
               </div>
 
-              {models.length === 0 && !showModelForm && (
+              {models.length === 0 && (
                 <div className="empty" style={{ padding: '36px 12px' }}>
                   <h2>No models yet</h2>
                   <p>Add a model like <code>minimax-ai/minimax-m3</code> under one of your providers.</p>
@@ -433,61 +495,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   ))}
                 </div>
               ))}
-
-              {showModelForm && (
-                <div className="inline-form">
-                  <h4>New model</h4>
-                  <label className="field-label">Provider</label>
-                  <select
-                    className="input"
-                    value={modelForm.providerId}
-                    onChange={(e) => setModelForm({ ...modelForm, providerId: e.target.value })}
-                  >
-                    {providers.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="field-label">Model id</label>
-                  <input
-                    className="input"
-                    placeholder="minimax-ai/minimax-m3"
-                    value={modelForm.model}
-                    onChange={(e) => setModelForm({ ...modelForm, model: e.target.value })}
-                    onKeyDown={(e) => e.key === 'Enter' && submitModel()}
-                  />
-                  <p className="hint">Use the provider's model identifier, e.g. minimax-ai/minimax-m3</p>
-                  <label className="field-label">Display name</label>
-                  <input
-                    className="input"
-                    placeholder="e.g. MiniMax M3 (optional)"
-                    value={modelForm.displayName}
-                    onChange={(e) => setModelForm({ ...modelForm, displayName: e.target.value })}
-                    onKeyDown={(e) => e.key === 'Enter' && submitModel()}
-                  />
-                  <label className="field-label">Max tokens (optional)</label>
-                  <input
-                    className="input"
-                    type="number"
-                    placeholder="e.g. 16384 (leave empty for provider default)"
-                    value={modelForm.maxTokens}
-                    onChange={(e) => setModelForm({ ...modelForm, maxTokens: e.target.value })}
-                    onKeyDown={(e) => e.key === 'Enter' && submitModel()}
-                  />
-                  <p className="hint">Maximum tokens for AI responses. Higher values allow longer responses.</p>
-                  <div className="dialog-actions">
-                    <button className="btn" onClick={() => { setShowModelForm(false); setError(null) }}>
-                      Cancel
-                    </button>
-                    <button className="btn btn-primary" onClick={submitModel}>
-                      Add model
-                    </button>
-                  </div>
-                </div>
-              )}
-             </>
-          )}
+            </>
+          ) : null}
 
           {tab === 'prompt' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
