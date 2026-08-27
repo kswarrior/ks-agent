@@ -7,52 +7,16 @@
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <header class="site-header">
-        <div class="header-content">
-            <div class="logo">
-                <span class="logo-icon">📚</span>
-                <span class="logo-text">KS Docs</span>
-            </div>
-            <nav class="main-nav">
-                <a href="/" class="nav-link">Home</a>
-                <a href="/docs" class="nav-link">Docs</a>
-                <a href="/dashboard" class="nav-link">Dashboard</a>
-            </nav>
-        </div>
-    </header>
+    <%- include('partials/header') %>
 
     <div class="page-wrapper">
-        <aside class="sidebar">
-            <div class="sidebar-section">
-                <h3>Documentation</h3>
-                <nav class="sidebar-nav">
-                    <a href="/docs" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === null ? 'active' : '' %>">Overview</a>
-                    <% if (typeof docs !== 'undefined' && docs) { %>
-                        <% docs.forEach(function(doc) { %>
-                            <a href="/docs/<%= doc.id %>" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === doc.id ? 'active' : '' %>">
-                                <%= doc.title %>
-                            </a>
-                        <% }); %>
-                    <% } %>
-                </nav>
-            </div>
-            <div class="sidebar-section">
-                <h3>Resources</h3>
-                <nav class="sidebar-nav">
-                    <a href="#" class="sidebar-link">Examples</a>
-                    <a href="#" class="sidebar-link">Tutorials</a>
-                    <a href="#" class="sidebar-link">Community</a>
-                </nav>
-            </div>
-        </aside>
+        <%- include('partials/sidebar') %>
 
         <main class="main-content">
-            <%- content %>
+            <%- defineContent('content') %>
         </main>
     </div>
 
-    <footer class="site-footer">
-        <p>&copy; 2024 KS Documentation. All rights reserved.</p>
-    </footer>
+    <%- include('partials/footer') %>
 </body>
 </html>
