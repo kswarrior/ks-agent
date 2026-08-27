@@ -1,0 +1,28 @@
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <span class="section-title">Browse</span>
+    <nav>
+      <a class="nav-item <%= page === 'dashboard' ? 'active' : '' %>" href="/dashboard">Dashboard</a>
+      <a class="nav-item <%= page === 'docs' ? 'active' : '' %>" href="/docs">Docs Home</a>
+      <a class="nav-item <%= page === 'docs-section' ? 'active' : '' %>" href="/docs/section">Section</a>
+    </nav>
+  </div>
+
+  <div class="sidebar-section">
+    <span class="section-title">Docs Pages</span>
+    <nav>
+      <a class="nav-item <%= page === 'docs-intro' ? 'active' : '' %>" href="/docs/introduction">Introduction</a>
+      <a class="nav-item <%= page === 'docs-getting-started' ? 'active' : '' %>" href="/docs/getting-started">Getting Started</a>
+      <a class="nav-item <%= page === 'docs-api' ? 'active' : '' %>" href="/docs/api">API Reference</a>
+      <a class="nav-item <%= page === 'docs-faq' ? 'active' : '' %>" href="/docs/faq">FAQ</a>
+    </nav>
+  </div>
+
+  <div class="sidebar-section">
+    <span class="section-title">Meta</span>
+    <nav>
+      <a class="nav-item" href="/docs/releases">Releases</a>
+      <a class="nav-item" href="/docs/changelog">Changelog</a>
+    </nav>
+  </div>
+</aside>
