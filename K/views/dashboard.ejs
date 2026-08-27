@@ -1,0 +1,132 @@
+<%- include('partials/header') %>
+
+<div class="main-content <%= active === 'dashboard' ? '' : 'expanded' %>">
+  <!-- Welcome Banner -->
+  <div class="welcome-banner">
+    <h1>Welcome back, <%= user.username %>! ⚔️</h1>
+    <p>Ready to conquer the Minecraft world today?</p>
+    <div class="stats-row">
+      <div class="stat-chip"><i class="fas fa-gem"></i> Level <%= user.level %></div>
+      <div class="stat-chip"><i class="fas fa-coins"></i> <%= user.coins.toLocaleString() %> Coins</div>
+      <div class="stat-chip"><i class="fas fa-shield-alt"></i> <%= user.rank %> Rank</div>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 4px;">Total Kills</div>
+          <div style="font-size: 1.8rem; font-weight: 800;">4,521</div>
+        </div>
+        <div class="icon-badge red"><i class="fas fa-skull"></i></div>
+      </div>
+      <div style="color: var(--success); font-size: 0.85rem;"><i class="fas fa-arrow-up"></i> 12% this week</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 4px;">Play Time</div>
+          <div style="font-size: 1.8rem; font-weight: 800;">342h</div>
+        </div>
+        <div class="icon-badge blue"><i class="fas fa-clock"></i></div>
+      </div>
+      <div style="color: var(--text-muted); font-size: 0.85rem;">+5h this week</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 4px;">Blocks Mined</div>
+          <div style="font-size: 1.8rem; font-weight: 800;">89K</div>
+        </div>
+        <div class="icon-badge yellow"><i class="fas fa-cube"></i></div>
+      </div>
+      <div style="color: var(--success); font-size: 0.85rem;"><i class="fas fa-arrow-up"></i> 3% this week</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 4px;">Mob Kills</div>
+          <div style="font-size: 1.8rem; font-weight: 800;">12,340</div>
+        </div>
+        <div class="icon-badge purple"><i class="fas fa-spider"></i></div>
+      </div>
+      <div style="color: var(--success); font-size: 0.85rem;"><i class="fas fa-arrow-up"></i> 8% this week</div>
+    </div>
+  </div>
+
+  <!-- Grid Sections -->
+  <div class="grid-2">
+    <!-- Achievements -->
+    <div class="card">
+      <div class="card-header">
+        <h2><i class="fas fa-trophy" style="color: var(--warning);"></i> Recent Achievements</h2>
+      </div>
+      <div class="achievement">
+        <div class="achievement-icon"><i class="fas fa-crown"></i></div>
+        <div>
+          <h3>Diamond Lord</h3>
+          <p>Mine 10,000 diamonds in total</p>
+          <span class="rarity legendary">Legendary</span>
+        </div>
+      </div>
+      <div class="achievement">
+        <div class="achievement-icon"><i class="fas fa-dragon"></i></div>
+        <div>
+          <h3>Ender Slayer</h3>
+          <p>Defeat the Ender Dragon 50 times</p>
+          <span class="rarity epic">Epic</span>
+        </div>
+      </div>
+      <div class="achievement">
+        <div class="achievement-icon"><i class="fas fa-fire"></i></div>
+        <div>
+          <h3>Fire Resistant</h3>
+          <p>Survive in the Nether for 24 hours</p>
+          <span class="rarity rare">Rare</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity -->
+    <div class="card">
+      <div class="card-header">
+        <h2><i class="fas fa-chart-line" style="color: var(--accent-light);"></i> Activity</h2>
+      </div>
+      <div class="skill-list">
+        <div class="skill">
+          <div class="skill-header"><span>⚔️ Combat</span><span class="level">Level 92</span></div>
+          <div class="progress-bar"><div class="fill" style="width: 92%;"></div></div>
+        </div>
+        <div class="skill">
+          <div class="skill-header"><span>⛏️ Mining</span><span class="level">Level 78</span></div>
+          <div class="progress-bar"><div class="fill" style="width: 78%;"></div></div>
+        </div>
+        <div class="skill">
+          <div class="skill-header"><span>🌾 Farming</span><span class="level">Level 65</span></div>
+          <div class="progress-bar"><div class="fill" style="width: 65%;"></div></div>
+        </div>
+        <div class="skill">
+          <div class="skill-header"><span>🏹 Archery</span><span class="level">Level 84</span></div>
+          <div class="progress-bar"><div class="fill" style="width: 84%;"></div></div>
+        </div>
+        <div class="skill">
+          <div class="skill-header"><span>🧪 Alchemy</span><span class="level">Level 45</span></div>
+          <div class="progress-bar"><div class="fill" style="width: 45%;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+    &copy; 2025 <strong>KS Warrior</strong>. All rights reserved.
+  </div>
+</div>
+
+<script src="/javascripts/main.js"></script>
+</body>
+</html>
