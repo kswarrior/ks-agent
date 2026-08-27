@@ -6,7 +6,7 @@ import { IconCheck, IconX, IconPlus, IconSearch, IconActivity, IconRotate } from
 import { FilesPane } from './FilesPane'
 import { ActivityPane } from './ActivityPane'
 
-type RsTab = 'plan' | 'files' | 'terminal' | 'settings' | 'activity'
+type RsTab = 'plan' | 'files' | 'terminal' | 'activity'
 
 interface RightSidebarProps {
   open: boolean
@@ -21,8 +21,7 @@ const TABS: Array<{ id: RsTab; label: string }> = [
   { id: 'plan', label: 'Plan' },
   { id: 'files', label: 'Files' },
   { id: 'terminal', label: 'Terminal' },
-  { id: 'activity', label: 'Activity' },
-  { id: 'settings', label: 'Settings' }
+  { id: 'activity', label: 'Activity' }
 ]
 
 function PlanView({ plan }: { plan: Plan }) {
@@ -198,14 +197,6 @@ export function RightSidebar({ open, activeProject, plan, activities, onClose, o
           {tab === 'plan' && (plan ? <PlanView plan={plan} /> : <div className="rsb-empty">Nothing here yet</div>)}
           {tab === 'terminal' && <TerminalPane projectId={activeProject?.id ?? null} />}
           {tab === 'activity' && <ActivityPane activities={activities} />}
-          {tab === 'settings' && (
-            <div className="rsb-settings">
-              <p>Providers, models and prompts are managed in Settings.</p>
-              <button className="btn btn-primary" onClick={onOpenSettings}>
-                Open settings
-              </button>
-            </div>
-          )}
           {tab === 'files' && <FilesPane projectId={activeProject?.id ?? null} />}
         </div>
       </aside>
