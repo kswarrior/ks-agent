@@ -11,23 +11,26 @@ import {
   findChat,
   findPlanForChat,
   findProject,
+  findQuestion,
   findTerminal,
   getDb,
   getRetrySettings,
   loadDb,
   messagesOf,
   newId,
+  questionsOf,
   saveDb,
   terminalsOf,
   touchChat,
   updateRetrySettings,
   type Chat,
   type Project,
+  type Question,
   type Terminal,
   type RetrySettings
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
-import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, runAgentLoop } from './agent.js'
+import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 
 loadDb()
@@ -115,6 +118,7 @@ app.delete('/api/projects/:id', (c) => {
   db.chats = db.chats.filter((ch) => ch.projectId !== removed.id)
   db.messages = db.messages.filter((m) => !chatIds.has(m.chatId))
   db.plans = db.plans.filter((p) => !chatIds.has(p.chatId))
+  db.questions = db.questions.filter((q) => !chatIds.has(q.chatId))
   for (const cid of chatIds) {
     generations.get(cid)?.controller.abort()
     generations.delete(cid)
@@ -167,6 +171,7 @@ app.delete('/api/chats/:id', (c) => {
   db.chats.splice(idx, 1)
   db.messages = db.messages.filter((m) => m.chatId !== id)
   db.plans = db.plans.filter((p) => p.chatId !== id)
+  db.questions = db.questions.filter((q) => q.chatId !== id)
   generations.get(id)?.controller.abort()
   generations.delete(id)
   saveDb()
@@ -179,6 +184,44 @@ app.get('/api/chats/:id/plan', (c) => {
   const chat = findChat(c.req.param('id'))
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
   return c.json(findPlanForChat(chat.id) ?? null)
+})
+
+// ---------------- Questions ----------------
+
+app.get('/api/chats/:id/questions', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  return c.json(questionsOf(chat.id))
+})
+
+app.post('/api/chats/:id/questions/:qid/answer', async (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  const question = findQuestion(c.req.param('qid'))
+  if (!question || question.chatId !== chat.id) return c.json({ error: 'Question not found' }, 404)
+  if (question.status !== 'pending') return c.json({ error: 'Question already answered' }, 409)
+  const body = await c.req.json().catch(() => ({}))
+  const answer = String(body.answer ?? '').trim()
+  if (!answer) return c.json({ error: 'Answer is required' }, 400)
+  if (answer.length > 2000) return c.json({ error: 'Answer too long' }, 400)
+  if (!question.allowCustom && !question.options.includes(answer)) {
+    return c.json({ error: 'Custom answer not allowed for this question' }, 400)
+  }
+  question.answer = answer
+  question.selectedOption = question.options.includes(answer) ? answer : null
+  question.status = 'answered'
+  question.answeredAt = new Date().toISOString()
+  saveDb()
+  resolvePendingQuestion(question.id, answer)
+  const job = generations.get(chat.id)
+  if (job) {
+    for (const notify of [...job.listeners]) {
+      try {
+        notify('question', JSON.stringify(question))
+      } catch {}
+    }
+  }
+  return c.json(question)
 })
 
 // ---------------- Background generation ----------------

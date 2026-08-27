@@ -348,7 +348,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       const options = rawOptions.map((o: unknown) => String(o ?? '').trim()).filter(Boolean).slice(0, 6)
       const allowCustom = args.allow_custom !== false
       if (options.length === 0 && !allowCustom) return err('provide at least one option or allow custom answer')
-      if (options.some((o) => o.length > 80)) return err('each option must be <=80 chars')
+      if (options.some((o: string) => o.length > 80)) return err('each option must be <=80 chars')
       if (options.length > 0 && options.length < 1) return err('options invalid')
       const customPlaceholder =
         typeof args.custom_placeholder === 'string' ? args.custom_placeholder.trim().slice(0, 80) : undefined
