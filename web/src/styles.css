@@ -2071,12 +2071,12 @@ textarea {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 11px;
-  margin-bottom: 7px;
-  transition: border-color 0.15s ease, opacity 0.15s ease;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 8px 2px;
+  margin-bottom: 2px;
+  transition: opacity 0.15s ease;
 }
 
 .plan-check {
@@ -2228,16 +2228,16 @@ textarea {
 }
 
 .q-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  animation: rise 0.16s ease;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  animation: none;
 }
 
 .q-card.pending {
-  border-color: var(--border-strong);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  border: none;
+  box-shadow: none;
 }
 
 .q-card.answered {
