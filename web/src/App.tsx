@@ -530,6 +530,9 @@ function KsAgent() {
 
     let chatId = activeChatId
 
+    // Prevent concurrent sends for the same chat
+    if (chatId && sendingRef.current.has(chatId)) return
+
     if (!chatId) {
       creatingChatRef.current = true
       try {
@@ -564,6 +567,9 @@ function KsAgent() {
       setMessages((prev) => [...prev, tempUserMsg])
     }
 
+    // Mark this chat as sending
+    if (chatId) sendingRef.current.add(chatId)
+
     setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
 
     try {
@@ -591,6 +597,8 @@ function KsAgent() {
         const fresh = await api.listMessages(chatId)
         if (activeChatIdRef.current === chatId) setMessages(fresh)
       } catch {}
+    } finally {
+      if (chatId) sendingRef.current.delete(chatId)
     }
   }
 
