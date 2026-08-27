@@ -13,7 +13,9 @@ import {
   IconPencil,
   IconSearch,
   IconTrash,
-  IconUpload
+  IconUpload,
+  FileIcon,
+  getFileMeta
 } from '../icons'
 
 interface FilesPaneProps {
