@@ -1625,8 +1625,9 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
   const rawQuery = url.search
   if (qs && !rawQuery) targetPath += '?' + qs
   else if (rawQuery) targetPath = '/' + suffix + rawQuery
-  // ensure we don't double-slash
-  targetPath = targetPath.replace(/\/\//g, '/')
+  // ensure we don't double-slash in the path portion only (not query string)
+  const [pathPart, queryPart] = targetPath.split('?')
+  targetPath = pathPart.replace(/\/\//g, '/') + (queryPart ? '?' + queryPart : '')
   if (!targetPath.startsWith('/')) targetPath = '/' + targetPath
   const target = `http://127.0.0.1:${port}${targetPath}`
 
