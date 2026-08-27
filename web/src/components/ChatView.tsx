@@ -300,11 +300,11 @@ export function ChatView(props: Props) {
 
             {props.streaming ? (
               <button className="send-btn stop-btn" onClick={props.onStop} aria-label="Stop" title="Stop">
-                <IconStop size={16} />
+                <IconStop size={14} />
               </button>
             ) : (
               <button className="send-btn" onClick={send} disabled={!canSend} aria-label="Send" title="Send">
-                <IconSend size={15} />
+                <IconSend size={16} style={{ transform: 'translate(1px, -1px)' }} />
               </button>
             )}
           </div>
