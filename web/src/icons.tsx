@@ -406,3 +406,9 @@ export const IconMonitor = ({ size, className, style }: IconProps) => (
     <line x1="12" y1="17" x2="12" y2="21" />
   </svg>
 )
+
+export const IconPlay = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className} fill="currentColor" stroke="none" viewBox="0 0 24 24">
+    <polygon points="5 3 19 12 5 21 5 3" />
+  </svg>
+)

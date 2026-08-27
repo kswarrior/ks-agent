@@ -1563,7 +1563,7 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
       if (typeof v === 'string') headers.set(k, v)
     }
     // For proxy, we need to forward body if present
-    let body: BodyInit | undefined
+    let body: any = undefined
     if (!['GET', 'HEAD'].includes(method)) {
       try { body = await c.req.arrayBuffer() as any } catch {}
     }
