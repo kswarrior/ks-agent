@@ -240,7 +240,7 @@ button {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.75);
   overflow: hidden;
   animation: pop 0.12s ease;
 }
@@ -441,7 +441,7 @@ button {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75);
   padding: 5px;
   animation: pop 0.12s ease;
 }
@@ -833,7 +833,7 @@ button {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.75);
   padding: 6px;
   animation: pop 0.12s ease;
   z-index: 50;
@@ -897,7 +897,7 @@ button {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75);
   padding: 4px;
   animation: pop 0.12s ease;
 }
@@ -916,7 +916,7 @@ button {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.66);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(2px);
   z-index: 90;
   display: flex;
@@ -942,7 +942,7 @@ button {
   border: 1px solid var(--border-strong);
   border-radius: 14px;
   padding: 18px;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.85);
   animation: rise 0.16s ease;
 }
 
@@ -1103,7 +1103,7 @@ button {
   border: 1px solid var(--border-strong);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.85);
   animation: rise 0.16s ease;
 }
 
@@ -1307,7 +1307,7 @@ button {
   border: 1px solid var(--border-strong);
   color: var(--text);
   font-size: 13.5px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
   cursor: pointer;
   animation: toast-in 0.18s ease;
   word-break: break-word;
@@ -1767,7 +1767,7 @@ button {
 .plan-card.done .plan-check {
   background: #86efac;
   border-color: #86efac;
-  color: #0a0a0a;
+  color: #000000;
 }
 
 .plan-card.working .plan-check {
@@ -1836,7 +1836,7 @@ button {
     z-index: 70;
     transform: translateX(105%);
     transition: transform 0.2s ease;
-    box-shadow: -24px 0 48px rgba(0, 0, 0, 0.45);
+    box-shadow: -24px 0 48px rgba(0, 0, 0, 0.7);
   }
 
   .rsb.open {
@@ -1847,7 +1847,7 @@ button {
     display: block;
     position: fixed;
     inset: var(--header-h) 0 0 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.72);
     z-index: 65;
     animation: fade 0.15s ease;
   }
@@ -1862,7 +1862,7 @@ button {
     z-index: 70;
     transform: translateX(-105%);
     transition: transform 0.2s ease;
-    box-shadow: 24px 0 48px rgba(0, 0, 0, 0.45);
+    box-shadow: 24px 0 48px rgba(0, 0, 0, 0.7);
   }
 
   .sidebar.open {
@@ -1873,7 +1873,7 @@ button {
     display: block;
     position: fixed;
     inset: var(--header-h) 0 0 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.72);
     z-index: 60;
     animation: fade 0.15s ease;
   }
