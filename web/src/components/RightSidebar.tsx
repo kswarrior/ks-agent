@@ -14,7 +14,6 @@ interface RightSidebarProps {
   plan: Plan | null
   activities: Activity[]
   onClose: () => void
-  onOpenSettings: () => void
 }
 
 const TABS: Array<{ id: RsTab; label: string }> = [
@@ -176,7 +175,7 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
   )
 }
 
-export function RightSidebar({ open, activeProject, plan, activities, onClose, onOpenSettings }: RightSidebarProps) {
+export function RightSidebar({ open, activeProject, plan, activities, onClose }: RightSidebarProps) {
   const [tab, setTab] = useState<RsTab>('plan')
 
   return (
