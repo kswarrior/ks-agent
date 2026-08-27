@@ -12,10 +12,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 const indexRouter = require('./routes/index');
 const aboutRouter = require('./routes/about');
 const statsRouter = require('./routes/stats');
+const docsRouter = require('./routes/docs');
 
 app.use('/', indexRouter);
 app.use('/about', aboutRouter);
 app.use('/stats', statsRouter);
+app.use('/docs', docsRouter);
 
 // 404
 app.use((req, res) => {
