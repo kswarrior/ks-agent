@@ -535,6 +535,15 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   onKeyDown={(e) => e.key === 'Enter' && submitModel()}
                 />
                 <p className="hint">Maximum tokens for AI responses. Higher values allow longer responses.</p>
+                <label className="field-label">System prompt (optional)</label>
+                <textarea
+                  className="input"
+                  rows={6}
+                  placeholder="Custom system prompt for this model. Leave blank to use the global or built-in default. Useful for weaker models that need clearer instructions."
+                  value={modelForm.systemPrompt}
+                  onChange={(e) => setModelForm({ ...modelForm, systemPrompt: e.target.value })}
+                />
+                <p className="hint">A model-specific system prompt overrides the global setting and the built-in default.</p>
                 <div className="dialog-actions">
                   <button className="btn" onClick={() => { setShowModelForm(false); setError(null) }}>
                     Cancel
@@ -583,15 +592,28 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                         {m.maxTokens && (
                           <small style={{ color: 'var(--text-faint)', marginLeft: 6 }}>({m.maxTokens.toLocaleString()} tokens)</small>
                         )}
+                        {m.systemPrompt && (
+                          <small style={{ color: 'var(--text-faint)', marginLeft: 6 }}>(custom prompt)</small>
+                        )}
                       </span>
-                      <button
-                        className="icon-btn"
-                        style={{ width: 28, height: 28, color: '#ef4444' }}
-                        aria-label={`Remove ${m.model}`}
-                        onClick={() => removeModel(m)}
-                      >
-                        <IconTrash size={14} />
-                      </button>
+                      <span style={{ display: 'inline-flex', gap: 4 }}>
+                        <button
+                          className="icon-btn"
+                          style={{ width: 28, height: 28 }}
+                          aria-label={`Edit ${m.model}`}
+                          onClick={() => { setModelEdit({ ...m }); setError(null) }}
+                        >
+                          <IconPencil size={14} />
+                        </button>
+                        <button
+                          className="icon-btn"
+                          style={{ width: 28, height: 28, color: '#ef4444' }}
+                          aria-label={`Remove ${m.model}`}
+                          onClick={() => removeModel(m)}
+                        >
+                          <IconTrash size={14} />
+                        </button>
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -601,7 +623,31 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
 
           {tab === 'prompt' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
-              <h4>Plan prompt</h4>
+              <h4>System prompt (global)</h4>
+              <p className="hint" style={{ marginTop: 2, marginBottom: 10 }}>
+                The personality and behavior instructions sent to every model. Per-model prompts (set in the
+                Models tab) override this. Leave blank to use KS Agent's built-in default — recommended for
+                strong models. Weaker/small models (e.g. meta/muse-glimmer-30b) often work much better with a
+                clearer, custom prompt imported here.
+              </p>
+              <textarea
+                className="input"
+                rows={10}
+                placeholder="You are KS Agent, a precise coding assistant…"
+                value={systemDraft}
+                onChange={(e) => setSystemDraft(e.target.value)}
+              />
+              <div className="dialog-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={submitSystemPrompt}
+                  disabled={systemDraft.trim() === systemPrompt}
+                >
+                  Save
+                </button>
+              </div>
+
+              <h4 style={{ marginTop: 24 }}>Plan prompt</h4>
               <p className="hint" style={{ marginTop: 2, marginBottom: 10 }}>
                 Instructions for the agent when it plans and executes work (creating plan steps, using tools,
                 marking them complete). Leave blank to use the built-in default.
@@ -613,9 +659,6 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 value={planDraft}
                 onChange={(e) => setPlanDraft(e.target.value)}
               />
-              <p className="hint" style={{ marginTop: 8 }}>
-                The primary system prompt is built into KS Agent and cannot be viewed or edited.
-              </p>
               <div className="dialog-actions">
                 <button
                   className="btn btn-primary"
