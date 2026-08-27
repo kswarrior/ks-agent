@@ -365,9 +365,12 @@ interface GenerationJob {
   chatId: string
   assistantId: string
   model: string
+  modelDisplayName?: string
+  providerName?: string
   content: string
   status: 'running' | 'done' | 'stopped' | 'error'
   errorMessage?: string
+  startedAt: string
   finishedAt?: string
   controller: AbortController
   listeners: Set<(event: string, data: string) => void>
@@ -514,13 +517,27 @@ async function persistAssistantSafe(job: GenerationJob, content: string, isError
   try {
     const chat = findChat(job.chatId)
     if (!chat) return
+    const finishedAt = new Date().toISOString()
+    const startedAt = job.startedAt || finishedAt
+    let durationMs: number | undefined
+    try {
+      const d = Date.parse(finishedAt) - Date.parse(startedAt)
+      if (Number.isFinite(d) && d >= 0) durationMs = d
+    } catch {}
+    if (!job.finishedAt) job.finishedAt = finishedAt
     getDb().messages.push({
       id: job.assistantId,
       chatId: job.chatId,
       role: 'assistant',
       content,
-      createdAt: new Date().toISOString(),
-      error: isError || undefined
+      createdAt: finishedAt,
+      error: isError || undefined,
+      model: job.model,
+      modelDisplayName: job.modelDisplayName,
+      providerName: job.providerName,
+      startedAt,
+      finishedAt,
+      durationMs
     })
     touchChat(chat)
     saveDb()
@@ -742,8 +759,11 @@ app.post('/api/chats/:id/messages', async (c) => {
     chatId: chat.id,
     assistantId: newId(),
     model: resolvedModel.model,
+    modelDisplayName: resolvedModel.displayName,
+    providerName: provider.name,
     content: '',
     status: 'running',
+    startedAt: new Date().toISOString(),
     controller: new AbortController(),
     listeners: new Set()
   }
