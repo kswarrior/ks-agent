@@ -96,6 +96,21 @@ export interface RetrySettings {
   stopOnStatusCodes: number[]
 }
 
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question'
+
+export interface Activity {
+  id: string
+  chatId: string
+  toolType: ActivityToolType
+  toolCallId: string
+  args: Record<string, unknown>
+  summary: string
+  result?: string
+  ok?: boolean
+  timestamp: string
+  expanded?: boolean
+}
+
 interface DB {
   projects: Project[]
   chats: Chat[]
@@ -107,13 +122,14 @@ interface DB {
   plans: Plan[]
   terminals: Terminal[]
   questions: Question[]
+  activities: Activity[]
   retrySettings: RetrySettings
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404] } }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404] } }
 
 function ensureChatSeqs(chats: Chat[]): boolean {
   let changed = false
@@ -173,6 +189,7 @@ export function loadDb(): void {
       plans: Array.isArray(parsed.plans) ? parsed.plans : [],
       terminals: Array.isArray(parsed.terminals) ? parsed.terminals : [],
       questions: Array.isArray(parsed.questions) ? parsed.questions : [],
+      activities: Array.isArray(parsed.activities) ? parsed.activities : [],
       retrySettings: parsed.retrySettings && typeof parsed.retrySettings === 'object'
         ? {
             enabled: Boolean(parsed.retrySettings.enabled ?? defaultRetrySettings.enabled),
@@ -200,7 +217,7 @@ export function loadDb(): void {
       retryOnStatusCodes: [429, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404]
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], retrySettings: defaultRetrySettings }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings }
   }
 }
 
