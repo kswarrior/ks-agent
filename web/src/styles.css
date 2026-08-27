@@ -45,6 +45,45 @@ button {
   font-family: inherit;
 }
 
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+button:focus,
+button:active,
+a:focus,
+a:active,
+[role='button']:focus,
+[role='button']:active {
+  outline: none;
+  box-shadow: none;
+}
+
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: none;
+}
+
+input,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
 ::-webkit-scrollbar {
   width: 9px;
   height: 9px;
