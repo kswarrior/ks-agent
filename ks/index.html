@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Docs Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-icon">📚</span>
+        <span class="brand-text">Docsboard</span>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-section">Overview</div>
+        <a href="#" class="nav-item active">
+          <span>📄</span> All Pages
+        </a>
+        <a href="#" class="nav-item">
+          <span>🕐</span> Recent
+        </a>
+        <a href="#" class="nav-item">
+          <span>⭐</span> Favorites
+        </a>
+        <a href="#" class="nav-item">
+          <span>🗑️</span> Archived
+        </a>
+
+        <div class="nav-section">Status</div>
+        <a href="#" class="nav-item">
+          <span class="dot published"></span> Published
+        </a>
+        <a href="#" class="nav-item">
+          <span class="dot draft"></span> Draft
+        </a>
+        <a href="#" class="nav-item">
+          <span class="dot review"></span> In Review
+        </a>
+
+        <div class="nav-section">Tags</div>
+        <div class="tags-cloud">
+          <span class="tag">API</span>
+          <span class="tag">Getting Started</span>
+          <span class="tag">Guides</span>
+          <span class="tag">Reference</span>
+          <span class="tag">Tutorial</span>
+          <span class="tag">Changelog</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div class="avatar">AD</div>
+          <div class="user-meta">
+            <div class="user-name">Admin</div>
+            <div class="user-role">Owner</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Docs Pages</h1>
+          <p class="subtitle">Manage and monitor your documentation.</p>
+        </div>
+        <div class="topbar-actions">
+          <div class="searchbox-wrap">
+            <span class="search-icon">🔍</span>
+            <input
+              id="searchInput"
+              type="text"
+              placeholder="Search pages..."
+              class="searchbox"
+            />
+          </div>
+          <button class="btn primary">+ New Page</button>
+        </div>
+      </header>
+
+      <!-- FILTERS -->
+      <div class="filterbar">
+        <select id="statusFilter" class="select">
+          <option value="all">All statuses</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+          <option value="review">In Review</option>
+        </select>
+
+        <select id="tagFilter" class="select">
+          <option value="all">All tags</option>
+        </select>
+
+        <select id="sortSelect" class="select">
+          <option value="date-desc">Date (newest)</option>
+          <option value="date-asc">Date (oldest)</option>
+          <option value="title-asc">Title (A-Z)</option>
+          <option value="title-desc">Title (Z-A)</option>
+          <option value="views-desc">Most viewed</option>
+        </select>
+
+        <div class="result-count" id="resultCount"></div>
+      </div>
+
+      <!-- TABLE -->
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th class="checkbox-cell"><input type="checkbox" id="selectAll" /></th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Category</th>
+              <th>Tags</th>
+              <th>Author</th>
+              <th>Last Updated</th>
+              <th class="text-right">Views</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="empty-state" id="emptyState" style="display: none;">
+        <span class="empty-icon">📭</span>
+        <p>No pages match your filters.</p>
+      </div>
+
+      <!-- PAGINATION (kept simple) -->
+      <div class="pager" id="pager">
+        <span class="pager-info"></span>
+        <div class="pager-buttons"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
