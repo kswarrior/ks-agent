@@ -1100,16 +1100,18 @@ app.post('/api/projects/:id/files/upload', async (c) => {
   if (!t.stat.isDirectory()) return c.json({ error: 'Target is not a directory' }, 400)
   const raw = form.file
   const list = Array.isArray(raw) ? raw : [raw]
-  const saved = []
-  for (const item of list) {
-    if (!(item instanceof File)) continue
+  const files = list.filter((x): x is File => x instanceof File)
+  if (files.length === 0) return c.json({ error: 'No files in upload' }, 400)
+  for (const item of files) {
     if (!validSegment(item.name)) return c.json({ error: `Invalid file name: "${item.name}"` }, 400)
     if (item.size > MAX_UPLOAD_BYTES) return c.json({ error: `"${item.name}" exceeds size limit` }, 400)
+  }
+  const saved: string[] = []
+  for (const item of files) {
     const buf = Buffer.from(await item.arrayBuffer())
     fs.writeFileSync(path.join(t.abs, item.name), buf)
     saved.push(item.name)
   }
-  if (saved.length === 0) return c.json({ error: 'No files in upload' }, 400)
   return c.json({ ok: true, saved }, 201)
 })
 
@@ -1148,7 +1150,7 @@ app.put('/api/projects/:id/files/content', async (c) => {
     return c.json({ error: 'File not found' }, 404)
   }
   if (!stat.isFile()) return c.json({ error: 'Not a file' }, 400)
-  if (content.length > 10 * 1024 * 1024) return c.json({ error: 'Content too large' }, 400)
+  if (Buffer.byteLength(content, 'utf8') > 10 * 1024 * 1024) return c.json({ error: 'Content too large' }, 400)
   try {
     fs.writeFileSync(abs, content, 'utf8')
   } catch (e: any) {
@@ -1188,7 +1190,11 @@ app.post('/api/projects/:id/files/upload-url', async (c) => {
   } catch (e: any) {
     return c.json({ error: e?.message || 'Failed to fetch URL' }, 400)
   }
-  if (isBlockedHost(new URL(res.url).hostname)) return c.json({ error: 'Blocked host' }, 400)
+  try {
+    if (res.url && isBlockedHost(new URL(res.url).hostname)) return c.json({ error: 'Blocked host' }, 400)
+  } catch {
+    return c.json({ error: 'Blocked host' }, 400)
+  }
   if (!res.ok) return c.json({ error: `Failed to fetch URL (${res.status})` }, 400)
   if (!res.body) return c.json({ error: 'Empty download' }, 400)
   const chunks = []
@@ -1310,6 +1316,10 @@ function isBlockedHost(hostname: string): boolean {
     return true
   if (h === '::1' || h === '::') return true
   if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
+  if (h.startsWith('::ffff:')) {
+    const v4 = h.slice(7)
+    if (v4) return isBlockedHost(v4)
+  }
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
   if (!m) return false
   const a = Number(m[1])
