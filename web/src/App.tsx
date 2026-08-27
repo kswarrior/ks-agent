@@ -26,12 +26,12 @@ function KsAgent() {
   const [plans, setPlans] = useState<Record<string, Plan>>({})
   const [questions, setQuestions] = useState<Record<string, Question[]>>({})
 
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => localStorage.getItem(LS_PROJECT))
-  const [activeChatId, setActiveChatId] = useState<string | null>(() => localStorage.getItem(LS_CHAT))
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(() => localStorage.getItem(LS_MODEL))
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => { try { return localStorage.getItem(LS_PROJECT) } catch { return null } })
+  const [activeChatId, setActiveChatId] = useState<string | null>(() => { try { return localStorage.getItem(LS_CHAT) } catch { return null } })
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(() => { try { return localStorage.getItem(LS_MODEL) } catch { return null } })
 
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 900px)').matches)
-  const [rsbOpen, setRsbOpen] = useState(() => window.matchMedia('(min-width: 1200px)').matches)
+  const [sidebarOpen, setSidebarOpen] = useState(() => { try { return window.matchMedia('(min-width: 900px)').matches } catch { return true } })
+  const [rsbOpen, setRsbOpen] = useState(() => { try { return window.matchMedia('(min-width: 1200px)').matches } catch { return true } })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -85,18 +85,24 @@ function KsAgent() {
   }, [])
 
   useEffect(() => {
-    if (activeProjectId) localStorage.setItem(LS_PROJECT, activeProjectId)
-    else localStorage.removeItem(LS_PROJECT)
+    try {
+      if (activeProjectId) localStorage.setItem(LS_PROJECT, activeProjectId)
+      else localStorage.removeItem(LS_PROJECT)
+    } catch {}
   }, [activeProjectId])
 
   useEffect(() => {
-    if (activeChatId) localStorage.setItem(LS_CHAT, activeChatId)
-    else localStorage.removeItem(LS_CHAT)
+    try {
+      if (activeChatId) localStorage.setItem(LS_CHAT, activeChatId)
+      else localStorage.removeItem(LS_CHAT)
+    } catch {}
   }, [activeChatId])
 
   useEffect(() => {
-    if (selectedModelId) localStorage.setItem(LS_MODEL, selectedModelId)
-    else localStorage.removeItem(LS_MODEL)
+    try {
+      if (selectedModelId) localStorage.setItem(LS_MODEL, selectedModelId)
+      else localStorage.removeItem(LS_MODEL)
+    } catch {}
   }, [selectedModelId])
 
   // load chats when project changes
