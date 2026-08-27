@@ -505,7 +505,7 @@ function TerminalPane({ project }: { project: Project | null }) {
   )
 }
 
-export function RightSidebar({ open, activeProject, plan, activities, onClose }: RightSidebarProps) {
+export function RightSidebar({ open, activeProject, plan, activities, streaming, onClose }: RightSidebarProps) {
   const [tab, setTab] = useState<RsTab>('plan')
 
   return (
@@ -523,7 +523,7 @@ export function RightSidebar({ open, activeProject, plan, activities, onClose }:
         </div>
 
         <div className="rsb-body">
-          {tab === 'plan' && <PlanView plan={plan} activities={activities} />}
+          {tab === 'plan' && <PlanView plan={plan} activities={activities} streaming={streaming} />}
           {tab === 'terminal' && <TerminalPane project={activeProject} />}
           {tab === 'activity' && <ActivityPane activities={activities} />}
           {tab === 'files' && <FilesPane projectId={activeProject?.id ?? null} />}

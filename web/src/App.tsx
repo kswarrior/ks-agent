@@ -591,6 +591,7 @@ function KsAgent() {
           activeProject={activeProject}
           plan={activeChat ? plans[activeChat.id] ?? null : null}
           activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
+          streaming={activeChat ? streams[activeChat.id] !== undefined : false}
           onClose={() => setRsbOpen(false)}
         />
       </div>
