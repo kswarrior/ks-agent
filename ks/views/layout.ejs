@@ -26,9 +26,7 @@
             <div class="sidebar-section">
                 <h3>Documentation</h3>
                 <nav class="sidebar-nav">
-                    <a href="/docs" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === null ? 'active' : '' %>">
-                        Overview
-                    </a>
+                    <a href="/docs" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === null ? 'active' : '' %>">Overview</a>
                     <% if (typeof docs !== 'undefined' && docs) { %>
                         <% docs.forEach(function(doc) { %>
                             <a href="/docs/<%= doc.id %>" class="sidebar-link <%= typeof activeDoc !== 'undefined' && activeDoc === doc.id ? 'active' : '' %>">
@@ -49,7 +47,7 @@
         </aside>
 
         <main class="main-content">
-            <%- body %>
+            <%- content %>
         </main>
     </div>
 
