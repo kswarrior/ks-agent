@@ -375,7 +375,7 @@ function KsAgent() {
   }
 
   async function deleteProject(project: Project) {
-    const result: any = await confirm({
+    const { confirmed, checked: deleteFolder } = await confirm({
       title: `Delete "${project.name}"?`,
       message: 'All chats and messages in this project will be permanently removed.',
       danger: true,
@@ -384,8 +384,6 @@ function KsAgent() {
       checkboxWarning: 'This will permanently delete all files and folders inside the project directory. This action cannot be undone!',
       checkboxInitialChecked: false
     })
-    const confirmed = typeof result === 'object' && result !== null && 'confirmed' in result ? result.confirmed : result
-    const deleteFolder = typeof result === 'object' && result !== null && 'checked' in result ? result.checked : false
     if (!confirmed) return
     try {
       await api.deleteProject(project.id, { deleteFolder })
