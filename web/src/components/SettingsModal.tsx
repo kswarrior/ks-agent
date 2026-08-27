@@ -282,6 +282,51 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 </button>
               </div>
             </>
+          ) : tab === 'providers' && providerForm ? (
+            <>
+              <div className="list-head">
+                <button
+                  className="icon-btn"
+                  aria-label="Back to providers"
+                  onClick={() => { setProviderForm(null); setError(null) }}
+                >
+                  <IconChevronLeft size={16} />
+                </button>
+                <h3>{providerForm.editingId ? 'Edit provider' : 'Create provider'}</h3>
+              </div>
+              <div className="inline-form" style={{ marginTop: 0 }}>
+                <label className="field-label">Name</label>
+                <input
+                  className="input"
+                  placeholder="e.g. OpenRouter"
+                  value={providerForm.name}
+                  onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })}
+                />
+                <label className="field-label">Base URL</label>
+                <input
+                  className="input"
+                  placeholder="https://api.openai.com/v1"
+                  value={providerForm.baseUrl}
+                  onChange={(e) => setProviderForm({ ...providerForm, baseUrl: e.target.value })}
+                />
+                <label className="field-label">API key {providerForm.editingId && <span style={{ fontWeight: 400 }}>(leave blank to keep current)</span>}</label>
+                <input
+                  className="input"
+                  type="password"
+                  placeholder="sk-…"
+                  value={providerForm.apiKey}
+                  onChange={(e) => setProviderForm({ ...providerForm, apiKey: e.target.value })}
+                />
+                <div className="dialog-actions">
+                  <button className="btn" onClick={() => { setProviderForm(null); setError(null) }}>
+                    Cancel
+                  </button>
+                  <button className="btn btn-primary" onClick={submitProvider}>
+                    {providerForm.editingId ? 'Save changes' : 'Create'}
+                  </button>
+                </div>
+              </div>
+            </>
           ) : tab === 'providers' ? (
             <>
               <div className="list-head">
@@ -295,7 +340,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 </button>
               </div>
 
-              {providers.length === 0 && !providerForm && (
+              {providers.length === 0 && (
                 <div className="empty" style={{ padding: '36px 12px' }}>
                   <h2>No providers yet</h2>
                   <p>Add an OpenAI-compatible provider (base URL + API key) to start.</p>
@@ -334,42 +379,6 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   <div className="provider-key">{p.keyPreview || 'no key set'}</div>
                 </div>
               ))}
-
-              {providerForm && (
-                <div className="inline-form">
-                  <h4>{providerForm.editingId ? 'Edit provider' : 'New provider'}</h4>
-                  <label className="field-label">Name</label>
-                  <input
-                    className="input"
-                    placeholder="e.g. OpenRouter"
-                    value={providerForm.name}
-                    onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })}
-                  />
-                  <label className="field-label">Base URL</label>
-                  <input
-                    className="input"
-                    placeholder="https://api.openai.com/v1"
-                    value={providerForm.baseUrl}
-                    onChange={(e) => setProviderForm({ ...providerForm, baseUrl: e.target.value })}
-                  />
-                  <label className="field-label">API key {providerForm.editingId && <span style={{ fontWeight: 400 }}>(leave blank to keep current)</span>}</label>
-                  <input
-                    className="input"
-                    type="password"
-                    placeholder="sk-…"
-                    value={providerForm.apiKey}
-                    onChange={(e) => setProviderForm({ ...providerForm, apiKey: e.target.value })}
-                  />
-                  <div className="dialog-actions">
-                    <button className="btn" onClick={() => { setProviderForm(null); setError(null) }}>
-                      Cancel
-                    </button>
-                    <button className="btn btn-primary" onClick={submitProvider}>
-                      {providerForm.editingId ? 'Save changes' : 'Create'}
-                    </button>
-                  </div>
-                </div>
-              )}
             </>
           ) : null}
 
