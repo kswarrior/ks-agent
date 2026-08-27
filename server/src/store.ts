@@ -104,6 +104,15 @@ export interface RetrySettings {
   alwaysRetry?: boolean
 }
 
+export interface Skill {
+  id: string
+  name: string
+  note: string
+  mainFile: string
+  files: string[]
+  createdAt: string
+}
+
 export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question'
 
 export interface Activity {
@@ -132,12 +141,13 @@ interface DB {
   questions: Question[]
   activities: Activity[]
   retrySettings: RetrySettings
+  skills: Skill[]
 }
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false } }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [] }
 
 function ensureChatSeqs(chats: Chat[]): boolean {
   let changed = false
