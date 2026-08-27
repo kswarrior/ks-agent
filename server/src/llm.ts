@@ -191,7 +191,7 @@ export async function* streamChat(
       buf = buf.slice(nl + 1)
       if (!line.startsWith('data:')) continue
       const payload = line.slice(5).trim()
-      if (payload === '[DONE]') return
+      if (payload === '[DONE]') break
       const chunk = parseChunk(payload)
       if (chunk?.text) yield chunk.text
     }
