@@ -74,7 +74,25 @@
         <li class="<%= active === 'leaderboard' ? 'active' : '' %>">
           <a href="#"><i class="fas fa-trophy"></i><span>Leaderboard</span></a>
         </li>
+        <li><hr class="sidebar-nav-divider" /></li>
+        <li class="sidebar-nav-label">Documentation</li>
+        <li class="<%= active === 'docs' ? 'active' : '' %>">
+          <a href="/docs"><i class="fas fa-book-open"></i><span>Overview</span>
+            <span class="doc-badge new">New</span></a>
+        </li>
+        <ul class="sidebar-docs-list">
+          <li class="<%= active === 'docs-api' ? 'active' : '' %>">
+            <a href="/docs/api"><span class="doc-icon"><i class="fas fa-plug"></i></span>API Reference</a>
+          </li>
+          <li class="<%= active === 'docs-plugins' ? 'active' : '' %>">
+            <a href="/docs/plugins"><span class="doc-icon"><i class="fas fa-puzzle-piece"></i></span>Plugins</a>
+          </li>
+          <li class="<%= active === 'docs-server' ? 'active' : '' %>">
+            <a href="/docs/server"><span class="doc-icon"><i class="fas fa-server"></i></span>Server Setup</a>
+          </li>
+        </ul>
       </ul>
+        </li>
     </nav>
     <div class="sidebar-footer">
       <div class="user-card">
