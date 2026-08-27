@@ -451,21 +451,23 @@ export interface AgentRunOutcome {
 function markWorkingStep(ctx: ToolContext): void {
   const plan = findPlanForChat(ctx.chatId)
   if (!plan) return
-  const workingIdx = plan.steps.findIndex((s) => s.status === 'pending')
-  if (workingIdx === -1) return
-  plan.steps[workingIdx].status = 'working'
+  // Only promote pending -> working if no step is currently working
+  if (plan.steps.some((s) => s.status === 'working')) return
+  const pendingIdx = plan.steps.findIndex((s) => s.status === 'pending')
+  if (pendingIdx === -1) return
+  plan.steps[pendingIdx].status = 'working'
   plan.updatedAt = new Date().toISOString()
   saveDb()
   ctx.onEvent('plan', JSON.stringify(plan))
 }
 
-function finalizePlanIfNeeded(ctx: ToolContext): void {
+function revertWorkingSteps(ctx: ToolContext): void {
   const plan = findPlanForChat(ctx.chatId)
   if (!plan) return
   let changed = false
   for (const s of plan.steps) {
-    if (s.status !== 'done') {
-      s.status = 'done'
+    if (s.status === 'working') {
+      s.status = 'pending'
       changed = true
     }
   }
@@ -481,9 +483,10 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
   const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal }
   let content = ''
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    if (opts.signal.aborted) throw abortError()
-    markWorkingStep(ctx)
+  try {
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      if (opts.signal.aborted) throw abortError()
+      markWorkingStep(ctx)
 
     let roundText = ''
     let outcome: Awaited<ReturnType<typeof streamChatWithTools>> | null = null
@@ -566,14 +569,18 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       messages.push({ role: 'tool', tool_call_id: call.id, content: res.result })
     }
   }
-
-  // Agent finished without further tool calls — ensure plan is fully marked done
-  // so UI does not remain stuck on "Executing...". This is a safety net for cases
-  // where the model creates files successfully but forgets to call complete_plan_step
-  // for one or more steps.
-  if (!opts.signal.aborted) {
-    finalizePlanIfNeeded(ctx)
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      revertWorkingSteps(ctx)
+      throw e
+    }
+    throw e
   }
+
+  // Agent finished — revert any lingering 'working' back to 'pending'
+  // so incomplete steps are not falsely shown as complete or still executing.
+  // Steps only become 'done' via explicit complete_plan_step calls.
+  revertWorkingSteps(ctx)
 
   return { content, stopped: false }
 }
