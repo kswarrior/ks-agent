@@ -37,6 +37,7 @@ export interface ModelEntry {
   displayName?: string
   providerId: string
   providerName: string
+  maxTokens?: number
 }
 
 export interface FileEntry {
