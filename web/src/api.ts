@@ -223,8 +223,24 @@ export const deleteTerminal = (id: string) =>
 export const execTerminal = (id: string, command: string) =>
   req<{ output: string; exitCode: number; cwd: string }>(`/api/terminals/${id}/exec`, json('POST', { command }))
 
+export type PreviewInfo = {
+  port: number
+  url: string
+  proxiedUrl: string
+  running: boolean
+  started?: boolean
+  message?: string
+  error?: string
+  managed?: boolean
+}
 export const startPreview = (projectId: string) =>
-  req<{ port: number }>(`/api/projects/${projectId}/preview/start`, json('POST', {}))
+  req<PreviewInfo>(`/api/projects/${projectId}/preview/start`, json('POST', {}))
+export const getPreviewStatus = (projectId: string) =>
+  req<PreviewInfo>(`/api/projects/${projectId}/preview/status`)
+export const stopPreview = (projectId: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/preview/stop`, json('POST', {}))
+export const previewProxyUrl = (projectId: string, subPath = '') =>
+  `/api/projects/${projectId}/preview/proxy/${subPath.replace(/^\//, '')}`
 
 // Settings
 export const listProviders = () => req<Provider[]>('/api/settings/providers')
