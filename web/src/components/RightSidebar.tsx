@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Plan, Project, Terminal, Activity } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
-import { IconCheck, IconX, IconPlus, IconSearch, IconActivity, IconRotate, IconChevronLeft, IconTerminal, IconTrash } from '../icons'
+import { IconCheck, IconX, IconPlus, IconSearch, IconActivity, IconRotate, IconChevronLeft, IconTerminal, IconTrash, IconPencil } from '../icons'
 import { FilesPane } from './FilesPane'
 import { ActivityPane } from './ActivityPane'
 import { useDialogs } from '../dialogs'
@@ -268,16 +268,21 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
               <div
                 key={terminal.id}
                 className="tp-row"
-                role="button"
-                tabIndex={0}
-                onClick={() => openTerminal(terminal)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTerminal(terminal) } }}
               >
                 <IconTerminal size={15} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
                 <span className="tp-name">{terminal.name}</span>
                 <button
-                  className="icon-btn tp-delete"
+                  className="icon-btn tp-action tp-edit"
+                  aria-label="Edit terminal"
+                  title="Edit terminal"
+                  onClick={() => openTerminal(terminal)}
+                >
+                  <IconPencil size={14} />
+                </button>
+                <button
+                  className="icon-btn tp-action tp-delete"
                   aria-label="Delete terminal"
+                  title="Delete terminal"
                   onClick={async (e) => {
                     e.stopPropagation()
                     try {
@@ -289,7 +294,7 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
                     }
                   }}
                 >
-                  <IconX size={14} />
+                  <IconTrash size={14} />
                 </button>
               </div>
             ))

@@ -42,6 +42,19 @@ interface ToolContext {
   projectPath: string
   chatId: string
   onEvent: (event: string, data: string) => void
+  signal: AbortSignal
+  toolCallId?: string
+}
+
+// Pending ask_question resolvers: questionId -> resolve(answer)
+export const pendingQuestionResolvers = new Map<string, (answer: string) => void>()
+
+export function resolvePendingQuestion(questionId: string, answer: string): boolean {
+  const fn = pendingQuestionResolvers.get(questionId)
+  if (!fn) return false
+  pendingQuestionResolvers.delete(questionId)
+  fn(answer)
+  return true
 }
 
 function err(message: string): ToolExecResult {
@@ -153,6 +166,29 @@ const AGENT_TOOLS: ToolDef[] = [
         type: 'object',
         properties: { index: { type: 'integer', description: '0-based index of the finished step' } },
         required: ['index']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ask_question',
+      description:
+        'Ask the user a clarifying question when you need confirmation, a choice, or extra information. Shows clickable option buttons + optional custom typed answer. Use when unsure, need approval, or need data before proceeding.',
+      parameters: {
+        type: 'object',
+        properties: {
+          header: { type: 'string', description: 'Short title for the question (2-40 chars)' },
+          question: { type: 'string', description: 'The question to ask the user (5-500 chars)' },
+          options: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '1-6 short option labels (2-60 chars each). At least one option or allow_custom true required.'
+          },
+          allow_custom: { type: 'boolean', description: 'Whether to allow custom typed answer (default true)' },
+          custom_placeholder: { type: 'string', description: 'Placeholder for custom input' }
+        },
+        required: ['question']
       }
     }
   }

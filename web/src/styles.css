@@ -1719,7 +1719,7 @@ textarea {
   gap: 8px;
   padding: 7px 7px;
   border-radius: var(--radius-sm);
-  cursor: pointer;
+  cursor: default;
   color: var(--text-dim);
   border: 1px solid transparent;
   font-size: 13.5px;
@@ -1738,16 +1738,19 @@ textarea {
   text-overflow: ellipsis;
 }
 
+.tp-action,
 .tp-delete {
   opacity: 0;
   transition: opacity 0.12s ease;
 }
 
+.tp-row:hover .tp-action,
 .tp-row:hover .tp-delete {
   opacity: 1;
 }
 
 @media (hover: none) {
+  .tp-action,
   .tp-delete {
     opacity: 1;
   }
