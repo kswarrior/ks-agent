@@ -88,6 +88,11 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
     setConfirmState(null)
   }
 
+  const closePrompt = (value: string | null) => {
+    promptState?.resolve(value)
+    setPromptState(null)
+  }
+
   const submitPrompt = () => {
     if (!promptState) return
     const value = promptValue.trim()
@@ -126,7 +131,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
       )}
 
       {promptState && (
-        <div className="overlay" onMouseDown={() => promptState.resolve(null)}>
+        <div className="overlay" onMouseDown={() => closePrompt(null)}>
           <div className="dialog" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
             <h3 className="dialog-title">{promptState.title}</h3>
             {promptState.label && <label className="field-label">{promptState.label}</label>}
@@ -145,7 +150,7 @@ export function DialogsProvider({ children }: { children: ReactNode }) {
             />
             {promptError && <p className="field-error">{promptError}</p>}
             <div className="dialog-actions">
-              <button className="btn" onClick={() => promptState.resolve(null)}>
+              <button className="btn" onClick={() => closePrompt(null)}>
                 Cancel
               </button>
               <button className="btn btn-primary" onClick={submitPrompt}>

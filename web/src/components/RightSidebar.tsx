@@ -283,7 +283,6 @@ function TerminalPane({ projectId }: { projectId: string | null }) {
                     try {
                       await api.deleteTerminal(terminal.id)
                       toast('Terminal deleted', 'success')
-                      if (selected?.id === terminal.id) { setSelected(null); setDetailName('') }
                       await refresh()
                     } catch (err: any) {
                       toast(err.message, 'error')
