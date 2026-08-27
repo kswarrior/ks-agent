@@ -1304,6 +1304,38 @@ function isBlockedHost(hostname: string): boolean {
   return false
 }
 
+// ---------------- Preview ----------------
+
+app.post('/api/projects/:id/preview/start', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+
+  // Check for common dev server ports
+  const commonPorts = [3000, 3001, 4200, 5173, 8080, 8081, 9000]
+  const baseUrl = `http://localhost`
+
+  // Try to detect if there's a package.json with dev script
+  const packageJsonPath = path.join(project.path, 'package.json')
+  let detectedUrl = `${baseUrl}:3000`
+
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
+      if (pkg.scripts?.dev) {
+        // Try to extract port from dev script
+        const devScript = pkg.scripts.dev
+        const portMatch = devScript.match(/--port\s+(\d+)|-p\s+(\d+)|:(\d{4})/)
+        if (portMatch) {
+          const port = portMatch[1] || portMatch[2] || portMatch[3]
+          detectedUrl = `${baseUrl}:${port}`
+        }
+      }
+    } catch {}
+  }
+
+  return c.json({ url: detectedUrl })
+})
+
 // ---------------- Static frontend ----------------
 
 const distDir = process.env.KS_WEB_DIST || './dist'
