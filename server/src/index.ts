@@ -200,7 +200,6 @@ app.post('/api/chats/:id/questions/:qid/answer', async (c) => {
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
   const question = findQuestion(c.req.param('qid'))
   if (!question || question.chatId !== chat.id) return c.json({ error: 'Question not found' }, 404)
-  if (question.status !== 'pending') return c.json({ error: 'Question already answered' }, 409)
   const body = await c.req.json().catch(() => ({}))
   const answer = String(body.answer ?? '').trim()
   if (!answer) return c.json({ error: 'Answer is required' }, 400)
@@ -208,12 +207,17 @@ app.post('/api/chats/:id/questions/:qid/answer', async (c) => {
   if (!question.allowCustom && !question.options.includes(answer)) {
     return c.json({ error: 'Custom answer not allowed for this question' }, 400)
   }
+  const wasPending = question.status === 'pending'
+  // allow re-answering (for Back → change answer), but don't re-resolve if already answered
+  if (!wasPending && question.answer === answer) {
+    return c.json(question)
+  }
   question.answer = answer
   question.selectedOption = question.options.includes(answer) ? answer : null
   question.status = 'answered'
   question.answeredAt = new Date().toISOString()
   saveDb()
-  resolvePendingQuestion(question.id, answer)
+  if (wasPending) resolvePendingQuestion(question.id, answer)
   const job = generations.get(chat.id)
   if (job) {
     for (const notify of [...job.listeners]) {
