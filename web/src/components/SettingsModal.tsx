@@ -201,13 +201,33 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
         providerId: modelForm.providerId,
         model: modelForm.model.trim(),
         ...(modelForm.displayName.trim() ? { displayName: modelForm.displayName.trim() } : {}),
+        ...(modelForm.systemPrompt.trim() ? { systemPrompt: modelForm.systemPrompt.trim() } : {}),
         ...(maxTokens ? { maxTokens } : {})
       })
-      setModelForm({ providerId: '', model: '', displayName: '', maxTokens: '' })
+      setModelForm({ providerId: '', model: '', displayName: '', maxTokens: '', systemPrompt: '' })
       setShowModelForm(false)
       toast('Model added', 'success')
       await refresh()
       onDataChanged()
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
+  async function submitEditModel() {
+    if (!modelEdit) return
+    setError(null)
+    try {
+      const maxTokens = modelEdit.maxTokens != null ? Number(modelEdit.maxTokens) : undefined
+      await api.updateModel(modelEdit.id, {
+        displayName: modelEdit.displayName?.trim() ?? '',
+        ...(maxTokens != null && !isNaN(maxTokens) && maxTokens >= 1 ? { maxTokens } : { maxTokens: 0 }),
+        systemPrompt: modelEdit.systemPrompt?.trim() ?? ''
+      })
+      setModelEdit(null)
+      await refresh()
+      onDataChanged()
+      toast('Model updated', 'success')
     } catch (e: any) {
       setError(e.message)
     }
@@ -409,7 +429,61 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
             </>
           ) : null}
 
-          {tab === 'models' && showModelForm ? (
+          {tab === 'models' && modelEdit ? (
+            <>
+              <div className="list-head">
+                <button
+                  className="icon-btn"
+                  aria-label="Back to models"
+                  onClick={() => { setModelEdit(null); setError(null) }}
+                >
+                  <IconChevronLeft size={16} />
+                </button>
+                <h3>Edit model</h3>
+              </div>
+              <div className="inline-form" style={{ marginTop: 0 }}>
+                <label className="field-label">Model id</label>
+                <input className="input" value={modelEdit.model} disabled />
+                <label className="field-label">Display name</label>
+                <input
+                  className="input"
+                  placeholder="(optional)"
+                  value={modelEdit.displayName ?? ''}
+                  onChange={(e) => setModelEdit({ ...modelEdit, displayName: e.target.value })}
+                />
+                <label className="field-label">Max tokens (optional)</label>
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="leave empty for provider default"
+                  value={modelEdit.maxTokens ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value.trim()
+                    setModelEdit({ ...modelEdit, maxTokens: v ? parseInt(v, 10) : undefined })
+                  }}
+                />
+                <label className="field-label">System prompt (optional)</label>
+                <textarea
+                  className="input"
+                  rows={8}
+                  placeholder="Custom system prompt for this model. Leave blank to use the global or built-in default. Useful for weaker models that need clearer instructions."
+                  value={modelEdit.systemPrompt ?? ''}
+                  onChange={(e) => setModelEdit({ ...modelEdit, systemPrompt: e.target.value })}
+                />
+                <p className="hint" style={{ marginTop: 4 }}>
+                  A model-specific system prompt overrides the global setting and the built-in default.
+                </p>
+                <div className="dialog-actions">
+                  <button className="btn" onClick={() => { setModelEdit(null); setError(null) }}>
+                    Cancel
+                  </button>
+                  <button className="btn btn-primary" onClick={submitEditModel}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : tab === 'models' && showModelForm ? (
             <>
               <div className="list-head">
                 <button
