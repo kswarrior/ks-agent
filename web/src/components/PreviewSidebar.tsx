@@ -35,13 +35,16 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
       if (activeProject) {
         const res = await api.startPreview(activeProject.id)
         if (res.url) {
-          setUrl(res.url)
+          const detectedUrl = new URL(res.url)
+          const hostname = window.location.hostname || 'localhost'
+          detectedUrl.hostname = hostname
+          setUrl(detectedUrl.toString())
           return
         }
       }
-      setUrl(targetUrl || defaultUrl)
+      setUrl(targetUrl || getDefaultUrl())
     } catch {
-      setUrl(targetUrl || defaultUrl)
+      setUrl(targetUrl || getDefaultUrl())
     } finally {
       setLoading(false)
     }
