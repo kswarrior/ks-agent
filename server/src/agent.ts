@@ -449,19 +449,60 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     if (opts.signal.aborted) throw abortError()
     markWorkingStep(ctx)
-    const outcome = await streamChatWithTools(
-      opts.baseUrl,
-      opts.apiKey,
-      opts.model,
-      messages,
-      AGENT_TOOLS,
-      (text) => {
-        content += text
-        opts.onDelta(text)
-      },
-      opts.signal,
-      opts.retrySettings
-    )
+
+    let roundText = ''
+    let outcome: Awaited<ReturnType<typeof streamChatWithTools>> | null = null
+    let attempt = 0
+    const maxAttempts = opts.retrySettings?.enabled === false ? 0 : (opts.retrySettings?.maxRetries ?? 5)
+    while (true) {
+      roundText = ''
+      try {
+        outcome = await streamChatWithTools(
+          opts.baseUrl,
+          opts.apiKey,
+          opts.model,
+          messages,
+          AGENT_TOOLS,
+          (text) => {
+            roundText += text
+            content += text
+            opts.onDelta(text)
+          },
+          opts.signal,
+          opts.retrySettings
+        )
+        break
+      } catch (e: any) {
+        if (e?.name === 'AbortError') throw e
+        const msg = String(e?.message || e)
+        // if we already streamed some text for this round, don't retry (would duplicate)
+        if (roundText.length > 0) throw e
+        // revert the content that was optimistically appended (should be 0 in this branch, but be safe)
+        if (roundText.length > 0) {
+          content = content.slice(0, -roundText.length)
+        }
+        const isRetryableStatus = (opts.retrySettings?.retryOnStatusCodes ?? [429, 502, 503]).some((code) => msg.includes(String(code)))
+        const isStopStatus = (opts.retrySettings?.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
+        const shouldRetry = (opts.retrySettings?.enabled ?? true) && isRetryableStatus && !isStopStatus && attempt < maxAttempts
+        if (!shouldRetry) throw e
+        // respect Retry-After if present in msg
+        let delay = Math.min((opts.retrySettings?.baseDelayMs ?? 1200) * Math.pow(2, attempt) + Math.random() * 800, opts.retrySettings?.maxDelayMs ?? 30000)
+        const m = msg.match(/retry-after[^0-9]*(\d+)/i)
+        if (m) {
+          const secs = Number(m[1])
+          if (!Number.isNaN(secs) && secs >= 0 && secs < 300) delay = Math.max(delay, secs * 1000)
+        }
+        await new Promise<void>((resolve, reject) => {
+          const t = setTimeout(resolve, delay)
+          opts.signal.addEventListener('abort', () => { clearTimeout(t); reject(abortError()) }, { once: true })
+        })
+        attempt++
+        // clear any partial roundText that was already counted (already handled)
+        roundText = ''
+        continue
+      }
+    }
+    if (!outcome) break
 
     if (outcome.toolCalls.length === 0) break
 
