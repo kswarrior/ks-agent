@@ -706,10 +706,16 @@ app.post('/api/chats/:id/messages', async (c) => {
   touchChat(chat)
   saveDb()
 
-  // Primary prompt is built-in and fixed; the plan prompt is user-editable.
-  const planPrompt = getDb().planPrompt.trim() || DEFAULT_PLAN_PROMPT
+  // Resolve the system prompt: per-model override > global setting > built-in default.
+  // Smaller/weaker models (e.g. meta/muse-glimmer-30b) often fail to follow the
+  // built-in prompt, so letting each model import its own tuned prompt helps a lot.
+  const modelSystemPrompt =
+    (resolvedModel.systemPrompt?.trim()) ||
+    (db.systemPrompt?.trim()) ||
+    PRIMARY_SYSTEM_PROMPT
+  const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
   const history: LLMMessage[] = [
-    { role: 'system', content: PRIMARY_SYSTEM_PROMPT },
+    { role: 'system', content: modelSystemPrompt },
     ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
     ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
     ...messagesOf(chat.id).map((m) => ({ role: m.role as LLMMessage['role'], content: m.content }))
@@ -790,7 +796,8 @@ app.get('/api/settings/models', (c) => {
       displayName: m.displayName?.trim() ? m.displayName.trim() : m.model,
       providerId: m.providerId,
       providerName: db.providers.find((p) => p.id === m.providerId)?.name ?? 'Unknown',
-      maxTokens: m.maxTokens
+      maxTokens: m.maxTokens,
+      systemPrompt: m.systemPrompt ?? ''
     }))
   )
 })
