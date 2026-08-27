@@ -7,6 +7,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
+import * as pty from 'node-pty'
+import { WebSocketServer, WebSocket } from 'ws'
 import {
   chatsOf,
   findChat,
@@ -36,6 +38,78 @@ import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, resolvePendingQuestion, run
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 
 loadDb()
+
+// ---------------- PTY sessions (real Linux terminal) ----------------
+
+interface PtySession {
+  pty: pty.IPty
+  clients: Set<WebSocket>
+  buffer: string
+  projectId: string
+  terminalId: string
+}
+
+const ptySessions = new Map<string, PtySession>()
+
+function resolveShell(): string {
+  const envShell = process.env.SHELL
+  if (envShell && fs.existsSync(envShell)) return envShell
+  if (fs.existsSync('/bin/bash')) return '/bin/bash'
+  if (fs.existsSync('/bin/zsh')) return '/bin/zsh'
+  return '/bin/sh'
+}
+
+function getOrCreatePty(terminalId: string, projectPath: string, projectId: string, cols = 80, rows = 24): PtySession {
+  const existing = ptySessions.get(terminalId)
+  if (existing) return existing
+  // ensure cwd exists; fallback to homedir if missing
+  let cwd = projectPath
+  try {
+    const st = fs.statSync(projectPath)
+    if (!st.isDirectory()) cwd = os.homedir()
+  } catch {
+    try { fs.mkdirSync(projectPath, { recursive: true }) } catch {}
+    cwd = fs.existsSync(projectPath) ? projectPath : os.homedir()
+  }
+  const shell = resolveShell()
+  const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', LANG: process.env.LANG || 'en_US.UTF-8' } as Record<string, string>
+  const p = pty.spawn(shell, [], {
+    name: 'xterm-color',
+    cols,
+    rows,
+    cwd,
+    env
+  })
+  const sess: PtySession = { pty: p, clients: new Set(), buffer: '', projectId, terminalId }
+  // Buffer up to 200KB for reconnection replay
+  p.onData((data) => {
+    sess.buffer += data
+    if (sess.buffer.length > 200 * 1024) sess.buffer = sess.buffer.slice(-200 * 1024)
+    for (const ws of sess.clients) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try { ws.send(data) } catch {}
+      }
+    }
+  })
+  p.onExit(() => {
+    for (const ws of sess.clients) {
+      try { ws.close() } catch {}
+    }
+    ptySessions.delete(terminalId)
+  })
+  ptySessions.set(terminalId, sess)
+  return sess
+}
+
+function killPty(terminalId: string): void {
+  const sess = ptySessions.get(terminalId)
+  if (!sess) return
+  try { sess.pty.kill() } catch {}
+  for (const ws of sess.clients) {
+    try { ws.close() } catch {}
+  }
+  ptySessions.delete(terminalId)
+}
 
 const app = new Hono()
 
