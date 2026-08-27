@@ -137,7 +137,7 @@ interface DB {
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404] } }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false } }
 
 function ensureChatSeqs(chats: Chat[]): boolean {
   let changed = false
@@ -189,7 +189,8 @@ export function loadDb(): void {
       baseDelayMs: 1200,
       maxDelayMs: 30000,
       retryOnStatusCodes: [429, 502, 503],
-      stopOnStatusCodes: [400, 401, 403, 404]
+      stopOnStatusCodes: [400, 401, 403, 404],
+      alwaysRetry: false
     }
     db = {
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
@@ -215,7 +216,8 @@ export function loadDb(): void {
               : defaultRetrySettings.retryOnStatusCodes,
             stopOnStatusCodes: Array.isArray(parsed.retrySettings.stopOnStatusCodes)
               ? parsed.retrySettings.stopOnStatusCodes.filter((x: any) => Number.isInteger(x))
-              : defaultRetrySettings.stopOnStatusCodes
+              : defaultRetrySettings.stopOnStatusCodes,
+            alwaysRetry: Boolean(parsed.retrySettings.alwaysRetry ?? defaultRetrySettings.alwaysRetry)
           }
         : defaultRetrySettings
     }
@@ -229,7 +231,8 @@ export function loadDb(): void {
       baseDelayMs: 1200,
       maxDelayMs: 30000,
       retryOnStatusCodes: [429, 502, 503],
-      stopOnStatusCodes: [400, 401, 403, 404]
+      stopOnStatusCodes: [400, 401, 403, 404],
+      alwaysRetry: false
     }
     db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings }
   }
