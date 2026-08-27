@@ -807,6 +807,7 @@ app.post('/api/settings/models', async (c) => {
   const model = String(body.model ?? '').trim()
   const providerId = String(body.providerId ?? '').trim()
   const displayName = String(body.displayName ?? '').trim()
+  const systemPrompt = String(body.systemPrompt ?? '').trim()
   const maxTokens = body.maxTokens != null ? Number(body.maxTokens) : undefined
   if (!model) return c.json({ error: 'Model id is required' }, 400)
   if (!getDb().providers.some((p) => p.id === providerId)) {
@@ -815,10 +816,34 @@ app.post('/api/settings/models', async (c) => {
   if (maxTokens != null && (isNaN(maxTokens) || maxTokens < 1)) {
     return c.json({ error: 'Max tokens must be a positive number' }, 400)
   }
-  const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}), ...(maxTokens ? { maxTokens } : {}) }
+  const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}), ...(systemPrompt ? { systemPrompt } : {}), ...(maxTokens ? { maxTokens } : {}) }
   getDb().models.push(entry)
   saveDb()
   return c.json(entry, 201)
+})
+
+app.patch('/api/settings/models/:id', async (c) => {
+  const db = getDb()
+  const model = db.models.find((m) => m.id === c.req.param('id'))
+  if (!model) return c.json({ error: 'Model not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  if (body.displayName !== undefined) {
+    const displayName = String(body.displayName).trim()
+    if (displayName) model.displayName = displayName
+    else delete model.displayName
+  }
+  if (body.systemPrompt !== undefined) {
+    const systemPrompt = String(body.systemPrompt).trim()
+    if (systemPrompt) model.systemPrompt = systemPrompt
+    else delete model.systemPrompt
+  }
+  if (body.maxTokens !== undefined) {
+    const maxTokens = Number(body.maxTokens)
+    if (maxTokens != null && !isNaN(maxTokens) && maxTokens >= 1) model.maxTokens = maxTokens
+    else delete model.maxTokens
+  }
+  saveDb()
+  return c.json({ ok: true, model })
 })
 
 app.delete('/api/settings/models/:id', (c) => {
@@ -831,7 +856,18 @@ app.delete('/api/settings/models/:id', (c) => {
 })
 
 // ---------------- Settings: prompts ----------------
-// The primary system prompt is intentionally not readable or editable here.
+
+app.get('/api/settings/system-prompt', (c) => {
+  return c.json({ systemPrompt: getDb().systemPrompt })
+})
+
+app.patch('/api/settings/system-prompt', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const systemPrompt = String(body.systemPrompt ?? '').trim()
+  getDb().systemPrompt = systemPrompt
+  saveDb()
+  return c.json({ ok: true, systemPrompt })
+})
 
 app.get('/api/settings/plan-prompt', (c) => {
   return c.json({ planPrompt: getDb().planPrompt })
