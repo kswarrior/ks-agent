@@ -1,4 +1,4 @@
-import type { Activity, Chat, FileListing, Message, ModelEntry, Plan, Project, Provider, Question, RetrySettings, Terminal } from './types'
+import type { Activity, Chat, FileListing, Message, ModelEntry, Plan, Project, Provider, Question, RetrySettings, Skill, Terminal } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -274,3 +274,11 @@ export const savePlanPrompt = (planPrompt: string) =>
 export const getRetrySettings = () => req<RetrySettings>('/api/settings/retry')
 export const updateRetrySettings = (patch: Partial<RetrySettings>) =>
   req<RetrySettings>('/api/settings/retry', json('PATCH', patch))
+
+// Skills
+export const listSkills = () => req<Skill[]>('/api/settings/skills')
+export const createSkill = (s: { name: string; note: string; mainFile: string; files: string[] }) =>
+  req<Skill>('/api/settings/skills', json('POST', s))
+export const deleteSkill = (id: string) => req<{ ok: true }>(`/api/settings/skills/${id}`, { method: 'DELETE' })
+export const updateSkill = (id: string, patch: Partial<{ name: string; note: string; mainFile: string; files: string[] }>) =>
+  req<Skill>(`/api/settings/skills/${id}`, json('PATCH', patch))

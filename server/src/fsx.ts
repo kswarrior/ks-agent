@@ -24,6 +24,9 @@ export function validSegment(name: string): boolean {
     !name.includes('/') &&
     !name.includes('\\') &&
     !name.includes('\0') &&
-    name.trim() === name
+    !name.includes(':') &&
+    name.length <= 255 &&
+    name.trim() === name &&
+    !name.startsWith('.')
   )
 }
