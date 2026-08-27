@@ -21,6 +21,12 @@ export interface Message {
   content: string
   createdAt: string
   error?: boolean
+  model?: string
+  modelDisplayName?: string
+  providerName?: string
+  startedAt?: string
+  finishedAt?: string
+  durationMs?: number
 }
 
 export interface Provider {

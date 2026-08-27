@@ -27,6 +27,13 @@ export interface Message {
   content: string
   createdAt: string
   error?: boolean
+  // AI run metadata (only for assistant messages)
+  model?: string
+  modelDisplayName?: string
+  providerName?: string
+  startedAt?: string
+  finishedAt?: string
+  durationMs?: number
 }
 
 export interface Provider {
