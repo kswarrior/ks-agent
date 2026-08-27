@@ -1,0 +1,55 @@
+<%- include('partials/header') %>
+
+<div class="main-content">
+  <div class="page-intro">
+    <h1>About KS Warrior 🛡️</h1>
+    <p class="subtitle">The legendary Minecraft player who dominates every dimension</p>
+  </div>
+
+  <div class="content-block">
+    <h2><i class="fas fa-book-open"></i> My Story</h2>
+    <p>KS Warrior began their Minecraft journey in the early days of version 1.5. What started as curiosity quickly evolved into an obsession. From the first night spent hiding in a dirt hut to commanding armies of Iron Golems, every block placed, every mob defeated, and every structure built has shaped a player whose name echoes across the overworld and beyond.</p>
+    <br>
+    <p>With an unbreakable will and an eye for detail, KS Warrior has become a force to be reckoned with — not just in survival mode, but in PvP arenas, creative masterpieces, and speedruns alike. The journey never ends, and neither does the grind.</p>
+  </div>
+
+  <div class="content-block">
+    <h2><i class="fas fa-gem"></i> Highlights</h2>
+    <div class="highlights">
+      <div class="highlight-item">
+        <i class="fas fa-trophy"></i>
+        <h3>127</h3>
+        <p>Tournaments Won</p>
+      </div>
+      <div class="highlight-item">
+        <i class="fas fa-crown"></i>
+        <h3>#1</h3>
+        <p>Global Ranking</p>
+      </div>
+      <div class="highlight-item">
+        <i class="fas fa-clock"></i>
+        <h3>2,482</h3>
+        <p>Hours Played</p>
+      </div>
+      <div class="highlight-item">
+        <i class="fas fa-server"></i>
+        <h3>35+</h3>
+        <p>Unique Servers</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="content-block">
+    <h2><i class="fas fa-info-circle"></i> Player Info</h2>
+    <p>Rank: <strong style="color: var(--diamond);">Diamond</strong> | Level: <strong><%= user.level %></strong> | Coins: <strong style="color: var(--warning);"><%= user.coins.toLocaleString() %></strong></p>
+    <p>Favorite Biome: <strong>Dark Forest</strong> | Preferred Mode: <strong>Hardcore</strong> | Join Date: <strong>March 2013</strong></p>
+  </div>
+
+  <div style="margin-top: 20px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+    &copy; 2025 <strong>KS Warrior</strong>. All rights reserved.
+  </div>
+</div>
+
+<script src="/javascripts/main.js"></script>
+</body>
+</html>
