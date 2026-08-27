@@ -278,57 +278,22 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                         {activity.ok === false ? 'Error' : activity.ok === true ? 'Success' : 'Running'}
                       </span>
                     </div>
-                    <div className="activity-detail-section">
-                      <strong>Type</strong>
-                      <pre style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span
-                          className="activity-badge"
-                          style={{ background: badgeStyle.bg, color: badgeStyle.color, borderColor: badgeStyle.border, fontSize: 11 }}
-                        >
-                          {getToolIcon(activity.toolType)}
-                          {label}
-                        </span>
-                        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: 'var(--text-faint)' }}>{activity.toolType}</span>
-                      </pre>
-                    </div>
                     {commandDisplay && (
                       <div className="activity-detail-section">
                         <strong>{activity.toolType === 'run_shell' ? 'Command' : activity.toolType === 'ask_question' ? 'Question' : 'Path'}</strong>
-                        <pre>{commandDisplay}</pre>
+                        <pre className={activity.toolType === 'run_shell' ? 'activity-terminal-command' : ''}>{activity.toolType === 'run_shell' ? `$ ${commandDisplay}` : commandDisplay}</pre>
                       </div>
-                    )}
-                    {activity.toolType === 'write_file' && typeof activity.args.content === 'string' && (
-                      <div className="activity-detail-section">
-                        <strong>Content preview</strong>
-                        <pre>{String(activity.args.content).slice(0, 500)}{String(activity.args.content).length > 500 ? '\n…[truncated]' : ''}</pre>
-                      </div>
-                    )}
-                    {activity.toolType === 'edit_file' && (
-                      <>
-                        {typeof activity.args.old_string === 'string' && (
-                          <div className="activity-detail-section">
-                            <strong>Old string</strong>
-                            <pre>{String(activity.args.old_string).slice(0, 400)}</pre>
-                          </div>
-                        )}
-                        {typeof activity.args.new_string === 'string' && (
-                          <div className="activity-detail-section">
-                            <strong>New string</strong>
-                            <pre>{String(activity.args.new_string).slice(0, 400)}</pre>
-                          </div>
-                        )}
-                      </>
                     )}
                     {resultDisplay && (
                       <div className="activity-detail-section">
-                        <strong>Result</strong>
-                        <pre>{resultDisplay}</pre>
+                        <strong>Output</strong>
+                        {activity.toolType === 'run_shell' ? (
+                          <pre className="activity-terminal-output">{resultDisplay}</pre>
+                        ) : (
+                          <pre>{resultDisplay}</pre>
+                        )}
                       </div>
                     )}
-                    <div className="activity-detail-section">
-                      <strong>Raw args</strong>
-                      <pre>{JSON.stringify(activity.args, null, 2)}</pre>
-                    </div>
                   </div>
                 )}
               </div>

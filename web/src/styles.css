@@ -2710,6 +2710,24 @@ textarea {
   word-break: break-word;
   color: var(--text-dim);
 }
+.activity-terminal-command {
+  background: #000 !important;
+  border-color: #1a1a1a !important;
+  color: #e8e8e8 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.activity-terminal-output {
+  background: #000 !important;
+  border-color: #1a1a1a !important;
+  color: #c8c8c8 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  max-height: 320px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+}
 
 /* --- Enhanced Activity: Write / Edit / Read filters & badges --- */
 .activity-summary {
