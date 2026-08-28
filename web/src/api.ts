@@ -85,6 +85,7 @@ export interface StreamHandlers {
   onQuestion?: (question: Question) => void
   onChatTitle?: (data: { chatId: string; title: string; seq?: number }) => void
   onPreview?: (preview: Preview) => void
+  onRetry?: (info: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }) => void
   onError: (message: string) => void
   onDone: () => void
 }
@@ -162,6 +163,9 @@ export async function streamChatEvents(
             break
           case 'preview':
             handlers.onPreview?.(parsed as Preview)
+            break
+          case 'retry':
+            handlers.onRetry?.(parsed as { attempt: number; maxAttempts: number; delay: number; reason: string; error: string })
             break
           case 'error':
             handlers.onError(parsed.message)

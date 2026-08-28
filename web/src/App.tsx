@@ -53,6 +53,7 @@ function KsAgent() {
   // chatId → live text of its background generation (key present = still running)
   const [streams, setStreams] = useState<Record<string, string>>({})
   const [activities, setActivities] = useState<Activity[]>([])
+  const [retries, setRetries] = useState<Record<string, { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }>>({})
   const subsRef = useRef(new Map<string, AbortController>())
   const activeChatIdRef = useRef<string | null>(null)
   const activeProjectIdRef = useRef<string | null>(null)
@@ -331,8 +332,24 @@ function KsAgent() {
                 setPreviewOpen(true)
               }
             },
+            onRetry: (info) => {
+              setRetries((prev) => ({ ...prev, [chatId]: info }))
+              // clear retry indicator after delay passes
+              setTimeout(() => {
+                setRetries((prev) => {
+                  if (prev[chatId]?.attempt === info.attempt) {
+                    const n = { ...prev }
+                    delete n[chatId]
+                    return n
+                  }
+                  return prev
+                })
+              }, Math.min(info.delay + 500, 4000))
+              const reasonLabel = info.reason === 'timeout' ? 'timeout' : info.reason === 'resource_exhausted' ? 'capacity limit' : 'provider error'
+              toast(`Retrying (${info.attempt}/${info.maxAttempts}) after ${reasonLabel} — next in ${Math.round(info.delay/1000)}s`, 'error')
+            },
             onError: (message) => toast(message.split('\n')[0], 'error'),
-            onDone: () => {}
+            onDone: () => { setRetries((prev) => { const n={...prev}; delete n[chatId]; return n }) }
           },
           controller.signal
         )
@@ -865,6 +882,7 @@ function KsAgent() {
             plan={activeChat ? plans[activeChat.id] ?? null : null}
             activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
             onContinue={() => handleContinue()}
+            retryInfo={activeChat ? retries[activeChat.id] ?? null : null}
           />
         </main>
         <RightSidebar

@@ -149,6 +149,7 @@ interface Props {
   plan?: Plan | null
   activities?: Activity[]
   onContinue?: () => void
+  retryInfo?: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string } | null
 }
 
 export function ChatView(props: Props) {
@@ -318,6 +319,12 @@ export function ChatView(props: Props) {
                     <span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span>
                   </div>
                 ) : null}
+                {props.retryInfo && (
+                  <div style={{ marginTop: 8, padding: '6px 10px', background: '#3a2a0a', border: '1px solid #7c5a10', borderRadius: 8, fontSize: 12, color: '#facc15', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <IconRotate size={12} className="spin" />
+                    <span>Retrying {props.retryInfo.attempt}/{props.retryInfo.maxAttempts} after {props.retryInfo.reason === 'timeout' ? 'timeout' : props.retryInfo.reason === 'resource_exhausted' ? 'capacity limit' : 'provider error'} — next try in {Math.round(props.retryInfo.delay/1000)}s</span>
+                  </div>
+                )}
                 {props.streamText ? <Markdown content={props.streamText} /> : null}
                 <span className="cursor-blink" />
               </div>
