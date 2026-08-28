@@ -770,7 +770,7 @@ function KsAgent() {
         />
       </div>
 
-      {hasPreview && !previewOpen && activePreview && (
+      {showPreviewBanner && activePreview && (
         <div
           style={{
             position: 'fixed',
