@@ -34,6 +34,7 @@ export interface RetrySettings {
 
 interface RawChunk {
   text?: string
+  reasoning?: string
   finishReason?: string | null
   toolCallDeltas?: Array<{ index: number; id?: string; name?: string; argsDelta?: string }>
 }
