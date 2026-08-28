@@ -3,13 +3,17 @@ import { IconX, IconRefreshCw, IconExternalLink, IconMonitor, IconPlay, IconMaxi
 import { useToast } from '../toast'
 import * as api from '../api'
 
+import type { Preview } from '../types'
+
 interface PreviewSidebarProps {
   open: boolean
   onClose: () => void
   activeProject: { id: string; path: string } | null
+  activeChatId?: string | null
+  chatPreview?: Preview | null
 }
 
-export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarProps) {
+export function PreviewSidebar({ open, onClose, activeProject, activeChatId = null, chatPreview = null }: PreviewSidebarProps) {
   const toast = useToast()
   const [url, setUrl] = useState<string>('')
   const [directUrl, setDirectUrl] = useState<string>('')
@@ -20,19 +24,43 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeKey, setIframeKey] = useState(0)
   const prevProjectIdRef = useRef<string | null>(null)
+  const prevChatIdRef = useRef<string | null>(null)
 
   const getDefaultProxiedUrl = useCallback(() => {
+    if (chatPreview && activeChatId) return api.chatPreviewProxyUrl(activeChatId)
     if (activeProject) return api.previewProxyUrl(activeProject.id)
     const hostname = window.location.hostname || 'localhost'
     return `http://${hostname}:3000`
-  }, [activeProject])
+  }, [activeProject, activeChatId, chatPreview])
 
   const getDefaultDirectUrl = useCallback(() => {
+    if (chatPreview) {
+      const hostname = window.location.hostname || 'localhost'
+      return `http://${hostname}:${chatPreview.port}`
+    }
     const hostname = window.location.hostname || 'localhost'
     return `http://${hostname}:3000`
-  }, [])
+  }, [chatPreview])
+
+  const applyChatPreview = useCallback(() => {
+    if (!activeChatId || !chatPreview) return false
+    const hostname = window.location.hostname || 'localhost'
+    const proxied = api.chatPreviewProxyUrl(activeChatId)
+    const direct = `http://${hostname}:${chatPreview.port}`
+    setUrl(proxied)
+    setDirectUrl(direct)
+    setRunning(true)
+    setError(null)
+    setIframeKey((k) => k + 1)
+    return true
+  }, [activeChatId, chatPreview])
 
   const loadPreview = useCallback(async (opts?: { forceStart?: boolean }) => {
+    // If chat has an AI-driven preview, prefer it (per-chat like plan)
+    if (chatPreview && activeChatId) {
+      applyChatPreview()
+      return
+    }
     if (!activeProject) {
       setUrl(getDefaultDirectUrl())
       setDirectUrl(getDefaultDirectUrl())
@@ -69,29 +97,55 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
     } finally {
       setLoading(false)
     }
-  }, [activeProject, getDefaultDirectUrl, toast])
+  }, [activeProject, getDefaultDirectUrl, toast, chatPreview, activeChatId, applyChatPreview])
 
-  // Auto-load when sidebar opens or project changes while open
+  // Auto-load when sidebar opens, or project/chat changes while open — chat preview takes precedence (active per chat)
   useEffect(() => {
     if (!open) return
+    // chat preview is active per chat like plan — when it exists, show it immediately
+    if (chatPreview && activeChatId) {
+      // if already showing correct chat preview, don't reload unnecessarily unless chat changed
+      if (prevChatIdRef.current !== activeChatId || !url.includes('/api/chats/')) {
+        applyChatPreview()
+        prevChatIdRef.current = activeChatId
+        prevProjectIdRef.current = activeProject?.id ?? null
+      }
+      return
+    }
     const pid = activeProject?.id ?? null
-    const shouldReload = pid !== prevProjectIdRef.current || !url
+    const cid = activeChatId ?? null
+    const shouldReload = pid !== prevProjectIdRef.current || cid !== prevChatIdRef.current || !url
     prevProjectIdRef.current = pid
+    prevChatIdRef.current = cid
     if (shouldReload) {
       loadPreview()
     }
-  }, [open, activeProject?.id, loadPreview, url])
+  }, [open, activeProject?.id, activeChatId, chatPreview, loadPreview, url, applyChatPreview])
 
-  // Also reload when activeProject changes while already open
+  // Also reload when activeProject changes while already open (without chat preview)
   useEffect(() => {
     if (!open) return
+    if (chatPreview && activeChatId) return // chat preview already handled above
     if (activeProject && prevProjectIdRef.current !== activeProject.id) {
       prevProjectIdRef.current = activeProject.id
       loadPreview()
     }
-  }, [activeProject, open, loadPreview])
+  }, [activeProject, open, loadPreview, chatPreview, activeChatId])
+
+  // When chatPreview arrives/updates for the active chat while panel is open, switch to it
+  useEffect(() => {
+    if (!open) return
+    if (chatPreview && activeChatId) {
+      applyChatPreview()
+      prevChatIdRef.current = activeChatId
+    }
+  }, [chatPreview, activeChatId, open, applyChatPreview])
 
   const handleReload = () => {
+    if (chatPreview && activeChatId) {
+      applyChatPreview()
+      return
+    }
     if (!activeProject) {
       setIframeKey((k) => k + 1)
       return
@@ -101,6 +155,12 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
   }
 
   const handleOpenExternal = () => {
+    // chat preview takes precedence — open the per-chat proxied URL
+    if (chatPreview && activeChatId) {
+      const target = `${window.location.origin}${api.chatPreviewProxyUrl(activeChatId)}`
+      window.open(target, '_blank', 'noopener,noreferrer')
+      return
+    }
     let target = url
     // Prefer proxied URL (same-origin) as requested: /api/projects/:id/preview/proxy/
     if (activeProject) {
@@ -141,6 +201,12 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
   }
 
   const handleUseProxied = () => {
+    if (chatPreview && activeChatId) {
+      setUrl(api.chatPreviewProxyUrl(activeChatId))
+      setError(null)
+      setIframeKey((k) => k + 1)
+      return
+    }
     if (activeProject) {
       setUrl(api.previewProxyUrl(activeProject.id))
       setError(null)
@@ -158,7 +224,10 @@ export function PreviewSidebar({ open, onClose, activeProject }: PreviewSidebarP
     <>
       <aside className={`psb open${isFullscreen ? ' fullscreen' : ''}`}>
         <div className="psb-header">
-          <div className="psb-title">Preview{running === false ? ' — stopped' : running ? ' — running' : ''}</div>
+          <div className="psb-title">
+            {chatPreview && activeChatId ? `Preview :${chatPreview.port}${running === false ? ' — stopped' : running ? ' — running' : ''}` : `Preview${running === false ? ' — stopped' : running ? ' — running' : ''}`}
+            {chatPreview && activeChatId ? <span style={{ fontWeight: 400, color: 'var(--text-faint)', marginLeft: 6, fontSize: 11 }}>chat</span> : null}
+          </div>
           <div className="psb-actions">
             <button className="icon-btn" aria-label="Fullscreen" onClick={() => setIsFullscreen((v) => !v)} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (100% width)'}>
               {isFullscreen ? <IconMinimize size={16} /> : <IconMaximize size={16} />}
