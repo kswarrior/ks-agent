@@ -110,7 +110,9 @@ export interface Skill {
   note: string
   mainFile: string
   files: string[]
+  projectId?: string
   createdAt: string
+  updatedAt?: string
 }
 
 export interface Preview {
