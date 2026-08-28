@@ -2392,15 +2392,22 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
     const ct = proxied.headers.get('content-type') || ''
     const isHtml = ct.includes('text/html')
     const isCss = ct.includes('text/css')
-    if (isHtml || isCss) {
+    const isJs = ct.includes('javascript') || ct.includes('ecmascript') || (/\.(m?js|cjs|ts|tsx|jsx)(\?|$)/.test(targetPath) && !isHtml && !isCss && ct.includes('text/plain'))
+    // Also treat Vite-served modules with .js-like paths even if content-type is octet-stream
+    const isJsByPath = !isHtml && !isCss && /\.(m?js|cjs|ts|tsx|jsx)(\?|$)/.test(targetPath)
+    const shouldRewriteJs = isJs || isJsByPath
+    if (isHtml || isCss || shouldRewriteJs) {
       const text = await proxied.text()
       let out = text
       const baseProxyPath = `/api/projects/${project.id}/preview/proxy/`
       if (isHtml) out = injectIntoHtml(text, baseProxyPath)
       else if (isCss) out = rewriteCssUrls(text, baseProxyPath)
+      else if (shouldRewriteJs) out = rewriteJsUrls(text, baseProxyPath)
       outHeaders.delete('content-length')
       outHeaders.delete('content-encoding')
-      outHeaders.set('content-type', isHtml ? 'text/html; charset=utf-8' : 'text/css; charset=utf-8')
+      if (isHtml) outHeaders.set('content-type', 'text/html; charset=utf-8')
+      else if (isCss) outHeaders.set('content-type', 'text/css; charset=utf-8')
+      else outHeaders.set('content-type', ct.includes('javascript') || ct.includes('ecmascript') ? ct : 'application/javascript; charset=utf-8')
       outHeaders.delete('content-security-policy')
       outHeaders.set('X-Frame-Options', 'ALLOWALL')
       // also ensure correct length not required, let chunked handle
@@ -2479,15 +2486,21 @@ async function proxyChatPreview(c: any, suffix: string): Promise<Response> {
     const ct = proxied.headers.get('content-type') || ''
     const isHtml = ct.includes('text/html')
     const isCss = ct.includes('text/css')
-    if (isHtml || isCss) {
+    const isJs = ct.includes('javascript') || ct.includes('ecmascript') || (/\.(m?js|cjs|ts|tsx|jsx)(\?|$)/.test(targetPath) && !isHtml && !isCss && ct.includes('text/plain'))
+    const isJsByPath = !isHtml && !isCss && /\.(m?js|cjs|ts|tsx|jsx)(\?|$)/.test(targetPath)
+    const shouldRewriteJs = isJs || isJsByPath
+    if (isHtml || isCss || shouldRewriteJs) {
       const text = await proxied.text()
       let out = text
       const baseProxyPath = `/api/chats/${chat.id}/preview/proxy/`
       if (isHtml) out = injectIntoHtml(text, baseProxyPath)
       else if (isCss) out = rewriteCssUrls(text, baseProxyPath)
+      else if (shouldRewriteJs) out = rewriteJsUrls(text, baseProxyPath)
       outHeaders.delete('content-length')
       outHeaders.delete('content-encoding')
-      outHeaders.set('content-type', isHtml ? 'text/html; charset=utf-8' : 'text/css; charset=utf-8')
+      if (isHtml) outHeaders.set('content-type', 'text/html; charset=utf-8')
+      else if (isCss) outHeaders.set('content-type', 'text/css; charset=utf-8')
+      else outHeaders.set('content-type', ct.includes('javascript') || ct.includes('ecmascript') ? ct : 'application/javascript; charset=utf-8')
       outHeaders.delete('content-security-policy')
       outHeaders.set('X-Frame-Options', 'ALLOWALL')
       return new Response(out, { status: proxied.status, headers: outHeaders })
