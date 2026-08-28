@@ -1765,6 +1765,59 @@ app.all('/api/chats/:id/preview/proxy/*', async (c) => {
   return proxyChatPreview(c, suffix)
 })
 
+// --- Preview isolation helpers ---
+// Inject a deterministic light color-scheme + absolute-URL fixer into proxied HTML
+// so the iframe on a dark host (meta color-scheme: dark) doesn't incorrectly
+// force prefers-color-scheme: dark inside the preview (which makes a white
+// button appear black) and so that absolute URLs like /styles.css are correctly
+// resolved through the proxy when the iframe is not top-level.
+function buildPreviewIsolationHead(baseProxyPath: string): string {
+  // baseProxyPath is like /api/projects/<id>/preview/proxy/ — ensure trailing slash
+  const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
+  // We force light color-scheme for parity with standalone new-tab (light OS → white button)
+  // The iframe element itself also has color-scheme: light, but the injected meta/style
+  // guarantees the document's own prefers-color-scheme evaluates to light even when
+  // the parent is dark. Both together fix the black-vs-white bug.
+  // The tiny script rewrites absolute-root URLs (/asset) that would otherwise
+  // escape the proxy (e.g. /assets/app.css → 404) — they work in a new tab on :3000 but break in iframe.
+  return (
+    `<meta name="color-scheme" content="light">` +
+    `<style>html{color-scheme:light !important;}</style>` +
+    `<script>(function(){var base=${JSON.stringify(base)};function rw(el,a){var v=el.getAttribute(a);if(v&&v.startsWith('/')&&!v.startsWith('//'))el.setAttribute(a,base+v.slice(1));}function scan(root){try{root.querySelectorAll('[href^="/"],[src^="/"],[action^="/"],[srcset^="/"]').forEach(function(el){if(el.hasAttribute('href'))rw(el,'href');if(el.hasAttribute('src'))rw(el,'src');if(el.hasAttribute('action'))rw(el,'action');if(el.hasAttribute('srcset')){var s=el.getAttribute('srcset');if(s){var r=s.split(',').map(function(p){var t=p.trim();if(t.startsWith('/')&&!t.startsWith('//'))return base+t.slice(1)+' '+t.split(/\\s+/).slice(1).join(' ');return p;}).join(',');el.setAttribute('srcset',r);}}});}catch(e){}}function cssScan(){try{document.querySelectorAll('link[rel="stylesheet"]').forEach(function(l){/* already handled */});}catch(e){}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){scan(document)});else scan(document);new MutationObserver(function(m){m.forEach(function(x){x.addedNodes.forEach(function(n){if(n.nodeType===1){scan(n);if(n.querySelectorAll)scan(n);}});});}).observe(document.documentElement,{childList:true,subtree:true});})();</script>`
+  )
+}
+
+function injectIntoHtml(html: string, baseProxyPath: string): string {
+  const injection = buildPreviewIsolationHead(baseProxyPath)
+  // Prefer injecting right after <head> so it runs early, before stylesheets are parsed.
+  const headOpen = html.match(/<head[^>]*>/i)
+  if (headOpen && headOpen.index !== undefined) {
+    const idx = headOpen.index + headOpen[0].length
+    return html.slice(0, idx) + injection + html.slice(idx)
+  }
+  // Fallback: after <html>
+  const htmlOpen = html.match(/<html[^>]*>/i)
+  if (htmlOpen && htmlOpen.index !== undefined) {
+    const idx = htmlOpen.index + htmlOpen[0].length
+    return html.slice(0, idx) + '<head>' + injection + '</head>' + html.slice(idx)
+  }
+  // Last resort: prepend
+  return injection + html
+}
+
+function rewriteCssUrls(css: string, baseProxyPath: string): string {
+  const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
+  // Rewrite url("/...") and url('/...') and url(/...) that are absolute-root
+  // Keep protocol-relative // and absolute http(s) untouched, keep relative and data:
+  return css.replace(/url\(\s*(['"]?)\/(?!\/)([^'")]+)\1\s*\)/g, (_m, q, path) => {
+    const quote = q || ''
+    // path already without leading slash
+    // If it contains :// or data:, skip
+    if (/^(?:[a-z]+:|\/\/|data:)/i.test(path)) return `url(${quote}/${path}${quote})`
+    return `url(${quote}${base}${path}${quote})`
+  })
+}
+
 async function proxyPreview(c: any, suffix: string): Promise<Response> {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
