@@ -130,6 +130,19 @@ function expandPath(p: string): string {
   return p
 }
 
+function resolveProjectPath(input: string): string {
+  let p = expandPath(input.trim())
+  if (!p) return p
+  if (path.isAbsolute(p)) {
+    return path.normalize(p)
+  }
+  const normalized = path.normalize(p)
+  if (normalized === 'project' || normalized.startsWith('project' + path.sep) || normalized.startsWith('project/')) {
+    return normalized
+  }
+  return path.join('project', normalized)
+}
+
 function publicProvider(p: { id: string; name: string; baseUrl: string; apiKey: string }) {
   return {
     id: p.id,
@@ -180,7 +193,7 @@ app.post('/api/projects', async (c) => {
 
   if (!name) return c.json({ error: 'Project name is required' }, 400)
   if (!dir) return c.json({ error: 'Project path is required' }, 400)
-  dir = expandPath(dir)
+  dir = resolveProjectPath(dir)
 
   try {
     if (!fs.existsSync(dir)) {
@@ -210,7 +223,7 @@ app.patch('/api/projects/:id', async (c) => {
     project.name = name
   }
   if (body.path !== undefined && String(body.path).trim()) {
-    project.path = expandPath(String(body.path).trim())
+    project.path = resolveProjectPath(String(body.path).trim())
   }
   saveDb()
   return c.json(project)
