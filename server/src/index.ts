@@ -1789,20 +1789,30 @@ function buildPreviewIsolationHead(baseProxyPath: string): string {
 
 function injectIntoHtml(html: string, baseProxyPath: string): string {
   const injection = buildPreviewIsolationHead(baseProxyPath)
+  const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
+  // Static rewrite for early resources that the browser preloads before our
+  // runtime script runs ( <link href="/...">, <script src="/..."> etc ).
+  // Only rewrite absolute-root URLs starting with / and not // or http(s):.
+  // Keep quoted form; preserve quote char.
+  const staticRewritten = html.replace(/(href|src|action)\s*=\s*(["'])\/(?!\/)/g, (_m: string, attr: string, q: string) => `${attr}=${q}${base}`)
+  // Also rewrite srcset's first entry statically (full list is handled by runtime script)
+  // This handles <img srcset="/a.jpg 1x, /b.jpg 2x"> partially but better than nothing.
+  // For srcset we do a naive replace of ="/
+  let outHtml = staticRewritten
   // Prefer injecting right after <head> so it runs early, before stylesheets are parsed.
-  const headOpen = html.match(/<head[^>]*>/i)
+  const headOpen = outHtml.match(/<head[^>]*>/i)
   if (headOpen && headOpen.index !== undefined) {
     const idx = headOpen.index + headOpen[0].length
-    return html.slice(0, idx) + injection + html.slice(idx)
+    return outHtml.slice(0, idx) + injection + outHtml.slice(idx)
   }
   // Fallback: after <html>
-  const htmlOpen = html.match(/<html[^>]*>/i)
+  const htmlOpen = outHtml.match(/<html[^>]*>/i)
   if (htmlOpen && htmlOpen.index !== undefined) {
     const idx = htmlOpen.index + htmlOpen[0].length
-    return html.slice(0, idx) + '<head>' + injection + '</head>' + html.slice(idx)
+    return outHtml.slice(0, idx) + '<head>' + injection + '</head>' + outHtml.slice(idx)
   }
   // Last resort: prepend
-  return injection + html
+  return injection + outHtml
 }
 
 function rewriteCssUrls(css: string, baseProxyPath: string): string {
