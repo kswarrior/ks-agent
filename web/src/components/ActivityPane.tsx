@@ -22,6 +22,8 @@ function getToolLabel(type: Activity['toolType']): string {
       return 'Step'
     case 'ask_question':
       return 'Ask'
+    case 'open_preview':
+      return 'Preview'
     default:
       return type
   }
@@ -45,6 +47,8 @@ function getToolBadgeStyle(type: Activity['toolType']): { bg: string; color: str
       return { bg: '#86efac1a', color: '#86efac', border: '#86efac30' }
     case 'ask_question':
       return { bg: '#f472b61a', color: '#f472b6', border: '#f472b630' }
+    case 'open_preview':
+      return { bg: '#22c55e1a', color: '#22c55e', border: '#22c55e30' }
     default:
       return { bg: '#1a1a1a', color: '#9a9a9a', border: '#252525' }
   }
@@ -67,6 +71,8 @@ function getToolIcon(type: Activity['toolType']) {
     case 'complete_plan_step':
       return <IconCheck size={12} />
     case 'ask_question':
+      return <IconActivity size={12} />
+    case 'open_preview':
       return <IconActivity size={12} />
     default:
       return <IconActivity size={12} />
@@ -91,6 +97,8 @@ function getCommandDisplay(type: Activity['toolType'], args: Record<string, unkn
       return `step ${args.index}`
     case 'ask_question':
       return (args.question as string) || (args.header as string) || ''
+    case 'open_preview':
+      return args.port ? `:${args.port}` : ''
     default:
       return ''
   }
@@ -131,7 +139,7 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
     return sortedActivities.filter((a) => a.toolType === filter)
   }, [sortedActivities, filter])
 
-  // Dropdown options: All, Write, Read, Edit, Shell — per latest request (write/read/shell etc) + List for explore
+  // Dropdown options: All, Write, Read, Edit, Shell, Preview — per latest request (write/read/shell etc) + List for explore
   const dropdownFilters: Array<{ key: FilterKey; label: string; count: number }> = useMemo(() => {
     return [
       { key: 'all' as FilterKey, label: 'All', count: counts.all || 0 },
@@ -139,6 +147,7 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
       { key: 'read_file' as FilterKey, label: 'Read', count: counts['read_file'] || 0 },
       { key: 'edit_file' as FilterKey, label: 'Edit', count: counts['edit_file'] || 0 },
       { key: 'run_shell' as FilterKey, label: 'Shell', count: counts['run_shell'] || 0 },
+      { key: 'open_preview' as FilterKey, label: 'Preview', count: counts['open_preview'] || 0 },
     ]
   }, [counts])
 

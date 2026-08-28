@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Activity, Chat, Message, ModelEntry, Plan, Question } from '../types'
+import type { Activity, Chat, Message, ModelEntry, Plan, Preview, Question } from '../types'
 import { Markdown } from './Markdown'
 import { IconChevronDown, IconRotate, IconSearch, IconSend, IconStop, IconCopy, IconClock, IconCheck } from '../icons'
 import { QuestionList } from './QuestionCard'
@@ -148,6 +148,8 @@ interface Props {
   onAnswerQuestion: (questionId: string, answer: string) => Promise<void>
   plan?: Plan | null
   activities?: Activity[]
+  preview?: Preview | null
+  onOpenPreview?: () => void
 }
 
 export function ChatView(props: Props) {
@@ -329,11 +331,34 @@ export function ChatView(props: Props) {
             {props.questions.length > 0 && (
               <QuestionList questions={props.questions} onAnswer={props.onAnswerQuestion} />
             )}
+            {(props as any).preview && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, marginTop: 2 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,0.6)', flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Preview ready</span>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace' }}>:{(props as any).preview.port}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 'auto', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>active per chat</span>
+                <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12, marginLeft: 8 }} onClick={() => (props as any).onOpenPreview?.()}>
+                  Open Preview
+                </button>
+              </div>
+            )}
           </div>
         )}
         {props.questions.length > 0 && (!props.chat || props.messages.length === 0) && !props.streaming && (
           <div className="msg-col" style={{ marginTop: 18 }}>
             <QuestionList questions={props.questions} onAnswer={props.onAnswerQuestion} />
+          </div>
+        )}
+        {(props as any).preview && (!props.chat || props.messages.length === 0) && !props.streaming && (
+          <div className="msg-col" style={{ marginTop: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,0.6)', flexShrink: 0 }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Preview ready</span>
+              <span style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace' }}>:{(props as any).preview.port}</span>
+              <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12, marginLeft: 'auto' }} onClick={() => (props as any).onOpenPreview?.()}>
+                Open Preview
+              </button>
+            </div>
           </div>
         )}
       </div>
