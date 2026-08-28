@@ -216,4 +216,11 @@ function init() {
 
 init();
 
-
+/* CSS for mark and ripple added via style tag */
+const extraCss = document.createElement("style");
+extraCss.textContent = `
+mark { background: #fef08a; color: #1f2937; padding: 0 .15em; border-radius: 3px; }
+.tags-cloud .tag.active { background: var(--primary-100); color: var(--primary-600); border-color: var(--primary-200); }
+@keyframes ripple { to { transform: scale(2.5); opacity: 0; } }
+`;
+document.head.appendChild(extraCss);

@@ -99,9 +99,7 @@ export interface Skill {
   note: string
   mainFile: string
   files: string[]
-  projectId?: string
   createdAt: string
-  updatedAt?: string
 }
 
 export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview'

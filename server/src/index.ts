@@ -765,12 +765,10 @@ app.post('/api/chats/:id/messages', async (c) => {
     (db.systemPrompt?.trim()) ||
     PRIMARY_SYSTEM_PROMPT
   const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
-  const skillMessages = buildSkillSystemMessages(project)
   const history: LLMMessage[] = [
     { role: 'system', content: modelSystemPrompt },
     ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
     ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-    ...skillMessages,
     ...messagesOf(chat.id).map((m) => ({ role: m.role as LLMMessage['role'], content: m.content }))
   ]
 
@@ -968,34 +966,6 @@ app.patch('/api/settings/retry', async (c) => {
 
 // ---------------- Skills ----------------
 
-function isValidRelPath(p: string, maxLen = 500): boolean {
-  if (!p || p.length > maxLen) return false
-  if (p.includes('\0')) return false
-  if (p.startsWith('/') || p.startsWith('\\')) return false
-  if (p.includes('//')) return false
-  const parts = p.split('/').filter(Boolean)
-  if (parts.length === 0) return false
-  if (parts.join('/') !== p) return false
-  if (!parts.every(validSegment)) return false
-  return true
-}
-
-function normalizeSkillFiles(files: unknown): string[] {
-  if (!Array.isArray(files)) return []
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const raw of files) {
-    const v = String(raw ?? '').trim()
-    if (!v) continue
-    if (!isValidRelPath(v)) continue
-    if (seen.has(v)) continue
-    seen.add(v)
-    out.push(v)
-    if (out.length >= 20) break
-  }
-  return out
-}
-
 app.get('/api/settings/skills', (c) => {
   return c.json(getSkills())
 })
@@ -1005,30 +975,11 @@ app.post('/api/settings/skills', async (c) => {
   const name = String(body.name ?? '').trim()
   const note = String(body.note ?? '').trim()
   const mainFile = String(body.mainFile ?? '').trim()
-  const projectId = body.projectId != null ? String(body.projectId).trim() : ''
-  if (Array.isArray(body.files)) {
-    for (const raw of body.files) {
-      const v = String(raw ?? '').trim()
-      if (!v) continue
-      if (!isValidRelPath(v)) return c.json({ error: `Invalid file path: "${v}"` }, 400)
-    }
-  }
-  const files = normalizeSkillFiles(body.files)
+  const files = Array.isArray(body.files) ? body.files.map((f: any) => String(f).trim()).filter(Boolean) : []
   if (!name) return c.json({ error: 'Skill name is required' }, 400)
-  if (name.length < 2 || name.length > 80) return c.json({ error: 'Skill name must be 2-80 characters' }, 400)
-  if (note.length > 500) return c.json({ error: 'Note must be ≤500 characters' }, 400)
   if (!mainFile) return c.json({ error: 'Main file is required' }, 400)
-  if (mainFile.length > 500) return c.json({ error: 'Main file path too long' }, 400)
   if (!mainFile.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
-  if (!isValidRelPath(mainFile)) return c.json({ error: 'Main file path is invalid' }, 400)
-  if (files.length > 20) return c.json({ error: 'Too many files (max 20)' }, 400)
-  if (projectId) {
-    if (!findProject(projectId)) return c.json({ error: 'Selected project not found' }, 400)
-  }
-  const duplicate = getDb().skills.some((s) => s.name.toLowerCase() === name.toLowerCase())
-  if (duplicate) return c.json({ error: 'A skill with this name already exists' }, 400)
-  const now = new Date().toISOString()
-  const skill: Skill = { id: newId(), name, note, mainFile, files, projectId: projectId || undefined, createdAt: now, updatedAt: now }
+  const skill: Skill = { id: newId(), name, note, mainFile, files, createdAt: new Date().toISOString() }
   getDb().skills.push(skill)
   saveDb()
   return c.json(skill, 201)
@@ -1050,116 +1001,21 @@ app.patch('/api/settings/skills/:id', async (c) => {
   if (body.name !== undefined) {
     const v = String(body.name).trim()
     if (!v) return c.json({ error: 'Name cannot be empty' }, 400)
-    if (v.length < 2 || v.length > 80) return c.json({ error: 'Skill name must be 2-80 characters' }, 400)
-    const dup = getDb().skills.some((s) => s.id !== skill.id && s.name.toLowerCase() === v.toLowerCase())
-    if (dup) return c.json({ error: 'A skill with this name already exists' }, 400)
     skill.name = v
   }
-  if (body.note !== undefined) {
-    const v = String(body.note).trim()
-    if (v.length > 500) return c.json({ error: 'Note must be ≤500 characters' }, 400)
-    skill.note = v
-  }
+  if (body.note !== undefined) skill.note = String(body.note).trim()
   if (body.mainFile !== undefined) {
     const v = String(body.mainFile).trim()
     if (!v) return c.json({ error: 'Main file cannot be empty' }, 400)
-    if (v.length > 500) return c.json({ error: 'Main file path too long' }, 400)
     if (!v.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
-    if (!isValidRelPath(v)) return c.json({ error: 'Main file path is invalid' }, 400)
     skill.mainFile = v
   }
-  if (body.files !== undefined) {
-    if (!Array.isArray(body.files)) return c.json({ error: 'files must be an array' }, 400)
-    for (const raw of body.files) {
-      const v = String(raw ?? '').trim()
-      if (!v) continue
-      if (!isValidRelPath(v)) return c.json({ error: `Invalid file path: "${v}"` }, 400)
-    }
-    skill.files = normalizeSkillFiles(body.files)
+  if (body.files !== undefined && Array.isArray(body.files)) {
+    skill.files = body.files.map((f: any) => String(f).trim()).filter(Boolean)
   }
-  if (body.projectId !== undefined) {
-    const v = body.projectId != null ? String(body.projectId).trim() : ''
-    if (v) {
-      if (!findProject(v)) return c.json({ error: 'Selected project not found' }, 400)
-      skill.projectId = v
-    } else {
-      delete skill.projectId
-    }
-  }
-  skill.updatedAt = new Date().toISOString()
   saveDb()
   return c.json(skill)
 })
-
-function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
-  const skills = getSkills()
-  if (skills.length === 0) return []
-  const msgs: LLMMessage[] = []
-  const MAX_FILE_BYTES = 12 * 1024
-  const MAX_TOTAL_CHARS = 12000
-  let totalChars = 0
-  for (const skill of skills) {
-    let basePath: string | null = null
-    if (skill.projectId) {
-      const p = findProject(skill.projectId)
-      if (p) basePath = p.path
-    }
-    if (!basePath && project) basePath = project.path
-    if (!basePath) continue
-    let mainContent: string | null = null
-    try {
-      const abs = resolveInProject(basePath, skill.mainFile)
-      if (abs && fs.existsSync(abs)) {
-        const stat = fs.statSync(abs)
-        if (stat.isFile() && stat.size <= 100 * 1024) {
-          const buf = fs.readFileSync(abs, 'utf8')
-          if (!buf.includes('\0')) {
-            mainContent = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
-          }
-        }
-      }
-    } catch {}
-    let block = `Skill: ${skill.name}`
-    if (skill.note) block += ` — ${skill.note}`
-    block += `\nMain file: ${skill.mainFile}`
-    if (skill.files.length) block += `\nRelated files: ${skill.files.join(', ')}`
-    if (mainContent) {
-      const snippet = mainContent.slice(0, 8000)
-      block += `\n\n--- Content of ${skill.mainFile} ---\n${snippet}\n--- End ${skill.mainFile} ---`
-    } else {
-      block += `\n\n(Note: main file content not available at build time; use list_files/read_file tools to load "${skill.mainFile}" and related files when relevant)`
-    }
-    if (skill.files.length && totalChars < MAX_TOTAL_CHARS) {
-      for (const rel of skill.files.slice(0, 5)) {
-        if (rel === skill.mainFile) continue
-        if (totalChars >= MAX_TOTAL_CHARS) break
-        try {
-          const abs2 = resolveInProject(basePath, rel)
-          if (!abs2 || !fs.existsSync(abs2)) continue
-          const stat2 = fs.statSync(abs2)
-          if (!stat2.isFile() || stat2.size > 50 * 1024) continue
-          const c2 = fs.readFileSync(abs2, 'utf8')
-          if (c2.includes('\0')) continue
-          const preview = c2.slice(0, 2000)
-          const addition = `\n\n--- ${rel} ---\n${preview}`
-          if (block.length + addition.length + totalChars > MAX_TOTAL_CHARS + 5000) continue
-          block += addition
-        } catch {}
-      }
-    }
-    if (totalChars + block.length > MAX_TOTAL_CHARS + 8000) {
-      const short = `Skill: ${skill.name}${skill.note ? ` — ${skill.note}` : ''}\nMain: ${skill.mainFile}`
-      if (short.length + totalChars > MAX_TOTAL_CHARS + 8000) break
-      msgs.push({ role: 'system', content: short })
-      totalChars += short.length
-      continue
-    }
-    msgs.push({ role: 'system', content: block })
-    totalChars += block.length
-    if (totalChars > MAX_TOTAL_CHARS + 8000) break
-  }
-  return msgs
-}
 
 // ---------------- Project files ----------------
 
@@ -1779,69 +1635,6 @@ app.all('/api/chats/:id/preview/proxy/*', async (c) => {
   return proxyChatPreview(c, suffix)
 })
 
-// --- Preview isolation helpers ---
-// Inject a deterministic light color-scheme + absolute-URL fixer into proxied HTML
-// so the iframe on a dark host (meta color-scheme: dark) doesn't incorrectly
-// force prefers-color-scheme: dark inside the preview (which makes a white
-// button appear black) and so that absolute URLs like /styles.css are correctly
-// resolved through the proxy when the iframe is not top-level.
-function buildPreviewIsolationHead(baseProxyPath: string): string {
-  // baseProxyPath is like /api/projects/<id>/preview/proxy/ — ensure trailing slash
-  const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
-  // We force light color-scheme for parity with standalone new-tab (light OS → white button)
-  // The iframe element itself also has color-scheme: light, but the injected meta/style
-  // guarantees the document's own prefers-color-scheme evaluates to light even when
-  // the parent is dark. Both together fix the black-vs-white bug.
-  // The tiny script rewrites absolute-root URLs (/asset) that would otherwise
-  // escape the proxy (e.g. /assets/app.css → 404) — they work in a new tab on :3000 but break in iframe.
-  return (
-    `<meta name="color-scheme" content="light">` +
-    `<style>html{color-scheme:light !important;}</style>` +
-    `<script>(function(){var base=${JSON.stringify(base)};function rw(el,a){var v=el.getAttribute(a);if(v&&v.startsWith('/')&&!v.startsWith('//'))el.setAttribute(a,base+v.slice(1));}function scan(root){try{root.querySelectorAll('[href^="/"],[src^="/"],[action^="/"],[srcset^="/"]').forEach(function(el){if(el.hasAttribute('href'))rw(el,'href');if(el.hasAttribute('src'))rw(el,'src');if(el.hasAttribute('action'))rw(el,'action');if(el.hasAttribute('srcset')){var s=el.getAttribute('srcset');if(s){var r=s.split(',').map(function(p){var t=p.trim();if(t.startsWith('/')&&!t.startsWith('//'))return base+t.slice(1)+' '+t.split(/\\s+/).slice(1).join(' ');return p;}).join(',');el.setAttribute('srcset',r);}}});}catch(e){}}function cssScan(){try{document.querySelectorAll('link[rel="stylesheet"]').forEach(function(l){/* already handled */});}catch(e){}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){scan(document)});else scan(document);new MutationObserver(function(m){m.forEach(function(x){x.addedNodes.forEach(function(n){if(n.nodeType===1){scan(n);if(n.querySelectorAll)scan(n);}});});}).observe(document.documentElement,{childList:true,subtree:true});})();</script>`
-  )
-}
-
-function injectIntoHtml(html: string, baseProxyPath: string): string {
-  const injection = buildPreviewIsolationHead(baseProxyPath)
-  const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
-  // Static rewrite for early resources that the browser preloads before our
-  // runtime script runs ( <link href="/...">, <script src="/..."> etc ).
-  // Only rewrite absolute-root URLs starting with / and not // or http(s):.
-  // Keep quoted form; preserve quote char.
-  const staticRewritten = html.replace(/(href|src|action)\s*=\s*(["'])\/(?!\/)/g, (_m: string, attr: string, q: string) => `${attr}=${q}${base}`)
-  // Also rewrite srcset's first entry statically (full list is handled by runtime script)
-  // This handles <img srcset="/a.jpg 1x, /b.jpg 2x"> partially but better than nothing.
-  // For srcset we do a naive replace of ="/
-  let outHtml = staticRewritten
-  // Prefer injecting right after <head> so it runs early, before stylesheets are parsed.
-  const headOpen = outHtml.match(/<head[^>]*>/i)
-  if (headOpen && headOpen.index !== undefined) {
-    const idx = headOpen.index + headOpen[0].length
-    return outHtml.slice(0, idx) + injection + outHtml.slice(idx)
-  }
-  // Fallback: after <html>
-  const htmlOpen = outHtml.match(/<html[^>]*>/i)
-  if (htmlOpen && htmlOpen.index !== undefined) {
-    const idx = htmlOpen.index + htmlOpen[0].length
-    return outHtml.slice(0, idx) + '<head>' + injection + '</head>' + outHtml.slice(idx)
-  }
-  // Last resort: prepend
-  return injection + outHtml
-}
-
-function rewriteCssUrls(css: string, baseProxyPath: string): string {
-  const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
-  // Rewrite url("/...") and url('/...') and url(/...) that are absolute-root
-  // Keep protocol-relative // and absolute http(s) untouched, keep relative and data:
-  return css.replace(/url\(\s*(['"]?)\/(?!\/)([^'")]+)\1\s*\)/g, (_m, q, path) => {
-    const quote = q || ''
-    // path already without leading slash
-    // If it contains :// or data:, skip
-    if (/^(?:[a-z]+:|\/\/|data:)/i.test(path)) return `url(${quote}/${path}${quote})`
-    return `url(${quote}${base}${path}${quote})`
-  })
-}
-
 async function proxyPreview(c: any, suffix: string): Promise<Response> {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
@@ -1908,24 +1701,6 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
           outHeaders.set('location', newLoc)
         }
       } catch {}
-    }
-
-    const ct = proxied.headers.get('content-type') || ''
-    const isHtml = ct.includes('text/html')
-    const isCss = ct.includes('text/css')
-    if (isHtml || isCss) {
-      const text = await proxied.text()
-      let out = text
-      const baseProxyPath = `/api/projects/${project.id}/preview/proxy/`
-      if (isHtml) out = injectIntoHtml(text, baseProxyPath)
-      else if (isCss) out = rewriteCssUrls(text, baseProxyPath)
-      outHeaders.delete('content-length')
-      outHeaders.delete('content-encoding')
-      outHeaders.set('content-type', isHtml ? 'text/html; charset=utf-8' : 'text/css; charset=utf-8')
-      outHeaders.delete('content-security-policy')
-      outHeaders.set('X-Frame-Options', 'ALLOWALL')
-      // also ensure correct length not required, let chunked handle
-      return new Response(out, { status: proxied.status, headers: outHeaders })
     }
 
     const buf = await proxied.arrayBuffer()
@@ -1995,23 +1770,6 @@ async function proxyChatPreview(c: any, suffix: string): Promise<Response> {
           outHeaders.set('location', newLoc)
         }
       } catch {}
-    }
-
-    const ct = proxied.headers.get('content-type') || ''
-    const isHtml = ct.includes('text/html')
-    const isCss = ct.includes('text/css')
-    if (isHtml || isCss) {
-      const text = await proxied.text()
-      let out = text
-      const baseProxyPath = `/api/chats/${chat.id}/preview/proxy/`
-      if (isHtml) out = injectIntoHtml(text, baseProxyPath)
-      else if (isCss) out = rewriteCssUrls(text, baseProxyPath)
-      outHeaders.delete('content-length')
-      outHeaders.delete('content-encoding')
-      outHeaders.set('content-type', isHtml ? 'text/html; charset=utf-8' : 'text/css; charset=utf-8')
-      outHeaders.delete('content-security-policy')
-      outHeaders.set('X-Frame-Options', 'ALLOWALL')
-      return new Response(out, { status: proxied.status, headers: outHeaders })
     }
 
     const buf = await proxied.arrayBuffer()

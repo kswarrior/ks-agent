@@ -110,9 +110,7 @@ export interface Skill {
   note: string
   mainFile: string
   files: string[]
-  projectId?: string
   createdAt: string
-  updatedAt?: string
 }
 
 export interface Preview {
@@ -158,7 +156,7 @@ interface DB {
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [] }
 
 function ensureChatSeqs(chats: Chat[]): boolean {
   let changed = false
@@ -209,7 +207,7 @@ export function loadDb(): void {
       maxRetries: 5,
       baseDelayMs: 1200,
       maxDelayMs: 30000,
-      retryOnStatusCodes: [429, 500, 502, 503],
+      retryOnStatusCodes: [429, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
@@ -241,33 +239,10 @@ export function loadDb(): void {
             alwaysRetry: Boolean(parsed.retrySettings.alwaysRetry ?? defaultRetrySettings.alwaysRetry)
           }
         : defaultRetrySettings,
-      skills: Array.isArray(parsed.skills) ? parsed.skills.filter((s: any) => s && typeof s.id === 'string' && typeof s.name === 'string' && typeof s.mainFile === 'string' && s.mainFile.trim().endsWith('.md')).map((s: any) => ({
-        id: String(s.id),
-        name: String(s.name).trim(),
-        note: typeof s.note === 'string' ? String(s.note).trim() : '',
-        mainFile: String(s.mainFile).trim(),
-        files: Array.isArray(s.files) ? [...new Set(s.files.map((f: any) => String(f).trim()).filter(Boolean))] : [],
-        projectId: typeof s.projectId === 'string' && s.projectId.trim() ? String(s.projectId).trim() : undefined,
-        createdAt: typeof s.createdAt === 'string' ? s.createdAt : new Date().toISOString(),
-        updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : undefined
-      })) : [],
+      skills: Array.isArray(parsed.skills) ? parsed.skills.filter((s: any) => s && typeof s.id === 'string' && typeof s.name === 'string') : [],
       previews: Array.isArray(parsed.previews) ? parsed.previews.filter((p: any) => p && typeof p.id === 'string' && typeof p.chatId === 'string' && Number.isInteger(p.port)) : []
     }
-    // Migrate old skills missing updatedAt / projectId: ensure defaults and deduplicate files
-    let migrated = false
-    for (const s of db.skills) {
-      if (!s.updatedAt) { s.updatedAt = s.createdAt; migrated = true }
-      if (Array.isArray(s.files)) {
-        const deduped = [...new Set(s.files.map((f: any) => String(f).trim()).filter(Boolean))]
-        if (deduped.length !== s.files.length) { s.files = deduped; migrated = true }
-      }
-    }
-    // Migrate retry settings to include 500 (ResourceExhausted) for Nvidia rate limits
-    if (!db.retrySettings.retryOnStatusCodes.includes(500)) {
-      db.retrySettings.retryOnStatusCodes = [...new Set([...db.retrySettings.retryOnStatusCodes, 500])].sort((a, b) => a - b)
-      migrated = true
-    }
-    if (ensureChatSeqs(db.chats) || migrated) {
+    if (ensureChatSeqs(db.chats)) {
       try { saveDb() } catch {}
     }
   } catch {
@@ -276,7 +251,7 @@ export function loadDb(): void {
       maxRetries: 5,
       baseDelayMs: 1200,
       maxDelayMs: 30000,
-      retryOnStatusCodes: [429, 500, 502, 503],
+      retryOnStatusCodes: [429, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
