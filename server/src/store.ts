@@ -423,8 +423,17 @@ export function nextChatSeq(projectId: string): number {
 
 function persistToSqlite(): void {
   const s = ensureDb()
-  // Disable FK during bulk replace to avoid order issues
-  try { s.pragma('foreign_keys = OFF') } catch {}
+  // Sanitize orphaned skill.projectId left over from old delete-project bug (FK would reject otherwise)
+  if (db.skills.length) {
+    const validProjects = new Set(db.projects.map((p) => p.id))
+    for (const sk of db.skills) {
+      if (sk.projectId && !validProjects.has(sk.projectId)) {
+        sk.projectId = undefined
+      }
+    }
+  }
+  // Keep FK ON throughout: deletes are children-first, inserts are parents-first (both satisfy FK)
+  try { s.pragma('foreign_keys = ON') } catch {}
   const txn = s.transaction(() => {
     s.prepare('DELETE FROM activities').run()
     s.prepare('DELETE FROM previews').run()
@@ -477,8 +486,19 @@ function persistToSqlite(): void {
     insKv.run('planPrompt', db.planPrompt)
     insKv.run('retrySettings', JSON.stringify(db.retrySettings))
   })
-  txn()
-  try { s.pragma('foreign_keys = ON') } catch {}
+  try {
+    txn()
+  } catch (e) {
+    console.error('persistToSqlite transaction failed:', e)
+    throw e
+  }
+  // Validate FK integrity after bulk replace; should be clean
+  try {
+    const violations = s.prepare('PRAGMA foreign_key_check').all() as any[]
+    if (violations.length) console.error('Foreign key violations after persistToSqlite:', violations)
+    // Ensure FK remains ON for subsequent writes
+    s.pragma('foreign_keys = ON')
+  } catch {}
 }
 
 function loadFromSqlite(s: Database.Database): DB | null {
