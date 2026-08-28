@@ -299,7 +299,8 @@ export async function* streamChat(
       if (payload === '[DONE]') break
       const chunk = parseChunk(payload)
       if (!chunk) continue
-      const out = (chunk.reasoning ?? '') + (chunk.text ?? '')
+      // Hide reasoning/thinking — only stream visible content to user
+      const out = chunk.text ?? ''
       if (out) yield out
     }
   }
@@ -308,7 +309,7 @@ export async function* streamChat(
     if (payload && payload !== '[DONE]') {
       const chunk = parseChunk(payload)
       if (chunk) {
-        const out = (chunk.reasoning ?? '') + (chunk.text ?? '')
+        const out = chunk.text ?? ''
         if (out) yield out
       }
     }
@@ -372,7 +373,8 @@ export async function streamChatWithTools(
       if (payload === '[DONE]') break
       const chunk = parseChunk(payload)
       if (!chunk) continue
-      const deltaOut = (chunk.reasoning ?? '') + (chunk.text ?? '')
+      // Hide reasoning/thinking — only forward visible content
+      const deltaOut = chunk.text ?? ''
       if (deltaOut) {
         text += deltaOut
         onDelta(deltaOut)
@@ -393,7 +395,7 @@ export async function streamChatWithTools(
     if (payload && payload !== '[DONE]') {
       const chunk = parseChunk(payload)
       if (chunk) {
-        const deltaOut = (chunk.reasoning ?? '') + (chunk.text ?? '')
+        const deltaOut = chunk.text ?? ''
         if (deltaOut) {
           text += deltaOut
           onDelta(deltaOut)
