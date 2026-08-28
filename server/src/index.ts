@@ -1006,6 +1006,13 @@ app.post('/api/settings/skills', async (c) => {
   const note = String(body.note ?? '').trim()
   const mainFile = String(body.mainFile ?? '').trim()
   const projectId = body.projectId != null ? String(body.projectId).trim() : ''
+  if (Array.isArray(body.files)) {
+    for (const raw of body.files) {
+      const v = String(raw ?? '').trim()
+      if (!v) continue
+      if (!isValidRelPath(v)) return c.json({ error: `Invalid file path: "${v}"` }, 400)
+    }
+  }
   const files = normalizeSkillFiles(body.files)
   if (!name) return c.json({ error: 'Skill name is required' }, 400)
   if (name.length < 2 || name.length > 80) return c.json({ error: 'Skill name must be 2-80 characters' }, 400)
@@ -1063,6 +1070,11 @@ app.patch('/api/settings/skills/:id', async (c) => {
   }
   if (body.files !== undefined) {
     if (!Array.isArray(body.files)) return c.json({ error: 'files must be an array' }, 400)
+    for (const raw of body.files) {
+      const v = String(raw ?? '').trim()
+      if (!v) continue
+      if (!isValidRelPath(v)) return c.json({ error: `Invalid file path: "${v}"` }, 400)
+    }
     skill.files = normalizeSkillFiles(body.files)
   }
   if (body.projectId !== undefined) {
