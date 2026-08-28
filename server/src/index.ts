@@ -1886,6 +1886,24 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
       } catch {}
     }
 
+    const ct = proxied.headers.get('content-type') || ''
+    const isHtml = ct.includes('text/html')
+    const isCss = ct.includes('text/css')
+    if (isHtml || isCss) {
+      const text = await proxied.text()
+      let out = text
+      const baseProxyPath = `/api/projects/${project.id}/preview/proxy/`
+      if (isHtml) out = injectIntoHtml(text, baseProxyPath)
+      else if (isCss) out = rewriteCssUrls(text, baseProxyPath)
+      outHeaders.delete('content-length')
+      outHeaders.delete('content-encoding')
+      outHeaders.set('content-type', isHtml ? 'text/html; charset=utf-8' : 'text/css; charset=utf-8')
+      outHeaders.delete('content-security-policy')
+      outHeaders.set('X-Frame-Options', 'ALLOWALL')
+      // also ensure correct length not required, let chunked handle
+      return new Response(out, { status: proxied.status, headers: outHeaders })
+    }
+
     const buf = await proxied.arrayBuffer()
     return new Response(buf, { status: proxied.status, headers: outHeaders })
   } catch (e: any) {
@@ -1953,6 +1971,23 @@ async function proxyChatPreview(c: any, suffix: string): Promise<Response> {
           outHeaders.set('location', newLoc)
         }
       } catch {}
+    }
+
+    const ct = proxied.headers.get('content-type') || ''
+    const isHtml = ct.includes('text/html')
+    const isCss = ct.includes('text/css')
+    if (isHtml || isCss) {
+      const text = await proxied.text()
+      let out = text
+      const baseProxyPath = `/api/chats/${chat.id}/preview/proxy/`
+      if (isHtml) out = injectIntoHtml(text, baseProxyPath)
+      else if (isCss) out = rewriteCssUrls(text, baseProxyPath)
+      outHeaders.delete('content-length')
+      outHeaders.delete('content-encoding')
+      outHeaders.set('content-type', isHtml ? 'text/html; charset=utf-8' : 'text/css; charset=utf-8')
+      outHeaders.delete('content-security-policy')
+      outHeaders.set('X-Frame-Options', 'ALLOWALL')
+      return new Response(out, { status: proxied.status, headers: outHeaders })
     }
 
     const buf = await proxied.arrayBuffer()
