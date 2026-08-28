@@ -972,8 +972,10 @@ function isValidRelPath(p: string, maxLen = 500): boolean {
   if (!p || p.length > maxLen) return false
   if (p.includes('\0')) return false
   if (p.startsWith('/') || p.startsWith('\\')) return false
+  if (p.includes('//')) return false
   const parts = p.split('/').filter(Boolean)
   if (parts.length === 0) return false
+  if (parts.join('/') !== p) return false
   if (!parts.every(validSegment)) return false
   return true
 }
