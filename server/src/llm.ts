@@ -167,10 +167,9 @@ function parseChunk(payload: string): RawChunk | null {
   }
   // Some providers return top-level error instead of choices (e.g. ResourceExhausted 500 streaming)
   if (json.error) {
-    // preserve error message so openStream can surface it via status handling;
-    // for streaming error payloads that still come with 200, treat as null and let caller handle via finish
-    // But if choices missing and error present, we synthesize a text chunk with error to avoid silent hang
-    return null
+    const errMsg = (json.error as any).message || JSON.stringify(json.error)
+    const errCode = (json.error as any).code || (json.error as any).status || 500
+    throw Object.assign(new Error(`Provider responded ${errCode}: ${errMsg}`), { name: 'ProviderError', status: errCode })
   }
   const choice = json.choices?.[0]
   if (!choice) return null
@@ -228,25 +227,22 @@ export async function* streamChat(
   const READ_TIMEOUT_MS = 20000
 
   while (true) {
-    let readResult: ReadableStreamReadResult<Uint8Array>
+    let readResult: any
     try {
-      const readPromise = reader.read()
+      const readPromise: Promise<any> = reader.read()
       const timeoutPromise = new Promise<never>((_, reject) => {
         const t = setTimeout(() => reject(Object.assign(new Error('Provider stream timeout (20s no data)'), { name: 'TimeoutError' })), READ_TIMEOUT_MS)
         signal?.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })) }, { once: true })
-        // clear on success is handled by not rejecting; the timer will be GC'd after race settles but we clear via wrapper
         readPromise.then(() => clearTimeout(t), () => clearTimeout(t))
       })
-      readResult = await Promise.race([readPromise, timeoutPromise]) as ReadableStreamReadResult<Uint8Array>
+      readResult = await Promise.race([readPromise, timeoutPromise])
     } catch (e: any) {
       if (e?.name === 'AbortError') throw e
-      // Timeout is retryable as network error — throw so openStream retry can handle if applicable;
-      // but at this layer we are already past openStream, so we surface as stream error for runAgentLoop retry
       throw e
     }
     const { done, value } = readResult
     if (done) break
-    buf += decoder.decode(value, { stream: true })
+    buf += decoder.decode(value as Uint8Array, { stream: true })
     let nl: number
     while ((nl = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, nl).trim()
@@ -260,7 +256,6 @@ export async function* streamChat(
       if (out) yield out
     }
   }
-  // Flush any trailing content without newline (some providers don't terminate last line with \n)
   if (buf.trim().startsWith('data:')) {
     const payload = buf.trim().slice(5).trim()
     if (payload && payload !== '[DONE]') {
@@ -312,23 +307,23 @@ export async function streamChatWithTools(
   const READ_TIMEOUT_MS = 20000
 
   while (true) {
-    let readResult: ReadableStreamReadResult<Uint8Array>
+    let readResult: any
     try {
-      const readPromise = reader.read()
+      const readPromise: Promise<any> = reader.read()
       const timeoutPromise = new Promise<never>((_, reject) => {
         const t = setTimeout(() => reject(Object.assign(new Error('Provider stream timeout (20s no data)'), { name: 'TimeoutError' })), READ_TIMEOUT_MS)
         const onAbort = () => { clearTimeout(t); reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })) }
         signal?.addEventListener('abort', onAbort, { once: true })
         readPromise.then(() => { clearTimeout(t); signal?.removeEventListener('abort', onAbort) }, () => { clearTimeout(t); signal?.removeEventListener('abort', onAbort) })
       })
-      readResult = await Promise.race([readPromise, timeoutPromise]) as ReadableStreamReadResult<Uint8Array>
+      readResult = await Promise.race([readPromise, timeoutPromise])
     } catch (e: any) {
       if (e?.name === 'AbortError') throw e
       throw e
     }
     const { done, value } = readResult
     if (done) break
-    buf += decoder.decode(value, { stream: true })
+    buf += decoder.decode(value as Uint8Array, { stream: true })
     let nl: number
     while ((nl = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, nl).trim()
