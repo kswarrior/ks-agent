@@ -371,11 +371,11 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   function resetRetryDefaults() {
     const defaults: RetrySettings = {
       enabled: true,
-      maxRetries: 3,
-      baseDelayMs: 1000,
+      maxRetries: 5,
+      baseDelayMs: 1200,
       maxDelayMs: 30000,
-      retryOnStatusCodes: [429, 503],
-      stopOnStatusCodes: [404],
+      retryOnStatusCodes: [429, 500, 502, 503],
+      stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
     setRetryDraft(defaults)

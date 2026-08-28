@@ -691,6 +691,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         if (e?.name === 'AbortError') throw e
         const msg = String(e?.message || e)
         const isTimeout = /timeout/i.test(msg)
+        const isResourceExhausted = /resourceexhausted|worker local total request limit/i.test(msg)
         // Long edits / reasoning pauses can stall mid-stream and trigger the idle
         // timeout after partial content has already been emitted. The original
         // code failed immediately to avoid duplication, but with a tight 20s
@@ -698,18 +699,23 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         // increased idle timeout most stalls are avoided; for the remainder we
         // allow a retry even after partial content by rolling back the partial
         // delta so the retry re-streams the round cleanly.
-        if (roundText.length > 0 && !isTimeout) throw e
-        if (isTimeout && roundText.length > 0) {
+        // ResourceExhausted (Worker local total request limit) is also transient
+        // and should be retried even after partial content, with rollback.
+        const canRetryAfterPartial = isTimeout || isResourceExhausted || !!opts.retrySettings?.alwaysRetry
+        if (roundText.length > 0 && !canRetryAfterPartial) throw e
+        if ((isTimeout || isResourceExhausted || !!opts.retrySettings?.alwaysRetry) && roundText.length > 0) {
           if (content.length >= roundText.length && content.endsWith(roundText)) {
             content = content.slice(0, -roundText.length)
           } else {
             content = content.slice(0, Math.max(0, content.length - roundText.length))
           }
         }
-        const isResourceExhausted = /resourceexhausted|worker local total request limit/i.test(msg)
         const isRetryableStatus = !!opts.retrySettings?.alwaysRetry || isTimeout || isResourceExhausted || (opts.retrySettings?.retryOnStatusCodes ?? [429, 500, 502, 503]).some((code) => msg.includes(String(code)))
-        const isStopStatus = !opts.retrySettings?.alwaysRetry && (opts.retrySettings?.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
-        const shouldRetry = (opts.retrySettings?.enabled ?? true) && isRetryableStatus && !isStopStatus && attempt < maxAttempts
+        // ResourceExhausted should never be considered a stop condition — it's a transient capacity error
+        const isStopStatus = !opts.retrySettings?.alwaysRetry && !isResourceExhausted && (opts.retrySettings?.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
+        // For ResourceExhausted with alwaysRetry, allow many more retries (transient capacity)
+        const effectiveMaxAttempts = isResourceExhausted && opts.retrySettings?.alwaysRetry ? Math.max(maxAttempts, 30) : maxAttempts
+        const shouldRetry = (opts.retrySettings?.enabled ?? true) && isRetryableStatus && !isStopStatus && attempt < effectiveMaxAttempts
         if (!shouldRetry) throw e
         // respect Retry-After if present in msg
         let delay = Math.min((opts.retrySettings?.baseDelayMs ?? 1200) * Math.pow(2, attempt) + Math.random() * 800, opts.retrySettings?.maxDelayMs ?? 30000)
