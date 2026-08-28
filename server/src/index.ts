@@ -2173,18 +2173,35 @@ app.all('/api/chats/:id/preview/proxy/*', async (c) => {
 // button appear black) and so that absolute URLs like /styles.css are correctly
 // resolved through the proxy when the iframe is not top-level.
 function buildPreviewIsolationHead(baseProxyPath: string): string {
-  // baseProxyPath is like /api/projects/<id>/preview/proxy/ — ensure trailing slash
   const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
-  // We force light color-scheme for parity with standalone new-tab (light OS → white button)
-  // The iframe element itself also has color-scheme: light, but the injected meta/style
-  // guarantees the document's own prefers-color-scheme evaluates to light even when
-  // the parent is dark. Both together fix the black-vs-white bug.
-  // The tiny script rewrites absolute-root URLs (/asset) that would otherwise
-  // escape the proxy (e.g. /assets/app.css → 404) — they work in a new tab on :3000 but break in iframe.
+  const baseJson = JSON.stringify(base)
+  // FIX: previous version double-rewrote already-proxied URLs (e.g. /api/.../proxy/assets/app.css
+  // became /api/.../proxy/api/.../proxy/assets/app.css → 404 → CSS not loaded).
+  // Now we guard with !isProxied and also patch fetch/XHR/WS for runtime absolute fetches.
   return (
     `<meta name="color-scheme" content="light">` +
     `<style>html{color-scheme:light !important;}</style>` +
-    `<script>(function(){var base=${JSON.stringify(base)};function rw(el,a){var v=el.getAttribute(a);if(v&&v.startsWith('/')&&!v.startsWith('//'))el.setAttribute(a,base+v.slice(1));}function scan(root){try{root.querySelectorAll('[href^="/"],[src^="/"],[action^="/"],[srcset^="/"]').forEach(function(el){if(el.hasAttribute('href'))rw(el,'href');if(el.hasAttribute('src'))rw(el,'src');if(el.hasAttribute('action'))rw(el,'action');if(el.hasAttribute('srcset')){var s=el.getAttribute('srcset');if(s){var r=s.split(',').map(function(p){var t=p.trim();if(t.startsWith('/')&&!t.startsWith('//'))return base+t.slice(1)+' '+t.split(/\\s+/).slice(1).join(' ');return p;}).join(',');el.setAttribute('srcset',r);}}});}catch(e){}}function cssScan(){try{document.querySelectorAll('link[rel="stylesheet"]').forEach(function(l){/* already handled */});}catch(e){}}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){scan(document)});else scan(document);new MutationObserver(function(m){m.forEach(function(x){x.addedNodes.forEach(function(n){if(n.nodeType===1){scan(n);if(n.querySelectorAll)scan(n);}});});}).observe(document.documentElement,{childList:true,subtree:true});})();</script>`
+    `<script>(function(){var base=${baseJson};` +
+    `function isProxied(u){return typeof u==='string'&&u.indexOf(base)===0;}` +
+    `function shouldRewrite(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&!isProxied(u);}` +
+    `function rw(el,a){try{var v=el.getAttribute(a);if(shouldRewrite(v))el.setAttribute(a,base+v.slice(1));}catch(e){}}` +
+    `function scan(root){try{` +
+    `var els=root.querySelectorAll('[href^="/"],[src^="/"],[action^="/"],[srcset^="/"],[style]');` +
+    `els.forEach(function(el){` +
+    `if(el.hasAttribute('href'))rw(el,'href');` +
+    `if(el.hasAttribute('src'))rw(el,'src');` +
+    `if(el.hasAttribute('action'))rw(el,'action');` +
+    `if(el.hasAttribute('srcset')){var s=el.getAttribute('srcset');if(s){var r=s.split(',').map(function(p){var t=p.trim();var m=t.match(/^([^\\s]+)(\\s+.*)?$/);if(!m)return p;var url=m[1],rest=m[2]||'';if(shouldRewrite(url))url=base+url.slice(1);return url+rest;}).join(', ');el.setAttribute('srcset',r);}}` +
+    `if(el.hasAttribute('style')){var st=el.getAttribute('style');if(st&&st.indexOf('url(')!==-1){var ns=st.replace(/url\\(\\s*(['\"]?)\\/(?!\\/)([^'\"\\)]+)\\1\\s*\\)/g,function(m,q,p){if(p.indexOf(base.slice(1))===0)return m;var qq=q||'';return 'url('+qq+base+p+qq+')';});if(ns!==st)el.setAttribute('style',ns);}}` +
+    `});` +
+    `}catch(e){}}` +
+    `try{var _fetch=window.fetch;window.fetch=function(input,init){if(typeof input==='string'&&shouldRewrite(input))input=base+input.slice(1);else if(input&&input.url&&shouldRewrite(input.url)){var u=base+input.url.slice(1);try{input=new Request(u,input);}catch(e){input=u;}}return _fetch.call(this,input,init);};}catch(e){}` +
+    `try{var _open=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){if(shouldRewrite(u))arguments[1]=base+u.slice(1);return _open.apply(this,arguments);};}catch(e){}` +
+    `try{var _WS=window.WebSocket;if(_WS)window.WebSocket=function(u,p){if(shouldRewrite(u))u=(location.protocol==='https:'?'wss://':'ws://')+location.host+base+u.slice(1);return new _WS(u,p);};if(_WS)window.WebSocket.prototype=_WS.prototype;}catch(e){}` +
+    `try{var _ES=window.EventSource;if(_ES)window.EventSource=function(u,c){if(shouldRewrite(u))u=base+u.slice(1);return new _ES(u,c);};}catch(e){}` +
+    `if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){scan(document);});else scan(document);` +
+    `new MutationObserver(function(m){m.forEach(function(x){x.addedNodes.forEach(function(n){if(n.nodeType===1){scan(n);if(n.querySelectorAll)scan(n);}});});}).observe(document.documentElement,{childList:true,subtree:true});` +
+    `})();</script>`
   )
 }
 
@@ -2193,41 +2210,116 @@ function injectIntoHtml(html: string, baseProxyPath: string): string {
   const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
   // Static rewrite for early resources that the browser preloads before our
   // runtime script runs ( <link href="/...">, <script src="/..."> etc ).
-  // Only rewrite absolute-root URLs starting with / and not // or http(s):.
-  // Keep quoted form; preserve quote char.
-  const staticRewritten = html.replace(/(href|src|action)\s*=\s*(["'])\/(?!\/)/g, (_m: string, attr: string, q: string) => `${attr}=${q}${base}`)
-  // Also rewrite srcset's first entry statically (full list is handled by runtime script)
-  // This handles <img srcset="/a.jpg 1x, /b.jpg 2x"> partially but better than nothing.
-  // For srcset we do a naive replace of ="/
-  let outHtml = staticRewritten
-  // Prefer injecting right after <head> so it runs early, before stylesheets are parsed.
+  // Only rewrite absolute-root URLs starting with / and not // or http(s): and not already proxied.
+  let outHtml = html.replace(/(href|src|action)\s*=\s*(["'])\/(?!\/)/g, (_m: string, attr: string, q: string) => `${attr}=${q}${base}`)
+  const doubleBase = base + base.slice(1)
+  if (outHtml.includes(doubleBase)) outHtml = outHtml.split(doubleBase).join(base)
+  // Rewrite srcset statically (handle each candidate URL that starts with /)
+  outHtml = outHtml.replace(/srcset\s*=\s*(["'])([^"']+)\1/gi, (_m: string, q: string, content: string) => {
+    const rewritten = content
+      .split(',')
+      .map((p) => {
+        const t = p.trim()
+        const sep = t.search(/\s/)
+        let urlPart = sep === -1 ? t : t.slice(0, sep)
+        const rest = sep === -1 ? '' : t.slice(sep)
+        if (urlPart.startsWith('/') && !urlPart.startsWith('//') && !urlPart.startsWith(base)) {
+          urlPart = base + urlPart.slice(1)
+        }
+        return urlPart + rest
+      })
+      .join(', ')
+    return `srcset=${q}${rewritten}${q}`
+  })
+  // Rewrite CSS url() and @import inside <style> blocks
+  outHtml = outHtml.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (_m: string, attrs: string, cssContent: string) => {
+    let rw = rewriteCssUrls(cssContent, base)
+    rw = rw.replace(/@import\s+([\"'])\/(?!\/)([^\"']+)\1/gi, (_a: string, qq: string, pp: string) => `@import ${qq}${base}${pp}${qq}`)
+    return `<style${attrs}>${rw}</style>`
+  })
+  // Rewrite inline style="" attributes that contain url()
+  outHtml = outHtml.replace(/style\s*=\s*(["'])([^"']*url\([^)]+\)[^"']*)\1/gi, (_m: string, q: string, styleContent: string) => {
+    const rewritten = rewriteCssUrls(styleContent, base)
+    return `style=${q}${rewritten}${q}`
+  })
+  // Rewrite JS module imports inside inline <script> (no src)
+  outHtml = outHtml.replace(/<script([^>]*?)>([\s\S]*?)<\/script>/gi, (m: string, attrs: string, code: string) => {
+    if (/\bsrc\s*=/.test(attrs)) return m
+    if (!code.trim()) return m
+    if (!code.includes('"/') && !code.includes("'/") && !code.includes('from "') && !code.includes("from '")) return m
+    const rewritten = rewriteJsUrls(code, base)
+    return `<script${attrs}>${rewritten}</script>`
+  })
+  // Handle existing <base> — replace its href with our proxied base, then inject isolation after it
+  if (/<base[^>]*>/i.test(outHtml)) {
+    outHtml = outHtml.replace(/<base[^>]*>/i, `<base href="${base}">`)
+    const baseTag = outHtml.match(/<base[^>]*>/i)
+    if (baseTag && baseTag.index !== undefined) {
+      const idx = baseTag.index + baseTag[0].length
+      return outHtml.slice(0, idx) + injection + outHtml.slice(idx)
+    }
+  }
   const headOpen = outHtml.match(/<head[^>]*>/i)
   if (headOpen && headOpen.index !== undefined) {
     const idx = headOpen.index + headOpen[0].length
-    return outHtml.slice(0, idx) + injection + outHtml.slice(idx)
+    return outHtml.slice(0, idx) + `<base href="${base}">` + injection + outHtml.slice(idx)
   }
-  // Fallback: after <html>
   const htmlOpen = outHtml.match(/<html[^>]*>/i)
   if (htmlOpen && htmlOpen.index !== undefined) {
     const idx = htmlOpen.index + htmlOpen[0].length
-    return outHtml.slice(0, idx) + '<head>' + injection + '</head>' + outHtml.slice(idx)
+    return outHtml.slice(0, idx) + `<head><base href="${base}">` + injection + `</head>` + outHtml.slice(idx)
   }
-  // Last resort: prepend
-  return injection + outHtml
+  return `<base href="${base}">` + injection + outHtml
 }
 
 function rewriteCssUrls(css: string, baseProxyPath: string): string {
   const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
-  // Rewrite url("/...") and url('/...') and url(/...) that are absolute-root
-  // Keep protocol-relative // and absolute http(s) untouched, keep relative and data:
-  return css.replace(/url\(\s*(['"]?)\/(?!\/)([^'")]+)\1\s*\)/g, (_m, q, path) => {
+  let out = css.replace(/url\(\s*(['"]?)\/(?!\/)([^'")]+)\1\s*\)/g, (_m, q, p) => {
     const quote = q || ''
-    // path already without leading slash
-    // If it contains :// or data:, skip
-    if (/^(?:[a-z]+:|\/\/|data:)/i.test(path)) return `url(${quote}/${path}${quote})`
-    return `url(${quote}${base}${path}${quote})`
+    if (/^(?:[a-z]+:|\/\/|data:)/i.test(p)) return `url(${quote}/${p}${quote})`
+    if (p.startsWith(base.slice(1))) return `url(${quote}/${p}${quote})`
+    return `url(${quote}${base}${p}${quote})`
   })
+  out = out.replace(/@import\s+([\"'])\/(?!\/)([^\"']+)\1/g, (_m, q, p) => {
+    if (p.startsWith(base.slice(1))) return `@import ${q}/${p}${q}`
+    return `@import ${q}${base}${p}${q}`
+  })
+  return out
 }
+
+function rewriteJsUrls(js: string, baseProxyPath: string): string {
+  const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
+  const baseNoSlash = base.slice(1)
+  const doubleBase = base + baseNoSlash
+  let out = js
+  // 1) ES imports: from "/..." , import "/..." , import("/...")
+  out = out.replace(/(from\s+|import\s*\(\s*|import\s+)(["'])\/(?!\/)/g, (_m, pre, q) => `${pre}${q}${base}`)
+  if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
+  // 2) export ... from "/..."
+  out = out.replace(/(export\s+.*?\s+from\s+)(["'])\/(?!\/)/g, (_m, pre, q) => `${pre}${q}${base}`)
+  if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
+  // 3) fetch("/..."), open, EventSource, WebSocket
+  out = out.replace(/\b(fetch|open|sendBeacon|EventSource|WebSocket)\s*\(\s*(["'])\/(?!\/)/g, (_m, fn, q) => `${fn}(${q}${base}`)
+  if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
+  out = out.replace(/new\s+URL\s*\(\s*(["'])\/(?!\/)/g, (_m, q) => `new URL(${q}${base}`)
+  if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
+  // 4) .href = "/...", .src = "/..."
+  out = out.replace(/(\.(href|src|action)\s*=\s*)(["'])\/(?!\/)/g, (_m, pre, _attr, q) => `${pre}${q}${base}`)
+  if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
+  // 5) Generic string literals that look like absolute asset paths — fallback for Vite hashed chunks
+  // Only rewrite if it looks like a file path and not an API route
+  out = out.replace(/(["'])\/(?!\/)([^"'`]*\.[a-z0-9]{1,5})\1/g, (m, q, pathInside) => {
+    if (pathInside.startsWith(baseNoSlash)) return m
+    if (pathInside.includes(' ') || pathInside.includes('\n')) return m
+    if (pathInside.length < 2) return m
+    if (!pathInside.includes('.') && !pathInside.includes('/')) return m
+    if (pathInside.startsWith('api/')) return m
+    return `${q}${base}${pathInside}${q}`
+  })
+  if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
+  return out
+}
+
 
 async function proxyPreview(c: any, suffix: string): Promise<Response> {
   const project = findProject(c.req.param('id'))
