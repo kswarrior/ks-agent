@@ -681,6 +681,9 @@ function KsAgent() {
   const togglePreview = useCallback(() => setPreviewOpen((v) => !v), [])
   const toggleRight = useCallback(() => setRsbOpen((v) => !v), [])
 
+  const activePreview = activeChat ? previews[activeChat.id] ?? null : null
+  const hasPreview = !!activePreview
+
   // ---- render ----
   return (
     <div className="app">
@@ -688,6 +691,8 @@ function KsAgent() {
         onMenu={() => setSidebarOpen((v) => !v)}
         onToggleRight={toggleRight}
         onTogglePreview={togglePreview}
+        hasPreview={hasPreview}
+        previewPort={activePreview?.port ?? null}
       />
       <div className={`shell${sidebarOpen ? '' : ' sb-closed'}`}>
         <Sidebar

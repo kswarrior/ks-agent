@@ -4,9 +4,11 @@ interface HeaderProps {
   onMenu: () => void
   onToggleRight: () => void
   onTogglePreview: () => void
+  hasPreview?: boolean
+  previewPort?: number | null
 }
 
-export function Header({ onMenu, onToggleRight, onTogglePreview }: HeaderProps) {
+export function Header({ onMenu, onToggleRight, onTogglePreview, hasPreview, previewPort }: HeaderProps) {
   return (
     <header className="header">
       <button className="icon-btn menu-btn" aria-label="Toggle sidebar" onClick={onMenu}>
@@ -16,8 +18,46 @@ export function Header({ onMenu, onToggleRight, onTogglePreview }: HeaderProps) 
         KS Agent<span className="brand-dot" />
       </div>
       <div className="header-spacer" />
-      <button className="icon-btn psb-toggle" aria-label="Toggle preview" onClick={onTogglePreview}>
+      <button
+        className="icon-btn psb-toggle"
+        aria-label="Toggle preview"
+        onClick={onTogglePreview}
+        style={{ position: 'relative' }}
+        title={hasPreview ? `Preview Live :${previewPort} — click to open` : 'Toggle preview'}
+      >
         <IconMonitor size={20} />
+        {hasPreview && (
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              width: 9,
+              height: 9,
+              borderRadius: '50%',
+              background: '#22c55e',
+              border: '2px solid var(--surface)',
+              boxShadow: '0 0 8px rgba(34,197,94,0.85)',
+            }}
+          />
+        )}
+        {hasPreview && (
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              width: 9,
+              height: 9,
+              borderRadius: '50%',
+              background: '#22c55e',
+              opacity: 0.55,
+              animation: 'previewPing 1.6s cubic-bezier(0,0,0.2,1) infinite',
+            }}
+          />
+        )}
       </button>
       <button className="icon-btn rsb-toggle" aria-label="Toggle workspace panel" onClick={onToggleRight}>
         <IconPanelRight size={20} />
