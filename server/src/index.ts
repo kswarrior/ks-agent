@@ -14,6 +14,7 @@ import {
   chatsOf,
   findChat,
   findPlanForChat,
+  findPreviewForChat,
   findProject,
   findQuestion,
   findTerminal,
@@ -31,6 +32,7 @@ import {
   touchChat,
   updateRetrySettings,
   type Chat,
+  type Preview,
   type Project,
   type Question,
   type Terminal,
@@ -235,6 +237,8 @@ app.delete('/api/projects/:id', async (c) => {
   db.questions = db.questions.filter((q) => !chatIds.has(q.chatId))
   // @ts-ignore - activities may not exist in old DB files
   db.activities = (db.activities || []).filter((a: any) => !chatIds.has(a.chatId))
+  // @ts-ignore - previews may not exist in old DB files
+  db.previews = (db.previews || []).filter((p: any) => !chatIds.has(p.chatId))
   for (const cid of chatIds) {
     generations.get(cid)?.controller.abort()
     generations.delete(cid)
@@ -298,6 +302,8 @@ app.delete('/api/chats/:id', (c) => {
   db.questions = db.questions.filter((q) => q.chatId !== id)
   // @ts-ignore
   db.activities = (db.activities || []).filter((a: any) => a.chatId !== id)
+  // @ts-ignore
+  db.previews = (db.previews || []).filter((p: any) => p.chatId !== id)
   generations.get(id)?.controller.abort()
   generations.delete(id)
   saveDb()

@@ -202,6 +202,18 @@ const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'open_preview',
+      description: 'Open a live preview for a web app/service running on a port. Call ONCE after the final task is complete and verified, ONLY if the project has a previewable website/service (e.g. Vite dev server, Next.js, static site) that is actually running on the given port. Provide the port number where the preview is reachable. The preview is saved per chat like the plan and stays active for that chat.',
+      parameters: {
+        type: 'object',
+        properties: { port: { type: 'integer', description: 'Port number where the previewable service is listening (1-65535)', minimum: 1, maximum: 65535 } },
+        required: ['port']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'ask_question',
       description:
         'MANDATORY tool for any clarification — this is the ONLY way to ask the user anything. NEVER write questions/options in your chat reply text; you MUST call this tool instead. It renders an interactive card in the UI with clickable option buttons + optional custom typed input, and PAUSES execution until the user answers. Use it whenever you need confirmation, a choice, or extra info — at ANY stage (Understand, Explore, Planning, Executing). Do not assume or invent. Do not duplicate the question in your text output when you call this tool; just call the tool. Example: header="Choose Framework", question="Which framework should I use for the dashboard?", options=["React","Vue","Plain HTML"], allow_custom=true, custom_placeholder="Or type custom...". The tool blocks until answered and returns the user selection.',
@@ -501,6 +513,21 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       saveDb()
       ctx.onEvent('plan', JSON.stringify(plan))
       return ok(`OK step ${idx} marked complete`, `done: ${step.title.slice(0, 60)}`)
+    }
+
+    case 'open_preview': {
+      const rawPort = args.port
+      const port = typeof rawPort === 'string' ? Number(rawPort) : Number(rawPort)
+      if (!Number.isInteger(port) || port < 1 || port > 65535) return err('port must be an integer 1-65535')
+      const db = getDb()
+      // Replace any existing preview for this chat — one active preview per chat like plan
+      db.previews = (db.previews || []).filter((p) => p.chatId !== ctx.chatId)
+      const now = new Date().toISOString()
+      const preview = { id: newId(), chatId: ctx.chatId, port, createdAt: now, updatedAt: now }
+      db.previews.push(preview)
+      saveDb()
+      ctx.onEvent('preview', JSON.stringify(preview))
+      return ok(`OK preview set to port ${port}`, `preview :${port}`)
     }
 
     case 'ask_question': {
