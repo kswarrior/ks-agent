@@ -159,18 +159,61 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     const note = skillForm.note.trim()
     const mainFile = skillForm.mainFile.trim()
     if (!name) return setError('Skill name is required')
+    if (name.length < 2 || name.length > 80) return setError('Skill name must be 2-80 characters')
+    if (note.length > 500) return setError('Note must be ≤500 characters')
     if (!mainFile) return setError('Main file is required')
     if (!mainFile.endsWith('.md')) return setError('Main file must be .md')
+    if (mainFile.length > 500) return setError('Main file path too long')
     try {
-      await api.createSkill({ name, note, mainFile, files: skillForm.files })
+      const payload: { name: string; note: string; mainFile: string; files: string[]; projectId?: string } = { name, note, mainFile, files: [...new Set(skillForm.files.map((f) => f.trim()).filter(Boolean))] }
+      if (skillForm.projectId.trim()) payload.projectId = skillForm.projectId.trim()
+      else if (skillFileBrowserProject) payload.projectId = skillFileBrowserProject
+      await api.createSkill(payload)
       toast('Skill added', 'success')
-      setSkillForm({ name: '', note: '', mainFile: '', files: [] })
+      setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '' })
       setShowSkillForm(false)
       setSkillFileBrowserOpen(false)
+      setSkillPickerDir('')
       await loadSkills()
     } catch (e: any) {
       setError(e.message)
     }
+  }
+
+  async function submitEditSkill() {
+    if (!skillEdit) return
+    setError(null)
+    const name = skillEditForm.name.trim()
+    const note = skillEditForm.note.trim()
+    const mainFile = skillEditForm.mainFile.trim()
+    if (!name) return setError('Skill name is required')
+    if (name.length < 2 || name.length > 80) return setError('Skill name must be 2-80 characters')
+    if (note.length > 500) return setError('Note must be ≤500 characters')
+    if (!mainFile) return setError('Main file is required')
+    if (!mainFile.endsWith('.md')) return setError('Main file must be .md')
+    if (mainFile.length > 500) return setError('Main file path too long')
+    try {
+      const payload: Partial<{ name: string; note: string; mainFile: string; files: string[]; projectId: string }> = {
+        name, note, mainFile, files: [...new Set(skillEditForm.files.map((f) => f.trim()).filter(Boolean))]
+      }
+      if (skillEditForm.projectId.trim()) payload.projectId = skillEditForm.projectId.trim()
+      else payload.projectId = ''
+      await api.updateSkill(skillEdit.id, payload as any)
+      toast('Skill updated', 'success')
+      setSkillEdit(null)
+      await loadSkills()
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
+  function startEditSkill(s: Skill) {
+    setSkillEdit(s)
+    setSkillEditForm({ name: s.name, note: s.note, mainFile: s.mainFile, files: [...s.files], projectId: s.projectId ?? '' })
+    setShowSkillForm(false)
+    setError(null)
+    setSkillFileBrowserOpen(false)
+    if (s.projectId) setSkillFileBrowserProject(s.projectId)
   }
 
   async function removeSkill(id: string) {
@@ -179,6 +222,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     try {
       await api.deleteSkill(id)
       toast('Skill deleted', 'success')
+      if (skillEdit?.id === id) setSkillEdit(null)
       await loadSkills()
     } catch (e: any) {
       toast(e.message, 'error')
@@ -196,13 +240,17 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   }
 
   async function refreshSkillPicker() {
-    if (!skillFileBrowserProject) return
+    if (!skillFileBrowserProject) {
+      setSkillPickerEntries([])
+      return
+    }
     setSkillPickerLoading(true)
     try {
       const listing = await api.listFiles(skillFileBrowserProject, skillPickerDir)
       setSkillPickerEntries(listing.entries)
     } catch (e: any) {
       toast(e.message, 'error')
+      setSkillPickerEntries([])
     } finally {
       setSkillPickerLoading(false)
     }
@@ -218,6 +266,10 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   useEffect(() => {
     if (skillFileBrowserOpen && skillFileBrowserProject) {
       refreshSkillPicker()
+    }
+    if (!skillFileBrowserOpen) {
+      // clear stale entries when closed to avoid showing outdated dir
+      setSkillPickerEntries([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [skillFileBrowserProject, skillPickerDir, skillFileBrowserOpen])
