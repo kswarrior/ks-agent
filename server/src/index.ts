@@ -1017,6 +1017,10 @@ app.post('/api/chats/:id/continue', async (c) => {
   if (!lastAssistant) return c.json({ error: 'No assistant message to continue from' }, 400)
   const isPureContinue = !rawContent || isContinueKeyword(rawContent)
   if (isPureContinue) {
+    const wasInterruptedPure = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || !!(lastAssistant as any).error
+    if (!wasInterruptedPure) {
+      return c.json({ error: 'No interrupted response to continue from. Send a new message instead.' }, 400)
+    }
     const stripped = stripInterruptedSuffix(lastAssistant.content)
     if (lastAssistant.content !== stripped) {
       lastAssistant.content = stripped
