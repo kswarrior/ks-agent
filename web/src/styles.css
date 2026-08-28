@@ -1347,6 +1347,12 @@ textarea {
   scrollbar-width: none;
   overscroll-behavior-x: contain;
   scroll-behavior: smooth;
+  cursor: grab;
+  touch-action: pan-x;
+}
+
+.tabs:active {
+  cursor: grabbing;
 }
 
 .tabs::-webkit-scrollbar {
