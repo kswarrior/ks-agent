@@ -59,7 +59,7 @@ async function readWithTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   signal: AbortSignal | undefined,
   timeoutMs: number
-): Promise<ReadableStreamReadResult<Uint8Array>> {
+): Promise<{ done: boolean; value?: Uint8Array }> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null
   let onAbort: (() => void) | null = null
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -77,7 +77,7 @@ async function readWithTimeout(
       signal.addEventListener('abort', onAbort, { once: true })
     }
   })
-  const readPromise: Promise<ReadableStreamReadResult<Uint8Array>> = reader.read() as any
+  const readPromise: Promise<{ done: boolean; value?: Uint8Array }> = reader.read() as any
   const cleanup = () => {
     if (timeoutId) clearTimeout(timeoutId)
     if (signal && onAbort) signal.removeEventListener('abort', onAbort)
@@ -85,7 +85,7 @@ async function readWithTimeout(
   readPromise.then(cleanup, cleanup)
   timeoutPromise.catch(() => cleanup())
   try {
-    const result = (await Promise.race([readPromise, timeoutPromise])) as ReadableStreamReadResult<Uint8Array>
+    const result = (await Promise.race([readPromise, timeoutPromise])) as { done: boolean; value?: Uint8Array }
     cleanup()
     return result
   } catch (e) {
@@ -280,14 +280,14 @@ export async function* streamChat(
   let buf = ''
 
   while (true) {
-    let readResult: ReadableStreamReadResult<Uint8Array>
+    let readResult: { done: boolean; value?: Uint8Array }
     try {
       readResult = await readWithTimeout(reader, signal, STREAM_IDLE_TIMEOUT_MS)
     } catch (e: any) {
       if (e?.name === 'AbortError') throw e
       throw e
     }
-    const { done, value } = readResult
+    const { done, value } = readResult as any
     if (done) break
     buf += decoder.decode(value as Uint8Array, { stream: true })
     let nl: number
@@ -353,14 +353,14 @@ export async function streamChatWithTools(
   const calls = new Map<number, { id: string; name: string; args: string }>()
 
   while (true) {
-    let readResult: ReadableStreamReadResult<Uint8Array>
+    let readResult: { done: boolean; value?: Uint8Array }
     try {
       readResult = await readWithTimeout(reader, signal, STREAM_IDLE_TIMEOUT_MS)
     } catch (e: any) {
       if (e?.name === 'AbortError') throw e
       throw e
     }
-    const { done, value } = readResult
+    const { done, value } = readResult as any
     if (done) break
     buf += decoder.decode(value as Uint8Array, { stream: true })
     let nl: number
