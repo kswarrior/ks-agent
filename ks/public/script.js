@@ -34,6 +34,22 @@ const state = {
   search: ""
 };
 
+/* ─── Category detection ─────────────────────────────────────── */
+// Determine current category from page title or URL
+const categoryMap = {
+  "All Documentation": "all",
+  "Guides": "Guides",
+  "API Reference": "Reference",
+  "Tutorials": "Tutorials",
+  "SDKs": "SDKs"
+};
+
+const currentCategory = (() => {
+  const h1 = document.querySelector(".topbar h1")?.textContent;
+  if (h1) return categoryMap[h1] || "all";
+  return "all";
+})();
+
 /* ─── Helpers ────────────────────────────────────────────────── */
 const fmtDate = (iso) => {
   const d = new Date(iso);
