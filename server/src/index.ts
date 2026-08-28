@@ -966,6 +966,32 @@ app.patch('/api/settings/retry', async (c) => {
 
 // ---------------- Skills ----------------
 
+function isValidRelPath(p: string, maxLen = 500): boolean {
+  if (!p || p.length > maxLen) return false
+  if (p.includes('\0')) return false
+  if (p.startsWith('/') || p.startsWith('\\')) return false
+  const parts = p.split('/').filter(Boolean)
+  if (parts.length === 0) return false
+  if (!parts.every(validSegment)) return false
+  return true
+}
+
+function normalizeSkillFiles(files: unknown): string[] {
+  if (!Array.isArray(files)) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of files) {
+    const v = String(raw ?? '').trim()
+    if (!v) continue
+    if (!isValidRelPath(v)) continue
+    if (seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+    if (out.length >= 20) break
+  }
+  return out
+}
+
 app.get('/api/settings/skills', (c) => {
   return c.json(getSkills())
 })
@@ -975,11 +1001,23 @@ app.post('/api/settings/skills', async (c) => {
   const name = String(body.name ?? '').trim()
   const note = String(body.note ?? '').trim()
   const mainFile = String(body.mainFile ?? '').trim()
-  const files = Array.isArray(body.files) ? body.files.map((f: any) => String(f).trim()).filter(Boolean) : []
+  const projectId = body.projectId != null ? String(body.projectId).trim() : ''
+  const files = normalizeSkillFiles(body.files)
   if (!name) return c.json({ error: 'Skill name is required' }, 400)
+  if (name.length < 2 || name.length > 80) return c.json({ error: 'Skill name must be 2-80 characters' }, 400)
+  if (note.length > 500) return c.json({ error: 'Note must be ≤500 characters' }, 400)
   if (!mainFile) return c.json({ error: 'Main file is required' }, 400)
+  if (mainFile.length > 500) return c.json({ error: 'Main file path too long' }, 400)
   if (!mainFile.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
-  const skill: Skill = { id: newId(), name, note, mainFile, files, createdAt: new Date().toISOString() }
+  if (!isValidRelPath(mainFile)) return c.json({ error: 'Main file path is invalid' }, 400)
+  if (files.length > 20) return c.json({ error: 'Too many files (max 20)' }, 400)
+  if (projectId) {
+    if (!findProject(projectId)) return c.json({ error: 'Selected project not found' }, 400)
+  }
+  const duplicate = getDb().skills.some((s) => s.name.toLowerCase() === name.toLowerCase())
+  if (duplicate) return c.json({ error: 'A skill with this name already exists' }, 400)
+  const now = new Date().toISOString()
+  const skill: Skill = { id: newId(), name, note, mainFile, files, projectId: projectId || undefined, createdAt: now, updatedAt: now }
   getDb().skills.push(skill)
   saveDb()
   return c.json(skill, 201)
@@ -1001,18 +1039,38 @@ app.patch('/api/settings/skills/:id', async (c) => {
   if (body.name !== undefined) {
     const v = String(body.name).trim()
     if (!v) return c.json({ error: 'Name cannot be empty' }, 400)
+    if (v.length < 2 || v.length > 80) return c.json({ error: 'Skill name must be 2-80 characters' }, 400)
+    const dup = getDb().skills.some((s) => s.id !== skill.id && s.name.toLowerCase() === v.toLowerCase())
+    if (dup) return c.json({ error: 'A skill with this name already exists' }, 400)
     skill.name = v
   }
-  if (body.note !== undefined) skill.note = String(body.note).trim()
+  if (body.note !== undefined) {
+    const v = String(body.note).trim()
+    if (v.length > 500) return c.json({ error: 'Note must be ≤500 characters' }, 400)
+    skill.note = v
+  }
   if (body.mainFile !== undefined) {
     const v = String(body.mainFile).trim()
     if (!v) return c.json({ error: 'Main file cannot be empty' }, 400)
+    if (v.length > 500) return c.json({ error: 'Main file path too long' }, 400)
     if (!v.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
+    if (!isValidRelPath(v)) return c.json({ error: 'Main file path is invalid' }, 400)
     skill.mainFile = v
   }
-  if (body.files !== undefined && Array.isArray(body.files)) {
-    skill.files = body.files.map((f: any) => String(f).trim()).filter(Boolean)
+  if (body.files !== undefined) {
+    if (!Array.isArray(body.files)) return c.json({ error: 'files must be an array' }, 400)
+    skill.files = normalizeSkillFiles(body.files)
   }
+  if (body.projectId !== undefined) {
+    const v = body.projectId != null ? String(body.projectId).trim() : ''
+    if (v) {
+      if (!findProject(v)) return c.json({ error: 'Selected project not found' }, 400)
+      skill.projectId = v
+    } else {
+      delete skill.projectId
+    }
+  }
+  skill.updatedAt = new Date().toISOString()
   saveDb()
   return c.json(skill)
 })
