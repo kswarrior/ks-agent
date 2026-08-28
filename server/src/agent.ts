@@ -711,8 +711,9 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           }
         }
         const isRetryableStatus = !!opts.retrySettings?.alwaysRetry || isTimeout || isResourceExhausted || (opts.retrySettings?.retryOnStatusCodes ?? [429, 500, 502, 503]).some((code) => msg.includes(String(code)))
-        // ResourceExhausted should never be considered a stop condition — it's a transient capacity error
-        const isStopStatus = !opts.retrySettings?.alwaysRetry && !isResourceExhausted && (opts.retrySettings?.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
+        // Stop codes fail fast — even with alwaysRetry, client errors should not be retried
+        // (alwaysRetry widens retryOn but must not bypass stopOn; only ResourceExhausted is exempt).
+        const isStopStatus = !isResourceExhausted && (opts.retrySettings?.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
         // For ResourceExhausted with alwaysRetry, allow many more retries (transient capacity)
         const effectiveMaxAttempts = isResourceExhausted && opts.retrySettings?.alwaysRetry ? Math.max(maxAttempts, 30) : maxAttempts
         const shouldRetry = (opts.retrySettings?.enabled ?? true) && isRetryableStatus && !isStopStatus && attempt < effectiveMaxAttempts
@@ -724,6 +725,11 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           const secs = Number(m[1])
           if (!Number.isNaN(secs) && secs >= 0 && secs < 300) delay = Math.max(delay, secs * 1000)
         }
+        const reason = isTimeout ? 'timeout' : isResourceExhausted ? 'resource_exhausted' : 'provider_error'
+        console.warn(`[agent retry] round ${round} attempt ${attempt + 1}/${effectiveMaxAttempts} reason=${reason} delay=${Math.round(delay)}ms msg=${msg.slice(0,140)}`)
+        try {
+          ctx.onEvent('retry', JSON.stringify({ attempt: attempt + 1, maxAttempts: effectiveMaxAttempts, delay, reason, error: msg.slice(0, 500) }))
+        } catch {}
         await new Promise<void>((resolve, reject) => {
           const t = setTimeout(resolve, delay)
           opts.signal.addEventListener('abort', () => { clearTimeout(t); reject(abortError()) }, { once: true })
@@ -820,6 +826,10 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       revertWorkingSteps(ctx)
       throw e
     }
+    // On any other error, revert working steps so UI doesn't stay stuck on
+    // "Executing 3/7" after the stream has failed. The step returns to
+    // pending and will be retried correctly on next continuation.
+    revertWorkingSteps(ctx)
     throw e
   }
 

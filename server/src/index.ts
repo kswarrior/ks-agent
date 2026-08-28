@@ -683,7 +683,7 @@ async function runGeneration(
             // ensures persisted message is not duplicated; client snapshot will be resent
           }
           const isRetryableStatus = !!retrySettings.alwaysRetry || isTimeout || isResourceExhausted || (retrySettings.retryOnStatusCodes ?? [429, 500, 502, 503]).some((code) => msg.includes(String(code)))
-          const isStopStatus = !retrySettings.alwaysRetry && !isResourceExhausted && (retrySettings.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
+          const isStopStatus = !isResourceExhausted && (retrySettings.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
           const effectiveMaxAttempts = isResourceExhausted && retrySettings.alwaysRetry ? Math.max(maxAttempts, 30) : maxAttempts
           const shouldRetry = retrySettings.enabled && isRetryableStatus && !isStopStatus && attempt < effectiveMaxAttempts
           if (!shouldRetry) throw e
@@ -693,6 +693,9 @@ async function runGeneration(
             const secs = Number(m[1])
             if (!Number.isNaN(secs) && secs >= 0 && secs < 300) delay = Math.max(delay, secs * 1000)
           }
+          const reasonSimple = isTimeout ? 'timeout' : isResourceExhausted ? 'resource_exhausted' : 'provider_error'
+          console.warn(`[runGeneration retry] attempt ${attempt + 1}/${effectiveMaxAttempts} reason=${reasonSimple} delay=${Math.round(delay)}ms msg=${msg.slice(0,140)}`)
+          try { emitTo(job, 'retry', JSON.stringify({ attempt: attempt + 1, maxAttempts: effectiveMaxAttempts, delay, reason: reasonSimple, error: msg.slice(0, 500) })) } catch {}
           await new Promise<void>((resolve, reject) => {
             const t = setTimeout(resolve, delay)
             job.controller.signal.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })) }, { once: true })

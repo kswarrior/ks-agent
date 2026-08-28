@@ -153,6 +153,7 @@ async function openStream(
       const shouldRetryNet = settings.enabled && attempt < settings.maxRetries
       if (!shouldRetryNet) throw e
       const delayNet = Math.min(settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 800, settings.maxDelayMs)
+      console.warn(`[llm retry] Network error — retry ${attempt + 1}/${settings.maxRetries} in ${Math.round(delayNet)}ms: ${String(e?.message||e).slice(0,120)}`)
       await new Promise((resolve, reject) => {
         const t = setTimeout(resolve, delayNet)
         signal?.addEventListener('abort', () => { clearTimeout(t); reject(new Error('Aborted')) }, { once: true })
@@ -286,6 +287,7 @@ export async function* streamChat(
   const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true, ...(maxTokens ? { max_tokens: maxTokens } : {}) }, signal, retrySettings)
   const decoder = new TextDecoder()
   let buf = ''
+  let lastContentAt = Date.now()
 
   while (true) {
     let readResult: { done: boolean; value?: Uint8Array }
@@ -299,6 +301,7 @@ export async function* streamChat(
     if (done) break
     buf += decoder.decode(value as Uint8Array, { stream: true })
     let nl: number
+    let yieldedThisRead = false
     while ((nl = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, nl).trim()
       buf = buf.slice(nl + 1)
@@ -309,7 +312,22 @@ export async function* streamChat(
       if (!chunk) continue
       // Hide reasoning/thinking — only stream visible content to user
       const out = chunk.text ?? ''
-      if (out) yield out
+      if (out) {
+        yieldedThisRead = true
+        lastContentAt = Date.now()
+        yield out
+      } else if (chunk.reasoning != null) {
+        // Reasoning deltas don't count as visible content but indicate
+        // the stream is still alive - refresh idle timer without yielding.
+        lastContentAt = Date.now()
+      }
+    }
+    // Content-level idle detection: provider sent keep-alives/bytes but no
+    // visible token for STREAM_IDLE_TIMEOUT_MS means it is stalled
+    // ("connected but not working"). Without this, keep-alives prevent
+    // readWithTimeout from firing and the agent appears stuck on same step.
+    if (!yieldedThisRead && buf.trim() === '' && Date.now() - lastContentAt > STREAM_IDLE_TIMEOUT_MS) {
+      throw timeoutError(STREAM_IDLE_TIMEOUT_MS)
     }
   }
   if (buf.trim().startsWith('data:')) {
@@ -360,6 +378,7 @@ export async function streamChatWithTools(
   let text = ''
   let finishReason: string | null = null
   const calls = new Map<number, { id: string; name: string; args: string }>()
+  let lastProgressAt = Date.now()
 
   while (true) {
     let readResult: { done: boolean; value?: Uint8Array }
@@ -373,6 +392,7 @@ export async function streamChatWithTools(
     if (done) break
     buf += decoder.decode(value as Uint8Array, { stream: true })
     let nl: number
+    let progressedThisRead = false
     while ((nl = buf.indexOf('\n')) >= 0) {
       const line = buf.slice(0, nl).trim()
       buf = buf.slice(nl + 1)
@@ -386,15 +406,31 @@ export async function streamChatWithTools(
       if (deltaOut) {
         text += deltaOut
         onDelta(deltaOut)
+        progressedThisRead = true
+        lastProgressAt = Date.now()
+      } else if (chunk.reasoning != null) {
+        progressedThisRead = true
+        lastProgressAt = Date.now()
       }
-      if (chunk.finishReason) finishReason = chunk.finishReason
-      for (const d of chunk.toolCallDeltas ?? []) {
-        const cur = calls.get(d.index) ?? { id: '', name: '', args: '' }
-        if (d.id) cur.id = cur.id + d.id
-        if (d.name) cur.name = cur.name + d.name
-        if (d.argsDelta) cur.args += d.argsDelta
-        calls.set(d.index, cur)
+      if (chunk.finishReason) {
+        finishReason = chunk.finishReason
+        progressedThisRead = true
+        lastProgressAt = Date.now()
       }
+      if (chunk.toolCallDeltas && chunk.toolCallDeltas.length > 0) {
+        for (const d of chunk.toolCallDeltas ?? []) {
+          const cur = calls.get(d.index) ?? { id: '', name: '', args: '' }
+          if (d.id) cur.id = cur.id + d.id
+          if (d.name) cur.name = cur.name + d.name
+          if (d.argsDelta) cur.args += d.argsDelta
+          calls.set(d.index, cur)
+        }
+        progressedThisRead = true
+        lastProgressAt = Date.now()
+      }
+    }
+    if (!progressedThisRead && buf.trim() === '' && Date.now() - lastProgressAt > STREAM_IDLE_TIMEOUT_MS) {
+      throw timeoutError(STREAM_IDLE_TIMEOUT_MS)
     }
   }
   // Flush trailing buffer without newline
