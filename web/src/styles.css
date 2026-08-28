@@ -1754,6 +1754,9 @@ textarea {
   border: none;
   background: #fff;
   display: block;
+  color-scheme: light;
+  /* isolate preview colors from host dark theme — prevents
+     prefers-color-scheme: dark from matching inside iframe on light OS */
 }
 
 /* Preview sidebar always overlays — on desktop it sits over the right sidebar (z-index 75 vs rsb 70), on mobile with scrim */

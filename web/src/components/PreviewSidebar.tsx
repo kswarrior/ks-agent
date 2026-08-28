@@ -261,7 +261,14 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
             className="psb-iframe"
             src={iframeSrc}
             title="Preview"
+            // color-scheme isolated to light: prevents parent's dark meta/CSS from
+            // forcing prefers-color-scheme: dark inside the preview (which makes
+            // light-designed buttons appear black). Standalone new-tab is light on
+            // light OS, so iframe must match — not inherit dark.
+            style={{ colorScheme: 'light' } as React.CSSProperties}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
+            // allow transparency so preview's own background shows, not host dark
+            allowTransparency={true}
             onLoad={() => {
               // Only clear error if we were showing "not reachable" but now loaded
               // Keep error if iframe returned proxy JSON error (detected via content?)
