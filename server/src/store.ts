@@ -157,8 +157,54 @@ interface DB {
 
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
+const defaultSkillsDir = path.join(process.cwd(), 'skills')
 
 let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [] }
+
+function titleFromFileName(base: string): string {
+  return base
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ')
+}
+
+function seedDefaultSkills(): boolean {
+  let changed = false
+  try {
+    if (!fs.existsSync(defaultSkillsDir)) return false
+    const entries = fs.readdirSync(defaultSkillsDir, { withFileTypes: true })
+    for (const ent of entries) {
+      if (!ent.isFile() || !ent.name.endsWith('.md')) continue
+      const mainFile = ent.name
+      const exists = db.skills.some((s) => s.mainFile === mainFile || s.name.toLowerCase() === titleFromFileName(mainFile.slice(0, -3)).toLowerCase())
+      if (exists) continue
+      let note = ''
+      try {
+        const content = fs.readFileSync(path.join(defaultSkillsDir, mainFile), 'utf8')
+        const lines = content.split('\n').map((l) => l.trim()).filter(Boolean)
+        // first heading without '#'
+        const heading = lines.find((l) => l.startsWith('#'))
+        if (heading) note = heading.replace(/^#+\s*/, '').slice(0, 80)
+        else if (lines[0]) note = lines[0].slice(0, 80)
+      } catch {}
+      const now = new Date().toISOString()
+      db.skills.push({
+        id: randomUUID(),
+        name: titleFromFileName(mainFile.slice(0, -3)),
+        note,
+        mainFile,
+        files: [],
+        createdAt: now,
+        updatedAt: now
+      })
+      changed = true
+    }
+  } catch {}
+  return changed
+}
 
 function ensureChatSeqs(chats: Chat[]): boolean {
   let changed = false
@@ -267,6 +313,7 @@ export function loadDb(): void {
       db.retrySettings.retryOnStatusCodes = [...new Set([...db.retrySettings.retryOnStatusCodes, 500])].sort((a, b) => a - b)
       migrated = true
     }
+    if (seedDefaultSkills()) migrated = true
     if (ensureChatSeqs(db.chats) || migrated) {
       try { saveDb() } catch {}
     }
@@ -281,6 +328,9 @@ export function loadDb(): void {
       alwaysRetry: false
     }
     db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [] }
+    if (seedDefaultSkills()) {
+      try { saveDb() } catch {}
+    }
   }
 }
 
