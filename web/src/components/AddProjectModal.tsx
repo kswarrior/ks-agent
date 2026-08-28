@@ -19,6 +19,15 @@ export function AddProjectModal({ open, onClose, onCreated }: Props) {
 
   if (!open) return null
 
+  const resolvedPreview = (() => {
+    const p = path.trim()
+    if (!p) return ''
+    if (p.startsWith('/') || p.startsWith('~/') || p === '~') return p
+    if (p === 'project' || p.startsWith('project/')) return p
+    const norm = p.replace(/^\.\//, '')
+    return `project/${norm}`
+  })()
+
   async function submit() {
     setError(null)
     if (!name.trim()) return setError('Project name is required')
@@ -62,11 +71,19 @@ export function AddProjectModal({ open, onClose, onCreated }: Props) {
         <label className="field-label">Path</label>
         <input
           className="input"
-          placeholder="/home/user/projects/my-project"
+          placeholder="myproject  or  /myproject  or  ~/projects/my-project"
           value={path}
           onChange={(e) => setPath(e.target.value)}
           onKeyDown={(e) => !busy && e.key === 'Enter' && submit()}
         />
+        <div style={{ fontSize: '12px', opacity: 0.6, marginTop: 4, lineHeight: 1.4 }}>
+          Relative: <code>myproject</code> → <code>project/myproject</code> &nbsp;|&nbsp; Absolute: <code>/myproject</code> → <code>/myproject</code>
+        </div>
+        {resolvedPreview && (
+          <div style={{ fontSize: '12px', opacity: 0.8, marginTop: 4 }}>
+            → <code>{resolvedPreview}</code>
+          </div>
+        )}
 
         <label className="checkbox-row">
           <input type="checkbox" checked={mkdir} onChange={(e) => setMkdir(e.target.checked)} />
