@@ -688,9 +688,22 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       } catch (e: any) {
         if (e?.name === 'AbortError') throw e
         const msg = String(e?.message || e)
-        // if we already streamed some text for this round, don't retry (would duplicate)
-        if (roundText.length > 0) throw e
         const isTimeout = /timeout/i.test(msg)
+        // Long edits / reasoning pauses can stall mid-stream and trigger the idle
+        // timeout after partial content has already been emitted. The original
+        // code failed immediately to avoid duplication, but with a tight 20s
+        // window that surfaced as spurious "stream interrupted" errors. With the
+        // increased idle timeout most stalls are avoided; for the remainder we
+        // allow a retry even after partial content by rolling back the partial
+        // delta so the retry re-streams the round cleanly.
+        if (roundText.length > 0 && !isTimeout) throw e
+        if (isTimeout && roundText.length > 0) {
+          if (content.length >= roundText.length && content.endsWith(roundText)) {
+            content = content.slice(0, -roundText.length)
+          } else {
+            content = content.slice(0, Math.max(0, content.length - roundText.length))
+          }
+        }
         const isResourceExhausted = /resourceexhausted|worker local total request limit/i.test(msg)
         const isRetryableStatus = !!opts.retrySettings?.alwaysRetry || isTimeout || isResourceExhausted || (opts.retrySettings?.retryOnStatusCodes ?? [429, 500, 502, 503]).some((code) => msg.includes(String(code)))
         const isStopStatus = !opts.retrySettings?.alwaysRetry && (opts.retrySettings?.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
