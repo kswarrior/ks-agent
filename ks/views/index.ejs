@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KS Warrior • Minecraft Profile</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">KS WARRIOR</div>
+    <nav>
+      <a href="#">Dashboard</a>
+      <a href="#">Profile</a>
+      <a href="#">Stats</a>
+      <a href="#">Achievements</a>
+      <a href="#">Settings</a>
+    </nav>
+  </aside>
+  <button class="menu-toggle" id="menuToggle">☰</button>
+  <main class="main">
+    <header class="header">
+      <h1>Minecraft Player Profile</h1>
+    </header>
+    <section class="card fade-in">
+      <div class="skeleton" id="skeleton">
+        <div class="skeleton-avatar"></div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line short"></div>
+      </div>
+      <div id="playerContent" style="display:none;">
+        <div class="profile">
+          <img id="avatar" alt="Avatar">
+          <div>
+            <h2 id="playerName"></h2>
+            <p id="playerId"></p>
+          </div>
+        </div>
+      </div>
+      <div id="errorMsg" class="error"></div>
+    </section>
+  </main>
+</div>
+<script src="/js/app.js"></script>
+</body>
+</html>
