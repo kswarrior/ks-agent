@@ -1555,6 +1555,12 @@ textarea {
   }
 }
 
+@keyframes previewPing {
+  0% { transform: scale(1); opacity: 0.55; }
+  70% { transform: scale(1.9); opacity: 0; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
 /* ---------------- Right workspace panel ---------------- */
 
 .visually-hidden {

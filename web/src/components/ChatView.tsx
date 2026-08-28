@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Activity, Chat, Message, ModelEntry, Plan, Preview, Question } from '../types'
+import type { Activity, Chat, Message, ModelEntry, Plan, Question } from '../types'
 import { Markdown } from './Markdown'
 import { IconChevronDown, IconRotate, IconSearch, IconSend, IconStop, IconCopy, IconClock, IconCheck } from '../icons'
 import { QuestionList } from './QuestionCard'
@@ -148,8 +148,6 @@ interface Props {
   onAnswerQuestion: (questionId: string, answer: string) => Promise<void>
   plan?: Plan | null
   activities?: Activity[]
-  preview?: Preview | null
-  onOpenPreview?: () => void
 }
 
 export function ChatView(props: Props) {
