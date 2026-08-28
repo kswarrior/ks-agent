@@ -39,6 +39,61 @@ interface RawChunk {
   toolCallDeltas?: Array<{ index: number; id?: string; name?: string; argsDelta?: string }>
 }
 
+// Streaming idle timeout — how long we wait for the next chunk before
+// considering the provider stalled. 20s was too aggressive for large
+// edits/tool calls or reasoning models that pause between tokens; a
+// longer window avoids spurious "stream interrupted" errors while still
+// surfacing genuine hangs. 90s covers long edit generations without
+// hanging forever on a truly dead stream.
+const STREAM_IDLE_TIMEOUT_MS = 90_000
+
+function timeoutError(ms: number): Error {
+  return Object.assign(new Error(`Provider stream timeout (${Math.round(ms / 1000)}s no data)`), { name: 'TimeoutError' })
+}
+
+function abortErr(): Error {
+  return Object.assign(new Error('Aborted'), { name: 'AbortError' })
+}
+
+async function readWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal | undefined,
+  timeoutMs: number
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  let onAbort: (() => void) | null = null
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs)
+    if (signal) {
+      if (signal.aborted) {
+        if (timeoutId) clearTimeout(timeoutId)
+        reject(abortErr())
+        return
+      }
+      onAbort = () => {
+        if (timeoutId) clearTimeout(timeoutId)
+        reject(abortErr())
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+  })
+  const readPromise: Promise<ReadableStreamReadResult<Uint8Array>> = reader.read() as any
+  const cleanup = () => {
+    if (timeoutId) clearTimeout(timeoutId)
+    if (signal && onAbort) signal.removeEventListener('abort', onAbort)
+  }
+  readPromise.then(cleanup, cleanup)
+  timeoutPromise.catch(() => cleanup())
+  try {
+    const result = (await Promise.race([readPromise, timeoutPromise])) as ReadableStreamReadResult<Uint8Array>
+    cleanup()
+    return result
+  } catch (e) {
+    cleanup()
+    throw e
+  }
+}
+
 function endpoint(baseUrl: string): string {
   const clean = baseUrl.replace(/\/+$/, '')
   if (/\/chat\/completions$/.test(clean)) return clean
@@ -223,19 +278,11 @@ export async function* streamChat(
   const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true, ...(maxTokens ? { max_tokens: maxTokens } : {}) }, signal, retrySettings)
   const decoder = new TextDecoder()
   let buf = ''
-  // Streaming read timeout: if provider stalls for 20s without data, abort and let retry logic handle it
-  const READ_TIMEOUT_MS = 20000
 
   while (true) {
-    let readResult: any
+    let readResult: ReadableStreamReadResult<Uint8Array>
     try {
-      const readPromise: Promise<any> = reader.read()
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        const t = setTimeout(() => reject(Object.assign(new Error('Provider stream timeout (20s no data)'), { name: 'TimeoutError' })), READ_TIMEOUT_MS)
-        signal?.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })) }, { once: true })
-        readPromise.then(() => clearTimeout(t), () => clearTimeout(t))
-      })
-      readResult = await Promise.race([readPromise, timeoutPromise])
+      readResult = await readWithTimeout(reader, signal, STREAM_IDLE_TIMEOUT_MS)
     } catch (e: any) {
       if (e?.name === 'AbortError') throw e
       throw e
@@ -304,19 +351,11 @@ export async function streamChatWithTools(
   let text = ''
   let finishReason: string | null = null
   const calls = new Map<number, { id: string; name: string; args: string }>()
-  const READ_TIMEOUT_MS = 20000
 
   while (true) {
-    let readResult: any
+    let readResult: ReadableStreamReadResult<Uint8Array>
     try {
-      const readPromise: Promise<any> = reader.read()
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        const t = setTimeout(() => reject(Object.assign(new Error('Provider stream timeout (20s no data)'), { name: 'TimeoutError' })), READ_TIMEOUT_MS)
-        const onAbort = () => { clearTimeout(t); reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })) }
-        signal?.addEventListener('abort', onAbort, { once: true })
-        readPromise.then(() => { clearTimeout(t); signal?.removeEventListener('abort', onAbort) }, () => { clearTimeout(t); signal?.removeEventListener('abort', onAbort) })
-      })
-      readResult = await Promise.race([readPromise, timeoutPromise])
+      readResult = await readWithTimeout(reader, signal, STREAM_IDLE_TIMEOUT_MS)
     } catch (e: any) {
       if (e?.name === 'AbortError') throw e
       throw e
