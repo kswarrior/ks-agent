@@ -102,7 +102,15 @@ export interface Skill {
   createdAt: string
 }
 
-export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question'
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview'
+
+export interface Preview {
+  id: string
+  chatId: string
+  port: number
+  createdAt: string
+  updatedAt: string
+}
 
 export interface Question {
   id: string

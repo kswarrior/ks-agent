@@ -318,6 +318,14 @@ app.get('/api/chats/:id/plan', (c) => {
   return c.json(findPlanForChat(chat.id) ?? null)
 })
 
+// ---------------- Previews (per chat, like plan) ----------------
+
+app.get('/api/chats/:id/preview', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  return c.json(findPreviewForChat(chat.id) ?? null)
+})
+
 // ---------------- Activities ----------------
 
 app.get('/api/chats/:id/activities', (c) => {
@@ -1619,6 +1627,14 @@ app.all('/api/projects/:id/preview/proxy/*', async (c) => {
   return proxyPreview(c, suffix)
 })
 
+// Chat-scoped preview proxy — uses the per-chat open_preview port (active per chat like plan)
+app.all('/api/chats/:id/preview/proxy', async (c) => proxyChatPreview(c, ''))
+app.all('/api/chats/:id/preview/proxy/', async (c) => proxyChatPreview(c, ''))
+app.all('/api/chats/:id/preview/proxy/*', async (c) => {
+  const suffix = c.req.path.replace(/^\/api\/chats\/[^/]+\/preview\/proxy\/?/, '')
+  return proxyChatPreview(c, suffix)
+})
+
 async function proxyPreview(c: any, suffix: string): Promise<Response> {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
@@ -1682,6 +1698,75 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
         const locUrl = new URL(location, target)
         if (locUrl.hostname === '127.0.0.1' && String(locUrl.port) === String(port)) {
           const newLoc = `/api/projects/${project.id}/preview/proxy${locUrl.pathname}${locUrl.search}`
+          outHeaders.set('location', newLoc)
+        }
+      } catch {}
+    }
+
+    const buf = await proxied.arrayBuffer()
+    return new Response(buf, { status: proxied.status, headers: outHeaders })
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Proxy fetch failed' }, 502)
+  }
+}
+
+async function proxyChatPreview(c: any, suffix: string): Promise<Response> {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  const preview = findPreviewForChat(chat.id)
+  if (!preview) return c.json({ error: 'No preview for this chat. AI must call open_preview with the running port.' }, 404)
+  const port = preview.port
+  const query = c.req.query() as Record<string, string>
+  const qs = new URLSearchParams(query).toString()
+  let targetPath = '/' + suffix
+  const url = new URL(c.req.url)
+  const rawQuery = url.search
+  if (qs && !rawQuery) targetPath += '?' + qs
+  else if (rawQuery) targetPath = '/' + suffix + rawQuery
+  const [pathPart, queryPart] = targetPath.split('?')
+  targetPath = pathPart.replace(/\/\//g, '/') + (queryPart ? '?' + queryPart : '')
+  if (!targetPath.startsWith('/')) targetPath = '/' + targetPath
+  const target = `http://127.0.0.1:${port}${targetPath}`
+
+  if (!(await isPortReachable(port, 800))) {
+    return c.json({ error: `Preview not reachable on port ${port}. Ensure the dev server is running.` }, 502)
+  }
+
+  try {
+    const method = c.req.method
+    const headers = new Headers()
+    for (const [k, v] of Object.entries(c.req.header())) {
+      const lk = k.toLowerCase()
+      if (['host', 'connection', 'content-length'].includes(lk)) continue
+      if (typeof v === 'string') headers.set(k, v)
+    }
+    let body: any = undefined
+    if (!['GET', 'HEAD'].includes(method)) {
+      try { body = await c.req.arrayBuffer() as any } catch {}
+    }
+    const proxied = await fetch(target, {
+      method,
+      headers,
+      body,
+      redirect: 'manual'
+    } as any)
+
+    const outHeaders = new Headers()
+    proxied.headers.forEach((v: string, k: string) => {
+      const lk = k.toLowerCase()
+      if (['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(lk)) return
+      if (lk === 'x-frame-options') return
+      if (lk === 'content-security-policy') return
+      outHeaders.set(k, v)
+    })
+    outHeaders.set('X-Frame-Options', 'ALLOWALL')
+
+    const location = proxied.headers.get('location')
+    if (location) {
+      try {
+        const locUrl = new URL(location, target)
+        if (locUrl.hostname === '127.0.0.1' && String(locUrl.port) === String(port)) {
+          const newLoc = `/api/chats/${chat.id}/preview/proxy${locUrl.pathname}${locUrl.search}`
           outHeaders.set('location', newLoc)
         }
       } catch {}

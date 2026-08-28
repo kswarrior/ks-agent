@@ -1,4 +1,4 @@
-import type { Activity, Chat, FileListing, Message, ModelEntry, Plan, Project, Provider, Question, RetrySettings, Skill, Terminal } from './types'
+import type { Activity, Chat, FileListing, Message, ModelEntry, Plan, Preview, Project, Provider, Question, RetrySettings, Skill, Terminal } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -66,6 +66,7 @@ export interface StreamHandlers {
   onPlan?: (plan: Plan) => void
   onQuestion?: (question: Question) => void
   onChatTitle?: (data: { chatId: string; title: string; seq?: number }) => void
+  onPreview?: (preview: Preview) => void
   onError: (message: string) => void
   onDone: () => void
 }
