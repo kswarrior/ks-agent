@@ -2291,11 +2291,17 @@ function rewriteJsUrls(js: string, baseProxyPath: string): string {
   const baseNoSlash = base.slice(1)
   const doubleBase = base + baseNoSlash
   let out = js
-  // 1) ES imports: from "/..." , import "/..." , import("/...")
-  out = out.replace(/(from\s+|import\s*\(\s*|import\s+)(["'])\/(?!\/)/g, (_m, pre, q) => `${pre}${q}${base}`)
+  // 1) ES imports: from "/..." , import "/..." , import("/...") — skip /api/
+  out = out.replace(/(from\s+|import\s*\(\s*|import\s+)(["'])\/(?!\/)([^"'`]*?)\2/g, (m, pre, q, rest) => {
+    if (rest.startsWith('api/')) return m
+    return `${pre}${q}${base}${rest}${q}`
+  })
   if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
-  // 2) export ... from "/..."
-  out = out.replace(/(export\s+.*?\s+from\s+)(["'])\/(?!\/)/g, (_m, pre, q) => `${pre}${q}${base}`)
+  // 2) export ... from "/..." — skip /api/
+  out = out.replace(/(export\s+.*?\s+from\s+)(["'])\/(?!\/)([^"'`]*?)\2/g, (m, pre, q, rest) => {
+    if (rest.startsWith('api/')) return m
+    return `${pre}${q}${base}${rest}${q}`
+  })
   if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
   // 3) fetch("/..."), open, EventSource, WebSocket — skip /api/ which belongs to KS Agent itself, not preview
   out = out.replace(/\b(fetch|open|sendBeacon|EventSource|WebSocket)\s*\(\s*(["'])\/(?!\/)([^"'`]*?)\2/g, (m, fn, q, rest) => {
