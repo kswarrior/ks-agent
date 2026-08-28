@@ -322,9 +322,14 @@ function KsAgent() {
             },
             onPreview: (preview) => {
               setPreviews((prev) => ({ ...prev, [chatId]: preview }))
-              // auto-open preview when AI calls it after final task complete
-              setPreviewOpen(true)
-              toast(`Preview ready on port ${preview.port}`, 'success')
+              // show Preview Live card at bottom for 2s like delete-chat toast, active per chat
+              if (preview.chatId === activeChatIdRef.current) {
+                setShowPreviewBanner(true)
+                if (previewBannerTimerRef.current) clearTimeout(previewBannerTimerRef.current)
+                previewBannerTimerRef.current = setTimeout(() => setShowPreviewBanner(false), 2000)
+                // auto-open preview when AI calls it after final task complete for the active chat
+                setPreviewOpen(true)
+              }
             },
             onError: (message) => toast(message.split('\n')[0], 'error'),
             onDone: () => {}
@@ -685,6 +690,21 @@ function KsAgent() {
 
   const activePreview = activeChat ? previews[activeChat.id] ?? null : null
   const hasPreview = !!activePreview
+
+  // hide preview banner after 2s like delete-chat toast, cleanup timer on unmount/chat switch
+  useEffect(() => {
+    return () => {
+      if (previewBannerTimerRef.current) clearTimeout(previewBannerTimerRef.current)
+    }
+  }, [])
+  useEffect(() => {
+    // when active chat changes, hide any lingering banner (active per chat)
+    setShowPreviewBanner(false)
+    if (previewBannerTimerRef.current) {
+      clearTimeout(previewBannerTimerRef.current)
+      previewBannerTimerRef.current = null
+    }
+  }, [activeChat?.id])
 
   // ---- render ----
   return (
