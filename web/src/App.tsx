@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from './api'
-import type { Chat, Message, ModelEntry, Plan, Project, Activity, Question } from './types'
+import type { Chat, Message, ModelEntry, Plan, Preview, Project, Activity, Question } from './types'
 import { DialogsProvider, useDialogs } from './dialogs'
 import { ToastProvider, useToast } from './toast'
 import { Header } from './components/Header'
@@ -24,6 +24,7 @@ function KsAgent() {
   const [messages, setMessages] = useState<Message[]>([])
   const [models, setModels] = useState<ModelEntry[]>([])
   const [plans, setPlans] = useState<Record<string, Plan>>({})
+  const [previews, setPreviews] = useState<Record<string, Preview>>({})
   const [questions, setQuestions] = useState<Record<string, Question[]>>({})
 
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => { try { return localStorage.getItem(LS_PROJECT) } catch { return null } })
@@ -170,6 +171,28 @@ function KsAgent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId])
 
+  // load the chat's preview (per chat like plan, actively per chat)
+  useEffect(() => {
+    if (!activeChatId) return
+    let cancelled = false
+    api
+      .getChatPreview(activeChatId)
+      .then((preview) => {
+        if (cancelled) return
+        setPreviews((prev) => {
+          const next = { ...prev }
+          if (preview) next[activeChatId] = preview
+          else delete next[activeChatId]
+          return next
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChatId])
+
   // load activities for the chat (persisted per chat like plan)
   useEffect(() => {
     if (!activeChatId) return
@@ -295,6 +318,12 @@ function KsAgent() {
                 )
               )
             },
+            onPreview: (preview) => {
+              setPreviews((prev) => ({ ...prev, [chatId]: preview }))
+              // auto-open preview when AI calls it after final task complete
+              setPreviewOpen(true)
+              toast(`Preview ready on port ${preview.port}`, 'success')
+            },
             onError: (message) => toast(message.split('\n')[0], 'error'),
             onDone: () => {}
           },
@@ -362,6 +391,15 @@ function KsAgent() {
             setActivities((prev) => {
               const other = prev.filter((a) => a.chatId !== chatId)
               return [...other, ...acts]
+            })
+          } catch {}
+          try {
+            const preview = await api.getChatPreview(chatId)
+            setPreviews((prev) => {
+              const next = { ...prev }
+              if (preview) next[chatId] = preview
+              else delete next[chatId]
+              return next
             })
           } catch {}
         })

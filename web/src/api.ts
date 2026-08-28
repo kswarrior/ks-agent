@@ -142,6 +142,9 @@ export async function streamChatEvents(
           case 'chat_title':
             handlers.onChatTitle?.(parsed)
             break
+          case 'preview':
+            handlers.onPreview?.(parsed as Preview)
+            break
           case 'error':
             handlers.onError(parsed.message)
             break
@@ -163,6 +166,11 @@ export const stopGeneration = (chatId: string) =>
 
 // Activities
 export const listActivities = (chatId: string) => req<Activity[]>(`/api/chats/${chatId}/activities`)
+
+// Previews (per chat, like plan)
+export const getChatPreview = (chatId: string) => req<Preview | null>(`/api/chats/${chatId}/preview`)
+export const chatPreviewProxyUrl = (chatId: string, subPath = '') =>
+  `/api/chats/${chatId}/preview/proxy/${subPath.replace(/^\//, '')}`
 
 // Plans
 export const getPlan = (chatId: string) => req<Plan | null>(`/api/chats/${chatId}/plan`)
