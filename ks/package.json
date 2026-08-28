@@ -10,6 +10,9 @@
   "author": "KS WARRIOR",
   "license": "ISC",
   "dependencies": {
-    "express": "^5.2.1"
+    "300": "^0.0.1",
+    "ejs": "^6.0.1",
+    "express": "^5.2.1",
+    "save": "^2.9.0"
   }
 }
