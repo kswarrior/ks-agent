@@ -729,8 +729,6 @@ function KsAgent() {
             onAnswerQuestion={handleAnswerQuestion}
             plan={activeChat ? plans[activeChat.id] ?? null : null}
             activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
-            preview={activeChat ? previews[activeChat.id] ?? null : null}
-            onOpenPreview={() => setPreviewOpen(true)}
           />
         </main>
         <RightSidebar
@@ -749,6 +747,60 @@ function KsAgent() {
           onClose={() => setPreviewOpen(false)}
         />
       </div>
+
+      {hasPreview && !previewOpen && activePreview && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 18,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 75,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 16px',
+            background: 'var(--surface-2)',
+            border: '1px solid #22c55e30',
+            borderLeft: '3px solid #22c55e',
+            borderRadius: 10,
+            boxShadow: '0 12px 32px rgba(0,0,0,0.75)',
+            maxWidth: 'calc(100vw - 24px)',
+            animation: 'rise 0.18s ease',
+          }}
+        >
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: '#22c55e',
+              boxShadow: '0 0 8px rgba(34,197,94,0.65)',
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap' }}>Preview Live</span>
+          <span
+            style={{
+              fontSize: 12,
+              color: 'var(--text-dim)',
+              fontFamily: 'ui-monospace, monospace',
+              background: 'var(--btn)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              padding: '2px 6px',
+            }}
+          >
+            :{activePreview.port}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 2, display: 'none' }} className="hide-mobile">
+            active per chat
+          </span>
+          <button className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 12.5, marginLeft: 8, whiteSpace: 'nowrap' }} onClick={() => setPreviewOpen(true)}>
+            Open Preview
+          </button>
+        </div>
+      )}
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onDataChanged={refreshModels} />
       <AddProjectModal open={addProjectOpen} onClose={() => setAddProjectOpen(false)} onCreated={submitAddProject} />
