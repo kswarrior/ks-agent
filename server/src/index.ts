@@ -639,9 +639,54 @@ async function runGeneration(
         retrySettings
       })
     } else {
-      for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings, maxTokens)) {
-        job.content += delta
-        emitTo(job, 'delta', JSON.stringify(delta))
+      // Simple chat (no project/tools) — also retry on transient errors like ResourceExhausted
+      let attempt = 0
+      const maxAttempts = retrySettings.enabled === false ? 0 : (retrySettings.maxRetries ?? 5)
+      while (true) {
+        let roundText = ''
+        const startLen = job.content.length
+        try {
+          for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings, maxTokens)) {
+            roundText += delta
+            job.content += delta
+            emitTo(job, 'delta', JSON.stringify(delta))
+          }
+          break
+        } catch (e: any) {
+          if (e?.name === 'AbortError') throw e
+          const msg = String(e?.message || e)
+          const isTimeout = /timeout/i.test(msg)
+          const isResourceExhausted = /resourceexhausted|worker local total request limit/i.test(msg)
+          const canRetryAfterPartial = isTimeout || isResourceExhausted || !!retrySettings.alwaysRetry
+          if (roundText.length > 0 && !canRetryAfterPartial) throw e
+          if (roundText.length > 0) {
+            // rollback partial content of this attempt so retry is clean
+            if (job.content.length >= roundText.length && job.content.endsWith(roundText)) {
+              job.content = job.content.slice(0, -roundText.length)
+            } else {
+              job.content = job.content.slice(0, Math.max(startLen, job.content.length - roundText.length))
+            }
+            // also remove any delta already emitted? client will keep it, but rollback
+            // ensures persisted message is not duplicated; client snapshot will be resent
+          }
+          const isRetryableStatus = !!retrySettings.alwaysRetry || isTimeout || isResourceExhausted || (retrySettings.retryOnStatusCodes ?? [429, 500, 502, 503]).some((code) => msg.includes(String(code)))
+          const isStopStatus = !retrySettings.alwaysRetry && !isResourceExhausted && (retrySettings.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
+          const effectiveMaxAttempts = isResourceExhausted && retrySettings.alwaysRetry ? Math.max(maxAttempts, 30) : maxAttempts
+          const shouldRetry = retrySettings.enabled && isRetryableStatus && !isStopStatus && attempt < effectiveMaxAttempts
+          if (!shouldRetry) throw e
+          let delay = Math.min((retrySettings.baseDelayMs ?? 1200) * Math.pow(2, attempt) + Math.random() * 800, retrySettings.maxDelayMs ?? 30000)
+          const m = msg.match(/retry-after[^0-9]*(\d+)/i)
+          if (m) {
+            const secs = Number(m[1])
+            if (!Number.isNaN(secs) && secs >= 0 && secs < 300) delay = Math.max(delay, secs * 1000)
+          }
+          await new Promise<void>((resolve, reject) => {
+            const t = setTimeout(resolve, delay)
+            job.controller.signal.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })) }, { once: true })
+          })
+          attempt++
+          continue
+        }
       }
     }
   } catch (e: any) {
@@ -853,6 +898,21 @@ app.post('/api/chats/:id/messages', async (c) => {
     }
   }
 
+  // Check if previous assistant was interrupted — if so, keep activities/plan for seamless continuation
+  const prevAssistantForNormal = [...messagesOf(chat.id)].reverse().find((m) => m.role === 'assistant')
+  const prevWasInterrupted = prevAssistantForNormal
+    ? /\n\n_\[stopped\]_\s*$/.test(prevAssistantForNormal.content) ||
+      /\n\n_\[stream interrupted:/.test(prevAssistantForNormal.content) ||
+      !!(prevAssistantForNormal as any).error
+    : false
+  // Clean interrupted marker from DB so history is seamless even for "any other" input
+  if (prevWasInterrupted && prevAssistantForNormal) {
+    const cleaned = stripInterruptedSuffix(prevAssistantForNormal.content)
+    if (prevAssistantForNormal.content !== cleaned) {
+      prevAssistantForNormal.content = cleaned
+      if ((prevAssistantForNormal as any).error) delete (prevAssistantForNormal as any).error
+    }
+  }
   const userMsg = {
     id: newId(),
     chatId: chat.id,
@@ -870,8 +930,11 @@ app.post('/api/chats/:id/messages', async (c) => {
   touchChat(chat)
   // Clear previous activities for this chat so next run starts fresh (like client does)
   // Persisted per chat, so refresh after sending shows empty until new activity arrives
-  // @ts-ignore
-  db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
+  // But if previous was interrupted, preserve for seamless continue (user said any input should pick up where ended)
+  if (!prevWasInterrupted) {
+    // @ts-ignore
+    db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
+  }
   saveDb()
 
   // Resolve the system prompt: per-model override > global setting > built-in default.
@@ -999,6 +1062,7 @@ app.post('/api/chats/:id/continue', async (c) => {
   } else {
     // "any other" input with extra instruction — store as new user message and generate fresh,
     // but history is cleaned so AI continues seamlessly from where it ended.
+    const originalWasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || !!(lastAssistant as any).error
     const stripped = stripInterruptedSuffix(lastAssistant.content)
     if (lastAssistant.content !== stripped) {
       lastAssistant.content = stripped
@@ -1019,9 +1083,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     }
     touchChat(chat)
     // For "any other" we still want seamless pickup, so do NOT clear activities if last was interrupted
-    // Check if last generation was interrupted — if so, preserve plan/activities
-    const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || (lastAssistant as any).error
-    if (!wasInterrupted) {
+    if (!originalWasInterrupted) {
       // @ts-ignore
       db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
     }
