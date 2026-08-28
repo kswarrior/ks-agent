@@ -858,6 +858,7 @@ function KsAgent() {
             onAnswerQuestion={handleAnswerQuestion}
             plan={activeChat ? plans[activeChat.id] ?? null : null}
             activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
+            onContinue={() => handleContinue()}
           />
         </main>
         <RightSidebar
