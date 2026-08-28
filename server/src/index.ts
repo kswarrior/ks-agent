@@ -836,18 +836,24 @@ app.post('/api/chats/:id/messages', async (c) => {
     const allMsgs = messagesOf(chat.id)
     const lastAssistant = [...allMsgs].reverse().find((m) => m.role === 'assistant')
     if (lastAssistant) {
-      const stripped = stripInterruptedSuffix(lastAssistant.content)
-      // Update stored message to clean version immediately so history is clean
-      if (lastAssistant.content !== stripped) {
-        lastAssistant.content = stripped
-        if (lastAssistant.error) delete (lastAssistant as any).error
-        // keep original timestamps but ensure content is clean
-        saveDb()
-      }
-      // If after stripping we have something to continue from, or even if empty but
-      // the message was an error/stopped placeholder, we resume in place
-      const shouldResume = true
-      if (shouldResume) {
+      const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || !!(lastAssistant as any).error
+      // Only treat pure "continue" as resumption when previous response was actually interrupted
+      // Otherwise fall through to normal flow and create a regular user message "continue"
+      if (!wasInterrupted) {
+        // not interrupted: do not intercept, handle as normal user message below
+      } else {
+        const stripped = stripInterruptedSuffix(lastAssistant.content)
+        // Update stored message to clean version immediately so history is clean
+        if (lastAssistant.content !== stripped) {
+          lastAssistant.content = stripped
+          if (lastAssistant.error) delete (lastAssistant as any).error
+          // keep original timestamps but ensure content is clean
+          saveDb()
+        }
+        // If after stripping we have something to continue from, or even if empty but
+        // the message was an error/stopped placeholder, we resume in place
+        const shouldResume = true
+        if (shouldResume) {
         // Ensure chat seq etc.
         if (chat.seq == null || !Number.isInteger(chat.seq)) {
           chat.seq = nextChatSeq(chat.projectId)
@@ -894,6 +900,7 @@ app.post('/api/chats/:id/messages', async (c) => {
           job.finishedAt = new Date().toISOString()
         })
         return c.json({ userMsgId: lastAssistant.id, assistantId: job.assistantId, model: job.model, continued: true })
+        }
       }
     }
   }
