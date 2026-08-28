@@ -1,0 +1,34 @@
+<header class="header">
+    <div class="header-left">
+        <button class="header-btn header-btn-toggle" id="headerToggle">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h1 class="header-title"><%= pageTitle || 'Dashboard' %></h1>
+    </div>
+    
+    <div class="header-right">
+        <div class="header-actions">
+            <button class="header-btn" id="refreshBtn">
+                <i class="fas fa-sync-alt"></i>
+                <span class="d-none d-sm-inline">Refresh</span>
+            </button>
+            
+            <div class="header-notification">
+                <button class="header-btn" id="notificationBtn">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge">3</span>
+                </button>
+            </div>
+        </div>
+        
+        <div class="header-user">
+            <div class="user-info">
+                <span class="user-name">KS Admin</span>
+                <span class="user-role">Administrator</span>
+            </div>
+            <div class="user-avatar">
+                <img src="/ks-panel/img/avatar.png" alt="User Avatar">
+            </div>
+        </div>
+    </div>
+</header>
