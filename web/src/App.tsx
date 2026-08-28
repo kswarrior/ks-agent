@@ -664,11 +664,17 @@ function KsAgent() {
 
     let chatId = activeChatId
 
-    // If user typed pure "continue" and there's a previous assistant, delegate to continuation flow
+    // If user typed pure "continue" and previous response was interrupted, delegate to continuation flow
     // so it resumes exactly where it ended without creating a new user bubble.
+    // Otherwise treat "continue" as a normal user message.
     if (chatId && isContinueKeyword(content)) {
       const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
-      if (lastAssistant) {
+      const wasInterrupted = lastAssistant
+        ? /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) ||
+          /\n\n_\[stream interrupted:/.test(lastAssistant.content) ||
+          !!(lastAssistant as any).error
+        : false
+      if (lastAssistant && wasInterrupted) {
         return handleContinue(content)
       }
     }
