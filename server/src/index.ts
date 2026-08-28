@@ -140,6 +140,31 @@ function publicProvider(p: { id: string; name: string; baseUrl: string; apiKey: 
   }
 }
 
+function stripInterruptedSuffix(content: string): string {
+  // Remove trailing interruption markers appended by persistAssistantSafe
+  // e.g. "\n\n_[stopped]_" or "\n\n_[stream interrupted: ...]_"
+  let c = content
+  c = c.replace(/\n\n_\[stopped\]_\s*$/g, '')
+  c = c.replace(/\n\n_\[stream interrupted:[^\]]*\]_\s*$/g, '')
+  // Also handle generic truncated case if any
+  c = c.replace(/\n\n_\[truncated[^\]]*\]_\s*$/g, '')
+  return c.trimEnd()
+}
+
+function isContinueKeyword(text: string): boolean {
+  const t = text.trim().toLowerCase()
+  if (!t) return false
+  // pure continue variants - allow punctuation
+  return /^(continue|resume|proceed|keep going|go on|cont\.?|continue please|please continue)[.!]*$/.test(t)
+}
+
+function cleanMessagesForHistory(chatId: string): LLMMessage[] {
+  return messagesOf(chatId).map((m) => ({
+    role: m.role as LLMMessage['role'],
+    content: m.role === 'assistant' ? stripInterruptedSuffix(m.content) : m.content
+  }))
+}
+
 // ---------------- Projects ----------------
 
 app.get('/api/projects', (c) => {
@@ -391,6 +416,8 @@ interface GenerationJob {
   finishedAt?: string
   controller: AbortController
   listeners: Set<(event: string, data: string) => void>
+  /** When set, persist should update this existing message instead of pushing a new one */
+  continuationOf?: string
 }
 
 const generations = new Map<string, GenerationJob>()
@@ -542,6 +569,23 @@ async function persistAssistantSafe(job: GenerationJob, content: string, isError
       if (Number.isFinite(d) && d >= 0) durationMs = d
     } catch {}
     if (!job.finishedAt) job.finishedAt = finishedAt
+    // If this is a continuation, update the existing message in place instead of pushing a new one
+    if (job.continuationOf) {
+      const existing = getDb().messages.find((m) => m.id === job.continuationOf && m.chatId === job.chatId)
+      if (existing) {
+        existing.content = content
+        existing.error = isError || undefined
+        existing.model = job.model
+        existing.modelDisplayName = job.modelDisplayName
+        existing.providerName = job.providerName
+        existing.finishedAt = finishedAt
+        existing.durationMs = durationMs
+        // keep original startedAt/createdAt, but ensure finishedAt updated
+        touchChat(chat)
+        saveDb()
+        return
+      }
+    }
     getDb().messages.push({
       id: job.assistantId,
       chatId: job.chatId,

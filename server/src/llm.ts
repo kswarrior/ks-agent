@@ -168,13 +168,16 @@ async function openStream(
       } catch {}
       const status = res.status
       const errorMsg = `Provider responded ${status}${detail ? `: ${detail}` : ''}`
+      const isResourceExhausted = /resourceexhausted|worker local total request limit/i.test(detail) || /resourceexhausted|worker local total request limit/i.test(errorMsg)
 
-      if (!settings.alwaysRetry && settings.stopOnStatusCodes.includes(status)) {
+      if (!settings.alwaysRetry && !isResourceExhausted && settings.stopOnStatusCodes.includes(status)) {
         throw new Error(errorMsg)
       }
 
-      const isRetryable = !!settings.alwaysRetry || settings.retryOnStatusCodes.includes(status)
-      const shouldRetry = settings.enabled && isRetryable && attempt < settings.maxRetries
+      const isRetryable = !!settings.alwaysRetry || isResourceExhausted || settings.retryOnStatusCodes.includes(status)
+      // For ResourceExhausted with alwaysRetry, allow many more retries (provider capacity is transient)
+      const effectiveMaxRetries = isResourceExhausted && settings.alwaysRetry ? Math.max(settings.maxRetries, 30) : settings.maxRetries
+      const shouldRetry = settings.enabled && isRetryable && attempt < effectiveMaxRetries
 
       if (!shouldRetry) {
         throw new Error(errorMsg)
