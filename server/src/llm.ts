@@ -256,10 +256,8 @@ export async function* streamChat(
       if (payload === '[DONE]') break
       const chunk = parseChunk(payload)
       if (!chunk) continue
-      // For reasoning models, surface reasoning as text so user sees progress (and job.content includes it)
       const out = (chunk.reasoning ?? '') + (chunk.text ?? '')
       if (out) yield out
-      else if (chunk.text) yield chunk.text
     }
   }
   // Flush any trailing content without newline (some providers don't terminate last line with \n)
@@ -340,17 +338,10 @@ export async function streamChatWithTools(
       if (payload === '[DONE]') break
       const chunk = parseChunk(payload)
       if (!chunk) continue
-      // Merge reasoning + text for display and job accumulation; reasoning models stream thinking as reasoning_content
       const deltaOut = (chunk.reasoning ?? '') + (chunk.text ?? '')
       if (deltaOut) {
         text += deltaOut
         onDelta(deltaOut)
-      } else if (chunk.text) {
-        text += chunk.text
-        onDelta(chunk.text)
-      } else if (chunk.reasoning) {
-        text += chunk.reasoning
-        onDelta(chunk.reasoning)
       }
       if (chunk.finishReason) finishReason = chunk.finishReason
       for (const d of chunk.toolCallDeltas ?? []) {

@@ -158,7 +158,7 @@ interface DB {
 const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
 const dbFile = path.join(dataDir, 'db.json')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [] }
 
 function ensureChatSeqs(chats: Chat[]): boolean {
   let changed = false
@@ -209,7 +209,7 @@ export function loadDb(): void {
       maxRetries: 5,
       baseDelayMs: 1200,
       maxDelayMs: 30000,
-      retryOnStatusCodes: [429, 502, 503],
+      retryOnStatusCodes: [429, 500, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
@@ -262,6 +262,11 @@ export function loadDb(): void {
         if (deduped.length !== s.files.length) { s.files = deduped; migrated = true }
       }
     }
+    // Migrate retry settings to include 500 (ResourceExhausted) for Nvidia rate limits
+    if (!db.retrySettings.retryOnStatusCodes.includes(500)) {
+      db.retrySettings.retryOnStatusCodes = [...new Set([...db.retrySettings.retryOnStatusCodes, 500])].sort((a, b) => a - b)
+      migrated = true
+    }
     if (ensureChatSeqs(db.chats) || migrated) {
       try { saveDb() } catch {}
     }
@@ -271,7 +276,7 @@ export function loadDb(): void {
       maxRetries: 5,
       baseDelayMs: 1200,
       maxDelayMs: 30000,
-      retryOnStatusCodes: [429, 502, 503],
+      retryOnStatusCodes: [429, 500, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
