@@ -2298,23 +2298,15 @@ function rewriteJsUrls(js: string, baseProxyPath: string): string {
   out = out.replace(/(export\s+.*?\s+from\s+)(["'])\/(?!\/)/g, (_m, pre, q) => `${pre}${q}${base}`)
   if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
   // 3) fetch("/..."), open, EventSource, WebSocket — skip /api/ which belongs to KS Agent itself, not preview
-  // First, handle the common case with path content captured so we can skip api/
   out = out.replace(/\b(fetch|open|sendBeacon|EventSource|WebSocket)\s*\(\s*(["'])\/(?!\/)([^"'`]*?)\2/g, (m, fn, q, rest) => {
     if (rest.startsWith('api/')) return m
     return `${fn}(${q}${base}${rest}${q}`
-  })
-  // Fallback for empty or edge cases like fetch("/") where rest is empty — simple prefix but avoid api/
-  out = out.replace(/\b(fetch|open|sendBeacon|EventSource|WebSocket)\s*\(\s*(["'])\/(?!\/)/g, (m, fn, q) => {
-    // If this pattern was already handled by previous replace, it won't match again because rest is consumed
-    // So this is safe for fetch("/") etc.
-    return `${fn}(${q}${base}`
   })
   if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
   out = out.replace(/new\s+URL\s*\(\s*(["'])\/(?!\/)([^"'`]*?)\1/g, (m, q, rest) => {
     if (rest.startsWith('api/')) return m
     return `new URL(${q}${base}${rest}${q}`
   })
-  out = out.replace(/new\s+URL\s*\(\s*(["'])\/(?!\/)/g, (m, q) => `new URL(${q}${base}`)
   if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
   // 4) .href = "/...", .src = "/..."
   out = out.replace(/(\.(href|src|action)\s*=\s*)(["'])\/(?!\/)/g, (_m, pre, _attr, q) => `${pre}${q}${base}`)
