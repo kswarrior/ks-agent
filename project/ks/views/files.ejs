@@ -1,0 +1,221 @@
+<div class="card full-height">
+  <div class="card-header">
+    <h3>File Manager</h3>
+    <div class="file-actions">
+      <button class="btn btn-primary" onclick="showUploadModal()">Upload</button>
+      <button class="btn btn-secondary" onclick="showNewFolderModal()">New Folder</button>
+      <button class="btn btn-secondary" onclick="refreshFiles()">Refresh</button>
+    </div>
+  </div>
+  <div class="card-body">
+    <!-- Breadcrumbs -->
+    <div class="breadcrumbs">
+      <a href="/files" class="breadcrumb-item">Root</a>
+      <% breadcrumbs.forEach((crumb, i) => { %>
+        <span class="breadcrumb-sep">/</span>
+        <a href="/files?dir=<%= breadcrumbs.slice(0, i+1).join('/') %>" class="breadcrumb-item"><%= crumb %></a>
+      <% }); %>
+    </div>
+
+    <!-- File List -->
+    <div class="file-list" id="file-list">
+      <% if (files.length === 0) { %>
+        <div class="empty-state">This folder is empty</div>
+      <% } else { %>
+        <table class="file-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Size</th>
+              <th>Modified</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% files.forEach(file => { %>
+              <tr data-path="<%= file.path %>" data-is-dir="<%= file.isDirectory %>">
+                <td>
+                  <span class="file-icon <%= file.isDirectory ? 'folder' : getFileIcon(file.name) %>">
+                    <%= file.isDirectory ? '📁' : getFileIconChar(file.name) %>
+                  </span>
+                  <span class="file-name"><%= escapeHtml(file.name) %></span>
+                </td>
+                <td><%= file.isDirectory ? '-' : formatBytes(file.size) %></td>
+                <td><%= new Date(file.modified).toLocaleString() %></td>
+                <td>
+                  <div class="file-actions-cell">
+                    <% if (!file.isDirectory) { %>
+                      <button class="btn btn-sm btn-secondary" onclick="viewFile('<%= escapeJs(file.path) %>')">View</button>
+                      <button class="btn btn-sm btn-secondary" onclick="editFile('<%= escapeJs(file.path) %>')">Edit</button>
+                    <% } %>
+                    <button class="btn btn-sm btn-danger" onclick="deletePath('<%= escapeJs(file.path) %>', <%= file.isDirectory %>)">Delete</button>
+                  </div>
+                </td              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal" id="upload-modal">
+  <div class="modal-content">
+    <h3>Upload Files</h3>
+    <form id="upload-form" enctype="multipart/form-data">
+      <input type="hidden" name="dest" id="upload-dest" value="<%= currentDir %>">
+      <div class="form-group">
+        <label>Destination: <%= currentDir || '/' %></label>
+        <input type="file" name="files" multiple required>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="hideModal('upload-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- New Folder Modal -->
+<div class="modal" id="new-folder-modal">
+  <div class="modal-content">
+    <h3>Create New Folder</h3>
+    <form id="new-folder-form">
+      <input type="hidden" name="path" value="<%= currentDir %>">
+      <div class="form-group">
+        <label>Folder Name</label>
+        <input type="text" name="name" required placeholder="folder-name">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="hideModal('new-folder-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // File type icons
+  function getFileIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    if (['jar', 'json', 'yml', 'yaml', 'properties', 'txt', 'log', 'md'].includes(ext)) return 'text';
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return 'image';
+    if (['zip', 'tar', 'gz', 'rar'].includes(ext)) return 'archive';
+    return 'file';
+  }
+
+  function getFileIconChar(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    if (ext === 'jar') return '☕';
+    if (['json', 'yml', 'yaml', 'properties'].includes(ext)) return '📋';
+    if (['txt', 'log', 'md'].includes(ext)) return '📄';
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) return '🖼️';
+    if (['zip', 'tar', 'gz', 'rar'].includes(ext)) return '📦';
+    return '📄';
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function escapeJs(text) {
+    return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+  }
+
+  // Double-click to navigate folders
+  document.querySelectorAll('.file-table tbody tr[data-is-dir="true"]').forEach(row => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('dblclick', () => {
+      window.location.href = '/files?dir=' + encodeURIComponent(row.dataset.path);
+    });
+  });
+
+  // View file
+  function viewFile(path) {
+    window.open('/files/view?file=' + encodeURIComponent(path), '_blank');
+  }
+
+  // Edit file
+  function editFile(path) {
+    window.open('/files/view?file=' + encodeURIComponent(path) + '&edit=1', '_blank');
+  }
+
+  // Delete file/folder
+  function deletePath(path, isDir) {
+    if (!confirm(`Delete ${isDir ? 'folder' : 'file'} "${path}"?`)) return;
+    fetch('/files/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    }).then(r => r.json()).then(res => {
+      if (res.success) location.reload();
+      else alert('Error: ' + res.message);
+    });
+  }
+
+  // Upload form
+  document.getElementById('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const res = await fetch('/files/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.success) {
+      hideModal('upload-modal');
+      location.reload();
+    } else {
+      alert('Upload failed');
+    }
+  });
+
+  // New folder form
+  document.getElementById('new-folder-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const res = await fetch('/files/new-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.fromEntries(formData))
+    });
+    const data = await res.json();
+    if (data.success) {
+      hideModal('new-folder-modal');
+      location.reload();
+    } else {
+      alert('Failed to create folder');
+    }
+  });
+
+  function showUploadModal() {
+    document.getElementById('upload-modal').classList.add('show');
+  }
+
+  function showNewFolderModal() {
+    document.getElementById('new-folder-modal').classList.add('show');
+  }
+
+  function hideModal(id) {
+    document.getElementById(id).classList.remove('show');
+  }
+
+  function refreshFiles() {
+    location.reload();
+  }
+
+  // Close modal on backdrop click
+  document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.classList.remove('show');
+    });
+  });
+</script>

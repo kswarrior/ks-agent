@@ -170,7 +170,11 @@ async function openStream(
       const errorMsg = `Provider responded ${status}${detail ? `: ${detail}` : ''}`
       const isResourceExhausted = /resourceexhausted|worker local total request limit/i.test(detail) || /resourceexhausted|worker local total request limit/i.test(errorMsg)
 
-      if (!settings.alwaysRetry && !isResourceExhausted && settings.stopOnStatusCodes.includes(status)) {
+      // Stop codes (e.g. 400 Bad Request) should fail fast — retrying a client
+      // error won't fix it. Only ResourceExhausted is exempt because it is
+      // transient even when reported as a 4xx/5xx. The alwaysRetry flag
+      // widens retryOnStatus but must NOT bypass stopOnStatus.
+      if (!isResourceExhausted && settings.stopOnStatusCodes.includes(status)) {
         throw new Error(errorMsg)
       }
 
@@ -187,6 +191,7 @@ async function openStream(
         settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 800,
         settings.maxDelayMs
       )
+      console.warn(`[llm retry] Provider ${status} — retry ${attempt + 1}/${effectiveMaxRetries} in ${Math.round(delay)}ms: ${errorMsg.slice(0,120)}`)
       // Respect Retry-After header if present (seconds or http-date)
       const retryAfter = res.headers.get('retry-after')
       if (retryAfter) {
