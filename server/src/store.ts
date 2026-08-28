@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import Database from 'better-sqlite3'
 
 export interface Project {
   id: string
@@ -155,11 +156,165 @@ interface DB {
   previews: Preview[]
 }
 
-const dataDir = process.env.KS_DATA_DIR || path.join(process.cwd(), 'data')
-const dbFile = path.join(dataDir, 'db.json')
+// Storage location: agent root where skills/web/server folders live.
+// Default: <cwd>/storage/ksagent.db  (or <cwd>/data/ksagent.db if KS_DATA_DIR is set for backward compat)
+// Env overrides: KS_SQLITE_PATH (full file path) takes precedence over KS_DATA_DIR (directory)
+const legacyDataDir = path.join(process.cwd(), 'data')
+const legacyDbFile = path.join(legacyDataDir, 'db.json')
 const defaultSkillsDir = path.join(process.cwd(), 'skills')
 
+const storageDir = process.env.KS_SQLITE_PATH
+  ? path.dirname(path.resolve(process.env.KS_SQLITE_PATH))
+  : process.env.KS_DATA_DIR
+    ? path.resolve(process.env.KS_DATA_DIR)
+    : path.join(process.cwd(), 'storage')
+
+const dbFile = process.env.KS_SQLITE_PATH
+  ? path.resolve(process.env.KS_SQLITE_PATH)
+  : path.join(storageDir, 'ksagent.db')
+
 let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [] }
+
+let sqlite: Database.Database | null = null
+
+function ensureDb(): Database.Database {
+  if (sqlite) return sqlite
+  fs.mkdirSync(path.dirname(dbFile), { recursive: true })
+  sqlite = new Database(dbFile)
+  // WAL for concurrency, foreign_keys for integrity
+  try { sqlite.pragma('journal_mode = WAL') } catch {}
+  try { sqlite.pragma('foreign_keys = ON') } catch {}
+  initSchema(sqlite)
+  return sqlite
+}
+
+function initSchema(s: Database.Database): void {
+  s.exec(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS chats (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      seq INTEGER,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_chats_projectId ON chats(projectId);
+    CREATE TABLE IF NOT EXISTS providers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      baseUrl TEXT NOT NULL,
+      apiKey TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS models (
+      id TEXT PRIMARY KEY,
+      providerId TEXT NOT NULL,
+      model TEXT NOT NULL,
+      displayName TEXT,
+      maxTokens INTEGER,
+      systemPrompt TEXT,
+      FOREIGN KEY(providerId) REFERENCES providers(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_models_providerId ON models(providerId);
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      chatId TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      error INTEGER,
+      model TEXT,
+      modelDisplayName TEXT,
+      providerName TEXT,
+      startedAt TEXT,
+      finishedAt TEXT,
+      durationMs INTEGER,
+      FOREIGN KEY(chatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_messages_chatId ON messages(chatId);
+    CREATE TABLE IF NOT EXISTS plans (
+      id TEXT PRIMARY KEY,
+      chatId TEXT NOT NULL,
+      title TEXT NOT NULL,
+      steps TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(chatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_plans_chatId ON plans(chatId);
+    CREATE TABLE IF NOT EXISTS terminals (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_terminals_projectId ON terminals(projectId);
+    CREATE TABLE IF NOT EXISTS questions (
+      id TEXT PRIMARY KEY,
+      chatId TEXT NOT NULL,
+      header TEXT NOT NULL,
+      question TEXT NOT NULL,
+      options TEXT NOT NULL,
+      allowCustom INTEGER NOT NULL,
+      customPlaceholder TEXT,
+      status TEXT NOT NULL,
+      answer TEXT,
+      selectedOption TEXT,
+      createdAt TEXT NOT NULL,
+      answeredAt TEXT,
+      toolCallId TEXT,
+      FOREIGN KEY(chatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_questions_chatId ON questions(chatId);
+    CREATE TABLE IF NOT EXISTS activities (
+      id TEXT PRIMARY KEY,
+      chatId TEXT NOT NULL,
+      toolType TEXT NOT NULL,
+      toolCallId TEXT NOT NULL,
+      args TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      result TEXT,
+      ok INTEGER,
+      timestamp TEXT NOT NULL,
+      expanded INTEGER,
+      FOREIGN KEY(chatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_activities_chatId ON activities(chatId);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_toolCallId ON activities(toolCallId);
+    CREATE TABLE IF NOT EXISTS skills (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      note TEXT NOT NULL,
+      mainFile TEXT NOT NULL,
+      files TEXT NOT NULL,
+      projectId TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE SET NULL
+    );
+    CREATE TABLE IF NOT EXISTS previews (
+      id TEXT PRIMARY KEY,
+      chatId TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(chatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_previews_chatId ON previews(chatId);
+    CREATE TABLE IF NOT EXISTS kv (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `)
+}
 
 function titleFromFileName(base: string): string {
   return base
@@ -246,9 +401,210 @@ export function nextChatSeq(projectId: string): number {
   return seqs.length ? Math.max(...seqs) + 1 : 1
 }
 
-export function loadDb(): void {
+function persistToSqlite(): void {
+  const s = ensureDb()
+  // Disable FK during bulk replace to avoid order issues
+  try { s.pragma('foreign_keys = OFF') } catch {}
+  const txn = s.transaction(() => {
+    s.prepare('DELETE FROM activities').run()
+    s.prepare('DELETE FROM previews').run()
+    s.prepare('DELETE FROM questions').run()
+    s.prepare('DELETE FROM plans').run()
+    s.prepare('DELETE FROM messages').run()
+    s.prepare('DELETE FROM terminals').run()
+    s.prepare('DELETE FROM chats').run()
+    s.prepare('DELETE FROM models').run()
+    s.prepare('DELETE FROM providers').run()
+    s.prepare('DELETE FROM skills').run()
+    s.prepare('DELETE FROM projects').run()
+    s.prepare('DELETE FROM kv').run()
+
+    const insProject = s.prepare('INSERT INTO projects (id, name, path, createdAt) VALUES (?,?,?,?)')
+    for (const p of db.projects) insProject.run(p.id, p.name, p.path, p.createdAt)
+
+    const insChat = s.prepare('INSERT INTO chats (id, projectId, title, seq, createdAt, updatedAt) VALUES (?,?,?,?,?,?)')
+    for (const c of db.chats) insChat.run(c.id, c.projectId, c.title, c.seq ?? null, c.createdAt, c.updatedAt)
+
+    const insProvider = s.prepare('INSERT INTO providers (id, name, baseUrl, apiKey) VALUES (?,?,?,?)')
+    for (const p of db.providers) insProvider.run(p.id, p.name, p.baseUrl, p.apiKey)
+
+    const insModel = s.prepare('INSERT INTO models (id, providerId, model, displayName, maxTokens, systemPrompt) VALUES (?,?,?,?,?,?)')
+    for (const m of db.models) insModel.run(m.id, m.providerId, m.model, m.displayName ?? null, m.maxTokens ?? null, m.systemPrompt ?? null)
+
+    const insMessage = s.prepare('INSERT INTO messages (id, chatId, role, content, createdAt, error, model, modelDisplayName, providerName, startedAt, finishedAt, durationMs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    for (const m of db.messages) insMessage.run(m.id, m.chatId, m.role, m.content, m.createdAt, m.error ? 1 : null, m.model ?? null, m.modelDisplayName ?? null, m.providerName ?? null, m.startedAt ?? null, m.finishedAt ?? null, m.durationMs ?? null)
+
+    const insPlan = s.prepare('INSERT INTO plans (id, chatId, title, steps, createdAt, updatedAt) VALUES (?,?,?,?,?,?)')
+    for (const p of db.plans) insPlan.run(p.id, p.chatId, p.title, JSON.stringify(p.steps), p.createdAt, p.updatedAt)
+
+    const insTerminal = s.prepare('INSERT INTO terminals (id, projectId, name, createdAt, updatedAt) VALUES (?,?,?,?,?)')
+    for (const t of db.terminals) insTerminal.run(t.id, t.projectId, t.name, t.createdAt, t.updatedAt)
+
+    const insQuestion = s.prepare('INSERT INTO questions (id, chatId, header, question, options, allowCustom, customPlaceholder, status, answer, selectedOption, createdAt, answeredAt, toolCallId) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    for (const q of db.questions) insQuestion.run(q.id, q.chatId, q.header, q.question, JSON.stringify(q.options), q.allowCustom ? 1 : 0, q.customPlaceholder ?? null, q.status, q.answer ?? null, q.selectedOption ?? null, q.createdAt, q.answeredAt ?? null, q.toolCallId ?? null)
+
+    const insActivity = s.prepare('INSERT INTO activities (id, chatId, toolType, toolCallId, args, summary, result, ok, timestamp, expanded) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    for (const a of db.activities) insActivity.run(a.id, a.chatId, a.toolType, a.toolCallId, JSON.stringify(a.args), a.summary, a.result ?? null, a.ok == null ? null : a.ok ? 1 : 0, a.timestamp, a.expanded ? 1 : null)
+
+    const insSkill = s.prepare('INSERT INTO skills (id, name, note, mainFile, files, projectId, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?)')
+    for (const sk of db.skills) insSkill.run(sk.id, sk.name, sk.note, sk.mainFile, JSON.stringify(sk.files), sk.projectId ?? null, sk.createdAt, sk.updatedAt ?? null)
+
+    const insPreview = s.prepare('INSERT INTO previews (id, chatId, port, createdAt, updatedAt) VALUES (?,?,?,?,?)')
+    for (const p of db.previews) insPreview.run(p.id, p.chatId, p.port, p.createdAt, p.updatedAt)
+
+    const insKv = s.prepare('INSERT INTO kv (key, value) VALUES (?,?)')
+    insKv.run('systemPrompt', db.systemPrompt)
+    insKv.run('planPrompt', db.planPrompt)
+    insKv.run('retrySettings', JSON.stringify(db.retrySettings))
+  })
+  txn()
+  try { s.pragma('foreign_keys = ON') } catch {}
+}
+
+function loadFromSqlite(s: Database.Database): DB | null {
   try {
-    const raw = fs.readFileSync(dbFile, 'utf8')
+    // Check if kv exists to know if db was ever initialized
+    const kvCheck = s.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='kv'").get() as any
+    if (!kvCheck) return null
+
+    const projects = s.prepare('SELECT id, name, path, createdAt FROM projects ORDER BY createdAt').all() as Project[]
+    const chatsRows = s.prepare('SELECT id, projectId, title, seq, createdAt, updatedAt FROM chats ORDER BY createdAt').all() as any[]
+    const chats: Chat[] = chatsRows.map((r) => ({ id: r.id, projectId: r.projectId, title: r.title, seq: r.seq != null ? Number(r.seq) : undefined, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+
+    const providers = s.prepare('SELECT id, name, baseUrl, apiKey FROM providers').all() as Provider[]
+
+    const modelsRows = s.prepare('SELECT id, providerId, model, displayName, maxTokens, systemPrompt FROM models').all() as any[]
+    const models: ModelEntry[] = modelsRows.map((r) => ({
+      id: r.id,
+      providerId: r.providerId,
+      model: r.model,
+      displayName: r.displayName ?? undefined,
+      maxTokens: r.maxTokens != null ? Number(r.maxTokens) : undefined,
+      systemPrompt: r.systemPrompt ?? undefined
+    }))
+
+    const messagesRows = s.prepare('SELECT id, chatId, role, content, createdAt, error, model, modelDisplayName, providerName, startedAt, finishedAt, durationMs FROM messages ORDER BY createdAt').all() as any[]
+    const messages: Message[] = messagesRows.map((r) => ({
+      id: r.id,
+      chatId: r.chatId,
+      role: r.role as Role,
+      content: r.content,
+      createdAt: r.createdAt,
+      error: r.error ? true : undefined,
+      model: r.model ?? undefined,
+      modelDisplayName: r.modelDisplayName ?? undefined,
+      providerName: r.providerName ?? undefined,
+      startedAt: r.startedAt ?? undefined,
+      finishedAt: r.finishedAt ?? undefined,
+      durationMs: r.durationMs != null ? Number(r.durationMs) : undefined
+    }))
+
+    const plansRows = s.prepare('SELECT id, chatId, title, steps, createdAt, updatedAt FROM plans').all() as any[]
+    const plans: Plan[] = plansRows.map((r) => ({
+      id: r.id,
+      chatId: r.chatId,
+      title: r.title,
+      steps: JSON.parse(r.steps) as PlanStep[],
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt
+    }))
+
+    const terminals = s.prepare('SELECT id, projectId, name, createdAt, updatedAt FROM terminals').all() as Terminal[]
+
+    const questionsRows = s.prepare('SELECT id, chatId, header, question, options, allowCustom, customPlaceholder, status, answer, selectedOption, createdAt, answeredAt, toolCallId FROM questions').all() as any[]
+    const questions: Question[] = questionsRows.map((r) => ({
+      id: r.id,
+      chatId: r.chatId,
+      header: r.header,
+      question: r.question,
+      options: JSON.parse(r.options) as string[],
+      allowCustom: !!r.allowCustom,
+      customPlaceholder: r.customPlaceholder ?? undefined,
+      status: r.status as 'pending' | 'answered',
+      answer: r.answer ?? undefined,
+      selectedOption: r.selectedOption ?? null,
+      createdAt: r.createdAt,
+      answeredAt: r.answeredAt ?? undefined,
+      toolCallId: r.toolCallId ?? undefined
+    }))
+
+    const activitiesRows = s.prepare('SELECT id, chatId, toolType, toolCallId, args, summary, result, ok, timestamp, expanded FROM activities ORDER BY timestamp').all() as any[]
+    const activities: Activity[] = activitiesRows.map((r) => ({
+      id: r.id,
+      chatId: r.chatId,
+      toolType: r.toolType as ActivityToolType,
+      toolCallId: r.toolCallId,
+      args: JSON.parse(r.args) as Record<string, unknown>,
+      summary: r.summary,
+      result: r.result ?? undefined,
+      ok: r.ok == null ? undefined : !!r.ok,
+      timestamp: r.timestamp,
+      expanded: r.expanded ? true : undefined
+    }))
+
+    const skillsRows = s.prepare('SELECT id, name, note, mainFile, files, projectId, createdAt, updatedAt FROM skills').all() as any[]
+    const skills: Skill[] = skillsRows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      note: r.note,
+      mainFile: r.mainFile,
+      files: JSON.parse(r.files) as string[],
+      projectId: r.projectId ?? undefined,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt ?? undefined
+    }))
+
+    const previews = s.prepare('SELECT id, chatId, port, createdAt, updatedAt FROM previews').all() as Preview[]
+
+    const kvRows = s.prepare('SELECT key, value FROM kv').all() as any[]
+    const kv = new Map(kvRows.map((r) => [r.key, r.value]))
+    const systemPrompt = typeof kv.get('systemPrompt') === 'string' ? kv.get('systemPrompt') as string : ''
+    const planPrompt = typeof kv.get('planPrompt') === 'string' ? kv.get('planPrompt') as string : ''
+    let retrySettings: RetrySettings
+    try {
+      const parsed = kv.get('retrySettings') ? JSON.parse(kv.get('retrySettings') as string) : null
+      const def: RetrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }
+      if (parsed && typeof parsed === 'object') {
+        retrySettings = {
+          enabled: Boolean(parsed.enabled ?? def.enabled),
+          maxRetries: Number(parsed.maxRetries ?? def.maxRetries),
+          baseDelayMs: Number(parsed.baseDelayMs ?? def.baseDelayMs),
+          maxDelayMs: Number(parsed.maxDelayMs ?? def.maxDelayMs),
+          retryOnStatusCodes: Array.isArray(parsed.retryOnStatusCodes) ? parsed.retryOnStatusCodes.filter((x: any) => Number.isInteger(x)) : def.retryOnStatusCodes,
+          stopOnStatusCodes: Array.isArray(parsed.stopOnStatusCodes) ? parsed.stopOnStatusCodes.filter((x: any) => Number.isInteger(x)) : def.stopOnStatusCodes,
+          alwaysRetry: Boolean(parsed.alwaysRetry ?? def.alwaysRetry)
+        }
+      } else retrySettings = def
+    } catch {
+      retrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }
+    }
+
+    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, skills, previews }
+  } catch (e) {
+    console.error('Failed to load from sqlite:', e)
+    return null
+  }
+}
+
+function tryMigrateFromJson(): boolean {
+  if (!fs.existsSync(legacyDbFile)) return false
+  try {
+    const s = ensureDb()
+    // Only migrate if sqlite is empty
+    const hasData = (() => {
+      try {
+        const c = (s.prepare('SELECT COUNT(*) as c FROM projects').get() as any).c
+        if (c > 0) return true
+        const c2 = (s.prepare('SELECT COUNT(*) as c FROM chats').get() as any).c
+        if (c2 > 0) return true
+        const c3 = (s.prepare('SELECT COUNT(*) as c FROM kv').get() as any).c
+        if (c3 > 0) return true
+        return false
+      } catch { return false }
+    })()
+    if (hasData) return false
+
+    const raw = fs.readFileSync(legacyDbFile, 'utf8')
     const parsed = JSON.parse(raw)
     const defaultRetrySettings: RetrySettings = {
       enabled: true,
@@ -265,7 +621,6 @@ export function loadDb(): void {
       messages: Array.isArray(parsed.messages) ? parsed.messages : [],
       providers: Array.isArray(parsed.providers) ? parsed.providers : [],
       models: Array.isArray(parsed.models) ? parsed.models : [],
-      // Legacy field kept (and re-saved) so old settings are never lost.
       systemPrompt: typeof parsed.systemPrompt === 'string' ? parsed.systemPrompt : '',
       planPrompt: typeof parsed.planPrompt === 'string' ? parsed.planPrompt : '',
       plans: Array.isArray(parsed.plans) ? parsed.plans : [],
@@ -299,7 +654,7 @@ export function loadDb(): void {
       })) : [],
       previews: Array.isArray(parsed.previews) ? parsed.previews.filter((p: any) => p && typeof p.id === 'string' && typeof p.chatId === 'string' && Number.isInteger(p.port)) : []
     }
-    // Migrate old skills missing updatedAt / projectId: ensure defaults and deduplicate files
+    // Migrate old skills missing updatedAt / projectId
     let migrated = false
     for (const s of db.skills) {
       if (!s.updatedAt) { s.updatedAt = s.createdAt; migrated = true }
@@ -308,16 +663,57 @@ export function loadDb(): void {
         if (deduped.length !== s.files.length) { s.files = deduped; migrated = true }
       }
     }
-    // Migrate retry settings to include 500 (ResourceExhausted) for Nvidia rate limits
     if (!db.retrySettings.retryOnStatusCodes.includes(500)) {
       db.retrySettings.retryOnStatusCodes = [...new Set([...db.retrySettings.retryOnStatusCodes, 500])].sort((a, b) => a - b)
       migrated = true
     }
     if (seedDefaultSkills()) migrated = true
     if (ensureChatSeqs(db.chats) || migrated) {
-      try { saveDb() } catch {}
+      // will be persisted below
     }
-  } catch {
+    persistToSqlite()
+    // Keep legacy file as backup, rename to .bak if we want
+    try {
+      const bak = legacyDbFile + '.bak'
+      if (!fs.existsSync(bak)) fs.copyFileSync(legacyDbFile, bak)
+    } catch {}
+    console.log(`Migrated legacy ${legacyDbFile} -> ${dbFile}`)
+    return true
+  } catch (e) {
+    console.error('Migration from JSON failed:', e)
+    return false
+  }
+}
+
+export function loadDb(): void {
+  try {
+    const s = ensureDb()
+    // Attempt migration first if sqlite empty and legacy json exists
+    tryMigrateFromJson()
+
+    const loaded = loadFromSqlite(s)
+    if (loaded) {
+      db = loaded
+      // Migrate old skills missing updatedAt / projectId
+      let migrated = false
+      for (const sk of db.skills) {
+        if (!sk.updatedAt) { sk.updatedAt = sk.createdAt; migrated = true }
+        if (Array.isArray(sk.files)) {
+          const deduped = [...new Set(sk.files.map((f: any) => String(f).trim()).filter(Boolean))]
+          if (deduped.length !== sk.files.length) { (sk as any).files = deduped; migrated = true }
+        }
+      }
+      if (!db.retrySettings.retryOnStatusCodes.includes(500)) {
+        db.retrySettings.retryOnStatusCodes = [...new Set([...db.retrySettings.retryOnStatusCodes, 500])].sort((a, b) => a - b)
+        migrated = true
+      }
+      if (seedDefaultSkills()) migrated = true
+      if (ensureChatSeqs(db.chats) || migrated) {
+        try { persistToSqlite() } catch {}
+      }
+      return
+    }
+    // No data in sqlite and no legacy: initialize fresh
     const defaultRetrySettings: RetrySettings = {
       enabled: true,
       maxRetries: 5,
@@ -329,16 +725,37 @@ export function loadDb(): void {
     }
     db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [] }
     if (seedDefaultSkills()) {
-      try { saveDb() } catch {}
+      try { persistToSqlite() } catch {}
+    } else {
+      // ensure kv is persisted even if empty
+      try { persistToSqlite() } catch {}
+    }
+  } catch (e) {
+    console.error('loadDb failed:', e)
+    const defaultRetrySettings: RetrySettings = {
+      enabled: true,
+      maxRetries: 5,
+      baseDelayMs: 1200,
+      maxDelayMs: 30000,
+      retryOnStatusCodes: [429, 500, 502, 503],
+      stopOnStatusCodes: [400, 401, 403, 404],
+      alwaysRetry: false
+    }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [] }
+    if (seedDefaultSkills()) {
+      try { persistToSqlite() } catch {}
     }
   }
 }
 
 export function saveDb(): void {
-  fs.mkdirSync(dataDir, { recursive: true })
-  const tmp = dbFile + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(db, null, 2))
-  fs.renameSync(tmp, dbFile)
+  try {
+    // Ensure directory exists
+    fs.mkdirSync(path.dirname(dbFile), { recursive: true })
+    persistToSqlite()
+  } catch (e) {
+    console.error('saveDb failed:', e)
+  }
 }
 
 export function getDb(): DB {

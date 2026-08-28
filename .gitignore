@@ -2,5 +2,10 @@ node_modules/
 dist/
 dist-server/
 data/
+storage/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.log
 .DS_Store
