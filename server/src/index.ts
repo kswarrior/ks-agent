@@ -780,6 +780,79 @@ app.post('/api/chats/:id/messages', async (c) => {
 
   const project = findProject(chat.projectId)
 
+  // ---- "continue" keyword: resume exactly where previous assistant left off ----
+  // If the user just typed "continue" (or resume/proceed) and the last assistant message
+  // was interrupted/stopped/error, we treat this as a free continuation: no new user
+  // bubble is stored, history is cleaned of stopped markers, and generation resumes
+  // by updating the existing assistant message in place. Any other input (including
+  // "continue and also fix X") falls through to the normal flow but still benefits
+  // from stripped history so the AI can naturally carry on.
+  if (isContinueKeyword(content)) {
+    const allMsgs = messagesOf(chat.id)
+    const lastAssistant = [...allMsgs].reverse().find((m) => m.role === 'assistant')
+    if (lastAssistant) {
+      const stripped = stripInterruptedSuffix(lastAssistant.content)
+      // Update stored message to clean version immediately so history is clean
+      if (lastAssistant.content !== stripped) {
+        lastAssistant.content = stripped
+        if (lastAssistant.error) delete (lastAssistant as any).error
+        // keep original timestamps but ensure content is clean
+        saveDb()
+      }
+      // If after stripping we have something to continue from, or even if empty but
+      // the message was an error/stopped placeholder, we resume in place
+      const shouldResume = true
+      if (shouldResume) {
+        // Ensure chat seq etc.
+        if (chat.seq == null || !Number.isInteger(chat.seq)) {
+          chat.seq = nextChatSeq(chat.projectId)
+          if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
+        }
+        touchChat(chat)
+        // Do NOT clear activities/plans — continuation should preserve progress
+        saveDb()
+        const modelSystemPrompt =
+          (resolvedModel.systemPrompt?.trim()) ||
+          (db.systemPrompt?.trim()) ||
+          PRIMARY_SYSTEM_PROMPT
+        const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
+        const skillMessages = buildSkillSystemMessages(project)
+        // History ends with the (now cleaned) assistant message; add ephemeral continue instruction
+        const history: LLMMessage[] = [
+          { role: 'system', content: modelSystemPrompt },
+          ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
+          ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+          ...skillMessages,
+          ...cleanMessagesForHistory(chat.id),
+          {
+            role: 'user',
+            content:
+              'Continue exactly where you left off. Do not repeat the content already generated — pick up mid-sentence/paragraph if needed and continue until the task is complete. Do not add any preamble like "Continuing...".'
+          }
+        ]
+        const job: GenerationJob = {
+          chatId: chat.id,
+          assistantId: lastAssistant.id,
+          model: resolvedModel.model,
+          modelDisplayName: resolvedModel.displayName,
+          providerName: provider.name,
+          content: stripped,
+          status: 'running',
+          startedAt: lastAssistant.startedAt || new Date().toISOString(),
+          controller: new AbortController(),
+          listeners: new Set(),
+          continuationOf: lastAssistant.id
+        }
+        generations.set(chat.id, job)
+        const agent: AgentSpec | null = project ? { projectPath: project.path } : null
+        void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
+          job.finishedAt = new Date().toISOString()
+        })
+        return c.json({ userMsgId: lastAssistant.id, assistantId: job.assistantId, model: job.model, continued: true })
+      }
+    }
+  }
+
   const userMsg = {
     id: newId(),
     chatId: chat.id,
@@ -815,7 +888,7 @@ app.post('/api/chats/:id/messages', async (c) => {
     ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
     ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
     ...skillMessages,
-    ...messagesOf(chat.id).map((m) => ({ role: m.role as LLMMessage['role'], content: m.content }))
+    ...cleanMessagesForHistory(chat.id)
   ]
 
   const job: GenerationJob = {
@@ -842,6 +915,150 @@ app.post('/api/chats/:id/messages', async (c) => {
   })
 
   return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
+})
+
+/**
+ * POST /api/chats/:id/continue
+ * Freely resumes generation exactly where the previous assistant left off.
+ * - If `content` is omitted or is a pure "continue" keyword, it resumes the
+ *   last assistant message in place (no new user bubble, updates existing).
+ * - If `content` is provided with extra instruction (e.g. "continue and also add tests"),
+ *   it stores that as a new user message and continues normally — but history is
+ *   still cleaned of interruption markers so the AI picks up seamlessly.
+ * In all cases the next input "continue OR any other" will start from the point where it ended.
+ */
+app.post('/api/chats/:id/continue', async (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const rawContent = String(body.content ?? body.instruction ?? body.message ?? '').trim()
+  const modelId = body.modelId ? String(body.modelId) : ''
+  const db = getDb()
+  const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
+  const resolvedModel = modelEntry ?? db.models[0]
+  if (!resolvedModel) return c.json({ error: 'No model configured. Add a provider and model in Settings.' }, 400)
+  const provider = db.providers.find((p) => p.id === resolvedModel.providerId)
+  if (!provider) return c.json({ error: 'Model has no valid provider' }, 400)
+  const runningJob = generations.get(chat.id)
+  if (runningJob && runningJob.status === 'running') return c.json({ error: 'This chat is already generating a reply' }, 409)
+  const project = findProject(chat.projectId)
+  const msgs = messagesOf(chat.id)
+  const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant')
+  if (!lastAssistant) return c.json({ error: 'No assistant message to continue from' }, 400)
+  const isPureContinue = !rawContent || isContinueKeyword(rawContent)
+  if (isPureContinue) {
+    const stripped = stripInterruptedSuffix(lastAssistant.content)
+    if (lastAssistant.content !== stripped) {
+      lastAssistant.content = stripped
+      if ((lastAssistant as any).error) delete (lastAssistant as any).error
+      saveDb()
+    }
+    if (chat.seq == null || !Number.isInteger(chat.seq)) {
+      chat.seq = nextChatSeq(chat.projectId)
+      if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
+    }
+    touchChat(chat)
+    saveDb()
+    const modelSystemPrompt =
+      (resolvedModel.systemPrompt?.trim()) ||
+      (db.systemPrompt?.trim()) ||
+      PRIMARY_SYSTEM_PROMPT
+    const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
+    const skillMessages = buildSkillSystemMessages(project)
+    const history: LLMMessage[] = [
+      { role: 'system', content: modelSystemPrompt },
+      ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
+      ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+      ...skillMessages,
+      ...cleanMessagesForHistory(chat.id),
+      {
+        role: 'user',
+        content:
+          'Continue exactly where you left off. Do not repeat the content already generated — pick up mid-sentence/paragraph if needed and continue until the task is complete. Do not add any preamble like "Continuing...".'
+      }
+    ]
+    const job: GenerationJob = {
+      chatId: chat.id,
+      assistantId: lastAssistant.id,
+      model: resolvedModel.model,
+      modelDisplayName: resolvedModel.displayName,
+      providerName: provider.name,
+      content: stripped,
+      status: 'running',
+      startedAt: lastAssistant.startedAt || new Date().toISOString(),
+      controller: new AbortController(),
+      listeners: new Set(),
+      continuationOf: lastAssistant.id
+    }
+    generations.set(chat.id, job)
+    const agent: AgentSpec | null = project ? { projectPath: project.path } : null
+    void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
+      job.finishedAt = new Date().toISOString()
+    })
+    return c.json({ assistantId: job.assistantId, model: job.model, continued: true, content: stripped })
+  } else {
+    // "any other" input with extra instruction — store as new user message and generate fresh,
+    // but history is cleaned so AI continues seamlessly from where it ended.
+    const stripped = stripInterruptedSuffix(lastAssistant.content)
+    if (lastAssistant.content !== stripped) {
+      lastAssistant.content = stripped
+      if ((lastAssistant as any).error) delete (lastAssistant as any).error
+      saveDb()
+    }
+    const userMsg = {
+      id: newId(),
+      chatId: chat.id,
+      role: 'user' as const,
+      content: rawContent,
+      createdAt: new Date().toISOString()
+    }
+    db.messages.push(userMsg)
+    if (chat.seq == null || !Number.isInteger(chat.seq)) {
+      chat.seq = nextChatSeq(chat.projectId)
+      if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
+    }
+    touchChat(chat)
+    // For "any other" we still want seamless pickup, so do NOT clear activities if last was interrupted
+    // Check if last generation was interrupted — if so, preserve plan/activities
+    const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || (lastAssistant as any).error
+    if (!wasInterrupted) {
+      // @ts-ignore
+      db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
+    }
+    saveDb()
+    const modelSystemPrompt =
+      (resolvedModel.systemPrompt?.trim()) ||
+      (db.systemPrompt?.trim()) ||
+      PRIMARY_SYSTEM_PROMPT
+    const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
+    const skillMessages = buildSkillSystemMessages(project)
+    const history: LLMMessage[] = [
+      { role: 'system', content: modelSystemPrompt },
+      ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
+      ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+      ...skillMessages,
+      ...cleanMessagesForHistory(chat.id)
+    ]
+    const job: GenerationJob = {
+      chatId: chat.id,
+      assistantId: newId(),
+      model: resolvedModel.model,
+      modelDisplayName: resolvedModel.displayName,
+      providerName: provider.name,
+      content: '',
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      controller: new AbortController(),
+      listeners: new Set()
+    }
+    generations.set(chat.id, job)
+    void generateAndPersistTitle(chat, rawContent, provider, resolvedModel.model).catch(() => {})
+    const agent: AgentSpec | null = project ? { projectPath: project.path } : null
+    void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
+      job.finishedAt = new Date().toISOString()
+    })
+    return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
+  }
 })
 
 // ---------------- Settings: providers & models ----------------
