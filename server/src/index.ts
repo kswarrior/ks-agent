@@ -1097,6 +1097,7 @@ function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
   const msgs: LLMMessage[] = []
   const MAX_FILE_BYTES = 12 * 1024
   const MAX_TOTAL_CHARS = 12000
+  const skillsDir = path.join(process.cwd(), 'skills')
   let totalChars = 0
   for (const skill of skills) {
     let basePath: string | null = null
@@ -1105,16 +1106,42 @@ function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
       if (p) basePath = p.path
     }
     if (!basePath && project) basePath = project.path
-    if (!basePath) continue
+    // Try to load main file: first via project, then via global skills/ folder (for default skills)
     let mainContent: string | null = null
     try {
-      const abs = resolveInProject(basePath, skill.mainFile)
+      let abs: string | null = null
+      if (basePath) abs = resolveInProject(basePath, skill.mainFile)
       if (abs && fs.existsSync(abs)) {
         const stat = fs.statSync(abs)
         if (stat.isFile() && stat.size <= 100 * 1024) {
           const buf = fs.readFileSync(abs, 'utf8')
           if (!buf.includes('\0')) {
             mainContent = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
+          }
+        }
+      }
+      if (!mainContent) {
+        const fallback = path.join(skillsDir, path.basename(skill.mainFile))
+        if (fs.existsSync(fallback)) {
+          const stat = fs.statSync(fallback)
+          if (stat.isFile() && stat.size <= 100 * 1024) {
+            const buf = fs.readFileSync(fallback, 'utf8')
+            if (!buf.includes('\0')) {
+              mainContent = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
+            }
+          }
+        }
+      }
+      // Also try direct skillsDir + mainFile if it contains subpath
+      if (!mainContent) {
+        const direct = path.join(skillsDir, skill.mainFile)
+        if (direct !== path.join(skillsDir, path.basename(skill.mainFile)) && fs.existsSync(direct)) {
+          const stat = fs.statSync(direct)
+          if (stat.isFile() && stat.size <= 100 * 1024) {
+            const buf = fs.readFileSync(direct, 'utf8')
+            if (!buf.includes('\0')) {
+              mainContent = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
+            }
           }
         }
       }
@@ -1134,14 +1161,51 @@ function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
         if (rel === skill.mainFile) continue
         if (totalChars >= MAX_TOTAL_CHARS) break
         try {
-          const abs2 = resolveInProject(basePath, rel)
-          if (!abs2 || !fs.existsSync(abs2)) continue
-          const stat2 = fs.statSync(abs2)
-          if (!stat2.isFile() || stat2.size > 50 * 1024) continue
-          const c2 = fs.readFileSync(abs2, 'utf8')
-          if (c2.includes('\0')) continue
-          const preview = c2.slice(0, 2000)
-          const addition = `\n\n--- ${rel} ---\n${preview}`
+          let found = false
+          let previewText: string | null = null
+          // Try project path first
+          if (basePath) {
+            const abs2 = resolveInProject(basePath, rel)
+            if (abs2 && fs.existsSync(abs2)) {
+              const stat2 = fs.statSync(abs2)
+              if (stat2.isFile() && stat2.size <= 50 * 1024) {
+                const c2 = fs.readFileSync(abs2, 'utf8')
+                if (!c2.includes('\0')) {
+                  previewText = c2.slice(0, 2000)
+                  found = true
+                }
+              }
+            }
+          }
+          // Fallback to global skills folder
+          if (!found) {
+            const fallback2 = path.join(skillsDir, path.basename(rel))
+            if (fs.existsSync(fallback2)) {
+              const stat2 = fs.statSync(fallback2)
+              if (stat2.isFile() && stat2.size <= 50 * 1024) {
+                const c2 = fs.readFileSync(fallback2, 'utf8')
+                if (!c2.includes('\0')) {
+                  previewText = c2.slice(0, 2000)
+                  found = true
+                }
+              }
+            }
+            if (!found) {
+              const direct2 = path.join(skillsDir, rel)
+              if (direct2 !== fallback2 && fs.existsSync(direct2)) {
+                const stat2 = fs.statSync(direct2)
+                if (stat2.isFile() && stat2.size <= 50 * 1024) {
+                  const c2 = fs.readFileSync(direct2, 'utf8')
+                  if (!c2.includes('\0')) {
+                    previewText = c2.slice(0, 2000)
+                    found = true
+                  }
+                }
+              }
+            }
+          }
+          if (!found || !previewText) continue
+          const addition = `\n\n--- ${rel} ---\n${previewText}`
           if (block.length + addition.length + totalChars > MAX_TOTAL_CHARS + 5000) continue
           block += addition
         } catch {}
