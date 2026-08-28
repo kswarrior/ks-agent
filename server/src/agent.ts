@@ -36,6 +36,8 @@ export const PRIMARY_SYSTEM_PROMPT =
 'QUESTIONS: when required information/choice/confirmation is genuinely missing, ONLY use ask_question; never ask in plain chat. ' +
 'Dangerous-command approval is handled automatically by the tool. ' +
 
+'PREVIEW: if the task builds, runs, or modifies a website, web app, frontend, or any service that is previewable on a port (e.g. Vite, Next.js, React, Vue, static server on 3000/5173/8000/8080) and the service is actually running and reachable after verification, you MUST call the open_preview tool with the exact port number after the final task is complete. The preview is saved per chat like the plan and stays active for that chat — one live preview per chat. Only call it once at the very end when a previewable service is truly running; do not call it for non-previewable tasks. ' +
+
 'GREETING: answer greetings briefly without explore/plan. ' +
 'FINAL: briefly state changes and verified results; mention limitations only when real.';
 
@@ -48,6 +50,7 @@ export const DEFAULT_PLAN_PROMPT =
 'Do not stop early or claim success without evidence. ' +
 'Preserve existing code, user changes, architecture, security, and unrelated files. ' +
 'Use ask_question for required choices/info; never ask questions in plain chat. ' +
+'Preview rule: if the final result is a previewable website/service on a port and it is running after verification, call open_preview with the port — saved per chat like plan. ' +
 'For greetings, reply briefly with no workflow.';
 
 const MAX_TOOL_ROUNDS = 25
