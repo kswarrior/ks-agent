@@ -473,7 +473,18 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           </button>
         </div>
 
-        <div className="tabs">
+        <div
+          className="tabs"
+          onWheel={(e) => {
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+              const el = e.currentTarget
+              if (el.scrollWidth > el.clientWidth) {
+                e.preventDefault()
+                el.scrollLeft += e.deltaY
+              }
+            }
+          }}
+        >
           <button className={`tab${tab === 'providers' ? ' active' : ''}`} onClick={() => { setTab('providers'); setError(null) }}>
             Providers
           </button>

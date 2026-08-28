@@ -434,7 +434,18 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
   return (
     <>
       <aside className={`rsb${open ? ' open' : ''}`}>
-        <div className="tabs rsb-tabs">
+        <div
+          className="tabs rsb-tabs"
+          onWheel={(e) => {
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+              const el = e.currentTarget
+              if (el.scrollWidth > el.clientWidth) {
+                e.preventDefault()
+                el.scrollLeft += e.deltaY
+              }
+            }
+          }}
+        >
           {TABS.map((t) => {
             const isActivity = t.id === 'activity'
             return (
