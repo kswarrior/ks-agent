@@ -181,12 +181,31 @@ function ensureDb(): Database.Database {
   if (sqlite) return sqlite
   fs.mkdirSync(path.dirname(dbFile), { recursive: true })
   sqlite = new Database(dbFile)
-  // WAL for concurrency, foreign_keys for integrity
+  // WAL for concurrency, foreign_keys for integrity, busy timeout to avoid SQLITE_BUSY on concurrent access
   try { sqlite.pragma('journal_mode = WAL') } catch {}
+  try { sqlite.pragma('busy_timeout = 5000') } catch {}
+  try { sqlite.pragma('synchronous = NORMAL') } catch {}
+  try { sqlite.pragma('wal_autocheckpoint = 1000') } catch {}
   try { sqlite.pragma('foreign_keys = ON') } catch {}
   initSchema(sqlite)
+  // Re-ensure FK enabled after init (initSchema may have been run on existing DB)
+  try { sqlite.pragma('foreign_keys = ON') } catch {}
   return sqlite
 }
+
+export function closeDb(): void {
+  if (!sqlite) return
+  try { sqlite.pragma('wal_checkpoint(TRUNCATE)') } catch {}
+  try { sqlite.close() } catch {}
+  sqlite = null
+}
+
+// Graceful shutdown: checkpoint WAL and close handle so no WAL file lingers with uncheckpointed data
+try {
+  process.on('SIGINT', () => { try { closeDb() } catch {} })
+  process.on('SIGTERM', () => { try { closeDb() } catch {} })
+  process.on('beforeExit', () => { try { closeDb() } catch {} })
+} catch {}
 
 function initSchema(s: Database.Database): void {
   s.exec(`
@@ -300,6 +319,7 @@ function initSchema(s: Database.Database): void {
       updatedAt TEXT,
       FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE SET NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_skills_projectId ON skills(projectId);
     CREATE TABLE IF NOT EXISTS previews (
       id TEXT PRIMARY KEY,
       chatId TEXT NOT NULL,
