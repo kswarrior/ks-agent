@@ -54,7 +54,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [stopOnInput, setStopOnInput] = useState('')
   const [skills, setSkills] = useState<Skill[]>([])
   const [showSkillForm, setShowSkillForm] = useState(false)
-  const [skillForm, setSkillForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[] })
+  const [skillForm, setSkillForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[], projectId: '' })
+  const [skillEdit, setSkillEdit] = useState<Skill | null>(null)
+  const [skillEditForm, setSkillEditForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[], projectId: '' })
   const [skillFileBrowserOpen, setSkillFileBrowserOpen] = useState(false)
   const [skillFileBrowserProject, setSkillFileBrowserProject] = useState<string | null>(null)
   const [skillProjects, setSkillProjects] = useState<Project[]>([])
@@ -78,6 +80,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       setModelEdit(null)
       setShowSkillForm(false)
       setSkillFileBrowserOpen(false)
+      setSkillEdit(null)
+      setSkillPickerDir('')
+      setSkillPickerEntries([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])

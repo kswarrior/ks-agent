@@ -765,10 +765,12 @@ app.post('/api/chats/:id/messages', async (c) => {
     (db.systemPrompt?.trim()) ||
     PRIMARY_SYSTEM_PROMPT
   const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
+  const skillMessages = buildSkillSystemMessages(project)
   const history: LLMMessage[] = [
     { role: 'system', content: modelSystemPrompt },
     ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
     ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+    ...skillMessages,
     ...messagesOf(chat.id).map((m) => ({ role: m.role as LLMMessage['role'], content: m.content }))
   ]
 
@@ -1074,6 +1076,76 @@ app.patch('/api/settings/skills/:id', async (c) => {
   saveDb()
   return c.json(skill)
 })
+
+function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
+  const skills = getSkills()
+  if (skills.length === 0) return []
+  const msgs: LLMMessage[] = []
+  const MAX_FILE_BYTES = 12 * 1024
+  const MAX_TOTAL_CHARS = 12000
+  let totalChars = 0
+  for (const skill of skills) {
+    let basePath: string | null = null
+    if (skill.projectId) {
+      const p = findProject(skill.projectId)
+      if (p) basePath = p.path
+    }
+    if (!basePath && project) basePath = project.path
+    if (!basePath) continue
+    let mainContent: string | null = null
+    try {
+      const abs = resolveInProject(basePath, skill.mainFile)
+      if (abs && fs.existsSync(abs)) {
+        const stat = fs.statSync(abs)
+        if (stat.isFile() && stat.size <= 100 * 1024) {
+          const buf = fs.readFileSync(abs, 'utf8')
+          if (!buf.includes('\0')) {
+            mainContent = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
+          }
+        }
+      }
+    } catch {}
+    let block = `Skill: ${skill.name}`
+    if (skill.note) block += ` — ${skill.note}`
+    block += `\nMain file: ${skill.mainFile}`
+    if (skill.files.length) block += `\nRelated files: ${skill.files.join(', ')}`
+    if (mainContent) {
+      const snippet = mainContent.slice(0, 8000)
+      block += `\n\n--- Content of ${skill.mainFile} ---\n${snippet}\n--- End ${skill.mainFile} ---`
+    } else {
+      block += `\n\n(Note: main file content not available at build time; use list_files/read_file tools to load "${skill.mainFile}" and related files when relevant)`
+    }
+    if (skill.files.length && totalChars < MAX_TOTAL_CHARS) {
+      for (const rel of skill.files.slice(0, 5)) {
+        if (rel === skill.mainFile) continue
+        if (totalChars >= MAX_TOTAL_CHARS) break
+        try {
+          const abs2 = resolveInProject(basePath, rel)
+          if (!abs2 || !fs.existsSync(abs2)) continue
+          const stat2 = fs.statSync(abs2)
+          if (!stat2.isFile() || stat2.size > 50 * 1024) continue
+          const c2 = fs.readFileSync(abs2, 'utf8')
+          if (c2.includes('\0')) continue
+          const preview = c2.slice(0, 2000)
+          const addition = `\n\n--- ${rel} ---\n${preview}`
+          if (block.length + addition.length + totalChars > MAX_TOTAL_CHARS + 5000) continue
+          block += addition
+        } catch {}
+      }
+    }
+    if (totalChars + block.length > MAX_TOTAL_CHARS + 8000) {
+      const short = `Skill: ${skill.name}${skill.note ? ` — ${skill.note}` : ''}\nMain: ${skill.mainFile}`
+      if (short.length + totalChars > MAX_TOTAL_CHARS + 8000) break
+      msgs.push({ role: 'system', content: short })
+      totalChars += short.length
+      continue
+    }
+    msgs.push({ role: 'system', content: block })
+    totalChars += block.length
+    if (totalChars > MAX_TOTAL_CHARS + 8000) break
+  }
+  return msgs
+}
 
 // ---------------- Project files ----------------
 
