@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as api from '../api'
 import type { ModelEntry, Provider, RetrySettings, Skill, Project, FileEntry } from '../types'
 import { useDialogs } from '../dialogs'
@@ -66,6 +66,49 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [error, setError] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
+
+  function handleTabsWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      const el = e.currentTarget
+      if (el.scrollWidth > el.clientWidth) {
+        e.preventDefault()
+        el.scrollLeft += e.deltaY
+      }
+    }
+  }
+
+  function handleTabsPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    if (el.scrollWidth <= el.clientWidth) return
+    dragRef.current = { active: true, startX: e.clientX, startScrollLeft: el.scrollLeft, moved: false }
+    el.setPointerCapture(e.pointerId)
+    el.style.cursor = 'grabbing'
+    el.style.userSelect = 'none'
+  }
+
+  function handleTabsPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current
+    const el = e.currentTarget
+    if (!drag?.active) return
+    const dx = e.clientX - drag.startX
+    if (Math.abs(dx) > 2) drag.moved = true
+    el.scrollLeft = drag.startScrollLeft - dx
+  }
+
+  function handleTabsPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    const drag = dragRef.current
+    dragRef.current = null
+    el.style.cursor = ''
+    el.style.userSelect = ''
+    try { el.releasePointerCapture(e.pointerId) } catch {}
+    if (drag?.moved) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }
 
   useEffect(() => {
     if (open) {

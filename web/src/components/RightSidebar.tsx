@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Plan, Project, Terminal, Activity } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
@@ -430,26 +430,76 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
   const editCount = activities.filter(a => a.toolType === 'edit_file').length
   const readCount = activities.filter(a => a.toolType === 'read_file').length
   const hasRunning = activities.some(a => a.ok === undefined)
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
+
+  function handleTabsWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      const el = e.currentTarget
+      if (el.scrollWidth > el.clientWidth) {
+        e.preventDefault()
+        el.scrollLeft += e.deltaY
+      }
+    }
+  }
+
+  function handleTabsPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    if (el.scrollWidth <= el.clientWidth) return
+    dragRef.current = { active: true, startX: e.clientX, startScrollLeft: el.scrollLeft, moved: false }
+    el.setPointerCapture(e.pointerId)
+    el.style.cursor = 'grabbing'
+    el.style.userSelect = 'none'
+  }
+
+  function handleTabsPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current
+    const el = e.currentTarget
+    if (!drag?.active) return
+    const dx = e.clientX - drag.startX
+    if (Math.abs(dx) > 2) drag.moved = true
+    el.scrollLeft = drag.startScrollLeft - dx
+  }
+
+  function handleTabsPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    const drag = dragRef.current
+    dragRef.current = null
+    el.style.cursor = ''
+    el.style.userSelect = ''
+    try { el.releasePointerCapture(e.pointerId) } catch {}
+    if (drag?.moved) {
+      // prevent accidental tab click after drag
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }
 
   return (
     <>
       <aside className={`rsb${open ? ' open' : ''}`}>
         <div
+          ref={tabsRef}
           className="tabs rsb-tabs"
-          onWheel={(e) => {
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-              const el = e.currentTarget
-              if (el.scrollWidth > el.clientWidth) {
-                e.preventDefault()
-                el.scrollLeft += e.deltaY
-              }
-            }
-          }}
+          onWheel={handleTabsWheel}
+          onPointerDown={handleTabsPointerDown}
+          onPointerMove={handleTabsPointerMove}
+          onPointerUp={handleTabsPointerUp}
+          onPointerLeave={handleTabsPointerUp}
         >
           {TABS.map((t) => {
             const isActivity = t.id === 'activity'
             return (
-              <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+              <button
+                key={t.id}
+                className={`tab${tab === t.id ? ' active' : ''}`}
+                onClick={(e) => {
+                  // ignore click if it was a drag
+                  if (dragRef.current?.moved) return
+                  setTab(t.id)
+                  e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+                }}
+              >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   {t.label}
                   {isActivity && activityCount > 0 && (
