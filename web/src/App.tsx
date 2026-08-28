@@ -36,6 +36,8 @@ function KsAgent() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [showPreviewBanner, setShowPreviewBanner] = useState(false)
+  const previewBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Keep the right workspace panel always open whenever the screen is wide
   // enough for it to fit next to the left sidebar and the composer input.
