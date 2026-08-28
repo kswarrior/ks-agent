@@ -48,19 +48,20 @@ loadDb()
 // stale (previous process crashed or retry left it hanging). Revert to pending
 // so UI doesn't stay stuck on "Executing 3/7" after restart.
 try {
-  const db = getDb()
-  let fixed = false
-  for (const plan of db.plans) {
-    for (const step of plan.steps) {
+  const mdb = getDb()
+  let mfixed = false
+  for (const mplan of mdb.plans) {
+    let pfixed = false
+    for (const step of mplan.steps) {
       if (step.status === 'working') {
         step.status = 'pending'
-        fixed = true
+        pfixed = true
+        mfixed = true
       }
     }
-    if (fixed) plan.updatedAt = new Date().toISOString()
+    if (pfixed) mplan.updatedAt = new Date().toISOString()
   }
-  if (fixed) {
-    const { saveDb } = await import('./store.js')
+  if (mfixed) {
     saveDb()
     console.log('[startup] Reverted stale working plan steps to pending')
   }
