@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reference - Documentation</title>
+  <link rel="stylesheet" href="/styles.css"></head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg>
+            <use href="#icon-book"></use>
+          </svg>
+        </div>
+        <a href="/" class="brand-link">Docs Dashboard</a>
+      </div>
+      <div class="nav">
+        <div class="nav-section">Categories</div>
+        <a href="/" class="nav-item">
+          <svg><use href="#icon-book"></use></svg>
+          All Docs
+        </a>
+        <a href="/guides" class="nav-item">
+          <svg><use href="#icon-doc"></use></svg>
+          Guides
+        </a>
+        <a href="/reference" class="nav-item active">
+          <svg><use href="#icon-clock"></use></svg>
+          Reference
+        </a>
+        <a href="/tutorials" class="nav-item">
+          <svg><use href="#icon-star"></use></svg>
+          Tutorials
+        </a>
+        <a href="/sdks" class="nav-item">
+          <svg><use href="#icon-search"></use></svg>
+          SDKs
+        </a>
+      </div>
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div class="avatar">AR</div>
+          <div class="user-meta">
+            <div class="user-name">Alex Rivera</div>
+            <div class="user-role">Admin</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <div class="topbar">
+        <div>
+          <h1>API Reference</h1>
+          <div class="subtitle">Complete API documentation and reference</div>
+        </div>
+        <div class="topbar-actions">
+          <div class="searchbox-wrap">
+            <svg class="search-icon"><use href="#icon-search"></use></svg>
+            <input type="text" id="searchInput" class="searchbox" placeholder="Search reference...">
+          </div>
+          <button class="btn primary">New Reference</button>
+        </div>
+      </div>
+
+      <div class="filterbar">
+        <select id="statusFilter" class="select">
+          <option value="all">All Status</option>
+          <option value="published">Published</option>
+          <option value="review">In Review</option>
+          <option value="draft">Draft</option>
+        </select>
+        <select id="tagFilter" class="select">
+          <option value="all">All Tags</option>
+        </select>
+        <select id="sortSelect" class="select">
+          <option value="date-desc">Date (Newest)</option>
+          <option value="date-asc">Date (Oldest)</option>
+          <option value="title-asc">Title (A-Z)</option>
+          <option value="title-desc">Title (Z-A)</option>
+        </select>
+        <span id="resultCount" class="result-count"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="selectAll"></th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Category</th>
+              <th>Tags</th>
+              <th>Author</th>
+              <th>Date</th>
+              <th>Views</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <!-- Rows will be populated by script.js -->
+          </tbody>
+        </table>
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon">📄</div>
+          <div>No documents found matching your criteria</div>
+        </div>
+      </div>
+
+      <div id="pager" class="pager">
+        <div class="pager-info"></div>
+        <div class="pager-buttons">
+          <button id="prevBtn">← Prev</button>
+          <button id="nextBtn">Next →</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Tag cloud sidebar -->
+  <div class="tags-cloud">
+    <!-- Tags will be populated by script.js -->
+  </div>
+
+  <script src="/script.js"></script>
+</body>
+</html>
