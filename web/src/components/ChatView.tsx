@@ -148,6 +148,7 @@ interface Props {
   onAnswerQuestion: (questionId: string, answer: string) => Promise<void>
   plan?: Plan | null
   activities?: Activity[]
+  onContinue?: () => void
 }
 
 export function ChatView(props: Props) {
@@ -251,6 +252,9 @@ export function ChatView(props: Props) {
   }, [plan, activities, props.streaming])
 
   const { hasExplore, workingStep, workingIdx, totalSteps, doneSteps, isPlanDone, chatStage, chatStageLabel } = flowStatus
+
+  const lastAssistantMsg = props.messages.length > 0 ? props.messages[props.messages.length - 1] : null
+  const isInterrupted = !props.streaming && !!lastAssistantMsg && lastAssistantMsg.role === 'assistant' && (!!lastAssistantMsg.error || /\n\n_\[stopped\]_\s*$/.test(lastAssistantMsg.content) || /\n\n_\[stream interrupted:/.test(lastAssistantMsg.content))
 
   return (
     <>

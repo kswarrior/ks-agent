@@ -571,6 +571,85 @@ function KsAgent() {
     if (window.innerWidth < 900) setSidebarOpen(false)
   }
 
+  function stripInterrupted(content: string): string {
+    let c = content
+    c = c.replace(/\n\n_\[stopped\]_\s*$/g, '')
+    c = c.replace(/\n\n_\[stream interrupted:[^\]]*\]_\s*$/g, '')
+    c = c.replace(/\n\n_\[truncated[^\]]*\]_\s*$/g, '')
+    return c.trimEnd()
+  }
+  function isContinueKeyword(text: string): boolean {
+    const t = text.trim().toLowerCase()
+    return /^(continue|resume|proceed|keep going|go on|cont\.?|continue please|please continue)[.!]*$/.test(t)
+  }
+
+  async function handleContinue(extraContent?: string) {
+    const chatId = activeChatId
+    if (!chatId || !selectedModelId) {
+      if (!selectedModelId) toast('No model selected. Add one in Settings.', 'error')
+      return
+    }
+    if (sendingRef.current.has(chatId)) return
+    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+    if (!lastAssistant) {
+      toast('No previous response to continue', 'error')
+      return
+    }
+    const stripped = stripInterrupted(lastAssistant.content)
+    // Pure continue (no extraContent) → update in place, hide old bubble to avoid duplication
+    const isPure = !extraContent || !extraContent.trim() || isContinueKeyword(extraContent)
+    if (isPure) {
+      // Optimistically hide interrupted bubble; streaming will show merged content
+      setMessages((prev) => prev.filter((m) => m.id !== lastAssistant.id))
+      setStreams((prev) => ({ ...prev, [chatId]: stripped }))
+    } else {
+      const tempUserMsg: Message = {
+        id: 'tmp-' + Date.now(),
+        chatId,
+        role: 'user',
+        content: extraContent,
+        createdAt: new Date().toISOString()
+      }
+      setMessages((prev) => [...prev, tempUserMsg])
+      setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
+    }
+    sendingRef.current.add(chatId)
+    try {
+      if (isPure) {
+        await api.continueChat(chatId, '', selectedModelId)
+      } else {
+        await api.continueChat(chatId, extraContent, selectedModelId)
+      }
+      // For pure continue preserve plan/activities so AI picks up where it left off
+      if (!isPure) {
+        // For "any other" with extra instruction but still continuation, preserve if was interrupted
+        const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || !!(lastAssistant as any).error
+        if (!wasInterrupted) {
+          setPlans((prev) => {
+            const n = { ...prev }
+            delete n[chatId]
+            return n
+          })
+          setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
+        }
+      }
+      trackGeneration(chatId)
+    } catch (e: any) {
+      toast(e.message, 'error')
+      setStreams((prev) => {
+        const next = { ...prev }
+        delete next[chatId]
+        return next
+      })
+      try {
+        const fresh = await api.listMessages(chatId)
+        if (activeChatIdRef.current === chatId) setMessages(fresh)
+      } catch {}
+    } finally {
+      sendingRef.current.delete(chatId)
+    }
+  }
+
   // ---- sending ----
   async function send(content: string) {
     if (!selectedModelId) {
@@ -585,8 +664,25 @@ function KsAgent() {
 
     let chatId = activeChatId
 
+    // If user typed pure "continue" and there's a previous assistant, delegate to continuation flow
+    // so it resumes exactly where it ended without creating a new user bubble.
+    if (chatId && isContinueKeyword(content)) {
+      const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+      if (lastAssistant) {
+        return handleContinue(content)
+      }
+    }
+
     // Prevent concurrent sends for the same chat
     if (chatId && sendingRef.current.has(chatId)) return
+
+    // Capture whether previous assistant was interrupted for seamless "any other" continuation
+    const prevAssistantForSend = chatId ? [...messages].reverse().find((m) => m.role === 'assistant') : null
+    const prevWasInterruptedForSend = prevAssistantForSend
+      ? /\n\n_\[stopped\]_\s*$/.test(prevAssistantForSend.content) ||
+        /\n\n_\[stream interrupted:/.test(prevAssistantForSend.content) ||
+        !!(prevAssistantForSend as any).error
+      : false
 
     if (!chatId) {
       creatingChatRef.current = true
@@ -634,12 +730,23 @@ function KsAgent() {
       // Without this, hasExplore stays true and old plan (done) makes UI
       // show stale "Executing 7/6" instead of the fresh flow.
       // Do it after send succeeds so a failed send doesn't lose the old plan.
-      setPlans((prev) => {
-        const n = { ...prev }
-        delete n[chatId]
-        return n
-      })
-      setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
+      // But if previous was interrupted and user said "any other", keep for seamless continuation.
+      if (!prevWasInterruptedForSend) {
+        setPlans((prev) => {
+          const n = { ...prev }
+          delete n[chatId]
+          return n
+        })
+        setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
+      } else {
+        // Clean stale stopped marker from displayed message optimistically
+        if (prevAssistantForSend) {
+          const cleaned = stripInterrupted(prevAssistantForSend.content)
+          if (cleaned !== prevAssistantForSend.content) {
+            setMessages((prev) => prev.map((m) => (m.id === prevAssistantForSend.id ? { ...m, content: cleaned, error: undefined } : m)))
+          }
+        }
+      }
       trackGeneration(chatId)
     } catch (e: any) {
       toast(e.message, 'error')
