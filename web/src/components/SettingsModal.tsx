@@ -982,7 +982,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   checked={!!retryDraft.alwaysRetry}
                   onChange={(e) => setRetryDraft({ ...retryDraft!, alwaysRetry: e.target.checked })}
                 />
-                Retry always — retry on any error (ignores status codes), also uses delay below
+                Retry always — retry on any error (ignores retryOn codes, but 4xx stop codes still apply except for capacity/timeout)
               </label>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -1094,7 +1094,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
 
               {retryDraft.alwaysRetry && (
                 <p className="hint" style={{ marginBottom: 16, color: 'var(--text-dim)' }}>
-                  “Retry always” is on — the agent will retry on any error up to Max retries, using the delay above. Status-code filters are ignored.
+                  “Retry always” is on — the agent will retry on any error up to Max retries, using the delay above. RetryOn codes are ignored, but 4xx stop codes (400/401/403/404) still fail fast unless the error is a capacity/timeout.
                 </p>
               )}
 

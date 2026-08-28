@@ -44,6 +44,29 @@ import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, resolvePendingQuestion, run
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 
 loadDb()
+// On startup, any plan step left as "working" but with no active generation is
+// stale (previous process crashed or retry left it hanging). Revert to pending
+// so UI doesn't stay stuck on "Executing 3/7" after restart.
+try {
+  const db = getDb()
+  let fixed = false
+  for (const plan of db.plans) {
+    for (const step of plan.steps) {
+      if (step.status === 'working') {
+        step.status = 'pending'
+        fixed = true
+      }
+    }
+    if (fixed) plan.updatedAt = new Date().toISOString()
+  }
+  if (fixed) {
+    const { saveDb } = await import('./store.js')
+    saveDb()
+    console.log('[startup] Reverted stale working plan steps to pending')
+  }
+} catch (e) {
+  console.warn('[startup] Failed to clean stale plan steps', e)
+}
 
 // ---------------- PTY sessions (real Linux terminal) ----------------
 
