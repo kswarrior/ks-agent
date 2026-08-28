@@ -517,30 +517,67 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
         </div>
 
         <div
+          ref={tabsRef}
           className="tabs"
-          onWheel={(e) => {
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-              const el = e.currentTarget
-              if (el.scrollWidth > el.clientWidth) {
-                e.preventDefault()
-                el.scrollLeft += e.deltaY
-              }
-            }
-          }}
+          onWheel={handleTabsWheel}
+          onPointerDown={handleTabsPointerDown}
+          onPointerMove={handleTabsPointerMove}
+          onPointerUp={handleTabsPointerUp}
+          onPointerLeave={handleTabsPointerUp}
         >
-          <button className={`tab${tab === 'providers' ? ' active' : ''}`} onClick={() => { setTab('providers'); setError(null) }}>
+          <button
+            className={`tab${tab === 'providers' ? ' active' : ''}`}
+            onClick={(e) => {
+              if (dragRef.current?.moved) return
+              setTab('providers')
+              setError(null)
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }}
+          >
             Providers
           </button>
-          <button className={`tab${tab === 'models' ? ' active' : ''}`} onClick={() => { setTab('models'); setError(null) }}>
+          <button
+            className={`tab${tab === 'models' ? ' active' : ''}`}
+            onClick={(e) => {
+              if (dragRef.current?.moved) return
+              setTab('models')
+              setError(null)
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }}
+          >
             Models
           </button>
-          <button className={`tab${tab === 'prompt' ? ' active' : ''}`} onClick={() => { setTab('prompt'); setError(null) }}>
+          <button
+            className={`tab${tab === 'prompt' ? ' active' : ''}`}
+            onClick={(e) => {
+              if (dragRef.current?.moved) return
+              setTab('prompt')
+              setError(null)
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }}
+          >
             Prompts
           </button>
-          <button className={`tab${tab === 'retry' ? ' active' : ''}`} onClick={() => { setTab('retry'); setError(null) }}>
+          <button
+            className={`tab${tab === 'retry' ? ' active' : ''}`}
+            onClick={(e) => {
+              if (dragRef.current?.moved) return
+              setTab('retry')
+              setError(null)
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }}
+          >
             Retry
           </button>
-          <button className={`tab${tab === 'skills' ? ' active' : ''}`} onClick={() => { setTab('skills'); setError(null) }}>
+          <button
+            className={`tab${tab === 'skills' ? ' active' : ''}`}
+            onClick={(e) => {
+              if (dragRef.current?.moved) return
+              setTab('skills')
+              setError(null)
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }}
+          >
             Skills
           </button>
         </div>
