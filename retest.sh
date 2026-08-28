@@ -40,16 +40,28 @@ if [[ ! -f dist/index.html || ! -f dist-server/index.js ]]; then
 fi
 
 echo "Starting KS Agent on port ${PORT}..."
+# Default to storage/ksagent.db at agent root (where skills/web/server live)
+# KS_SQLITE_PATH takes precedence, else KS_DATA_DIR (legacy), else storage
+DEFAULT_SQLITE="$PWD/storage/ksagent.db"
+if [[ -n "${KS_SQLITE_PATH:-}" ]]; then
+  SQLITE_PATH="$KS_SQLITE_PATH"
+elif [[ -n "${KS_DATA_DIR:-}" ]]; then
+  SQLITE_PATH="$KS_DATA_DIR/ksagent.db"
+else
+  SQLITE_PATH="$DEFAULT_SQLITE"
+fi
 (
   if command -v setsid >/dev/null 2>&1; then
     setsid env \
-      KS_DATA_DIR="${KS_DATA_DIR:-$PWD/data}" \
+      KS_SQLITE_PATH="$SQLITE_PATH" \
+      KS_DATA_DIR="${KS_DATA_DIR:-$PWD/storage}" \
       PORT="$PORT" \
       HOST="${HOST:-0.0.0.0}" \
       node dist-server/index.js &
   else
     nohup env \
-      KS_DATA_DIR="${KS_DATA_DIR:-$PWD/data}" \
+      KS_SQLITE_PATH="$SQLITE_PATH" \
+      KS_DATA_DIR="${KS_DATA_DIR:-$PWD/storage}" \
       PORT="$PORT" \
       HOST="${HOST:-0.0.0.0}" \
       node dist-server/index.js &
