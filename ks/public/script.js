@@ -75,11 +75,13 @@ const debounce = (fn, wait=180) => {
 /* ─── Filters / Sort ─────────────────────────────────────────── */
 function applyFilters() {
   const s = state.search.toLowerCase();
+  const isAllDocs = currentCategory === "all";
   state.data = DOCS.filter(d => {
     const matchSearch = !s || d.title.toLowerCase().includes(s) || d.author.toLowerCase().includes(s);
     const matchStatus = state.filter === "all" || d.status === state.filter;
     const matchTag = state.tag === "all" || d.tags.includes(state.tag);
-    return matchSearch && matchStatus && matchTag;
+    const matchCategory = isAllDocs || d.category === currentCategory;
+    return matchSearch && matchStatus && matchTag && matchCategory;
   });
   const [key, dir] = state.sort.split("-");
   state.data.sort((a,b) => {
