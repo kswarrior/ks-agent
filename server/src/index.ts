@@ -2233,8 +2233,7 @@ function injectIntoHtml(html: string, baseProxyPath: string): string {
   })
   // Rewrite CSS url() and @import inside <style> blocks
   outHtml = outHtml.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi, (_m: string, attrs: string, cssContent: string) => {
-    let rw = rewriteCssUrls(cssContent, base)
-    rw = rw.replace(/@import\s+([\"'])\/(?!\/)([^\"']+)\1/gi, (_a: string, qq: string, pp: string) => `@import ${qq}${base}${pp}${qq}`)
+    const rw = rewriteCssUrls(cssContent, base)
     return `<style${attrs}>${rw}</style>`
   })
   // Rewrite inline style="" attributes that contain url()
@@ -2298,10 +2297,28 @@ function rewriteJsUrls(js: string, baseProxyPath: string): string {
   // 2) export ... from "/..."
   out = out.replace(/(export\s+.*?\s+from\s+)(["'])\/(?!\/)/g, (_m, pre, q) => `${pre}${q}${base}`)
   if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
-  // 3) fetch("/..."), open, EventSource, WebSocket
-  out = out.replace(/\b(fetch|open|sendBeacon|EventSource|WebSocket)\s*\(\s*(["'])\/(?!\/)/g, (_m, fn, q) => `${fn}(${q}${base}`)
+  // 3) fetch("/..."), open, EventSource, WebSocket — skip /api/ which belongs to KS Agent itself, not preview
+  out = out.replace(/\b(fetch|open|sendBeacon|EventSource|WebSocket)\s*\(\s*(["'])\/(?!\/)/g, (m, fn, q) => {
+    const idx = out.indexOf(m)
+    // peek ahead 4 chars after the opening quote to see if it's api/
+    // We need to look at the original string segment after "/"
+    // Since replacement is per-match, we can inspect the match's trailing context by checking the substring following "/"
+    // The path after '/' is at position idx + m.length ; check next 4 chars in the original 'out' before replacement?
+    // Simpler: if the original js substring at this location starts with '" + '/api/' then skip
+    // We approximate by checking the next characters in 'out' at this match position: look ahead for 'api/'
+    const afterSlashIdx = idx + m.length
+    const peek = out.slice(afterSlashIdx, afterSlashIdx + 4)
+    if (peek === 'api/') return m
+    return `${fn}(${q}${base}`
+  })
   if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
-  out = out.replace(/new\s+URL\s*\(\s*(["'])\/(?!\/)/g, (_m, q) => `new URL(${q}${base}`)
+  out = out.replace(/new\s+URL\s*\(\s*(["'])\/(?!\/)/g, (m, q) => {
+    const idx = out.indexOf(m)
+    const afterSlashIdx = idx + m.length
+    const peek = out.slice(afterSlashIdx, afterSlashIdx + 4)
+    if (peek === 'api/') return m
+    return `new URL(${q}${base}`
+  })
   if (out.includes(doubleBase)) out = out.split(doubleBase).join(base)
   // 4) .href = "/...", .src = "/..."
   out = out.replace(/(\.(href|src|action)\s*=\s*)(["'])\/(?!\/)/g, (_m, pre, _attr, q) => `${pre}${q}${base}`)
