@@ -472,6 +472,11 @@ function KsAgent() {
           for (const id of deletedChatIds) delete n[id]
           return n
         })
+        setPreviews((prev) => {
+          const n = { ...prev }
+          for (const id of deletedChatIds) delete n[id]
+          return n
+        })
         setQuestions((prev) => {
           const n = { ...prev }
           for (const id of deletedChatIds) delete n[id]
@@ -520,6 +525,11 @@ function KsAgent() {
       setChats((prev) => prev.filter((c) => c.id !== chat.id))
       setActivities((prev) => prev.filter((a) => a.chatId !== chat.id))
       setPlans((prev) => {
+        const n = { ...prev }
+        delete n[chat.id]
+        return n
+      })
+      setPreviews((prev) => {
         const n = { ...prev }
         delete n[chat.id]
         return n
@@ -714,6 +724,8 @@ function KsAgent() {
             onAnswerQuestion={handleAnswerQuestion}
             plan={activeChat ? plans[activeChat.id] ?? null : null}
             activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
+            preview={activeChat ? previews[activeChat.id] ?? null : null}
+            onOpenPreview={() => setPreviewOpen(true)}
           />
         </main>
         <RightSidebar
@@ -727,6 +739,8 @@ function KsAgent() {
         <PreviewSidebar
           open={previewOpen}
           activeProject={activeProject ? { id: activeProject.id, path: activeProject.path } : null}
+          activeChatId={activeChat?.id ?? null}
+          chatPreview={activeChat ? previews[activeChat.id] ?? null : null}
           onClose={() => setPreviewOpen(false)}
         />
       </div>
