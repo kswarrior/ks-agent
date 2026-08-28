@@ -775,13 +775,14 @@ function KsAgent() {
           style={{
             position: 'fixed',
             bottom: 18,
-            left: '50%',
-            transform: 'translateX(-50%)',
+            right: 18,
+            left: 'auto',
+            transform: 'none',
             zIndex: 75,
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            padding: '10px 16px',
+            padding: '10px 16px 13px 16px',
             background: 'var(--surface-2)',
             border: '1px solid #22c55e30',
             borderLeft: '3px solid #22c55e',
@@ -789,6 +790,7 @@ function KsAgent() {
             boxShadow: '0 12px 32px rgba(0,0,0,0.75)',
             maxWidth: 'calc(100vw - 24px)',
             animation: 'rise 0.18s ease',
+            overflow: 'hidden',
           }}
         >
           <span
@@ -821,6 +823,19 @@ function KsAgent() {
           <button className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 12.5, marginLeft: 8, whiteSpace: 'nowrap' }} onClick={() => setPreviewOpen(true)}>
             Open Preview
           </button>
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: 0,
+              bottom: 0,
+              height: 3,
+              width: '100%',
+              background: '#22c55e',
+              transformOrigin: 'left',
+              animation: 'toast-progress 2s linear forwards',
+            }}
+          />
         </div>
       )}
 

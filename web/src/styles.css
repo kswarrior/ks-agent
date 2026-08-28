@@ -1497,23 +1497,28 @@ textarea {
   font-size: 14px;
 }
 
-/* Toasts */
+/* Toasts — right-bottom with bottom progress line */
 .toasts {
   position: fixed;
   bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 18px;
+  left: auto;
+  transform: none;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
   z-index: 120;
   width: max-content;
   max-width: calc(100vw - 32px);
+  pointer-events: none;
 }
 
 .toast {
-  padding: 10px 16px;
-  border-radius: 99px;
+  position: relative;
+  overflow: hidden;
+  padding: 10px 16px 13px 16px;
+  border-radius: 10px;
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   color: var(--text);
@@ -1522,16 +1527,40 @@ textarea {
   cursor: pointer;
   animation: toast-in 0.18s ease;
   word-break: break-word;
+  pointer-events: auto;
 }
 
-.toast-error {
-  border-color: #58201f;
-  color: var(--danger);
-  background: var(--danger-bg);
+.toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.85;
+  transform-origin: left;
+  animation: toast-progress 3.5s linear forwards;
 }
 
-.toast-success {
-  color: #86efac;
+.toast-info .toast-progress {
+  background: var(--text-dim);
+}
+
+.toast-error .toast-progress {
+  background: var(--danger);
+}
+
+.toast-success .toast-progress {
+  background: #22c55e;
+}
+
+@keyframes toast-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 @keyframes toast-in {

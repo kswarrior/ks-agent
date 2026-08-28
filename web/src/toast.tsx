@@ -46,7 +46,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toasts" aria-live="polite">
         {items.map((t) => (
           <div key={t.id} className={`toast toast-${t.type}`} onClick={() => dismiss(t.id)}>
-            {t.message}
+            <span className="toast-msg">{t.message}</span>
+            <div className="toast-progress" aria-hidden="true" />
           </div>
         ))}
       </div>
