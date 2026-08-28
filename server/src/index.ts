@@ -309,6 +309,13 @@ app.delete('/api/projects/:id', async (c) => {
   const termIds = db.terminals.filter((t) => t.projectId === removed.id).map((t) => t.id)
   db.terminals = db.terminals.filter((t) => t.projectId !== removed.id)
   for (const tid of termIds) killPty(tid)
+  // Orphaned skills: FK is SET NULL — detach from deleted project so skill becomes global instead of dangling FK
+  for (const sk of db.skills) {
+    if (sk.projectId === removed.id) {
+      delete sk.projectId
+      sk.updatedAt = new Date().toISOString()
+    }
+  }
   saveDb()
   return c.json({ ok: true })
 })

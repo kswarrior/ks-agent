@@ -725,10 +725,68 @@ function tryMigrateFromJson(): boolean {
   }
 }
 
+function tryMigrateFromLegacySqlite(): boolean {
+  const legacySqliteFile = path.join(legacyDataDir, 'ksagent.db')
+  if (path.resolve(legacySqliteFile) === path.resolve(dbFile)) return false
+  if (!fs.existsSync(legacySqliteFile)) return false
+  let attached = false
+  try {
+    const s = ensureDb()
+    const hasData = (() => {
+      try {
+        const c = (s.prepare('SELECT COUNT(*) as c FROM projects').get() as any).c
+        if (c > 0) return true
+        const c2 = (s.prepare('SELECT COUNT(*) as c FROM chats').get() as any).c
+        if (c2 > 0) return true
+        const c3 = (s.prepare('SELECT COUNT(*) as c FROM kv').get() as any).c
+        if (c3 > 0) return true
+        return false
+      } catch { return false }
+    })()
+    if (hasData) return false
+    const safePath = legacySqliteFile.replace(/'/g, "''")
+    s.exec(`ATTACH DATABASE '${safePath}' AS legacy`)
+    attached = true
+    // Verify legacy has expected tables
+    const legacyHasKv = (() => {
+      try { const r = (s.prepare("SELECT name FROM legacy.sqlite_master WHERE type='table' AND name='kv'").get() as any); return !!r } catch { return false }
+    })()
+    if (!legacyHasKv) { s.exec('DETACH DATABASE legacy'); attached = false; return false }
+    // Copy all tables if not already present (INSERT OR IGNORE keeps existing empty dest untouched)
+    // Use explicit column lists to stay robust against schema drift
+    s.exec(`
+      INSERT OR IGNORE INTO main.projects SELECT * FROM legacy.projects;
+      INSERT OR IGNORE INTO main.chats SELECT * FROM legacy.chats;
+      INSERT OR IGNORE INTO main.providers SELECT * FROM legacy.providers;
+      INSERT OR IGNORE INTO main.models SELECT * FROM legacy.models;
+      INSERT OR IGNORE INTO main.messages SELECT * FROM legacy.messages;
+      INSERT OR IGNORE INTO main.plans SELECT * FROM legacy.plans;
+      INSERT OR IGNORE INTO main.terminals SELECT * FROM legacy.terminals;
+      INSERT OR IGNORE INTO main.questions SELECT * FROM legacy.questions;
+      INSERT OR IGNORE INTO main.activities SELECT * FROM legacy.activities;
+      INSERT OR IGNORE INTO main.skills SELECT * FROM legacy.skills;
+      INSERT OR IGNORE INTO main.previews SELECT * FROM legacy.previews;
+      INSERT OR IGNORE INTO main.kv SELECT * FROM legacy.kv;
+    `)
+    s.exec('DETACH DATABASE legacy')
+    attached = false
+    const loaded = loadFromSqlite(s)
+    if (loaded) db = loaded
+    console.log(`Migrated legacy sqlite ${legacySqliteFile} -> ${dbFile}`)
+    return true
+  } catch (e) {
+    console.error('Migration from legacy sqlite failed:', e)
+    if (attached) { try { ensureDb().exec('DETACH DATABASE legacy') } catch {} }
+    return false
+  }
+}
+
 export function loadDb(): void {
   try {
     const s = ensureDb()
-    // Attempt migration first if sqlite empty and legacy json exists
+    // Attempt migration from legacy sqlite file (data/ksagent.db) before JSON so we preserve richer data if both exist
+    tryMigrateFromLegacySqlite()
+    // Attempt migration from legacy JSON (data/db.json) if sqlite still empty
     tryMigrateFromJson()
 
     const loaded = loadFromSqlite(s)
