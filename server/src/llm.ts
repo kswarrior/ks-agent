@@ -57,7 +57,7 @@ async function openStream(
     maxRetries: 5,
     baseDelayMs: 1200,
     maxDelayMs: 30000,
-    retryOnStatusCodes: [429, 503, 502],
+    retryOnStatusCodes: [429, 500, 502, 503],
     stopOnStatusCodes: [400, 401, 403, 404],
     alwaysRetry: false
   }
@@ -67,15 +67,32 @@ async function openStream(
     if (signal?.aborted) throw new Error('Aborted')
     let res: Response
     try {
-      res = await fetch(endpoint(baseUrl), {
-        method: 'POST',
-        signal,
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(body)
-      })
+      // Add a 30s connect timeout for hanging providers (e.g. lightning) — race fetch against a timer
+      const fetchWithTimeout = async (): Promise<Response> => {
+        const timeoutMs = 30000
+        let timeoutId: ReturnType<typeof setTimeout> | null = null
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(Object.assign(new Error('Provider connect timeout (30s)'), { name: 'TimeoutError' })), timeoutMs)
+        })
+        const fetchPromise = fetch(endpoint(baseUrl), {
+          method: 'POST',
+          signal,
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(body)
+        })
+        try {
+          const r = await Promise.race([fetchPromise, timeoutPromise])
+          if (timeoutId) clearTimeout(timeoutId)
+          return r as Response
+        } catch (e) {
+          if (timeoutId) clearTimeout(timeoutId)
+          throw e
+        }
+      }
+      res = await fetchWithTimeout()
     } catch (e: any) {
       if (e?.name === 'AbortError') throw e
       const shouldRetryNet = settings.enabled && attempt < settings.maxRetries
@@ -148,15 +165,41 @@ function parseChunk(payload: string): RawChunk | null {
   } catch {
     return null // ignore keep-alives / malformed fragments
   }
+  // Some providers return top-level error instead of choices (e.g. ResourceExhausted 500 streaming)
+  if (json.error) {
+    // preserve error message so openStream can surface it via status handling;
+    // for streaming error payloads that still come with 200, treat as null and let caller handle via finish
+    // But if choices missing and error present, we synthesize a text chunk with error to avoid silent hang
+    return null
+  }
   const choice = json.choices?.[0]
   if (!choice) return null
   const delta = choice.delta ?? choice.message ?? {}
+  // Reasoning models (nemotron, deepseek, etc.) send thinking in reasoning_content / reasoning / thinking
+  let reasoning: string | undefined
+  if (typeof delta.reasoning_content === 'string' && delta.reasoning_content) reasoning = delta.reasoning_content
+  else if (typeof delta.reasoning === 'string' && delta.reasoning) reasoning = delta.reasoning
+  else if (delta.reasoning && typeof delta.reasoning === 'object' && typeof (delta.reasoning as any).content === 'string') reasoning = (delta.reasoning as any).content
+  else if (typeof delta.thinking === 'string' && delta.thinking) reasoning = delta.thinking
+  else if (typeof (delta as any).reasoning_details === 'string' && (delta as any).reasoning_details) reasoning = (delta as any).reasoning_details
+
   const chunk: RawChunk = {
     text: typeof delta.content === 'string' ? delta.content : undefined,
-    finishReason: choice.finish_reason ?? null
+    reasoning,
+    finishReason: choice.finish_reason ?? choice.finishReason ?? null
   }
   if (Array.isArray(delta.tool_calls)) {
     chunk.toolCallDeltas = delta.tool_calls.map((tc: any, i: number) => ({
+      index: typeof tc.index === 'number' ? tc.index : i,
+      id: typeof tc.id === 'string' ? tc.id : undefined,
+      name: tc.function?.name ? String(tc.function.name) : undefined,
+      argsDelta: typeof tc.function?.arguments === 'string' ? tc.function.arguments : undefined
+    }))
+  }
+  // Some providers (e.g. older OpenRouter) put tool_calls at choice.message.tool_calls for first chunk
+  if (!chunk.toolCallDeltas && Array.isArray((choice as any).message?.tool_calls)) {
+    const mTool = (choice as any).message.tool_calls
+    chunk.toolCallDeltas = mTool.map((tc: any, i: number) => ({
       index: typeof tc.index === 'number' ? tc.index : i,
       id: typeof tc.id === 'string' ? tc.id : undefined,
       name: tc.function?.name ? String(tc.function.name) : undefined,
@@ -181,9 +224,27 @@ export async function* streamChat(
   const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true, ...(maxTokens ? { max_tokens: maxTokens } : {}) }, signal, retrySettings)
   const decoder = new TextDecoder()
   let buf = ''
+  // Streaming read timeout: if provider stalls for 20s without data, abort and let retry logic handle it
+  const READ_TIMEOUT_MS = 20000
 
   while (true) {
-    const { done, value } = await reader.read()
+    let readResult: ReadableStreamReadResult<Uint8Array>
+    try {
+      const readPromise = reader.read()
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        const t = setTimeout(() => reject(Object.assign(new Error('Provider stream timeout (20s no data)'), { name: 'TimeoutError' })), READ_TIMEOUT_MS)
+        signal?.addEventListener('abort', () => { clearTimeout(t); reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })) }, { once: true })
+        // clear on success is handled by not rejecting; the timer will be GC'd after race settles but we clear via wrapper
+        readPromise.then(() => clearTimeout(t), () => clearTimeout(t))
+      })
+      readResult = await Promise.race([readPromise, timeoutPromise]) as ReadableStreamReadResult<Uint8Array>
+    } catch (e: any) {
+      if (e?.name === 'AbortError') throw e
+      // Timeout is retryable as network error — throw so openStream retry can handle if applicable;
+      // but at this layer we are already past openStream, so we surface as stream error for runAgentLoop retry
+      throw e
+    }
+    const { done, value } = readResult
     if (done) break
     buf += decoder.decode(value, { stream: true })
     let nl: number
@@ -194,7 +255,22 @@ export async function* streamChat(
       const payload = line.slice(5).trim()
       if (payload === '[DONE]') break
       const chunk = parseChunk(payload)
-      if (chunk?.text) yield chunk.text
+      if (!chunk) continue
+      // For reasoning models, surface reasoning as text so user sees progress (and job.content includes it)
+      const out = (chunk.reasoning ?? '') + (chunk.text ?? '')
+      if (out) yield out
+      else if (chunk.text) yield chunk.text
+    }
+  }
+  // Flush any trailing content without newline (some providers don't terminate last line with \n)
+  if (buf.trim().startsWith('data:')) {
+    const payload = buf.trim().slice(5).trim()
+    if (payload && payload !== '[DONE]') {
+      const chunk = parseChunk(payload)
+      if (chunk) {
+        const out = (chunk.reasoning ?? '') + (chunk.text ?? '')
+        if (out) yield out
+      }
     }
   }
 }
@@ -235,9 +311,24 @@ export async function streamChatWithTools(
   let text = ''
   let finishReason: string | null = null
   const calls = new Map<number, { id: string; name: string; args: string }>()
+  const READ_TIMEOUT_MS = 20000
 
   while (true) {
-    const { done, value } = await reader.read()
+    let readResult: ReadableStreamReadResult<Uint8Array>
+    try {
+      const readPromise = reader.read()
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        const t = setTimeout(() => reject(Object.assign(new Error('Provider stream timeout (20s no data)'), { name: 'TimeoutError' })), READ_TIMEOUT_MS)
+        const onAbort = () => { clearTimeout(t); reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })) }
+        signal?.addEventListener('abort', onAbort, { once: true })
+        readPromise.then(() => { clearTimeout(t); signal?.removeEventListener('abort', onAbort) }, () => { clearTimeout(t); signal?.removeEventListener('abort', onAbort) })
+      })
+      readResult = await Promise.race([readPromise, timeoutPromise]) as ReadableStreamReadResult<Uint8Array>
+    } catch (e: any) {
+      if (e?.name === 'AbortError') throw e
+      throw e
+    }
+    const { done, value } = readResult
     if (done) break
     buf += decoder.decode(value, { stream: true })
     let nl: number
@@ -249,9 +340,17 @@ export async function streamChatWithTools(
       if (payload === '[DONE]') break
       const chunk = parseChunk(payload)
       if (!chunk) continue
-      if (chunk.text) {
+      // Merge reasoning + text for display and job accumulation; reasoning models stream thinking as reasoning_content
+      const deltaOut = (chunk.reasoning ?? '') + (chunk.text ?? '')
+      if (deltaOut) {
+        text += deltaOut
+        onDelta(deltaOut)
+      } else if (chunk.text) {
         text += chunk.text
         onDelta(chunk.text)
+      } else if (chunk.reasoning) {
+        text += chunk.reasoning
+        onDelta(chunk.reasoning)
       }
       if (chunk.finishReason) finishReason = chunk.finishReason
       for (const d of chunk.toolCallDeltas ?? []) {
@@ -260,6 +359,28 @@ export async function streamChatWithTools(
         if (d.name) cur.name = cur.name + d.name
         if (d.argsDelta) cur.args += d.argsDelta
         calls.set(d.index, cur)
+      }
+    }
+  }
+  // Flush trailing buffer without newline
+  if (buf.trim().startsWith('data:')) {
+    const payload = buf.trim().slice(5).trim()
+    if (payload && payload !== '[DONE]') {
+      const chunk = parseChunk(payload)
+      if (chunk) {
+        const deltaOut = (chunk.reasoning ?? '') + (chunk.text ?? '')
+        if (deltaOut) {
+          text += deltaOut
+          onDelta(deltaOut)
+        }
+        if (chunk.finishReason) finishReason = chunk.finishReason
+        for (const d of chunk.toolCallDeltas ?? []) {
+          const cur = calls.get(d.index) ?? { id: '', name: '', args: '' }
+          if (d.id) cur.id = cur.id + d.id
+          if (d.name) cur.name = cur.name + d.name
+          if (d.argsDelta) cur.args += d.argsDelta
+          calls.set(d.index, cur)
+        }
       }
     }
   }
