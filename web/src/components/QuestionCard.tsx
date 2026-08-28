@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Question } from '../types'
-import { IconSend, IconChevronLeft } from '../icons'
+import { IconChevronLeft } from '../icons'
 
 interface CardProps {
   question: Question

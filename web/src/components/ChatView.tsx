@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Activity, Chat, Message, ModelEntry, Plan, Question } from '../types'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconRotate, IconSearch, IconSend, IconStop, IconCopy, IconClock, IconCheck } from '../icons'
+import { IconChevronDown, IconRotate, IconSearch, IconStop, IconCopy, IconClock, IconCheck } from '../icons'
 import { QuestionList } from './QuestionCard'
 import { useToast } from '../toast'
 
@@ -474,7 +474,7 @@ export function ChatView(props: Props) {
               </button>
             ) : (
               <button className="send-btn" onClick={send} disabled={!canSend} aria-label="Send" title="Send">
-                <IconSend size={16} style={{ transform: 'translate(1px, -1px)' }} />
+                <span aria-hidden style={{ fontSize: 18, lineHeight: 1, letterSpacing: 0 }}>⌯⌲</span>
               </button>
             )}
           </div>

@@ -55,6 +55,24 @@ export async function sendMessage(
   return data
 }
 
+export async function continueChat(
+  chatId: string,
+  content?: string,
+  modelId?: string | null
+): Promise<{ userMsgId?: string; assistantId: string; model: string; continued?: boolean; content?: string }> {
+  const res = await fetch(`/api/chats/${chatId}/continue`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content: content ?? '', modelId: modelId ?? null })
+  })
+  let data: any = null
+  try {
+    data = await res.json()
+  } catch {}
+  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
+  return data
+}
+
 // Background generations
 
 export interface StreamHandlers {
