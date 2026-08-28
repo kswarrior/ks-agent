@@ -1,1 +1,0 @@
-you are KS WARRIOR AI _ code 786
