@@ -690,7 +690,9 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         const msg = String(e?.message || e)
         // if we already streamed some text for this round, don't retry (would duplicate)
         if (roundText.length > 0) throw e
-        const isRetryableStatus = !!opts.retrySettings?.alwaysRetry || (opts.retrySettings?.retryOnStatusCodes ?? [429, 502, 503]).some((code) => msg.includes(String(code)))
+        const isTimeout = /timeout/i.test(msg)
+        const isResourceExhausted = /resourceexhausted|worker local total request limit/i.test(msg)
+        const isRetryableStatus = !!opts.retrySettings?.alwaysRetry || isTimeout || isResourceExhausted || (opts.retrySettings?.retryOnStatusCodes ?? [429, 500, 502, 503]).some((code) => msg.includes(String(code)))
         const isStopStatus = !opts.retrySettings?.alwaysRetry && (opts.retrySettings?.stopOnStatusCodes ?? [400, 401, 403, 404]).some((code) => msg.includes(` ${code}`) || msg.includes(`:${code}`) || msg.includes(`status\":${code}`))
         const shouldRetry = (opts.retrySettings?.enabled ?? true) && isRetryableStatus && !isStopStatus && attempt < maxAttempts
         if (!shouldRetry) throw e
@@ -713,7 +715,29 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
     }
     if (!outcome) break
 
-    if (outcome.toolCalls.length === 0) break
+    // Prevent early stop: if model returns no tools on first round for a non-greeting task, force exploration
+    if (outcome.toolCalls.length === 0) {
+      const userContent = (opts.history[opts.history.length - 1]?.content ?? '').trim()
+      const isGreeting = /^\s*(hello|hi|hey|greetings|howdy|good\s*(morning|afternoon|evening)|thanks|thank you)\s*[.!?]*\s*$/i.test(userContent)
+      const hasShortContent = outcome.text.trim().length < 300
+      // For task prompts, the agent MUST have explored. If no tools and no plan yet, inject a reminder and continue.
+      const needsExplore = !isGreeting && round === 0 && hasShortContent && !findPlanForChat(ctx.chatId)
+      if (needsExplore) {
+        // Check if we already injected reminder last round to avoid loop
+        const lastMsg = messages[messages.length - 1]
+        const alreadyReminded = lastMsg?.role === 'user' && typeof lastMsg.content === 'string' && lastMsg.content.includes('You MUST use tools')
+        if (!alreadyReminded) {
+          // Preserve the model's understanding text as assistant content for history
+          if (outcome.text.trim()) {
+            messages.push({ role: 'assistant', content: outcome.text })
+          }
+          messages.push({ role: 'user', content: 'You MUST use tools to inspect the project: call list_files with path "" immediately. Do not answer without exploring.' })
+          // Give model another chance to call tools
+          continue
+        }
+      }
+      break
+    }
 
     messages.push({
       role: 'assistant',
