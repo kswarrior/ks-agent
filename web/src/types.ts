@@ -134,13 +134,18 @@ export interface MCPServer {
   lastConnectedAt?: string | null
 }
 
+export type LSPTransport = 'stdio' | 'tcp' | 'socket' | 'websocket' | 'http' | 'sse'
+
 export interface LSPServer {
   id: string
   name: string
   language: string
-  command: string
+  transport: LSPTransport
+  command?: string | null
   args?: string[]
+  url?: string | null
   env?: Record<string, string>
+  headers?: Record<string, string>
   projectId?: string | null
   enabled: boolean
   createdAt: string
@@ -151,6 +156,10 @@ export interface LSPServer {
   capabilities?: Record<string, unknown> | null
   lastConnectedAt?: string | null
 }
+
+// Backwards compat alias
+export type LspServer = LSPServer
+export type LspTransport = LSPTransport
 
 export interface Preview {
   id: string
