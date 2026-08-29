@@ -24,7 +24,7 @@ export const IconMenu = ({ size, className, style }: IconProps) => (
   <svg {...base(size, style)} className={className} strokeWidth={2.3}>
     <line x1="4" y1="6.5" x2="20" y2="6.5" />
     <line x1="4" y1="12" x2="20" y2="12" />
-    <line x1="4" y1="17.5" x2="20" y2="17.5" />
+    <line x1="4" y1="17.5" x2="14" y2="17.5" />
   </svg>
 )
 
