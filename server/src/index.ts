@@ -2094,15 +2094,35 @@ function normalizeLspEnv(raw: unknown): Record<string, string> | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
+function normalizeLspHeaders(raw: unknown): Record<string, string> | undefined {
+  if (raw == null) return undefined
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, string> = {}
+  let count = 0
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(k).trim()
+    if (!key || key.length > 80) continue
+    const val = String(v ?? '').trim()
+    if (!val || val.length > 2000) continue
+    out[key] = val
+    count++
+    if (count >= 20) break
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 function lspPublic(server: LSPServer): Record<string, unknown> {
   const state = getLspServerState(server.id)
   return {
     id: server.id,
     name: server.name,
     language: server.language,
-    command: server.command,
+    transport: server.transport,
+    command: server.command ?? null,
     args: server.args ?? [],
+    url: server.url ?? null,
     env: server.env ?? {},
+    headers: server.headers ?? {},
     projectId: server.projectId ?? null,
     enabled: server.enabled,
     createdAt: server.createdAt,
@@ -2133,22 +2153,46 @@ function validateLspBody(body: any, isPatch = false): { error?: string; value?: 
       out.language = lang
     } else if (!isPatch) return { error: 'Language is required' }
   }
-  if (body.command !== undefined || !isPatch) {
+  if (body.transport !== undefined || !isPatch) {
+    const t = String(body.transport ?? '').trim() as LSPServer['transport']
+    const allowed: LSPServer['transport'][] = ['stdio', 'tcp', 'socket', 'websocket', 'http', 'sse']
+    if (!isPatch && !t) return { error: 'Transport is required (stdio, tcp, socket, websocket, http, sse)' }
+    if (t && !allowed.includes(t)) return { error: 'Transport must be one of: stdio, tcp, socket, websocket, http, sse' }
+    if (t) out.transport = t
+  }
+  const effTransport = (out.transport ?? (body.transport as any)) as LSPServer['transport'] | undefined
+  if (body.command !== undefined) {
     const cmd = String(body.command ?? '').trim()
-    if (!isPatch && !cmd) return { error: 'Command is required' }
     if (cmd) {
       if (cmd.length > 500) return { error: 'Command too long (max 500)' }
       out.command = cmd
-    } else if (!isPatch) return { error: 'Command is required' }
-    else if (cmd === '') out.command = undefined as any
+    } else {
+      out.command = undefined as any
+    }
   }
   if (body.args !== undefined) {
     const args = normalizeLspArgs(body.args)
     out.args = args
   }
+  if (body.url !== undefined) {
+    const u = String(body.url ?? '').trim()
+    if (u) {
+      if (u.length > 2000) return { error: 'URL too long' }
+      let parsed: URL
+      try { parsed = new URL(u) } catch { return { error: 'Invalid URL' } }
+      if (!['http:', 'https:', 'ws:', 'wss:', 'tcp:'].includes(parsed.protocol)) return { error: 'URL must be http(s)://, ws(s):// or tcp://' }
+      out.url = u
+    } else {
+      out.url = undefined as any
+    }
+  }
   if (body.env !== undefined) {
     const env = normalizeLspEnv(body.env)
     out.env = env
+  }
+  if (body.headers !== undefined) {
+    const h = normalizeLspHeaders(body.headers)
+    out.headers = h
   }
   if (body.projectId !== undefined) {
     const pid = body.projectId != null ? String(body.projectId).trim() : ''
@@ -2161,6 +2205,17 @@ function validateLspBody(body: any, isPatch = false): { error?: string; value?: 
   }
   if (body.enabled !== undefined) {
     out.enabled = Boolean(body.enabled)
+  }
+  if (!isPatch || out.transport || out.command !== undefined || out.url !== undefined) {
+    const finalTransport = (out.transport ?? effTransport) as any
+    if (finalTransport === 'stdio') {
+      if (out.command !== undefined && !out.command) return { error: 'stdio transport requires command' }
+      if (!isPatch && !out.command) return { error: 'stdio transport requires command' }
+    }
+    if (finalTransport && ['tcp','socket','http','sse','websocket'].includes(finalTransport)) {
+      if (out.url !== undefined && !out.url) return { error: `${finalTransport} transport requires url` }
+      if (!isPatch && !out.url) return { error: `${finalTransport} transport requires url` }
+    }
   }
   return { value: out }
 }
@@ -2178,21 +2233,20 @@ app.post('/api/settings/lsp', async (c) => {
   const v = validated.value!
   const dup = getDb().lspServers.some((s) => s.name.toLowerCase() === String(v.name).toLowerCase() && s.language === v.language)
   if (dup) return c.json({ error: 'An LSP server with this name and language already exists' }, 400)
-  const dupName = getDb().lspServers.some((s) => s.name.toLowerCase() === String(v.name).toLowerCase())
-  if (dupName) {
-    // allow same name for different language? already checked above, but if exact name dup even diff language we treat as error for simplicity
-    // Do not block if language differs – keep original check only for name+language
-  }
-  if (!v.command) return c.json({ error: 'Command is required' }, 400)
+  if (v.transport === 'stdio' && !v.command) return c.json({ error: 'stdio transport requires command' }, 400)
+  if (v.transport && ['tcp','socket','http','sse','websocket'].includes(v.transport) && !v.url) return c.json({ error: `${v.transport} transport requires url` }, 400)
   if (!v.language) return c.json({ error: 'Language is required' }, 400)
   const now = new Date().toISOString()
   const server: LSPServer = {
     id: newId(),
     name: String(v.name),
     language: String(v.language).toLowerCase(),
-    command: String(v.command),
+    transport: v.transport as LSPServer['transport'],
+    command: v.command,
     args: v.args,
+    url: v.url,
     env: v.env,
+    headers: v.headers,
     projectId: v.projectId,
     enabled: v.enabled !== false,
     createdAt: now,
@@ -2225,15 +2279,16 @@ app.patch('/api/settings/lsp/:id', async (c) => {
     srv.name = String(v.name)
   }
   if (v.language !== undefined) srv.language = String(v.language).toLowerCase()
-  if (v.command !== undefined) {
-    if (!v.command) return c.json({ error: 'Command cannot be empty' }, 400)
-    srv.command = String(v.command)
-  }
+  if (v.transport !== undefined) srv.transport = v.transport as LSPServer['transport']
+  if (v.command !== undefined) srv.command = v.command
   if (v.args !== undefined) srv.args = v.args
+  if (v.url !== undefined) srv.url = v.url
   if (v.env !== undefined) srv.env = v.env
+  if (v.headers !== undefined) srv.headers = v.headers
   if (v.projectId !== undefined) srv.projectId = v.projectId
   if (v.enabled !== undefined) srv.enabled = v.enabled
-  if (!srv.command) return c.json({ error: 'Command is required' }, 400)
+  if (srv.transport === 'stdio' && !srv.command) return c.json({ error: 'stdio transport requires command' }, 400)
+  if (['tcp','socket','http','sse','websocket'].includes(srv.transport) && !srv.url) return c.json({ error: `${srv.transport} transport requires url` }, 400)
   if (!srv.language) return c.json({ error: 'Language is required' }, 400)
   srv.updatedAt = new Date().toISOString()
   saveDb()

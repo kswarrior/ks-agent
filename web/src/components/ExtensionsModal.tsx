@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '../api'
-import type { Skill, Project, FileEntry, MCPServer, MCPTransport } from '../types'
+import type { Skill, Project, FileEntry, MCPServer, MCPTransport, LSPServer } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
 import {
@@ -51,6 +51,17 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [mcpActionLoading, setMcpActionLoading] = useState<string | null>(null)
   const [mcpExpanded, setMcpExpanded] = useState<Record<string, boolean>>({})
   const [mcpTestResult, setMcpTestResult] = useState<Record<string, { ok: boolean; error?: string; tools?: { name: string; description?: string }[] }>>({})
+
+  // --- LSP state ---
+  const [lspServers, setLspServers] = useState<LSPServer[]>([])
+  const [lspLoading, setLspLoading] = useState(false)
+  const [showLspForm, setShowLspForm] = useState(false)
+  const [lspForm, setLspForm] = useState<{ name: string; language: string; command: string; args: string; envText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
+  const [lspEdit, setLspEdit] = useState<LSPServer | null>(null)
+  const [lspEditForm, setLspEditForm] = useState<{ name: string; language: string; command: string; args: string; envText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
+  const [lspActionLoading, setLspActionLoading] = useState<string | null>(null)
+  const [lspExpanded, setLspExpanded] = useState<Record<string, boolean>>({})
+  const [lspTestResult, setLspTestResult] = useState<Record<string, { ok: boolean; error?: string; capabilities?: Record<string, unknown> }>>({})
   const confirm = useDialogs().confirm
   const toast = useToast()
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -98,6 +109,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
     if (open) {
       loadSkills()
       loadMcpServers()
+      loadLspServers()
       setError(null)
       setShowSkillForm(false)
       setSkillFileBrowserOpen(false)
@@ -108,6 +120,10 @@ export function ExtensionsModal({ open, onClose }: Props) {
       setMcpEdit(null)
       setMcpExpanded({})
       setMcpTestResult({})
+      setShowLspForm(false)
+      setLspEdit(null)
+      setLspExpanded({})
+      setLspTestResult({})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -115,6 +131,10 @@ export function ExtensionsModal({ open, onClose }: Props) {
   useEffect(() => {
     if (open && tab === 'mcp') {
       loadMcpServers()
+      if (skillProjects.length === 0) loadSkillProjects()
+    }
+    if (open && tab === 'lsp') {
+      loadLspServers()
       if (skillProjects.length === 0) loadSkillProjects()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -307,6 +327,140 @@ export function ExtensionsModal({ open, onClose }: Props) {
     try {
       await api.updateMcpServer(s.id, { enabled: !s.enabled })
       await loadMcpServers()
+      toast(s.enabled ? 'Disabled' : 'Enabled', 'success')
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  // ---- LSP helpers ----
+  const LSP_LANGUAGES = ['typescript','javascript','python','go','rust','css','json','html','yaml','bash','markdown','java','c','cpp','csharp','php','ruby','swift','kotlin','dart','toml','xml','sql','graphql','dockerfile'] as const
+  async function loadLspServers() {
+    setLspLoading(true)
+    try {
+      const list = await api.listLspServers()
+      setLspServers(list)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setLspLoading(false)
+    }
+  }
+  async function submitLsp() {
+    setError(null)
+    const name = lspForm.name.trim()
+    const language = lspForm.language.trim().toLowerCase()
+    const command = lspForm.command.trim()
+    if (!name) return setError('LSP server name is required')
+    if (name.length < 2 || name.length > 80) return setError('LSP name must be 2-80 characters')
+    if (!language) return setError('Language is required')
+    if (!/^[a-z][a-z0-9_-]*$/.test(language)) return setError('Invalid language id')
+    if (!command) return setError('Command is required')
+    const args = lspForm.args.trim() ? lspForm.args.split(',').map((s) => s.trim()).filter(Boolean) : undefined
+    const env = parseEnvText(lspForm.envText)
+    try {
+      await api.createLspServer({
+        name,
+        language,
+        command,
+        args,
+        env,
+        projectId: lspForm.projectId.trim() || undefined,
+        enabled: lspForm.enabled
+      })
+      toast('LSP server added', 'success')
+      setShowLspForm(false)
+      setLspForm({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
+      await loadLspServers()
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+  async function submitEditLsp() {
+    if (!lspEdit) return
+    setError(null)
+    const name = lspEditForm.name.trim()
+    const language = lspEditForm.language.trim().toLowerCase()
+    const command = lspEditForm.command.trim()
+    if (!name) return setError('LSP server name is required')
+    if (!language) return setError('Language is required')
+    if (!/^[a-z][a-z0-9_-]*$/.test(language)) return setError('Invalid language id')
+    if (!command) return setError('Command is required')
+    const args = lspEditForm.args.trim() ? lspEditForm.args.split(',').map((s) => s.trim()).filter(Boolean) : []
+    const env = parseEnvText(lspEditForm.envText)
+    try {
+      await api.updateLspServer(lspEdit.id, {
+        name,
+        language,
+        command,
+        args,
+        env,
+        projectId: lspEditForm.projectId.trim() || undefined,
+        enabled: lspEditForm.enabled
+      })
+      toast('LSP server updated', 'success')
+      setLspEdit(null)
+      await loadLspServers()
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+  function startEditLsp(s: LSPServer) {
+    setLspEdit(s)
+    setLspEditForm({
+      name: s.name,
+      language: s.language,
+      command: s.command,
+      args: (s.args ?? []).join(', '),
+      envText: stringifyEnv(s.env as any),
+      projectId: (s.projectId as string) ?? '',
+      enabled: s.enabled
+    })
+    setShowLspForm(false)
+    setError(null)
+  }
+  async function removeLsp(id: string, name: string) {
+    const ok = await confirm({ title: 'Delete LSP server?', message: `Remove "${name}"? Language intelligence will be disabled.`, danger: true, confirmText: 'Delete' })
+    if (!ok) return
+    try {
+      await api.deleteLspServer(id)
+      toast('LSP server deleted', 'success')
+      if (lspEdit?.id === id) setLspEdit(null)
+      await loadLspServers()
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+  async function testLsp(id: string) {
+    setLspActionLoading(`test:${id}`)
+    try {
+      const res = await api.testLspServer(id)
+      setLspTestResult((prev) => ({ ...prev, [id]: res as any }))
+      if (res.ok) toast('Connected — LSP initialize succeeded', 'success')
+      else toast(res.error ?? 'Test failed', 'error')
+      await loadLspServers()
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setLspActionLoading(null)
+    }
+  }
+  async function refreshLsp(id: string) {
+    setLspActionLoading(`refresh:${id}`)
+    try {
+      await api.refreshLspServer(id)
+      toast('Refreshed', 'success')
+      await loadLspServers()
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setLspActionLoading(null)
+    }
+  }
+  async function toggleLspEnabled(s: LSPServer) {
+    try {
+      await api.updateLspServer(s.id, { enabled: !s.enabled })
+      await loadLspServers()
       toast(s.enabled ? 'Disabled' : 'Enabled', 'success')
     } catch (e: any) {
       toast(e.message, 'error')
