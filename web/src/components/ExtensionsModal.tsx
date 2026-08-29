@@ -113,7 +113,10 @@ export function ExtensionsModal({ open, onClose }: Props) {
   }, [open])
 
   useEffect(() => {
-    if (open && tab === 'mcp') loadMcpServers()
+    if (open && tab === 'mcp') {
+      loadMcpServers()
+      if (skillProjects.length === 0) loadSkillProjects()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
 
@@ -514,25 +517,194 @@ export function ExtensionsModal({ open, onClose }: Props) {
           {tab === 'mcp' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconMCP size={16} /> MCP Servers</h4>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 8px' }}>Coming soon</span>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconMCP size={16} /> MCP Servers ({mcpServers.length})</h4>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={loadMcpServers} disabled={mcpLoading}>{mcpLoading ? 'Loading…' : 'Refresh'}</button>
+                  <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { if (mcpEdit) { setMcpEdit(null); setError(null) } else { setShowMcpForm(v => !v); setError(null); if (!showMcpForm && skillProjects.length === 0) loadSkillProjects() } }}>
+                    <IconPlus size={15} /> {mcpEdit ? 'Cancel edit' : showMcpForm ? 'Cancel' : 'Add'}
+                  </button>
+                </div>
               </div>
               <p className="hint" style={{ marginBottom: 16 }}>
-                Model Context Protocol servers extend the agent with external tools and data sources. Connect MCP servers to give the agent access to databases, APIs, and custom tooling.
+                MCP servers extend the agent with external tools. Tools are auto-discovered via MCP (stdio / SSE / HTTP / WebSocket) and injected into the agent. Scope per project or global.
               </p>
-              <div className="empty" style={{ padding: '32px 12px', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
-                  <IconMCP size={20} />
+
+              {mcpEdit && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
+                  <h4 style={{ marginBottom: 12 }}>Edit MCP server</h4>
+                  <label className="field-label">Name</label>
+                  <input className="input" placeholder="e.g. filesystem, brave-search" value={mcpEditForm.name} onChange={e => setMcpEditForm({ ...mcpEditForm, name: e.target.value })} />
+                  <label className="field-label">Transport</label>
+                  <select className="input" value={mcpEditForm.transport} onChange={e => setMcpEditForm({ ...mcpEditForm, transport: e.target.value as MCPTransport })}>
+                    <option value="stdio">stdio — local command</option>
+                    <option value="sse">sse — Server-Sent Events</option>
+                    <option value="http">http — Streamable HTTP</option>
+                    <option value="websocket">websocket</option>
+                  </select>
+                  {mcpEditForm.transport === 'stdio' ? (
+                    <>
+                      <label className="field-label">Command</label>
+                      <input className="input" placeholder="e.g. npx -y @modelcontextprotocol/server-filesystem /tmp" value={mcpEditForm.command} onChange={e => setMcpEditForm({ ...mcpEditForm, command: e.target.value })} />
+                      <label className="field-label">Args <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
+                      <input className="input" placeholder="e.g. --port, 3000" value={mcpEditForm.args} onChange={e => setMcpEditForm({ ...mcpEditForm, args: e.target.value })} />
+                      <label className="field-label">Env <span style={{ fontWeight: 400 }}>(KEY=VALUE per line)</span></label>
+                      <textarea className="input" placeholder="API_KEY=xxx
+HOME=/tmp" value={mcpEditForm.envText} onChange={e => setMcpEditForm({ ...mcpEditForm, envText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                    </>
+                  ) : (
+                    <>
+                      <label className="field-label">URL</label>
+                      <input className="input" placeholder="https://example.com/mcp or http://localhost:3000/sse" value={mcpEditForm.url} onChange={e => setMcpEditForm({ ...mcpEditForm, url: e.target.value })} />
+                      <label className="field-label">Headers <span style={{ fontWeight: 400 }}>(Key: Value per line)</span></label>
+                      <textarea className="input" placeholder="Authorization: Bearer xxx
+X-Custom: value" value={mcpEditForm.headersText} onChange={e => setMcpEditForm({ ...mcpEditForm, headersText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                    </>
+                  )}
+                  <label className="field-label">Scope project <span style={{ fontWeight: 400 }}>(leave empty for global)</span></label>
+                  <select className="input" value={mcpEditForm.projectId} onChange={e => setMcpEditForm({ ...mcpEditForm, projectId: e.target.value })}>
+                    <option value="">Global (all projects)</option>
+                    {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — {p.path}</option>)}
+                  </select>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={mcpEditForm.enabled} onChange={e => setMcpEditForm({ ...mcpEditForm, enabled: e.target.checked })} /> Enabled
+                  </label>
+                  <div className="dialog-actions" style={{ marginTop: 16 }}>
+                    <button className="btn" onClick={() => { setMcpEdit(null); setError(null) }}>Cancel</button>
+                    <button className="btn btn-primary" onClick={submitEditMcp}>Save</button>
+                  </div>
                 </div>
-                <h2>No MCP servers</h2>
-                <p>MCP support is under development. Soon you&apos;ll be able to add servers here (stdio / SSE / WebSocket).</p>
-              </div>
+              )}
+
+              {showMcpForm && !mcpEdit && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
+                  <label className="field-label">Name</label>
+                  <input className="input" placeholder="e.g. filesystem, fetch, brave-search" value={mcpForm.name} onChange={e => setMcpForm({ ...mcpForm, name: e.target.value })} />
+                  <label className="field-label">Transport</label>
+                  <select className="input" value={mcpForm.transport} onChange={e => setMcpForm({ ...mcpForm, transport: e.target.value as MCPTransport })}>
+                    <option value="stdio">stdio — local command</option>
+                    <option value="sse">sse — Server-Sent Events</option>
+                    <option value="http">http — Streamable HTTP</option>
+                    <option value="websocket">websocket</option>
+                  </select>
+                  {mcpForm.transport === 'stdio' ? (
+                    <>
+                      <label className="field-label">Command</label>
+                      <input className="input" placeholder="e.g. npx or /usr/local/bin/mcp-server" value={mcpForm.command} onChange={e => setMcpForm({ ...mcpForm, command: e.target.value })} />
+                      <label className="field-label">Args <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
+                      <input className="input" placeholder="e.g. -y, @modelcontextprotocol/server-filesystem, /tmp" value={mcpForm.args} onChange={e => setMcpForm({ ...mcpForm, args: e.target.value })} />
+                      <label className="field-label">Env <span style={{ fontWeight: 400 }}>(KEY=VALUE per line)</span></label>
+                      <textarea className="input" placeholder="BRAVE_API_KEY=xxx
+HOME=/tmp" value={mcpForm.envText} onChange={e => setMcpForm({ ...mcpForm, envText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                    </>
+                  ) : (
+                    <>
+                      <label className="field-label">URL</label>
+                      <input className="input" placeholder="https://example.com/mcp" value={mcpForm.url} onChange={e => setMcpForm({ ...mcpForm, url: e.target.value })} />
+                      <label className="field-label">Headers <span style={{ fontWeight: 400 }}>(Key: Value per line)</span></label>
+                      <textarea className="input" placeholder="Authorization: Bearer token
+X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpForm, headersText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                    </>
+                  )}
+                  <label className="field-label">Scope project <span style={{ fontWeight: 400 }}>(leave empty for global)</span></label>
+                  <select className="input" value={mcpForm.projectId} onChange={e => setMcpForm({ ...mcpForm, projectId: e.target.value })}>
+                    <option value="">Global (all projects)</option>
+                    {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — {p.path}</option>)}
+                  </select>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={mcpForm.enabled} onChange={e => setMcpForm({ ...mcpForm, enabled: e.target.checked })} /> Enabled
+                  </label>
+                  <div className="dialog-actions" style={{ marginTop: 16 }}>
+                    <button className="btn" onClick={() => { setShowMcpForm(false); setMcpForm({ name: '', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true }); setError(null) }}>Cancel</button>
+                    <button className="btn btn-primary" onClick={submitMcp}>Add server</button>
+                  </div>
+                </div>
+              )}
+
+              {mcpLoading ? (
+                <div className="hint" style={{ padding: 12 }}>Loading…</div>
+              ) : mcpServers.length === 0 ? (
+                <div className="empty" style={{ padding: '24px 12px', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+                    <IconMCP size={20} />
+                  </div>
+                  <h2>No MCP servers</h2>
+                  <p>Add a server via stdio command or HTTP/SSE URL. Tools will be auto-discovered.</p>
+                  <p className="hint" style={{ fontSize: 12 }}>Example stdio: <code>npx -y @modelcontextprotocol/server-filesystem /tmp</code></p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {mcpServers.map(s => {
+                    const isExpanded = !!mcpExpanded[s.id]
+                    const testRes = mcpTestResult[s.id]
+                    const statusColor = s.connecting ? '#f59e0b' : s.connected ? '#22c55e' : s.error ? '#ef4444' : '#6b7280'
+                    const statusLabel = s.connecting ? 'Connecting' : s.connected ? `Connected • ${s.tools.length} tool(s)` : s.error ? 'Error' : s.enabled ? 'Disconnected' : 'Disabled'
+                    const scopeName = s.projectId ? skillProjects.find(p => p.id === s.projectId)?.name ?? s.projectId.slice(0, 8) : 'Global'
+                    return (
+                      <div key={s.id} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, borderLeft: `3px solid ${statusColor}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 99, background: statusColor, flexShrink: 0, display: 'inline-block' }} />
+                          <span style={{ fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
+                          <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)' }}>{s.transport}</span>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }} title="Enabled">
+                            <input type="checkbox" checked={s.enabled} onChange={() => toggleMcpEnabled(s)} />
+                          </label>
+                          <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEditMcp(s)} aria-label={`Edit ${s.name}`}><IconPencil size={14} /></button>
+                          <button className="icon-btn" style={{ width: 28, height: 28, color: '#ef4444' }} onClick={() => removeMcp(s.id, s.name)} aria-label={`Delete ${s.name}`}><IconTrash size={14} /></button>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-faint)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          <span>{statusLabel}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconFolder size={12} /> {scopeName}</span>
+                        </div>
+                        {s.transport === 'stdio' ? (
+                          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
+                            {s.command} {(s.args ?? []).join(' ')}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>{s.url}</div>
+                        )}
+                        {s.error && <div style={{ fontSize: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '6px 8px', wordBreak: 'break-word' }}>{s.error}</div>}
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} disabled={mcpActionLoading === `test:${s.id}`} onClick={() => testMcp(s.id)}>{mcpActionLoading === `test:${s.id}` ? 'Testing…' : 'Test'}</button>
+                          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} disabled={mcpActionLoading === `refresh:${s.id}` || !s.enabled} onClick={() => refreshMcp(s.id)}>{mcpActionLoading === `refresh:${s.id}` ? 'Refreshing…' : 'Refresh tools'}</button>
+                          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setMcpExpanded(prev => ({ ...prev, [s.id]: !prev[s.id] }))}>{isExpanded ? 'Hide tools' : `Tools (${s.tools.length})`}</button>
+                        </div>
+                        {testRes && (
+                          <div style={{ fontSize: 12, padding: '6px 8px', borderRadius: 6, background: testRes.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${testRes.ok ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: testRes.ok ? '#16a34a' : '#ef4444' }}>
+                            {testRes.ok ? `Test OK — ${testRes.tools?.length ?? 0} tool(s)` : `Test failed: ${testRes.error}`}
+                          </div>
+                        )}
+                        {isExpanded && (
+                          <div style={{ marginTop: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                            {s.tools.length === 0 ? (
+                              <p className="hint" style={{ fontSize: 12 }}>{s.connected ? 'No tools discovered — server returned empty tools/list' : 'Not connected — test or refresh to discover tools'}</p>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {s.tools.map((t, idx) => (
+                                  <div key={idx} style={{ padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                                    <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: 'var(--text)' }}>{t.name}</span>
+                                      <span style={{ fontSize: 10, color: 'var(--text-faint)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '1px 6px' }}>mcp_{s.name}_{t.name}</span>
+                                    </div>
+                                    {t.description && <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{t.description}</div>}
+                                    {t.inputSchema && <details style={{ marginTop: 6 }}><summary style={{ fontSize: 11, color: 'var(--text-faint)', cursor: 'pointer' }}>inputSchema</summary><pre style={{ margin: '6px 0 0', fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: 8, maxHeight: 160, overflow: 'auto' }}>{JSON.stringify(t.inputSchema, null, 2)}</pre></details>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{new Date(s.createdAt).toLocaleString()}{s.updatedAt && s.updatedAt !== s.createdAt ? ` · updated ${new Date(s.updatedAt).toLocaleString()}` : ''}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
               <div style={{ marginTop: 16, padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>What you&apos;ll be able to do</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>How MCP works</div>
                 <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--text-faint)', fontSize: 13, lineHeight: 1.6 }}>
-                  <li>Add MCP servers via command, URL, or config</li>
-                  <li>View server status and available tools</li>
-                  <li>Enable/disable servers per project</li>
+                  <li>Tools are discovered via <code>initialize</code> + <code>tools/list</code> (MCP JSON-RPC 2.0)</li>
+                  <li>Agent sees tools as <code>mcp_&lt;server&gt;_&lt;tool&gt;</code> and calls them via <code>tools/call</code></li>
+                  <li>Stdio servers run as child processes; HTTP/SSE servers are called via fetch</li>
                 </ul>
               </div>
             </div>
