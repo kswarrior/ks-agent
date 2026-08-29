@@ -1,14 +1,15 @@
-import { IconMenu, IconPanelRight, IconMonitor } from '../icons'
+import { IconMenu, IconPanelRight, IconMonitor, IconPuzzle } from '../icons'
 
 interface HeaderProps {
   onMenu: () => void
   onToggleRight: () => void
   onTogglePreview: () => void
+  onToggleExtensions?: () => void
   hasPreview?: boolean
   previewPort?: number | null
 }
 
-export function Header({ onMenu, onToggleRight, onTogglePreview, hasPreview, previewPort }: HeaderProps) {
+export function Header({ onMenu, onToggleRight, onTogglePreview, onToggleExtensions, hasPreview, previewPort }: HeaderProps) {
   return (
     <header className="header">
       <button className="icon-btn menu-btn" aria-label="Toggle sidebar" onClick={onMenu}>
@@ -61,6 +62,9 @@ export function Header({ onMenu, onToggleRight, onTogglePreview, hasPreview, pre
       </button>
       <button className="icon-btn rsb-toggle" aria-label="Toggle workspace panel" onClick={onToggleRight}>
         <IconPanelRight size={20} />
+      </button>
+      <button className="icon-btn ext-toggle" aria-label="Toggle extensions" onClick={onToggleExtensions} title="Extensions — MCP, LSP, Plugins, Skills">
+        <IconPuzzle size={20} />
       </button>
     </header>
   )

@@ -9,6 +9,7 @@ import { RightSidebar } from './components/RightSidebar'
 import { PreviewSidebar } from './components/PreviewSidebar'
 import { ChatView } from './components/ChatView'
 import { SettingsModal } from './components/SettingsModal'
+import { ExtensionsModal } from './components/ExtensionsModal'
 import { AddProjectModal } from './components/AddProjectModal'
 
 const LS_PROJECT = 'ks.activeProject'
@@ -34,6 +35,7 @@ function KsAgent() {
   const [sidebarOpen, setSidebarOpen] = useState(() => { try { return window.matchMedia('(min-width: 900px)').matches } catch { return true } })
   const [rsbOpen, setRsbOpen] = useState(() => { try { return window.matchMedia('(min-width: 1200px)').matches } catch { return true } })
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [extensionsOpen, setExtensionsOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showPreviewBanner, setShowPreviewBanner] = useState(false)
