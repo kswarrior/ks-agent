@@ -867,26 +867,167 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
           {tab === 'lsp' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconLSP size={16} /> Language Servers</h4>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 8px' }}>Coming soon</span>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconLSP size={16} /> Language Servers ({lspServers.length})</h4>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={loadLspServers} disabled={lspLoading}>{lspLoading ? 'Loading…' : 'Refresh'}</button>
+                  <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { if (lspEdit) { setLspEdit(null); setError(null) } else { setShowLspForm(v => !v); setError(null); if (!showLspForm && skillProjects.length === 0) loadSkillProjects() } }}>
+                    <IconPlus size={15} /> {lspEdit ? 'Cancel edit' : showLspForm ? 'Cancel' : 'Add'}
+                  </button>
+                </div>
               </div>
               <p className="hint" style={{ marginBottom: 16 }}>
-                Language Server Protocol integrations provide smarter code intelligence — autocomplete, diagnostics, go-to-definition, and hover docs inside the agent&apos;s editor.
+                Language Server Protocol integrations provide smarter code intelligence — autocomplete, diagnostics, go-to-definition, and hover docs. Each server runs as a stdio child process and is auto-started per project or globally.
               </p>
-              <div className="empty" style={{ padding: '32px 12px', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
-                  <IconLSP size={20} />
+
+              {lspEdit && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
+                  <h4 style={{ marginBottom: 12 }}>Edit language server</h4>
+                  <label className="field-label">Name</label>
+                  <input className="input" placeholder="e.g. tsserver, pyright, gopls" value={lspEditForm.name} onChange={e => setLspEditForm({ ...lspEditForm, name: e.target.value })} />
+                  <label className="field-label">Language</label>
+                  <select className="input" value={lspEditForm.language} onChange={e => setLspEditForm({ ...lspEditForm, language: e.target.value })}>
+                    {LSP_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+                    {!LSP_LANGUAGES.includes(lspEditForm.language as any) && <option value={lspEditForm.language}>{lspEditForm.language} (custom)</option>}
+                  </select>
+                  <input className="input" style={{ marginTop: 6 }} placeholder="custom language id (e.g. vue, svelte)" value={LSP_LANGUAGES.includes(lspEditForm.language as any) ? '' : lspEditForm.language} onChange={e => setLspEditForm({ ...lspEditForm, language: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} disabled={LSP_LANGUAGES.includes(lspEditForm.language as any)} />
+                  <label className="field-label">Command <span style={{ fontWeight: 400 }}>(executable)</span></label>
+                  <input className="input" placeholder="e.g. typescript-language-server, pyright-langserver, gopls, rust-analyzer" value={lspEditForm.command} onChange={e => setLspEditForm({ ...lspEditForm, command: e.target.value })} />
+                  <label className="field-label">Args <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
+                  <input className="input" placeholder="e.g. --stdio or --stdio, --log-level, info" value={lspEditForm.args} onChange={e => setLspEditForm({ ...lspEditForm, args: e.target.value })} />
+                  <label className="field-label">Env <span style={{ fontWeight: 400 }}>(KEY=VALUE per line)</span></label>
+                  <textarea className="input" placeholder="NODE_ENV=production&#10;PYTHONPATH=/usr/local/lib" value={lspEditForm.envText} onChange={e => setLspEditForm({ ...lspEditForm, envText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                  <label className="field-label">Scope project <span style={{ fontWeight: 400 }}>(leave empty for global)</span></label>
+                  <select className="input" value={lspEditForm.projectId} onChange={e => setLspEditForm({ ...lspEditForm, projectId: e.target.value })}>
+                    <option value="">Global (all projects)</option>
+                    {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — {p.path}</option>)}
+                  </select>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={lspEditForm.enabled} onChange={e => setLspEditForm({ ...lspEditForm, enabled: e.target.checked })} /> Enabled
+                  </label>
+                  <div className="dialog-actions" style={{ marginTop: 16 }}>
+                    <button className="btn" onClick={() => { setLspEdit(null); setError(null) }}>Cancel</button>
+                    <button className="btn btn-primary" onClick={submitEditLsp}>Save</button>
+                  </div>
                 </div>
-                <h2>No language servers</h2>
-                <p>LSP support is under development. You&apos;ll be able to configure servers per language here.</p>
-              </div>
+              )}
+
+              {showLspForm && !lspEdit && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
+                  <label className="field-label">Name</label>
+                  <input className="input" placeholder="e.g. typescript, pyright, gopls, rust-analyzer" value={lspForm.name} onChange={e => setLspForm({ ...lspForm, name: e.target.value })} />
+                  <label className="field-label">Language</label>
+                  <select className="input" value={lspForm.language} onChange={e => setLspForm({ ...lspForm, language: e.target.value })}>
+                    {LSP_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                  <label className="field-label">Command <span style={{ fontWeight: 400 }}>(executable)</span></label>
+                  <input className="input" placeholder="e.g. typescript-language-server --stdio" value={lspForm.command} onChange={e => setLspForm({ ...lspForm, command: e.target.value })} />
+                  <label className="field-label">Args <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
+                  <input className="input" placeholder="e.g. --stdio or leave empty" value={lspForm.args} onChange={e => setLspForm({ ...lspForm, args: e.target.value })} />
+                  <label className="field-label">Env <span style={{ fontWeight: 400 }}>(KEY=VALUE per line)</span></label>
+                  <textarea className="input" placeholder="NODE_ENV=production&#10;PYTHONPATH=/usr/local/lib" value={lspForm.envText} onChange={e => setLspForm({ ...lspForm, envText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                  <label className="field-label">Scope project <span style={{ fontWeight: 400 }}>(leave empty for global)</span></label>
+                  <select className="input" value={lspForm.projectId} onChange={e => setLspForm({ ...lspForm, projectId: e.target.value })}>
+                    <option value="">Global (all projects)</option>
+                    {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — {p.path}</option>)}
+                  </select>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={lspForm.enabled} onChange={e => setLspForm({ ...lspForm, enabled: e.target.checked })} /> Enabled
+                  </label>
+                  <div className="dialog-actions" style={{ marginTop: 16 }}>
+                    <button className="btn" onClick={() => { setShowLspForm(false); setLspForm({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true }); setError(null) }}>Cancel</button>
+                    <button className="btn btn-primary" onClick={submitLsp}>Add server</button>
+                  </div>
+                </div>
+              )}
+
+              {lspLoading ? (
+                <div className="hint" style={{ padding: 12 }}>Loading…</div>
+              ) : lspServers.length === 0 ? (
+                <div className="empty" style={{ padding: '24px 12px', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+                    <IconLSP size={20} />
+                  </div>
+                  <h2>No language servers</h2>
+                  <p>Configure LSP servers per language. Each server runs via stdio and provides diagnostics, completion, hover and go-to-definition.</p>
+                  <p className="hint" style={{ fontSize: 12 }}>Example: <code>typescript-language-server --stdio</code> · <code>pyright-langserver --stdio</code> · <code>gopls</code> · <code>rust-analyzer</code></p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {lspServers.map(s => {
+                    const isExpanded = !!lspExpanded[s.id]
+                    const testRes = lspTestResult[s.id]
+                    const statusColor = s.connecting ? '#f59e0b' : s.connected ? '#22c55e' : s.error ? '#ef4444' : '#6b7280'
+                    const statusLabel = s.connecting ? 'Connecting' : s.connected ? 'Connected' : s.error ? 'Error' : s.enabled ? 'Disconnected' : 'Disabled'
+                    const scopeName = s.projectId ? skillProjects.find(p => p.id === s.projectId)?.name ?? s.projectId.slice(0, 8) : 'Global'
+                    const caps = s.capabilities as any
+                    return (
+                      <div key={s.id} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, borderLeft: `3px solid ${statusColor}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 99, background: statusColor, flexShrink: 0, display: 'inline-block' }} />
+                          <span style={{ fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
+                          <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)', textTransform: 'lowercase' }}>{s.language}</span>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }} title="Enabled">
+                            <input type="checkbox" checked={s.enabled} onChange={() => toggleLspEnabled(s)} />
+                          </label>
+                          <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEditLsp(s)} aria-label={`Edit ${s.name}`}><IconPencil size={14} /></button>
+                          <button className="icon-btn" style={{ width: 28, height: 28, color: '#ef4444' }} onClick={() => removeLsp(s.id, s.name)} aria-label={`Delete ${s.name}`}><IconTrash size={14} /></button>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-faint)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          <span>{statusLabel}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconFolder size={12} /> {scopeName}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
+                          {s.command} {(s.args ?? []).join(' ')}
+                        </div>
+                        {s.error && <div style={{ fontSize: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '6px 8px', wordBreak: 'break-word' }}>{s.error}</div>}
+                        {s.connected && caps && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {caps.completionProvider !== undefined && <span style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 99, color: '#16a34a' }}>completion</span>}
+                            {caps.hoverProvider && <span style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 99, color: '#2563eb' }}>hover</span>}
+                            {caps.definitionProvider && <span style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 99, color: '#7c3aed' }}>definition</span>}
+                            {caps.referencesProvider && <span style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 99, color: '#d97706' }}>references</span>}
+                            {caps.documentSymbolProvider && <span style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 99, color: '#4f46e5' }}>symbols</span>}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} disabled={lspActionLoading === `test:${s.id}`} onClick={() => testLsp(s.id)}>{lspActionLoading === `test:${s.id}` ? 'Testing…' : 'Test'}</button>
+                          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} disabled={lspActionLoading === `refresh:${s.id}` || !s.enabled} onClick={() => refreshLsp(s.id)}>{lspActionLoading === `refresh:${s.id}` ? 'Refreshing…' : 'Restart'}</button>
+                          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setLspExpanded(prev => ({ ...prev, [s.id]: !prev[s.id] }))}>{isExpanded ? 'Hide details' : 'Details'}</button>
+                        </div>
+                        {testRes && (
+                          <div style={{ fontSize: 12, padding: '6px 8px', borderRadius: 6, background: testRes.ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: `1px solid ${testRes.ok ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`, color: testRes.ok ? '#16a34a' : '#ef4444' }}>
+                            {testRes.ok ? 'Test OK — initialize succeeded' : `Test failed: ${testRes.error}`}
+                          </div>
+                        )}
+                        {isExpanded && (
+                          <div style={{ marginTop: 4, borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {s.capabilities ? (
+                              <div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Capabilities</div>
+                                <pre style={{ margin: 0, fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: 8, maxHeight: 200, overflow: 'auto' }}>{JSON.stringify(s.capabilities, null, 2)}</pre>
+                              </div>
+                            ) : (
+                              <p className="hint" style={{ fontSize: 12 }}>{s.connected ? 'No capabilities reported' : 'Not connected — test or restart to fetch capabilities'}</p>
+                            )}
+                            <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace' }}>
+                              ID: {s.id.slice(0, 8)} · {s.language} · {s.command}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{new Date(s.createdAt).toLocaleString()}{s.updatedAt && s.updatedAt !== s.createdAt ? ` · updated ${new Date(s.updatedAt).toLocaleString()}` : ''}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
               <div style={{ marginTop: 16, padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Planned languages</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Supported languages</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {['TypeScript', 'Python', 'Go', 'Rust', 'CSS', 'JSON'].map((lang) => (
+                  {['TypeScript', 'Python', 'Go', 'Rust', 'CSS', 'JSON', 'HTML', 'YAML', 'Bash'].map((lang) => (
                     <span key={lang} style={{ fontSize: 11, padding: '4px 8px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)' }}>{lang}</span>
                   ))}
                 </div>
+                <p className="hint" style={{ marginTop: 8, fontSize: 12 }}>Tip: install a server (e.g. <code>npm i -g typescript-language-server</code>, <code>pip install pyright</code>, <code>go install golang.org/x/tools/gopls@latest</code>) then add it here. Use <code>--stdio</code> where required.</p>
               </div>
             </div>
           )}
