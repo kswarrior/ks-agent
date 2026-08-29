@@ -21,10 +21,10 @@ function base(size = 18, style?: CSSProperties) {
 }
 
 export const IconMenu = ({ size, className, style }: IconProps) => (
-  <svg {...base(size, style)} className={className}>
-    <line x1="3" y1="6" x2="21" y2="6" />
-    <line x1="3" y1="12" x2="21" y2="12" />
-    <line x1="3" y1="18" x2="21" y2="18" />
+  <svg {...base(size, style)} className={className} strokeWidth={2.3}>
+    <line x1="4" y1="6.5" x2="20" y2="6.5" />
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <line x1="4" y1="17.5" x2="20" y2="17.5" />
   </svg>
 )
 
