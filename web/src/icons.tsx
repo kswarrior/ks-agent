@@ -453,3 +453,49 @@ export const IconCheckCircle = ({ size, className, style }: IconProps) => (
     <polyline points="22 4 12 14.01 9 11.01" />
   </svg>
 )
+
+export const IconPuzzle = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M9 3H7a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2V7a2 2 0 0 1 2-2 2 2 0 0 1 2 2v2h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2V3Z" />
+    <path d="M7 9H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2V13a2 2 0 0 1 2-2 2 2 0 0 1 2 2v2h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V9Z" />
+    <path d="M9 15v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2h-2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-2Z" opacity={0.9} />
+  </svg>
+)
+
+export const IconMCP = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <rect x="3" y="4" width="18" height="6" rx="2" />
+    <rect x="3" y="11" width="18" height="6" rx="2" />
+    <rect x="3" y="18" width="18" height="2.5" rx="1" opacity={0.6} />
+    <circle cx="7.5" cy="7" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="7.5" cy="14" r="1.2" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+export const IconLSP = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <polyline points="8 9 3 12 8 15" />
+    <polyline points="16 9 21 12 16 15" />
+    <line x1="14" y1="4" x2="10" y2="20" />
+  </svg>
+)
+
+export const IconPlug = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M11 5V3a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1v2" />
+    <path d="M13 5V3a1 1 0 0 0-1-1h0a1 1 0 0 0-1 1v2" />
+    <path d="M9 9a3 3 0 0 0 3 3 3 3 0 0 0 3-3V7H9z" />
+    <path d="M12 12v4" />
+    <path d="M8 14h8" />
+    <path d="M7 7H5a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h2" />
+    <path d="M17 7h2a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-2" />
+  </svg>
+)
+
+export const IconSparkles = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M12 3l1.6 3.4L17 8l-3.4 1.6L12 13l-1.6-3.4L7 8l3.4-1.6Z" />
+    <path d="M19 13l1 2 2 1-2 1-1 2-1-2-2-1 2-1Z" />
+    <path d="M5 14l1 1.5 1.5 1-1.5 1L5 19l-1-1.5L2.5 16.5 4 15.5Z" />
+  </svg>
+)
