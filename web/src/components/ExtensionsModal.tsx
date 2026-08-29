@@ -126,6 +126,190 @@ export function ExtensionsModal({ open, onClose }: Props) {
     }
   }
 
+  // ---- MCP helpers ----
+  function parseEnvText(text: string): Record<string, string> | undefined {
+    const out: Record<string, string> = {}
+    const lines = text.split('\n')
+    for (const raw of lines) {
+      const line = raw.trim()
+      if (!line || line.startsWith('#')) continue
+      const eq = line.indexOf('=')
+      if (eq === -1) continue
+      const k = line.slice(0, eq).trim()
+      const v = line.slice(eq + 1).trim()
+      if (!k) continue
+      if (!/^[A-Z_][A-Z0-9_]*$/i.test(k)) continue
+      out[k] = v
+    }
+    return Object.keys(out).length ? out : undefined
+  }
+  function parseHeadersText(text: string): Record<string, string> | undefined {
+    const out: Record<string, string> = {}
+    const lines = text.split('\n')
+    for (const raw of lines) {
+      const line = raw.trim()
+      if (!line || line.startsWith('#')) continue
+      const colon = line.indexOf(':')
+      if (colon === -1) continue
+      const k = line.slice(0, colon).trim()
+      const v = line.slice(colon + 1).trim()
+      if (!k || !v) continue
+      out[k] = v
+    }
+    return Object.keys(out).length ? out : undefined
+  }
+  function stringifyEnv(env?: Record<string, string> | null): string {
+    if (!env) return ''
+    return Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n')
+  }
+  function stringifyHeaders(h?: Record<string, string> | null): string {
+    if (!h) return ''
+    return Object.entries(h).map(([k, v]) => `${k}: ${v}`).join('\n')
+  }
+  async function loadMcpServers() {
+    setMcpLoading(true)
+    try {
+      const list = await api.listMcpServers()
+      setMcpServers(list)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setMcpLoading(false)
+    }
+  }
+  async function submitMcp() {
+    setError(null)
+    const name = mcpForm.name.trim()
+    const transport = mcpForm.transport
+    if (!name) return setError('MCP server name is required')
+    if (name.length < 2 || name.length > 80) return setError('MCP name must be 2-80 characters')
+    if (transport === 'stdio') {
+      if (!mcpForm.command.trim()) return setError('Command is required for stdio transport')
+    } else {
+      if (!mcpForm.url.trim()) return setError('URL is required for ' + transport + ' transport')
+      try { new URL(mcpForm.url.trim()) } catch { return setError('Invalid URL') }
+    }
+    const args = mcpForm.args.trim() ? mcpForm.args.split(',').map((s) => s.trim()).filter(Boolean) : undefined
+    const env = parseEnvText(mcpForm.envText)
+    const headers = parseHeadersText(mcpForm.headersText)
+    try {
+      await api.createMcpServer({
+        name,
+        transport,
+        command: mcpForm.command.trim() || undefined,
+        args,
+        url: mcpForm.url.trim() || undefined,
+        env,
+        headers,
+        projectId: mcpForm.projectId.trim() || undefined,
+        enabled: mcpForm.enabled
+      })
+      toast('MCP server added', 'success')
+      setShowMcpForm(false)
+      setMcpForm({ name: '', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
+      await loadMcpServers()
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+  async function submitEditMcp() {
+    if (!mcpEdit) return
+    setError(null)
+    const name = mcpEditForm.name.trim()
+    const transport = mcpEditForm.transport
+    if (!name) return setError('MCP server name is required')
+    if (transport === 'stdio') {
+      if (!mcpEditForm.command.trim()) return setError('Command is required for stdio transport')
+    } else {
+      if (!mcpEditForm.url.trim()) return setError('URL is required for ' + transport + ' transport')
+      try { new URL(mcpEditForm.url.trim()) } catch { return setError('Invalid URL') }
+    }
+    const args = mcpEditForm.args.trim() ? mcpEditForm.args.split(',').map((s) => s.trim()).filter(Boolean) : []
+    const env = parseEnvText(mcpEditForm.envText)
+    const headers = parseHeadersText(mcpEditForm.headersText)
+    try {
+      await api.updateMcpServer(mcpEdit.id, {
+        name,
+        transport,
+        command: mcpEditForm.command.trim() || undefined,
+        args,
+        url: mcpEditForm.url.trim() || undefined,
+        env,
+        headers,
+        projectId: mcpEditForm.projectId.trim() || undefined,
+        enabled: mcpEditForm.enabled
+      })
+      toast('MCP server updated', 'success')
+      setMcpEdit(null)
+      await loadMcpServers()
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+  function startEditMcp(s: MCPServer) {
+    setMcpEdit(s)
+    setMcpEditForm({
+      name: s.name,
+      transport: s.transport as MCPTransport,
+      command: (s.command as string) ?? '',
+      args: (s.args ?? []).join(', '),
+      url: (s.url as string) ?? '',
+      envText: stringifyEnv(s.env as any),
+      headersText: stringifyHeaders(s.headers as any),
+      projectId: (s.projectId as string) ?? '',
+      enabled: s.enabled
+    })
+    setShowMcpForm(false)
+    setError(null)
+  }
+  async function removeMcp(id: string, name: string) {
+    const ok = await confirm({ title: 'Delete MCP server?', message: `Remove "${name}"? Tools will no longer be available to the agent.`, danger: true, confirmText: 'Delete' })
+    if (!ok) return
+    try {
+      await api.deleteMcpServer(id)
+      toast('MCP server deleted', 'success')
+      if (mcpEdit?.id === id) setMcpEdit(null)
+      await loadMcpServers()
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+  async function testMcp(id: string) {
+    setMcpActionLoading(`test:${id}`)
+    try {
+      const res = await api.testMcpServer(id)
+      setMcpTestResult((prev) => ({ ...prev, [id]: res }))
+      if (res.ok) toast(`Connected — ${res.tools.length} tool(s) found`, 'success')
+      else toast(res.error ?? 'Test failed', 'error')
+      await loadMcpServers()
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setMcpActionLoading(null)
+    }
+  }
+  async function refreshMcp(id: string) {
+    setMcpActionLoading(`refresh:${id}`)
+    try {
+      await api.refreshMcpServer(id)
+      toast('Refreshed', 'success')
+      await loadMcpServers()
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setMcpActionLoading(null)
+    }
+  }
+  async function toggleMcpEnabled(s: MCPServer) {
+    try {
+      await api.updateMcpServer(s.id, { enabled: !s.enabled })
+      await loadMcpServers()
+      toast(s.enabled ? 'Disabled' : 'Enabled', 'success')
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
   async function submitSkill() {
     setError(null)
     const name = skillForm.name.trim()
