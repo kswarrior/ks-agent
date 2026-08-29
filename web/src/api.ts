@@ -1,4 +1,4 @@
-import type { Activity, Chat, FileListing, Message, ModelEntry, Plan, Preview, Project, Provider, Question, RetrySettings, Skill, Terminal } from './types'
+import type { Activity, Chat, FileListing, MCPServer, Message, ModelEntry, Plan, Preview, Project, Provider, Question, RetrySettings, Skill, Terminal } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -313,3 +313,17 @@ export const createSkill = (s: { name: string; note: string; mainFile: string; f
 export const deleteSkill = (id: string) => req<{ ok: true }>(`/api/settings/skills/${id}`, { method: 'DELETE' })
 export const updateSkill = (id: string, patch: Partial<{ name: string; note: string; mainFile: string; files: string[]; projectId?: string }>) =>
   req<Skill>(`/api/settings/skills/${id}`, json('PATCH', patch))
+
+// MCP Servers
+export const listMcpServers = () => req<MCPServer[]>('/api/settings/mcp')
+export const getMcpServer = (id: string) => req<MCPServer>(`/api/settings/mcp/${id}`)
+export const createMcpServer = (s: { name: string; transport: string; command?: string; args?: string[]; url?: string; env?: Record<string,string>; headers?: Record<string,string>; projectId?: string; enabled?: boolean }) =>
+  req<MCPServer>('/api/settings/mcp', json('POST', s))
+export const updateMcpServer = (id: string, patch: Partial<{ name: string; transport: string; command?: string; args?: string[]; url?: string; env?: Record<string,string>; headers?: Record<string,string>; projectId?: string; enabled?: boolean }>) =>
+  req<MCPServer>(`/api/settings/mcp/${id}`, json('PATCH', patch))
+export const deleteMcpServer = (id: string) => req<{ ok: true }>(`/api/settings/mcp/${id}`, { method: 'DELETE' })
+export const testMcpServer = (id: string, overrides?: Record<string, unknown>) =>
+  req<{ ok: boolean; error?: string; tools: { name: string; description?: string; inputSchema?: unknown }[] }>(`/api/settings/mcp/${id}/test`, json('POST', overrides ?? {}))
+export const getMcpTools = (id: string) => req<{ tools: { name: string; description?: string; inputSchema?: unknown }[] }>(`/api/settings/mcp/${id}/tools`)
+export const refreshMcpServer = (id: string) => req<{ ok: true; tools: { name: string; description?: string }[] }>(`/api/settings/mcp/${id}/refresh`, json('POST', {}))
+export const getMcpStatusAll = () => req<MCPServer[]>('/api/settings/mcp/status/all')

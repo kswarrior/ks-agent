@@ -104,7 +104,35 @@ export interface Skill {
   updatedAt?: string
 }
 
-export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview'
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | string
+
+export type MCPTransport = 'stdio' | 'sse' | 'http' | 'websocket'
+
+export interface MCPTool {
+  name: string
+  description?: string
+  inputSchema?: Record<string, unknown>
+}
+
+export interface MCPServer {
+  id: string
+  name: string
+  transport: MCPTransport
+  command?: string | null
+  args?: string[]
+  url?: string | null
+  env?: Record<string, string>
+  headers?: Record<string, string>
+  projectId?: string | null
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  connected: boolean
+  connecting: boolean
+  error?: string | null
+  tools: MCPTool[]
+  lastConnectedAt?: string | null
+}
 
 export interface Preview {
   id: string
