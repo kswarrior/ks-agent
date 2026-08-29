@@ -883,7 +883,7 @@ app.post('/api/chats/:id/messages', async (c) => {
     const allMsgs = messagesOf(chat.id)
     const lastAssistant = [...allMsgs].reverse().find((m) => m.role === 'assistant')
     if (lastAssistant) {
-      const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || !!(lastAssistant as any).error
+      const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
       // Only treat pure "continue" as resumption when previous response was actually interrupted
       // Otherwise fall through to normal flow and create a regular user message "continue"
       if (!wasInterrupted) {
@@ -1141,10 +1141,11 @@ app.post('/api/chats/:id/continue', async (c) => {
       if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
     }
     touchChat(chat)
-    // For "any other" we still want seamless pickup, so do NOT clear activities if last was interrupted
+    // For "any other" we still want seamless pickup, so do NOT clear activities/plans if last was interrupted
     if (!originalWasInterrupted) {
       // @ts-ignore
       db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
+      db.plans = db.plans.filter((p) => p.chatId !== chat.id)
     }
     saveDb()
     const modelSystemPrompt =
