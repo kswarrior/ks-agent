@@ -800,7 +800,24 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
               )}
 
               {mcpLoading ? (
-                <div className="hint" style={{ padding: 12 }}>Loading…</div>
+                <div className="fp-skel" aria-label="Loading MCP servers">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="fp-skel-icon" style={{ width: 8, height: 8, borderRadius: 99, animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: '38%', height: 14, animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: 52, height: 18, borderRadius: 99, marginLeft: 'auto', animationDelay: `${i * 70}ms` }} />
+                      </div>
+                      <span className="fp-skel-bar" style={{ width: '78%', height: 11, animationDelay: `${i * 70}ms` }} />
+                      <span className="fp-skel-bar" style={{ width: '64%', height: 11, animationDelay: `${i * 70}ms` }} />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <span className="fp-skel-bar" style={{ width: 56, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: 92, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: 72, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : mcpServers.length === 0 ? (
                 <div className="empty" style={{ padding: '24px 12px', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
                   <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
@@ -1002,7 +1019,25 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
               )}
 
               {lspLoading ? (
-                <div className="hint" style={{ padding: 12 }}>Loading…</div>
+                <div className="fp-skel" aria-label="Loading language servers">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="fp-skel-icon" style={{ width: 8, height: 8, borderRadius: 99, animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: '32%', height: 14, animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: 56, height: 18, borderRadius: 99, marginLeft: 'auto', animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: 48, height: 18, borderRadius: 99, animationDelay: `${i * 70}ms` }} />
+                      </div>
+                      <span className="fp-skel-bar" style={{ width: '74%', height: 11, animationDelay: `${i * 70}ms` }} />
+                      <span className="fp-skel-bar" style={{ width: '58%', height: 11, animationDelay: `${i * 70}ms` }} />
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <span className="fp-skel-bar" style={{ width: 56, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: 72, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                        <span className="fp-skel-bar" style={{ width: 72, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : lspServers.length === 0 ? (
                 <div className="empty" style={{ padding: '24px 12px', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
                   <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
