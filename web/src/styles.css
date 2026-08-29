@@ -194,6 +194,49 @@ textarea {
   filter: drop-shadow(0 1px 1px rgba(0,0,0,0.8));
 }
 
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: linear-gradient(135deg, #111111 0%, #0a0a0a 100%);
+  border: 1px solid #1e1e1e;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.header-actions .icon-btn {
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #e8e8e8;
+}
+
+.header-actions .icon-btn:hover {
+  background: #1a1a1a;
+  border-color: #2a2a2a;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.header-actions .icon-btn:active {
+  background: #0f0f0f;
+  border-color: #1e1e1e;
+}
+
+.header-actions .icon-btn svg {
+  stroke-width: 2.2px;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.85));
+}
+
+.header-actions .icon-btn.ext-toggle svg,
+.header-actions .icon-btn.psb-toggle svg,
+.header-actions .icon-btn.rsb-toggle svg {
+  stroke-width: 2.1px;
+}
+
 .shell {
   display: flex;
   flex: 1;
