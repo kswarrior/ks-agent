@@ -519,9 +519,6 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
               </button>
             )
           })}
-          <button className="icon-btn rsb-close" aria-label="Close panel" onClick={onClose}>
-            <IconX size={16} />
-          </button>
         </div>
 
         <div className="rsb-body">

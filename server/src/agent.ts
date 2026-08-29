@@ -798,9 +798,10 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         getDb().activities.push(activity)
         saveDb()
       } catch {}
+      // Send valid JSON for args — previous slice(0,300) on raw JSON string produced invalid JSON for large payloads (e.g. write_file with big content), causing client JSON.parse to fail and activity cards to not show until refresh (when they load from DB). Use storedArgs which is already safely truncated.
       opts.onEvent(
         'tool',
-        JSON.stringify({ callId: call.id, name: call.name, args: call.args.slice(0, 300) })
+        JSON.stringify({ callId: call.id, name: call.name, args: JSON.stringify(storedArgs) })
       )
       ctx.toolCallId = call.id
       const res = await executeTool(call.name, call.args, ctx)

@@ -275,7 +275,26 @@ function KsAgent() {
             },
             onTool: (tool) => {
               const { callId, name, args } = tool
-              const parsedArgs = typeof args === 'string' ? JSON.parse(args) : args
+              let parsedArgs: Record<string, unknown>
+              if (typeof args === 'string') {
+                try {
+                  parsedArgs = JSON.parse(args)
+                } catch {
+                  // Fallback for truncated/invalid JSON (e.g. old server slice) — extract path/command superficially so card still shows
+                  parsedArgs = {}
+                  try {
+                    const pathMatch = args.match(/"path"\s*:\s*"([^"]*)/)
+                    if (pathMatch) parsedArgs.path = pathMatch[1]
+                    const cmdMatch = args.match(/"command"\s*:\s*"([^"]*)/)
+                    if (cmdMatch) parsedArgs.command = cmdMatch[1]
+                    const titleMatch = args.match(/"title"\s*:\s*"([^"]*)/)
+                    if (titleMatch) parsedArgs.title = titleMatch[1]
+                  } catch {}
+                  if (!parsedArgs.path && !parsedArgs.command && !parsedArgs.title) parsedArgs._raw = args.slice(0, 200)
+                }
+              } else {
+                parsedArgs = (args as Record<string, unknown>) || {}
+              }
               pendingTools.set(callId, { name, args: parsedArgs as Record<string, unknown> })
               const activity: Activity = {
                 id: callId,

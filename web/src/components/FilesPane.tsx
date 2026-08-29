@@ -506,9 +506,6 @@ export function FilesPane({ projectId }: FilesPaneProps) {
             <span className="fp-edit-title" title={selected}>{selected}</span>
             <span className="fp-lang-badge" style={{ background: selectedColor, color: selectedColor === '#f7df1e' || selectedColor === '#ecd53f' ? '#000' : '#fff', borderColor: selectedColor }}>{selectedMeta?.label ?? 'FILE'}</span>
             <div className="fp-editor-actions">
-              <button className="btn" disabled={editLoading || editSaving} onClick={() => { setSelected(null); setEditContent(''); }}>
-                Cancel
-              </button>
               <button className="btn btn-primary" disabled={editLoading || editSaving} onClick={() => saveFileContent(selected)}>
                 {editSaving ? 'Saving…' : 'Save'}
               </button>
