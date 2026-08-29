@@ -982,12 +982,13 @@ app.post('/api/chats/:id/messages', async (c) => {
     if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
   }
   touchChat(chat)
-  // Clear previous activities for this chat so next run starts fresh (like client does)
+  // Clear previous activities/plans for this chat so next run starts fresh (like client does)
   // Persisted per chat, so refresh after sending shows empty until new activity arrives
   // But if previous was interrupted, preserve for seamless continue (user said any input should pick up where ended)
   if (!prevWasInterrupted) {
     // @ts-ignore
     db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
+    db.plans = db.plans.filter((p) => p.chatId !== chat.id)
   }
   saveDb()
 
