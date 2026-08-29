@@ -967,7 +967,7 @@ app.post('/api/chats/:id/messages', async (c) => {
           continuationOf: lastAssistant.id
         }
         generations.set(chat.id, job)
-        const agent: AgentSpec | null = project ? { projectPath: project.path } : null
+        const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
         void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
           job.finishedAt = new Date().toISOString()
         })
@@ -1052,7 +1052,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   // Fire-and-forget chat title generation (AI understands prompt and numbers the chat)
   void generateAndPersistTitle(chat, content, provider, resolvedModel.model).catch(() => {})
 
-  const agent: AgentSpec | null = project ? { projectPath: project.path } : null
+  const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
 
   void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
     job.finishedAt = new Date().toISOString()
@@ -1139,7 +1139,7 @@ app.post('/api/chats/:id/continue', async (c) => {
       continuationOf: lastAssistant.id
     }
     generations.set(chat.id, job)
-    const agent: AgentSpec | null = project ? { projectPath: project.path } : null
+    const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
     void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
       job.finishedAt = new Date().toISOString()
     })
@@ -1201,7 +1201,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     }
     generations.set(chat.id, job)
     void generateAndPersistTitle(chat, rawContent, provider, resolvedModel.model).catch(() => {})
-    const agent: AgentSpec | null = project ? { projectPath: project.path } : null
+    const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
     void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
       job.finishedAt = new Date().toISOString()
     })
