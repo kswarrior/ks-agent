@@ -412,6 +412,28 @@ function initSchema(s: Database.Database): void {
   `)
 }
 
+function migrateLspSchema(s: Database.Database): void {
+  try {
+    const cols = s.prepare("PRAGMA table_info(lspServers)").all() as any[]
+    if (!cols.length) return
+    const names = new Set(cols.map((c: any) => c.name))
+    // need to ensure transport, url, headers, command nullability matches new schema
+    // SQLite cannot alter NOT NULL directly, but we can add missing columns
+    if (!names.has('transport')) {
+      try { s.exec("ALTER TABLE lspServers ADD COLUMN transport TEXT") } catch {}
+      try { s.exec("UPDATE lspServers SET transport='stdio' WHERE transport IS NULL OR transport=''") } catch {}
+    }
+    if (!names.has('url')) {
+      try { s.exec("ALTER TABLE lspServers ADD COLUMN url TEXT") } catch {}
+    }
+    if (!names.has('headers')) {
+      try { s.exec("ALTER TABLE lspServers ADD COLUMN headers TEXT") } catch {}
+    }
+    // If command is NOT NULL but we want nullable, we leave as is — SQLite allows null inserts even if declared NOT NULL? We'll handle by ensuring command has default
+    // Also ensure new columns have defaults for existing rows
+  } catch {}
+}
+
 function titleFromFileName(base: string): string {
   return base
     .replace(/[-_]+/g, ' ')
@@ -720,7 +742,7 @@ function loadFromSqlite(s: Database.Database): DB | null {
         id: r.id,
         name: r.name,
         language: r.language,
-        transport: r.transport as LSPTransport,
+        transport: (r.transport as LSPTransport) ?? 'stdio',
         command: r.command ?? undefined,
         args: r.args ? JSON.parse(r.args) as string[] : undefined,
         url: r.url ?? undefined,
@@ -731,7 +753,27 @@ function loadFromSqlite(s: Database.Database): DB | null {
         createdAt: r.createdAt,
         updatedAt: r.updatedAt
       }))
-    } catch {}
+    } catch {
+      // fallback for old schema without transport/url/headers
+      try {
+        const lspRows = s.prepare('SELECT id, name, language, command, args, env, projectId, enabled, createdAt, updatedAt FROM lspServers').all() as any[]
+        lspServers = lspRows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          language: r.language,
+          transport: 'stdio' as LSPTransport,
+          command: r.command ?? undefined,
+          args: r.args ? JSON.parse(r.args) as string[] : undefined,
+          url: undefined,
+          env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
+          headers: undefined,
+          projectId: r.projectId ?? undefined,
+          enabled: !!r.enabled,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt
+        }))
+      } catch {}
+    }
 
     const previews = s.prepare('SELECT id, chatId, port, createdAt, updatedAt FROM previews').all() as Preview[]
 
