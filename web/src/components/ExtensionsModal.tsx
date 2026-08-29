@@ -695,21 +695,32 @@ export function ExtensionsModal({ open, onClose }: Props) {
 
           {tab === 'mcp' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconMCP size={16} /> MCP Servers ({mcpServers.length})</h4>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={loadMcpServers} disabled={mcpLoading}>{mcpLoading ? 'Loading…' : 'Refresh'}</button>
-                  <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { if (mcpEdit) { setMcpEdit(null); setError(null) } else { setShowMcpForm(v => !v); setError(null); if (!showMcpForm && skillProjects.length === 0) loadSkillProjects() } }}>
-                    <IconPlus size={15} /> {mcpEdit ? 'Cancel edit' : showMcpForm ? 'Cancel' : 'Add'}
-                  </button>
-                </div>
-              </div>
-              <p className="hint" style={{ marginBottom: 16 }}>
-                MCP servers extend the agent with external tools. Tools are auto-discovered via MCP (stdio / SSE / HTTP / WebSocket) and injected into the agent. Scope per project or global.
-              </p>
+              {!mcpEdit && !showMcpForm && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconMCP size={16} /> MCP Servers ({mcpServers.length})</h4>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={loadMcpServers} disabled={mcpLoading}>{mcpLoading ? 'Loading…' : 'Refresh'}</button>
+                      <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setShowMcpForm(true); setError(null); if (skillProjects.length === 0) loadSkillProjects() }}>
+                        <IconPlus size={15} /> Add
+                      </button>
+                    </div>
+                  </div>
+                  <p className="hint" style={{ marginBottom: 16 }}>
+                    MCP servers extend the agent with external tools. Tools are auto-discovered via MCP (stdio / SSE / HTTP / WebSocket) and injected into the agent. Scope per project or global.
+                  </p>
+                </>
+              )}
 
               {mcpEdit && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
+                <>
+                  <div className="fp-subhead">
+                    <button className="icon-btn" aria-label="Back to MCP servers" onClick={() => { setMcpEdit(null); setError(null) }}>
+                      <IconChevronLeft size={17} />
+                    </button>
+                    <span>Edit MCP server</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
                   <h4 style={{ marginBottom: 12 }}>Edit MCP server</h4>
                   <label className="field-label">Name</label>
                   <input className="input" placeholder="e.g. filesystem, brave-search" value={mcpEditForm.name} onChange={e => setMcpEditForm({ ...mcpEditForm, name: e.target.value })} />
@@ -752,10 +763,18 @@ X-Custom: value" value={mcpEditForm.headersText} onChange={e => setMcpEditForm({
                     <button className="btn btn-primary" onClick={submitEditMcp}>Save</button>
                   </div>
                 </div>
+                </>
               )}
 
               {showMcpForm && !mcpEdit && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
+                <>
+                  <div className="fp-subhead">
+                    <button className="icon-btn" aria-label="Back to MCP servers" onClick={() => { setShowMcpForm(false); setMcpForm({ name: '', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true }); setError(null) }}>
+                      <IconChevronLeft size={17} />
+                    </button>
+                    <span>Add MCP server</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
                   <label className="field-label">Name</label>
                   <input className="input" placeholder="e.g. filesystem, fetch, brave-search" value={mcpForm.name} onChange={e => setMcpForm({ ...mcpForm, name: e.target.value })} />
                   <label className="field-label">Transport</label>
@@ -797,9 +816,12 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     <button className="btn btn-primary" onClick={submitMcp}>Add server</button>
                   </div>
                 </div>
+                </>
               )}
 
-              {mcpLoading ? (
+              {!mcpEdit && !showMcpForm && (
+                <>
+                  {mcpLoading ? (
                 <div className="fp-skel" aria-label="Loading MCP servers">
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -899,26 +921,39 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                   <li>Stdio servers run as child processes; HTTP/SSE servers are called via fetch</li>
                 </ul>
               </div>
+                </>
+              )}
             </div>
           )}
 
           {tab === 'lsp' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconLSP size={16} /> Language Servers ({lspServers.length})</h4>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={loadLspServers} disabled={lspLoading}>{lspLoading ? 'Loading…' : 'Refresh'}</button>
-                  <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { if (lspEdit) { setLspEdit(null); setError(null) } else { setShowLspForm(v => !v); setError(null); if (!showLspForm && skillProjects.length === 0) loadSkillProjects() } }}>
-                    <IconPlus size={15} /> {lspEdit ? 'Cancel edit' : showLspForm ? 'Cancel' : 'Add'}
-                  </button>
-                </div>
-              </div>
-              <p className="hint" style={{ marginBottom: 16 }}>
-                Language Server Protocol integrations provide smarter code intelligence — autocomplete, diagnostics, go-to-definition, and hover docs. Servers run via stdio, TCP, HTTP or WebSocket and are auto-started per project or globally.
-              </p>
+              {!lspEdit && !showLspForm && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconLSP size={16} /> Language Servers ({lspServers.length})</h4>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={loadLspServers} disabled={lspLoading}>{lspLoading ? 'Loading…' : 'Refresh'}</button>
+                      <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setShowLspForm(true); setError(null); if (skillProjects.length === 0) loadSkillProjects() }}>
+                        <IconPlus size={15} /> Add
+                      </button>
+                    </div>
+                  </div>
+                  <p className="hint" style={{ marginBottom: 16 }}>
+                    Language Server Protocol integrations provide smarter code intelligence — autocomplete, diagnostics, go-to-definition, and hover docs. Servers run via stdio, TCP, HTTP or WebSocket and are auto-started per project or globally.
+                  </p>
+                </>
+              )}
 
               {lspEdit && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
+                <>
+                  <div className="fp-subhead">
+                    <button className="icon-btn" aria-label="Back to language servers" onClick={() => { setLspEdit(null); setError(null) }}>
+                      <IconChevronLeft size={17} />
+                    </button>
+                    <span>Edit language server</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
                   <h4 style={{ marginBottom: 12 }}>Edit language server</h4>
                   <label className="field-label">Name</label>
                   <input className="input" placeholder="e.g. tsserver, pyright, gopls" value={lspEditForm.name} onChange={e => setLspEditForm({ ...lspEditForm, name: e.target.value })} />
@@ -967,10 +1002,18 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     <button className="btn btn-primary" onClick={submitEditLsp}>Save</button>
                   </div>
                 </div>
+                </>
               )}
 
               {showLspForm && !lspEdit && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
+                <>
+                  <div className="fp-subhead">
+                    <button className="icon-btn" aria-label="Back to language servers" onClick={() => { setShowLspForm(false); setLspForm({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true }); setError(null) }}>
+                      <IconChevronLeft size={17} />
+                    </button>
+                    <span>Add language server</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
                   <label className="field-label">Name</label>
                   <input className="input" placeholder="e.g. typescript, pyright, gopls, rust-analyzer" value={lspForm.name} onChange={e => setLspForm({ ...lspForm, name: e.target.value })} />
                   <label className="field-label">Language</label>
@@ -1016,9 +1059,12 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     <button className="btn btn-primary" onClick={submitLsp}>Add server</button>
                   </div>
                 </div>
+                </>
               )}
 
-              {lspLoading ? (
+              {!lspEdit && !showLspForm && (
+                <>
+                  {lspLoading ? (
                 <div className="fp-skel" aria-label="Loading language servers">
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1130,6 +1176,8 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                 </div>
                 <p className="hint" style={{ marginTop: 8, fontSize: 12 }}>Tip: install a server (e.g. <code>npm i -g typescript-language-server</code>, <code>pip install pyright</code>, <code>go install golang.org/x/tools/gopls@latest</code>) then add it here. Use <code>--stdio</code> where required.</p>
               </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1158,17 +1206,28 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
 
           {tab === 'skills' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconSparkles size={16} /> Skills ({skills.length})</h4>
-                <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { if (skillEdit) { setSkillEdit(null); setError(null) } else { setShowSkillForm(v => !v); setError(null); if (!showSkillForm && skillProjects.length === 0) loadSkillProjects() } }}>
-                  <IconPlus size={15} /> {skillEdit ? 'Cancel edit' : showSkillForm ? 'Cancel' : 'Add'}
-                </button>
-              </div>
-              <p className="hint" style={{ marginBottom: 16 }}>Skills are reusable instruction packs. Each skill has a name, a short note, a main .md file and an optional list of additional files. They are automatically injected into the agent&apos;s context on every message — no manual loading needed.</p>
+              {!skillEdit && !showSkillForm && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconSparkles size={16} /> Skills ({skills.length})</h4>
+                    <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setShowSkillForm(true); setError(null); if (skillProjects.length === 0) loadSkillProjects() }}>
+                      <IconPlus size={15} /> Add
+                    </button>
+                  </div>
+                  <p className="hint" style={{ marginBottom: 16 }}>Skills are reusable instruction packs. Each skill has a name, a short note, a main .md file and an optional list of additional files. They are automatically injected into the agent&apos;s context on every message — no manual loading needed.</p>
+                </>
+              )}
 
               {skillEdit && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
-                  <h4 style={{ marginBottom: 12 }}>Edit skill</h4>
+                <>
+                  <div className="fp-subhead">
+                    <button className="icon-btn" aria-label="Back to skills" onClick={() => { setSkillEdit(null); setSkillFileBrowserOpen(false); setError(null) }}>
+                      <IconChevronLeft size={17} />
+                    </button>
+                    <span>Edit skill</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
+                    <h4 style={{ marginBottom: 12 }}>Edit skill</h4>
                   <label className="field-label">Name</label>
                   <input className="input" placeholder="e.g. My Skill" value={skillEditForm.name} onChange={e => setSkillEditForm({ ...skillEditForm, name: e.target.value })} />
                   <label className="field-label">Note <span style={{ fontWeight: 400 }}>(short about skill)</span></label>
@@ -1223,7 +1282,14 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                       <div style={{ padding: 8 }}>
                         <div className="fp-path" style={{ marginBottom: 6 }}>{skillPickerDir === '' ? '/' : skillPickerDir}</div>
                         {skillPickerLoading ? (
-                          <div className="hint" style={{ padding: 12 }}>Loading…</div>
+                          <div className="fp-skel" aria-label="Loading files">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <div key={i} className="fp-skel-row">
+                                <span className="fp-skel-icon" style={{ animationDelay: `${i * 70}ms` }} />
+                                <span className="fp-skel-bar" style={{ width: `${52 + ((i * 17) % 34)}%`, animationDelay: `${i * 70}ms` }} />
+                              </div>
+                            ))}
+                          </div>
                         ) : (
                           <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                             {skillPickerDir !== '' && (
@@ -1258,10 +1324,18 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     <button className="btn btn-primary" onClick={submitEditSkill}>Save</button>
                   </div>
                 </div>
+                </>
               )}
 
               {showSkillForm && !skillEdit && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
+                <>
+                  <div className="fp-subhead">
+                    <button className="icon-btn" aria-label="Back to skills" onClick={() => { setShowSkillForm(false); setSkillFileBrowserOpen(false); setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '' }); setSkillPickerDir(''); setError(null) }}>
+                      <IconChevronLeft size={17} />
+                    </button>
+                    <span>Add skill</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
                   <label className="field-label">Name</label>
                   <input className="input" placeholder="e.g. My Skill" value={skillForm.name} onChange={e => setSkillForm({ ...skillForm, name: e.target.value })} />
 
@@ -1360,14 +1434,34 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     <button className="btn btn-primary" onClick={submitSkill}>Add skill</button>
                   </div>
                 </div>
+                </>
               )}
 
-              {skills.length === 0 ? (
-                <div className="empty" style={{ padding: '24px 12px' }}>
-                  <h2>No skills yet</h2>
-                  <p>Create a skill with a name, note, main .md file and optional additional files. Skills are injected into every agent run.</p>
-                </div>
-              ) : (
+              {!skillEdit && !showSkillForm && (
+                <>
+                  {skillsLoading ? (
+                    <div className="fp-skel" aria-label="Loading skills">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="fp-skel-icon" style={{ width: 16, height: 16, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                            <span className="fp-skel-bar" style={{ width: '40%', height: 14, animationDelay: `${i * 70}ms` }} />
+                          </div>
+                          <span className="fp-skel-bar" style={{ width: '82%', height: 11, animationDelay: `${i * 70}ms` }} />
+                          <span className="fp-skel-bar" style={{ width: '62%', height: 11, animationDelay: `${i * 70}ms` }} />
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <span className="fp-skel-bar" style={{ width: 60, height: 12, borderRadius: 99, animationDelay: `${i * 70}ms` }} />
+                            <span className="fp-skel-bar" style={{ width: 48, height: 12, borderRadius: 99, animationDelay: `${i * 70}ms` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : skills.length === 0 ? (
+                    <div className="empty" style={{ padding: '24px 12px' }}>
+                      <h2>No skills yet</h2>
+                      <p>Create a skill with a name, note, main .md file and optional additional files. Skills are injected into every agent run.</p>
+                    </div>
+                  ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {skills.map(s => {
                     const projName = s.projectId ? skillProjects.find(p => p.id === s.projectId)?.name ?? s.projectId.slice(0, 8) : null
@@ -1393,6 +1487,8 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     </div>
                   )})}
                 </div>
+                  )}
+                </>
               )}
             </div>
           )}
