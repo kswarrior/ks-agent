@@ -456,9 +456,7 @@ export const IconCheckCircle = ({ size, className, style }: IconProps) => (
 
 export const IconPuzzle = ({ size, className, style }: IconProps) => (
   <svg {...base(size, style)} className={className}>
-    <path d="M9 3H7a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2V7a2 2 0 0 1 2-2 2 2 0 0 1 2 2v2h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2V3Z" />
-    <path d="M7 9H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2V13a2 2 0 0 1 2-2 2 2 0 0 1 2 2v2h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V9Z" />
-    <path d="M9 15v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-2h-2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-2Z" opacity={0.9} />
+    <path d="M6 6 H10 V3 H14 V6 H18 V10 H21 V14 H18 V18 H14 V15 H10 V18 H6 V14 H9 V10 H6 V6 Z" />
   </svg>
 )
 
