@@ -255,7 +255,7 @@ export function ChatView(props: Props) {
   const { hasExplore, workingStep, workingIdx, totalSteps, doneSteps, isPlanDone, chatStage, chatStageLabel } = flowStatus
 
   const lastAssistantMsg = props.messages.length > 0 ? props.messages[props.messages.length - 1] : null
-  const isInterrupted = !props.streaming && !!lastAssistantMsg && lastAssistantMsg.role === 'assistant' && (!!lastAssistantMsg.error || /\n\n_\[stopped\]_\s*$/.test(lastAssistantMsg.content) || /\n\n_\[stream interrupted:/.test(lastAssistantMsg.content))
+  const isInterrupted = !props.streaming && !!lastAssistantMsg && lastAssistantMsg.role === 'assistant' && (!!lastAssistantMsg.error || /\n\n_\[stopped\]_\s*$/.test(lastAssistantMsg.content) || /\n\n_\[stream interrupted:/.test(lastAssistantMsg.content) || /\n\n_\[truncated/.test(lastAssistantMsg.content))
 
   return (
     <>

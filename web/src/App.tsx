@@ -618,7 +618,7 @@ function KsAgent() {
   }
   function isContinueKeyword(text: string): boolean {
     const t = text.trim().toLowerCase()
-    return /^(continue|resume|proceed|keep going|go on|cont\.?|continue please|please continue)[.!]*$/.test(t)
+    return /^(continue|resume|proceed|keep going|go on|cont\.?|continue please|please continue)[.!?]*$/.test(t)
   }
 
   async function handleContinue(extraContent?: string) {

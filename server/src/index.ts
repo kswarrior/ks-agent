@@ -191,8 +191,8 @@ function stripInterruptedSuffix(content: string): string {
 function isContinueKeyword(text: string): boolean {
   const t = text.trim().toLowerCase()
   if (!t) return false
-  // pure continue variants - allow punctuation
-  return /^(continue|resume|proceed|keep going|go on|cont\.?|continue please|please continue)[.!]*$/.test(t)
+  // pure continue variants - allow punctuation (. ! ?)
+  return /^(continue|resume|proceed|keep going|go on|cont\.?|continue please|please continue)[.!?]*$/.test(t)
 }
 
 function cleanMessagesForHistory(chatId: string): LLMMessage[] {
