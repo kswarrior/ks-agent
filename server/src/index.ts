@@ -676,6 +676,7 @@ async function persistAssistantSafe(job: GenerationJob, content: string, isError
 
 interface AgentSpec {
   projectPath: string
+  projectId: string
 }
 
 async function runGeneration(
@@ -695,6 +696,7 @@ async function runGeneration(
         model,
         history,
         projectPath: agent.projectPath,
+        projectId: agent.projectId,
         chatId: job.chatId,
         signal: job.controller.signal,
         maxTokens,
