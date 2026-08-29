@@ -893,7 +893,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                 </div>
               </div>
               <p className="hint" style={{ marginBottom: 16 }}>
-                Language Server Protocol integrations provide smarter code intelligence — autocomplete, diagnostics, go-to-definition, and hover docs. Servers run via stdio and are auto-started per project or globally.
+                Language Server Protocol integrations provide smarter code intelligence — autocomplete, diagnostics, go-to-definition, and hover docs. Servers run via stdio, TCP, HTTP or WebSocket and are auto-started per project or globally.
               </p>
 
               {lspEdit && (
