@@ -864,6 +864,7 @@ function KsAgent() {
         onMenu={() => setSidebarOpen((v) => !v)}
         onToggleRight={toggleRight}
         onTogglePreview={togglePreview}
+        onToggleExtensions={() => setExtensionsOpen((v) => !v)}
         hasPreview={hasPreview}
         previewPort={activePreview?.port ?? null}
       />
@@ -978,6 +979,7 @@ function KsAgent() {
       )}
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onDataChanged={refreshModels} />
+      <ExtensionsModal open={extensionsOpen} onClose={() => setExtensionsOpen(false)} />
       <AddProjectModal open={addProjectOpen} onClose={() => setAddProjectOpen(false)} onCreated={submitAddProject} />
     </div>
   )
