@@ -336,6 +336,42 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       try {
         dirents = fs.readdirSync(abs, { withFileTypes: true })
       } catch (e: any) {
+        // Fallback for skills discovery: allow AI to list global ./skills/ even though sandbox is project-scoped.
+        // This fixes "ai knows skills note but not skill.md in ./skills/" — AI may try list_files "skills".
+        try {
+          const skillsDir = path.join(process.cwd(), 'skills')
+          const fallbackCandidates: string[] = []
+          const trimmed = rel.trim()
+          if (trimmed === 'skills' || trimmed === 'skills/' || trimmed === './skills' || trimmed === './skills/') {
+            fallbackCandidates.push(skillsDir)
+          } else if (trimmed.startsWith('skills/')) {
+            fallbackCandidates.push(path.join(process.cwd(), trimmed))
+            fallbackCandidates.push(path.join(skillsDir, trimmed.slice('skills/'.length)))
+          } else if (trimmed === '.skills' || trimmed === '.agent/skills' || trimmed === '.claude/skills' || trimmed === '.cursor/skills') {
+            // these are virtual; if project missing them, try project/skills variant or global
+            fallbackCandidates.push(skillsDir)
+          }
+          // also try project/skills/* fallback when listing project root and skills missing? include hint
+          // try project/skills folder explicitly
+          if (trimmed === '' || trimmed === '.' || trimmed === '/') {
+            // listing root: if global skills exists, we don't auto-merge, but we can list project/skills if exists
+            // no fallback needed — return original error
+          }
+          for (const cand of fallbackCandidates) {
+            try {
+              const d = fs.readdirSync(cand, { withFileTypes: true })
+              const lines2 = d
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .slice(0, LIST_MAX_ENTRIES)
+                .map((dd) => (dd.isDirectory() ? `[dir] ${dd.name}` : dd.name))
+              // show as global skills
+              const hint = `skills (global ${path.relative(process.cwd(), cand) || 'skills'})`
+              return ok(`${hint}\n${lines2.join('\n')}`, `${hint} (${lines2.length} entries)`)
+            } catch {}
+          }
+        } catch {}
+        // Also try project-local skills folder when user listed a missing skills subdir: e.g. skills missing in project but exists globally — show global
+        // Fallback to merged view: if listing project root fails? Not needed.
         return err(e?.message || 'cannot read directory')
       }
       const lines = dirents
@@ -343,6 +379,8 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
         .slice(0, LIST_MAX_ENTRIES)
         .map((d) => (d.isDirectory() ? `[dir] ${d.name}` : d.name))
       const shown = relWithin(ctx.projectPath, abs)
+      // If listing project root and global skills exist, hint that skills are also available via "skills" path
+      // For empty skills-like paths we already handled above. No extra injection needed.
       return ok(`${shown || '.'}\n${lines.join('\n')}`, `${shown || '/'} (${lines.length} entries)`)
     }
 
@@ -353,6 +391,52 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       try {
         stat = fs.statSync(abs)
       } catch {
+        // Fallback: try global ./skills/ and project/skills/ locations before giving up.
+        // This allows read_file("skill.md") or read_file("skills/...") to succeed
+        // even when file lives in global skills/ or project/skills/ instead of project root.
+        const rel = String(args.path ?? '').trim()
+        const baseName = path.basename(rel)
+        const skillsDir = path.join(process.cwd(), 'skills')
+        const fallbackAbsList: (string | null)[] = [
+          path.join(skillsDir, baseName),
+          path.join(skillsDir, rel),
+          path.join(process.cwd(), rel),
+          resolveInProject(ctx.projectPath, path.join('skills', baseName)),
+          resolveInProject(ctx.projectPath, path.join('skills', rel)),
+          resolveInProject(ctx.projectPath, path.join('.skills', baseName)),
+          resolveInProject(ctx.projectPath, path.join('.agent', 'skills', baseName)),
+          resolveInProject(ctx.projectPath, path.join('.claude', 'skills', baseName)),
+          resolveInProject(ctx.projectPath, path.join('.cursor', 'skills', baseName)),
+        ]
+        const seen = new Set<string>()
+        for (const cand of fallbackAbsList) {
+          if (!cand) continue
+          let norm: string
+          try { norm = path.resolve(cand) } catch { continue }
+          if (norm === path.resolve(abs) || seen.has(norm)) continue
+          seen.add(norm)
+          try {
+            const st = fs.statSync(norm)
+            if (st.isDirectory()) continue
+            if (st.size > READ_MAX_BYTES && st.size > 24 * 1024) {
+              // still allow truncated read via same logic below
+            }
+            if (st.size > 10 * 1024 * 1024) continue
+            const buf2 = st.size > READ_MAX_BYTES ? Buffer.alloc(READ_MAX_BYTES) : Buffer.alloc(st.size)
+            let fd2: number | null = null
+            try {
+              fd2 = fs.openSync(norm, 'r')
+              fs.readSync(fd2, buf2, 0, buf2.length, 0)
+            } finally {
+              if (fd2 !== null) fs.closeSync(fd2)
+            }
+            if (buf2.includes(0)) continue
+            const truncated2 = st.size > READ_MAX_BYTES ? `\n…[truncated at ${READ_MAX_BYTES} bytes]` : ''
+            const relShown = relWithin(ctx.projectPath, norm) || path.relative(process.cwd(), norm) || rel
+            // Return success with fallback path hint in result but keep summary as requested path
+            return ok(buf2.toString('utf8') + truncated2 + `\n\n[fallback: read from ${path.relative(process.cwd(), norm) || norm}]`, `${rel} (${st.size}B)`)
+          } catch {}
+        }
         return err(`file not found: ${args.path}`)
       }
       if (stat.isDirectory()) return err(`"${args.path}" is a directory`)
