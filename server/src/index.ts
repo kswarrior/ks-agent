@@ -37,11 +37,25 @@ import {
   type Question,
   type Terminal,
   type RetrySettings,
-  type Skill
+  type Skill,
+  type MCPServer,
+  type MCPTransport,
+  findMcpServer,
+  getMcpServers
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
+import {
+  connectMCPServer,
+  disconnectMCPServer,
+  getAllMCPStates,
+  getMCPServerState,
+  refreshMCPServer,
+  testMCPServer,
+  syncMCPStatesFromDb,
+  ensureMCPConnections
+} from './mcp.js'
 
 loadDb()
 // On startup, any plan step left as "working" but with no active generation is
