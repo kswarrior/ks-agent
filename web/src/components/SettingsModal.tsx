@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '../api'
-import type { ModelEntry, Provider, RetrySettings } from '../types'
+import type { ModelEntry, Provider, RetrySettings, Skill, Project, FileEntry } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
-import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate } from '../icons'
+import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate, IconFolder, IconFile } from '../icons'
 
 interface Props {
   open: boolean
