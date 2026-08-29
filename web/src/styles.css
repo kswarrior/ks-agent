@@ -197,12 +197,12 @@ textarea {
 .header-actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 3px;
-  background: linear-gradient(135deg, #111111 0%, #0a0a0a 100%);
-  border: 1px solid #1e1e1e;
-  border-radius: 10px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .header-actions .icon-btn {
