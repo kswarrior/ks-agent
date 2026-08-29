@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '../api'
-import type { Skill, Project, FileEntry, MCPServer, MCPTransport, LSPServer } from '../types'
+import type { Skill, Project, FileEntry, MCPServer, MCPTransport, LSPServer, LSPTransport } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
 import {
@@ -56,9 +56,9 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [lspServers, setLspServers] = useState<LSPServer[]>([])
   const [lspLoading, setLspLoading] = useState(false)
   const [showLspForm, setShowLspForm] = useState(false)
-  const [lspForm, setLspForm] = useState<{ name: string; language: string; command: string; args: string; envText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
+  const [lspForm, setLspForm] = useState<{ name: string; language: string; transport: LSPTransport; command: string; args: string; url: string; envText: string; headersText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
   const [lspEdit, setLspEdit] = useState<LSPServer | null>(null)
-  const [lspEditForm, setLspEditForm] = useState<{ name: string; language: string; command: string; args: string; envText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
+  const [lspEditForm, setLspEditForm] = useState<{ name: string; language: string; transport: LSPTransport; command: string; args: string; url: string; envText: string; headersText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
   const [lspActionLoading, setLspActionLoading] = useState<string | null>(null)
   const [lspExpanded, setLspExpanded] = useState<Record<string, boolean>>({})
   const [lspTestResult, setLspTestResult] = useState<Record<string, { ok: boolean; error?: string; capabilities?: Record<string, unknown> }>>({})
@@ -350,27 +350,36 @@ export function ExtensionsModal({ open, onClose }: Props) {
     setError(null)
     const name = lspForm.name.trim()
     const language = lspForm.language.trim().toLowerCase()
-    const command = lspForm.command.trim()
+    const transport = lspForm.transport
     if (!name) return setError('LSP server name is required')
     if (name.length < 2 || name.length > 80) return setError('LSP name must be 2-80 characters')
     if (!language) return setError('Language is required')
     if (!/^[a-z][a-z0-9_-]*$/.test(language)) return setError('Invalid language id')
-    if (!command) return setError('Command is required')
+    if (transport === 'stdio') {
+      if (!lspForm.command.trim()) return setError('Command is required for stdio transport')
+    } else {
+      if (!lspForm.url.trim()) return setError('URL is required for ' + transport + ' transport')
+      try { new URL(lspForm.url.trim()) } catch { return setError('Invalid URL') }
+    }
     const args = lspForm.args.trim() ? lspForm.args.split(',').map((s) => s.trim()).filter(Boolean) : undefined
     const env = parseEnvText(lspForm.envText)
+    const headers = parseHeadersText(lspForm.headersText)
     try {
       await api.createLspServer({
         name,
         language,
-        command,
+        transport,
+        command: lspForm.command.trim() || undefined,
         args,
+        url: lspForm.url.trim() || undefined,
         env,
+        headers,
         projectId: lspForm.projectId.trim() || undefined,
         enabled: lspForm.enabled
       })
       toast('LSP server added', 'success')
       setShowLspForm(false)
-      setLspForm({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
+      setLspForm({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
       await loadLspServers()
     } catch (e: any) {
       setError(e.message)
@@ -381,20 +390,29 @@ export function ExtensionsModal({ open, onClose }: Props) {
     setError(null)
     const name = lspEditForm.name.trim()
     const language = lspEditForm.language.trim().toLowerCase()
-    const command = lspEditForm.command.trim()
+    const transport = lspEditForm.transport
     if (!name) return setError('LSP server name is required')
     if (!language) return setError('Language is required')
     if (!/^[a-z][a-z0-9_-]*$/.test(language)) return setError('Invalid language id')
-    if (!command) return setError('Command is required')
+    if (transport === 'stdio') {
+      if (!lspEditForm.command.trim()) return setError('Command is required for stdio transport')
+    } else {
+      if (!lspEditForm.url.trim()) return setError('URL is required for ' + transport + ' transport')
+      try { new URL(lspEditForm.url.trim()) } catch { return setError('Invalid URL') }
+    }
     const args = lspEditForm.args.trim() ? lspEditForm.args.split(',').map((s) => s.trim()).filter(Boolean) : []
     const env = parseEnvText(lspEditForm.envText)
+    const headers = parseHeadersText(lspEditForm.headersText)
     try {
       await api.updateLspServer(lspEdit.id, {
         name,
         language,
-        command,
+        transport,
+        command: lspEditForm.command.trim() || undefined,
         args,
+        url: lspEditForm.url.trim() || undefined,
         env,
+        headers,
         projectId: lspEditForm.projectId.trim() || undefined,
         enabled: lspEditForm.enabled
       })
@@ -410,9 +428,12 @@ export function ExtensionsModal({ open, onClose }: Props) {
     setLspEditForm({
       name: s.name,
       language: s.language,
-      command: s.command,
+      transport: (s.transport as LSPTransport) ?? 'stdio',
+      command: (s.command as string) ?? '',
       args: (s.args ?? []).join(', '),
+      url: (s.url as string) ?? '',
       envText: stringifyEnv(s.env as any),
+      headersText: stringifyHeaders(s.headers as any),
       projectId: (s.projectId as string) ?? '',
       enabled: s.enabled
     })
