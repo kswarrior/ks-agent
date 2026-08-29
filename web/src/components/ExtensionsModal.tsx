@@ -428,9 +428,12 @@ export function ExtensionsModal({ open, onClose }: Props) {
     setLspEditForm({
       name: s.name,
       language: s.language,
-      command: s.command,
+      transport: (s.transport as LSPTransport) ?? 'stdio',
+      command: (s.command as string) ?? '',
       args: (s.args ?? []).join(', '),
+      url: (s.url as string) ?? '',
       envText: stringifyEnv(s.env as any),
+      headersText: stringifyHeaders((s as any).headers),
       projectId: (s.projectId as string) ?? '',
       enabled: s.enabled
     })
@@ -827,13 +830,9 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                           <span>{statusLabel}</span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconFolder size={12} /> {scopeName}</span>
                         </div>
-                        {s.transport === 'stdio' ? (
-                          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
-                            {s.command} {(s.args ?? []).join(' ')}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>{s.url}</div>
-                        )}
+                        <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
+                          {s.command} {(s.args ?? []).join(' ')}
+                        </div>
                         {s.error && <div style={{ fontSize: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '6px 8px', wordBreak: 'break-word' }}>{s.error}</div>}
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} disabled={mcpActionLoading === `test:${s.id}`} onClick={() => testMcp(s.id)}>{mcpActionLoading === `test:${s.id}` ? 'Testing…' : 'Test'}</button>
@@ -952,7 +951,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     <input type="checkbox" checked={lspForm.enabled} onChange={e => setLspForm({ ...lspForm, enabled: e.target.checked })} /> Enabled
                   </label>
                   <div className="dialog-actions" style={{ marginTop: 16 }}>
-                    <button className="btn" onClick={() => { setShowLspForm(false); setLspForm({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true }); setError(null) }}>Cancel</button>
+                    <button className="btn" onClick={() => { setShowLspForm(false); setLspForm({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true }); setError(null) }}>Cancel</button>
                     <button className="btn btn-primary" onClick={submitLsp}>Add server</button>
                   </div>
                 </div>
@@ -994,13 +993,9 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                           <span>{statusLabel}</span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconFolder size={12} /> {scopeName}</span>
                         </div>
-                        {s.transport === 'stdio' ? (
-                          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
-                            {s.command} {(s.args ?? []).join(' ')}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>{s.url}</div>
-                        )}
+                        <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
+                          {s.command} {(s.args ?? []).join(' ')}
+                        </div>
                         {s.error && <div style={{ fontSize: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '6px 8px', wordBreak: 'break-word' }}>{s.error}</div>}
                         {s.connected && caps && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -1032,7 +1027,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                               <p className="hint" style={{ fontSize: 12 }}>{s.connected ? 'No capabilities reported' : 'Not connected — test or restart to fetch capabilities'}</p>
                             )}
                             <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace' }}>
-                              ID: {s.id.slice(0, 8)} · {s.language} · {s.transport === 'stdio' ? s.command : s.url} · {s.transport}
+                              ID: {s.id.slice(0, 8)} · {s.language} · {s.command}
                             </div>
                           </div>
                         )}
