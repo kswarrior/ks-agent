@@ -1502,12 +1502,69 @@ app.patch('/api/settings/skills/:id', async (c) => {
 
 function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
   const skills = getSkills()
-  if (skills.length === 0) return []
-  const msgs: LLMMessage[] = []
   const MAX_FILE_BYTES = 12 * 1024
   const MAX_TOTAL_CHARS = 12000
   const skillsDir = path.join(process.cwd(), 'skills')
+  const msgs: LLMMessage[] = []
   let totalChars = 0
+
+  function tryLoadText(absCandidates: (string | null)[], maxBytes: number): string | null {
+    const seen = new Set<string>()
+    for (const cand of absCandidates) {
+      if (!cand) continue
+      let normalized: string
+      try { normalized = path.resolve(cand) } catch { continue }
+      if (seen.has(normalized)) continue
+      seen.add(normalized)
+      try {
+        if (!fs.existsSync(normalized)) continue
+        const stat = fs.statSync(normalized)
+        if (!stat.isFile() || stat.size > 100 * 1024) continue
+        const buf = fs.readFileSync(normalized, 'utf8')
+        if (buf.includes('\0')) continue
+        return buf.length > maxBytes ? buf.slice(0, maxBytes) + '\n…[truncated]' : buf
+      } catch {}
+    }
+    return null
+  }
+
+  function buildCandidates(basePath: string | null, rel: string): (string | null)[] {
+    const baseName = path.basename(rel)
+    const out: (string | null)[] = []
+    if (basePath) {
+      out.push(resolveInProject(basePath, rel))
+      // project-level conventional skill folders — covers project/nameproject/here
+      out.push(resolveInProject(basePath, path.join('skills', baseName)))
+      out.push(resolveInProject(basePath, path.join('skills', rel)))
+      out.push(resolveInProject(basePath, path.join('.skills', baseName)))
+      out.push(resolveInProject(basePath, path.join('.agent', 'skills', baseName)))
+      out.push(resolveInProject(basePath, path.join('.claude', 'skills', baseName)))
+      out.push(resolveInProject(basePath, path.join('.cursor', 'skills', baseName)))
+      // also try direct basename at project root via safeJoin already covered by first entry when rel is basename
+    }
+    // global ./skills/ (root) — primary location for default skills
+    out.push(path.join(skillsDir, baseName))
+    if (rel !== baseName) out.push(path.join(skillsDir, rel))
+    // cwd-relative for cases like "skills/code-review.md" when skillsDir is cwd/skills
+    try {
+      const cwdJoined = path.join(process.cwd(), rel)
+      if (!out.includes(cwdJoined)) out.push(cwdJoined)
+    } catch {}
+    return out
+  }
+
+  // Track known basenames to avoid re-injecting same file via auto-discovery
+  const knownBasenames = new Set<string>()
+  const knownRels = new Set<string>()
+  for (const s of skills) {
+    knownBasenames.add(path.basename(s.mainFile).toLowerCase())
+    knownRels.add(s.mainFile.toLowerCase())
+    for (const f of s.files) {
+      knownBasenames.add(path.basename(f).toLowerCase())
+      knownRels.add(f.toLowerCase())
+    }
+  }
+
   for (const skill of skills) {
     let basePath: string | null = null
     if (skill.projectId) {
@@ -1515,46 +1572,7 @@ function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
       if (p) basePath = p.path
     }
     if (!basePath && project) basePath = project.path
-    // Try to load main file: first via project, then via global skills/ folder (for default skills)
-    let mainContent: string | null = null
-    try {
-      let abs: string | null = null
-      if (basePath) abs = resolveInProject(basePath, skill.mainFile)
-      if (abs && fs.existsSync(abs)) {
-        const stat = fs.statSync(abs)
-        if (stat.isFile() && stat.size <= 100 * 1024) {
-          const buf = fs.readFileSync(abs, 'utf8')
-          if (!buf.includes('\0')) {
-            mainContent = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
-          }
-        }
-      }
-      if (!mainContent) {
-        const fallback = path.join(skillsDir, path.basename(skill.mainFile))
-        if (fs.existsSync(fallback)) {
-          const stat = fs.statSync(fallback)
-          if (stat.isFile() && stat.size <= 100 * 1024) {
-            const buf = fs.readFileSync(fallback, 'utf8')
-            if (!buf.includes('\0')) {
-              mainContent = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
-            }
-          }
-        }
-      }
-      // Also try direct skillsDir + mainFile if it contains subpath
-      if (!mainContent) {
-        const direct = path.join(skillsDir, skill.mainFile)
-        if (direct !== path.join(skillsDir, path.basename(skill.mainFile)) && fs.existsSync(direct)) {
-          const stat = fs.statSync(direct)
-          if (stat.isFile() && stat.size <= 100 * 1024) {
-            const buf = fs.readFileSync(direct, 'utf8')
-            if (!buf.includes('\0')) {
-              mainContent = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
-            }
-          }
-        }
-      }
-    } catch {}
+    const mainContent = tryLoadText(buildCandidates(basePath, skill.mainFile), MAX_FILE_BYTES)
     let block = `Skill: ${skill.name}`
     if (skill.note) block += ` — ${skill.note}`
     block += `\nMain file: ${skill.mainFile}`
@@ -1563,61 +1581,17 @@ function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
       const snippet = mainContent.slice(0, 8000)
       block += `\n\n--- Content of ${skill.mainFile} ---\n${snippet}\n--- End ${skill.mainFile} ---`
     } else {
-      block += `\n\n(Note: main file content not available at build time; use list_files/read_file tools to load "${skill.mainFile}" and related files when relevant)`
+      block += `\n\n(Note: main file content not available at build time; use list_files/read_file tools to load "${skill.mainFile}" and related files when relevant. Also try "skills/${path.basename(skill.mainFile)}" or list "skills/")`
     }
     if (skill.files.length && totalChars < MAX_TOTAL_CHARS) {
       for (const rel of skill.files.slice(0, 5)) {
         if (rel === skill.mainFile) continue
         if (totalChars >= MAX_TOTAL_CHARS) break
-        try {
-          let found = false
-          let previewText: string | null = null
-          // Try project path first
-          if (basePath) {
-            const abs2 = resolveInProject(basePath, rel)
-            if (abs2 && fs.existsSync(abs2)) {
-              const stat2 = fs.statSync(abs2)
-              if (stat2.isFile() && stat2.size <= 50 * 1024) {
-                const c2 = fs.readFileSync(abs2, 'utf8')
-                if (!c2.includes('\0')) {
-                  previewText = c2.slice(0, 2000)
-                  found = true
-                }
-              }
-            }
-          }
-          // Fallback to global skills folder
-          if (!found) {
-            const fallback2 = path.join(skillsDir, path.basename(rel))
-            if (fs.existsSync(fallback2)) {
-              const stat2 = fs.statSync(fallback2)
-              if (stat2.isFile() && stat2.size <= 50 * 1024) {
-                const c2 = fs.readFileSync(fallback2, 'utf8')
-                if (!c2.includes('\0')) {
-                  previewText = c2.slice(0, 2000)
-                  found = true
-                }
-              }
-            }
-            if (!found) {
-              const direct2 = path.join(skillsDir, rel)
-              if (direct2 !== fallback2 && fs.existsSync(direct2)) {
-                const stat2 = fs.statSync(direct2)
-                if (stat2.isFile() && stat2.size <= 50 * 1024) {
-                  const c2 = fs.readFileSync(direct2, 'utf8')
-                  if (!c2.includes('\0')) {
-                    previewText = c2.slice(0, 2000)
-                    found = true
-                  }
-                }
-              }
-            }
-          }
-          if (!found || !previewText) continue
-          const addition = `\n\n--- ${rel} ---\n${previewText}`
-          if (block.length + addition.length + totalChars > MAX_TOTAL_CHARS + 5000) continue
-          block += addition
-        } catch {}
+        const preview = tryLoadText(buildCandidates(basePath, rel), 2000)
+        if (!preview) continue
+        const addition = `\n\n--- ${rel} ---\n${preview.slice(0, 2000)}`
+        if (block.length + addition.length + totalChars > MAX_TOTAL_CHARS + 5000) continue
+        block += addition
       }
     }
     if (totalChars + block.length > MAX_TOTAL_CHARS + 8000) {
@@ -1631,6 +1605,103 @@ function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
     totalChars += block.length
     if (totalChars > MAX_TOTAL_CHARS + 8000) break
   }
+
+  // Auto-discover project-local skills that exist on disk but are not registered in DB.
+  // Covers user expectation: "find in project/nameproject/here" — e.g. project/ks/skills/*.md
+  // or project/ks/skill.md placed directly in project.
+  if (project && totalChars < MAX_TOTAL_CHARS + 8000) {
+    try {
+      const candidates: { abs: string; relHint: string }[] = []
+      // project root level skill.md variants
+      for (const name of ['skill.md', 'SKILL.md', 'skills.md']) {
+        const abs = resolveInProject(project.path, name)
+        if (abs) candidates.push({ abs, relHint: name })
+      }
+      const skillDirs = [
+        path.join(project.path, 'skills'),
+        path.join(project.path, '.skills'),
+        path.join(project.path, '.agent', 'skills'),
+        path.join(project.path, '.claude', 'skills'),
+        path.join(project.path, '.cursor', 'skills')
+      ]
+      for (const dir of skillDirs) {
+        try {
+          if (!fs.existsSync(dir)) continue
+          const stat = fs.statSync(dir)
+          if (!stat.isDirectory()) continue
+          const entries = fs.readdirSync(dir, { withFileTypes: true })
+          for (const ent of entries) {
+            if (!ent.isFile() || !ent.name.endsWith('.md')) continue
+            const abs = path.join(dir, ent.name)
+            // rel hint as seen from project root, e.g. skills/foo.md
+            const relHint = relWithin(project.path, abs) || ent.name
+            candidates.push({ abs, relHint })
+          }
+        } catch {}
+      }
+      // Also discover global skills that are not yet in DB (fallback)
+      try {
+        if (fs.existsSync(skillsDir)) {
+          const ents = fs.readdirSync(skillsDir, { withFileTypes: true })
+          for (const ent of ents) {
+            if (!ent.isFile() || !ent.name.endsWith('.md')) continue
+            const lower = ent.name.toLowerCase()
+            if (knownBasenames.has(lower)) continue
+            const abs = path.join(skillsDir, ent.name)
+            candidates.push({ abs, relHint: ent.name })
+          }
+        }
+      } catch {}
+
+      for (const { abs, relHint } of candidates) {
+        const base = path.basename(abs).toLowerCase()
+        if (knownBasenames.has(base)) continue
+        // avoid duplicate abs
+        if (candidates.filter(c => c.abs === abs).length > 1) continue
+        let content: string | null = null
+        try {
+          const stat = fs.statSync(abs)
+          if (!stat.isFile() || stat.size > 100 * 1024) continue
+          const buf = fs.readFileSync(abs, 'utf8')
+          if (buf.includes('\0')) continue
+          content = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
+        } catch { continue }
+        if (!content) continue
+        const title = base.replace(/\.md$/, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+        let block = `Skill: ${title} (auto-discovered)\nMain file: ${relHint}`
+        block += `\n\n--- Content of ${relHint} ---\n${content.slice(0, 8000)}\n--- End ${relHint} ---`
+        if (totalChars + block.length > MAX_TOTAL_CHARS + 8000) break
+        msgs.push({ role: 'system', content: block })
+        totalChars += block.length
+        knownBasenames.add(base)
+        if (totalChars > MAX_TOTAL_CHARS + 8000) break
+      }
+    } catch {}
+  }
+
+  // Also inject a discovery hint when skills exist but project is missing
+  if (msgs.length === 0 && skills.length === 0) {
+    // No DB skills, still advertise discovery locations if on-disk global skills exist
+    try {
+      if (fs.existsSync(skillsDir)) {
+        const ents = fs.readdirSync(skillsDir, { withFileTypes: true }).filter(e => e.isFile() && e.name.endsWith('.md'))
+        if (ents.length) {
+          // This branch handled in auto-discovery above when project undefined? Ensure global hint
+          // If no project, still surface global skills
+          for (const ent of ents.slice(0, 3)) {
+            const abs = path.join(skillsDir, ent.name)
+            try {
+              const buf = fs.readFileSync(abs, 'utf8')
+              if (buf.includes('\0')) continue
+              const content = buf.slice(0, 4000)
+              msgs.push({ role: 'system', content: `Skill: ${ent.name.replace(/\.md$/, '')}\nMain file: ${ent.name}\n\n--- Content of ${ent.name} ---\n${content}\n--- End ${ent.name} ---` })
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+  }
+
   return msgs
 }
 
