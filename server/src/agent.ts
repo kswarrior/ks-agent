@@ -4,6 +4,7 @@ import path from 'node:path'
 import { findPlanForChat, getDb, getRetrySettings, newId, saveDb, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
+import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
 
 /**
  * Built-in primary system prompt. Intentionally NOT exposed through any API,

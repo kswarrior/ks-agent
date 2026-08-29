@@ -332,6 +332,13 @@ app.delete('/api/projects/:id', async (c) => {
       sk.updatedAt = new Date().toISOString()
     }
   }
+  for (const ms of db.mcpServers) {
+    if (ms.projectId === removed.id) {
+      delete ms.projectId
+      ms.updatedAt = new Date().toISOString()
+    }
+  }
+  syncMCPStatesFromDb()
   saveDb()
   return c.json({ ok: true })
 })
@@ -1624,6 +1631,326 @@ function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
   }
   return msgs
 }
+
+// ---------------- MCP Servers ----------------
+
+function isValidMCPName(name: string): boolean {
+  return name.length >= 2 && name.length <= 80
+}
+
+function normalizeMCPArgs(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined
+  if (!Array.isArray(raw)) return undefined
+  const out: string[] = []
+  for (const v of raw) {
+    const s = String(v ?? '').trim()
+    if (!s) continue
+    if (s.length > 500) continue
+    out.push(s)
+    if (out.length >= 20) break
+  }
+  return out.length ? out : undefined
+}
+
+function normalizeMCPEnv(raw: unknown): Record<string, string> | undefined {
+  if (raw == null) return undefined
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, string> = {}
+  let count = 0
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(k).trim()
+    if (!key || key.length > 80) continue
+    if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) continue
+    const val = String(v ?? '')
+    if (val.length > 2000) continue
+    out[key] = val
+    count++
+    if (count >= 30) break
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+function normalizeMCPHeaders(raw: unknown): Record<string, string> | undefined {
+  if (raw == null) return undefined
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, string> = {}
+  let count = 0
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(k).trim()
+    if (!key || key.length > 80) continue
+    const val = String(v ?? '').trim()
+    if (!val || val.length > 2000) continue
+    out[key] = val
+    count++
+    if (count >= 20) break
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+function mcpPublic(server: MCPServer): Record<string, unknown> {
+  const state = getMCPServerState(server.id)
+  return {
+    id: server.id,
+    name: server.name,
+    transport: server.transport,
+    command: server.command ?? null,
+    args: server.args ?? [],
+    url: server.url ?? null,
+    env: server.env ?? {},
+    headers: server.headers ?? {},
+    projectId: server.projectId ?? null,
+    enabled: server.enabled,
+    createdAt: server.createdAt,
+    updatedAt: server.updatedAt,
+    // runtime status
+    connected: state?.connected ?? false,
+    connecting: state?.connecting ?? false,
+    error: state?.error ?? null,
+    tools: state?.tools ?? [],
+    lastConnectedAt: state?.lastConnectedAt ?? null
+  }
+}
+
+function validateMCPBody(body: any, isPatch = false): { error?: string; value?: Partial<MCPServer> } {
+  const out: Partial<MCPServer> = {}
+  if (body.name !== undefined || !isPatch) {
+    const name = String(body.name ?? '').trim()
+    if (!isPatch && !name) return { error: 'MCP server name is required' }
+    if (name) {
+      if (!isValidMCPName(name)) return { error: 'MCP name must be 2-80 chars' }
+      out.name = name
+    } else if (!isPatch) return { error: 'MCP server name is required' }
+  }
+  if (body.transport !== undefined || !isPatch) {
+    const t = String(body.transport ?? '').trim() as MCPTransport
+    const allowed: MCPTransport[] = ['stdio', 'sse', 'http', 'websocket']
+    if (!isPatch && !t) return { error: 'Transport is required (stdio, sse, http, websocket)' }
+    if (t && !allowed.includes(t)) return { error: 'Transport must be one of: stdio, sse, http, websocket' }
+    if (t) out.transport = t
+  }
+  // Determine effective transport for conditional validation
+  const effTransport = (out.transport ?? body.transport) as MCPTransport | undefined
+  if (body.command !== undefined) {
+    const cmd = String(body.command ?? '').trim()
+    if (cmd) {
+      if (cmd.length > 500) return { error: 'Command too long (max 500)' }
+      out.command = cmd
+    } else {
+      out.command = undefined
+    }
+  }
+  if (body.args !== undefined) {
+    const args = normalizeMCPArgs(body.args)
+    // if provided but empty array, treat as undefined
+    out.args = args
+  }
+  if (body.url !== undefined) {
+    const u = String(body.url ?? '').trim()
+    if (u) {
+      if (u.length > 2000) return { error: 'URL too long' }
+      let parsed: URL
+      try { parsed = new URL(u) } catch { return { error: 'Invalid URL' } }
+      if (!['http:', 'https:', 'ws:', 'wss:'].includes(parsed.protocol)) return { error: 'URL must be http(s):// or ws(s)://' }
+      out.url = u
+    } else {
+      out.url = undefined
+    }
+  }
+  if (body.env !== undefined) {
+    const env = normalizeMCPEnv(body.env)
+    out.env = env
+  }
+  if (body.headers !== undefined) {
+    const h = normalizeMCPHeaders(body.headers)
+    out.headers = h
+  }
+  if (body.projectId !== undefined) {
+    const pid = body.projectId != null ? String(body.projectId).trim() : ''
+    if (pid) {
+      if (!findProject(pid)) return { error: 'Selected project not found' }
+      out.projectId = pid
+    } else {
+      out.projectId = undefined
+    }
+  }
+  if (body.enabled !== undefined) {
+    out.enabled = Boolean(body.enabled)
+  }
+  // Cross-field validation (only when we have enough info; for PATCH we lazily validate if fields present)
+  if (!isPatch || out.transport || out.command !== undefined || out.url !== undefined) {
+    const finalTransport = (out.transport ?? effTransport) as MCPTransport | undefined
+    // For create, transport is definitely present; for patch we can only validate if transport is known
+    if (finalTransport === 'stdio' && isPatch && out.command === undefined && out.transport !== 'stdio') {
+      // if patching non-stdio fields, skip stdio check
+    } else if (finalTransport === 'stdio') {
+      // need command; if patching and command not supplied, we check existing server elsewhere
+      if (out.command !== undefined && !out.command) return { error: 'stdio transport requires command' }
+      if (!isPatch && !out.command) return { error: 'stdio transport requires command' }
+    }
+    if (finalTransport && ['sse', 'http', 'websocket'].includes(finalTransport)) {
+      if (out.url !== undefined && !out.url) return { error: `${finalTransport} transport requires url` }
+      if (!isPatch && !out.url) return { error: `${finalTransport} transport requires url` }
+    }
+  }
+  return { value: out }
+}
+
+app.get('/api/settings/mcp', (c) => {
+  syncMCPStatesFromDb()
+  const servers = getMcpServers().map(mcpPublic)
+  return c.json(servers)
+})
+
+app.post('/api/settings/mcp', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const validated = validateMCPBody(body, false)
+  if (validated.error) return c.json({ error: validated.error }, 400)
+  const v = validated.value!
+  // duplicate name check (case-insensitive)
+  const dup = getDb().mcpServers.some((s) => s.name.toLowerCase() === String(v.name).toLowerCase())
+  if (dup) return c.json({ error: 'An MCP server with this name already exists' }, 400)
+  // finalize required fields based on transport
+  if (v.transport === 'stdio' && !v.command) return c.json({ error: 'stdio transport requires command' }, 400)
+  if (v.transport && ['sse', 'http', 'websocket'].includes(v.transport) && !v.url) return c.json({ error: `${v.transport} transport requires url` }, 400)
+  const now = new Date().toISOString()
+  const server: MCPServer = {
+    id: newId(),
+    name: String(v.name),
+    transport: v.transport as MCPTransport,
+    command: v.command,
+    args: v.args,
+    url: v.url,
+    env: v.env,
+    headers: v.headers,
+    projectId: v.projectId,
+    enabled: v.enabled !== false,
+    createdAt: now,
+    updatedAt: now
+  }
+  getDb().mcpServers.push(server)
+  saveDb()
+  syncMCPStatesFromDb()
+  if (server.enabled) void connectMCPServer(server).catch(() => {})
+  return c.json(mcpPublic(server), 201)
+})
+
+app.get('/api/settings/mcp/:id', (c) => {
+  const srv = findMcpServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'MCP server not found' }, 404)
+  syncMCPStatesFromDb()
+  return c.json(mcpPublic(srv))
+})
+
+app.patch('/api/settings/mcp/:id', async (c) => {
+  const srv = findMcpServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'MCP server not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const validated = validateMCPBody(body, true)
+  if (validated.error) return c.json({ error: validated.error }, 400)
+  const v = validated.value!
+  if (v.name !== undefined) {
+    const dup = getDb().mcpServers.some((s) => s.id !== srv.id && s.name.toLowerCase() === String(v.name).toLowerCase())
+    if (dup) return c.json({ error: 'An MCP server with this name already exists' }, 400)
+    srv.name = String(v.name)
+  }
+  if (v.transport !== undefined) srv.transport = v.transport as MCPTransport
+  if (v.command !== undefined) srv.command = v.command
+  if (v.args !== undefined) srv.args = v.args
+  if (v.url !== undefined) srv.url = v.url
+  if (v.env !== undefined) srv.env = v.env
+  if (v.headers !== undefined) srv.headers = v.headers
+  if (v.projectId !== undefined) srv.projectId = v.projectId
+  if (v.enabled !== undefined) srv.enabled = v.enabled
+  // final cross-check
+  if (srv.transport === 'stdio' && !srv.command) return c.json({ error: 'stdio transport requires command' }, 400)
+  if (['sse', 'http', 'websocket'].includes(srv.transport) && !srv.url) return c.json({ error: `${srv.transport} transport requires url` }, 400)
+  srv.updatedAt = new Date().toISOString()
+  saveDb()
+  syncMCPStatesFromDb()
+  if (srv.enabled) void connectMCPServer(srv).catch(() => {})
+  else disconnectMCPServer(srv.id)
+  return c.json(mcpPublic(srv))
+})
+
+app.delete('/api/settings/mcp/:id', (c) => {
+  const id = c.req.param('id')
+  const idx = getDb().mcpServers.findIndex((s) => s.id === id)
+  if (idx === -1) return c.json({ error: 'MCP server not found' }, 404)
+  disconnectMCPServer(id)
+  getDb().mcpServers.splice(idx, 1)
+  saveDb()
+  syncMCPStatesFromDb()
+  // also remove state entry
+  const st = getMCPServerState(id)
+  if (st) {
+    // already disconnected; state will be cleaned on next sync
+  }
+  return c.json({ ok: true })
+})
+
+app.post('/api/settings/mcp/:id/test', async (c) => {
+  const srv = findMcpServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'MCP server not found' }, 404)
+  // Allow test with overrides from body (for unsaved form)
+  const body = await c.req.json().catch(() => ({}))
+  let testSrv: MCPServer = srv
+  if (body && (body.command || body.url || body.transport || body.args || body.env || body.headers)) {
+    const merged: any = { ...srv, ...body }
+    // normalize merged for test only
+    testSrv = {
+      ...srv,
+      transport: (merged.transport ?? srv.transport) as MCPTransport,
+      command: merged.command !== undefined ? String(merged.command).trim() || undefined : srv.command,
+      args: merged.args !== undefined ? normalizeMCPArgs(merged.args) : srv.args,
+      url: merged.url !== undefined ? String(merged.url).trim() || undefined : srv.url,
+      env: merged.env !== undefined ? normalizeMCPEnv(merged.env) : srv.env,
+      headers: merged.headers !== undefined ? normalizeMCPHeaders(merged.headers) : srv.headers
+    }
+  }
+  const result = await testMCPServer(testSrv)
+  if (!result.ok) return c.json({ ok: false, error: result.error, tools: [] }, 200)
+  return c.json({ ok: true, tools: result.tools })
+})
+
+app.get('/api/settings/mcp/:id/tools', async (c) => {
+  const srv = findMcpServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'MCP server not found' }, 404)
+  syncMCPStatesFromDb()
+  const state = getMCPServerState(srv.id)
+  if (!state?.connected) {
+    if (!srv.enabled) return c.json({ error: 'Server is disabled' }, 400)
+    const res = await connectMCPServer(srv)
+    if (!res.ok) return c.json({ error: res.error ?? 'Failed to connect', tools: [] }, 502)
+    return c.json({ tools: res.tools ?? [] })
+  }
+  return c.json({ tools: state.tools })
+})
+
+app.post('/api/settings/mcp/:id/refresh', async (c) => {
+  const srv = findMcpServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'MCP server not found' }, 404)
+  if (!srv.enabled) return c.json({ error: 'Server is disabled' }, 400)
+  const res = await refreshMCPServer(srv.id)
+  if (!res.ok) return c.json({ error: res.error ?? 'Refresh failed' }, 502)
+  return c.json({ ok: true, tools: res.tools })
+})
+
+app.get('/api/settings/mcp/status/all', (c) => {
+  syncMCPStatesFromDb()
+  const states = getAllMCPStates().map((st) => ({
+    id: st.server.id,
+    name: st.server.name,
+    transport: st.server.transport,
+    enabled: st.server.enabled,
+    connected: st.connected,
+    connecting: st.connecting,
+    error: st.error ?? null,
+    tools: st.tools,
+    projectId: st.server.projectId ?? null,
+    updatedAt: st.server.updatedAt
+  }))
+  return c.json(states)
+})
 
 // ---------------- Project files ----------------
 
