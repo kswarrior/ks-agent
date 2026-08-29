@@ -116,6 +116,23 @@ export interface Skill {
   updatedAt?: string
 }
 
+export type MCPTransport = 'stdio' | 'sse' | 'http' | 'websocket'
+
+export interface MCPServer {
+  id: string
+  name: string
+  transport: MCPTransport
+  command?: string
+  args?: string[]
+  url?: string
+  env?: Record<string, string>
+  headers?: Record<string, string>
+  projectId?: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Preview {
   id: string
   chatId: string
@@ -154,6 +171,7 @@ interface DB {
   retrySettings: RetrySettings
   skills: Skill[]
   previews: Preview[]
+  mcpServers: MCPServer[]
 }
 
 // Storage location: agent root where skills/web/server folders live.
@@ -173,7 +191,7 @@ const dbFile = process.env.KS_SQLITE_PATH
   ? path.resolve(process.env.KS_SQLITE_PATH)
   : path.join(storageDir, 'ksagent.db')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [], mcpServers: [] }
 
 let sqlite: Database.Database | null = null
 
