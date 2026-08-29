@@ -1700,6 +1700,36 @@ function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
     } catch {}
   }
 
+  // Also inject global skills when no project is active (e.g. simple chat)
+  if (!project && totalChars < MAX_TOTAL_CHARS + 8000) {
+    try {
+      if (fs.existsSync(skillsDir)) {
+        const ents = fs.readdirSync(skillsDir, { withFileTypes: true }).filter(e => e.isFile() && e.name.endsWith('.md'))
+        for (const ent of ents) {
+          const lower = ent.name.toLowerCase()
+          if (knownBasenames.has(lower)) continue
+          const abs = path.join(skillsDir, ent.name)
+          try {
+            const stat = fs.statSync(abs)
+            if (!stat.isFile() || stat.size > 100 * 1024) continue
+            const buf = fs.readFileSync(abs, 'utf8')
+            if (buf.includes('\0')) continue
+            const content = buf.length > MAX_FILE_BYTES ? buf.slice(0, MAX_FILE_BYTES) + '\n…[truncated]' : buf
+            const title = ent.name.replace(/\.md$/, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+            const relHint = ent.name
+            let block = `Skill: ${title} (auto-discovered)\nMain file: ${relHint}`
+            block += `\n\n--- Content of ${relHint} ---\n${content.slice(0, 8000)}\n--- End ${relHint} ---`
+            if (totalChars + block.length > MAX_TOTAL_CHARS + 8000) break
+            msgs.push({ role: 'system', content: block })
+            totalChars += block.length
+            knownBasenames.add(lower)
+            if (totalChars > MAX_TOTAL_CHARS + 8000) break
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
   // Also inject a discovery hint when skills exist but project is missing
   if (msgs.length === 0 && skills.length === 0) {
     // No DB skills, still advertise discovery locations if on-disk global skills exist
