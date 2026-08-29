@@ -30,6 +30,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
 
   // --- Skills state (migrated from SettingsModal) ---
   const [skills, setSkills] = useState<Skill[]>([])
+  const [skillsLoading, setSkillsLoading] = useState(false)
   const [showSkillForm, setShowSkillForm] = useState(false)
   const [skillForm, setSkillForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[], projectId: '' })
   const [skillEdit, setSkillEdit] = useState<Skill | null>(null)
@@ -141,11 +142,14 @@ export function ExtensionsModal({ open, onClose }: Props) {
   }, [tab])
 
   async function loadSkills() {
+    setSkillsLoading(true)
     try {
       const list = await api.listSkills()
       setSkills(list)
     } catch (e: any) {
       toast(e.message, 'error')
+    } finally {
+      setSkillsLoading(false)
     }
   }
 
