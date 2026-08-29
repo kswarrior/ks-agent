@@ -56,9 +56,9 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [lspServers, setLspServers] = useState<LSPServer[]>([])
   const [lspLoading, setLspLoading] = useState(false)
   const [showLspForm, setShowLspForm] = useState(false)
-  const [lspForm, setLspForm] = useState<{ name: string; language: string; transport: LSPTransport; command: string; args: string; url: string; envText: string; headersText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
+  const [lspForm, setLspForm] = useState<{ name: string; language: string; command: string; args: string; envText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
   const [lspEdit, setLspEdit] = useState<LSPServer | null>(null)
-  const [lspEditForm, setLspEditForm] = useState<{ name: string; language: string; transport: LSPTransport; command: string; args: string; url: string; envText: string; headersText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
+  const [lspEditForm, setLspEditForm] = useState<{ name: string; language: string; command: string; args: string; envText: string; projectId: string; enabled: boolean }>({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
   const [lspActionLoading, setLspActionLoading] = useState<string | null>(null)
   const [lspExpanded, setLspExpanded] = useState<Record<string, boolean>>({})
   const [lspTestResult, setLspTestResult] = useState<Record<string, { ok: boolean; error?: string; capabilities?: Record<string, unknown> }>>({})
@@ -350,27 +350,36 @@ export function ExtensionsModal({ open, onClose }: Props) {
     setError(null)
     const name = lspForm.name.trim()
     const language = lspForm.language.trim().toLowerCase()
-    const command = lspForm.command.trim()
+    const transport = lspForm.transport
     if (!name) return setError('LSP server name is required')
     if (name.length < 2 || name.length > 80) return setError('LSP name must be 2-80 characters')
     if (!language) return setError('Language is required')
     if (!/^[a-z][a-z0-9_-]*$/.test(language)) return setError('Invalid language id')
-    if (!command) return setError('Command is required')
+    if (transport === 'stdio') {
+      if (!lspForm.command.trim()) return setError('Command is required for stdio transport')
+    } else {
+      if (!lspForm.url.trim()) return setError('URL is required for ' + transport + ' transport')
+      try { new URL(lspForm.url.trim()) } catch { return setError('Invalid URL') }
+    }
     const args = lspForm.args.trim() ? lspForm.args.split(',').map((s) => s.trim()).filter(Boolean) : undefined
     const env = parseEnvText(lspForm.envText)
+    const headers = parseHeadersText(lspForm.headersText)
     try {
       await api.createLspServer({
         name,
         language,
-        command,
+        transport,
+        command: lspForm.command.trim() || undefined,
         args,
+        url: lspForm.url.trim() || undefined,
         env,
+        headers,
         projectId: lspForm.projectId.trim() || undefined,
         enabled: lspForm.enabled
       })
       toast('LSP server added', 'success')
       setShowLspForm(false)
-      setLspForm({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
+      setLspForm({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
       await loadLspServers()
     } catch (e: any) {
       setError(e.message)
@@ -876,7 +885,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                 </div>
               </div>
               <p className="hint" style={{ marginBottom: 16 }}>
-                Language Server Protocol integrations provide smarter code intelligence — autocomplete, diagnostics, go-to-definition, and hover docs. Each server runs as a stdio child process and is auto-started per project or globally.
+                Language Server Protocol integrations provide smarter code intelligence — autocomplete, diagnostics, go-to-definition, and hover docs. Servers run via stdio, TCP, HTTP or WebSocket and are auto-started per project or globally.
               </p>
 
               {lspEdit && (
@@ -1055,7 +1064,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                               <p className="hint" style={{ fontSize: 12 }}>{s.connected ? 'No capabilities reported' : 'Not connected — test or restart to fetch capabilities'}</p>
                             )}
                             <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace' }}>
-                              ID: {s.id.slice(0, 8)} · {s.language} · {s.command}
+                              ID: {s.id.slice(0, 8)} · {s.language} · {s.transport === 'stdio' ? s.command : s.url} · {s.transport}
                             </div>
                           </div>
                         )}
