@@ -900,7 +900,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     } else {
@@ -918,7 +918,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     }
@@ -1034,4 +1034,12 @@ export function findPreviewForChat(chatId: string): Preview | undefined {
 
 export function previewsOfChat(chatId: string): Preview[] {
   return db.previews.filter((p) => p.chatId === chatId).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+export function getMcpServers(): MCPServer[] {
+  return [...db.mcpServers].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export function findMcpServer(id: string): MCPServer | undefined {
+  return db.mcpServers.find((s) => s.id === id)
 }
