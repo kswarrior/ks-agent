@@ -58,6 +58,8 @@ import {
 } from './mcp.js'
 
 loadDb()
+// Fire-and-forget: connect enabled MCP servers in background
+void ensureMCPConnections().catch((e) => console.warn('[mcp] startup connect failed', e))
 // On startup, any plan step left as "working" but with no active generation is
 // stale (previous process crashed or retry left it hanging). Revert to pending
 // so UI doesn't stay stuck on "Executing 3/7" after restart.
