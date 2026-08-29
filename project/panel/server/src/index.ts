@@ -1,22 +1,35 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { Serve } from '@hono/node-server';
+import { readFileSync, writeFileSync, statSync, readdirSync, mkdirSync, rmSync, existsSync, openSync, appendFileSync, constants } from 'fs';
+import { join, dirname } from 'path';
+import { spawn, spawnSync } from 'child_process';
+import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { readFileSync, writeFile, appendFile, stat, readdir, mkdir, rm, existsSync } from 'fs';
-import { join, basename, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { z } from 'zod';
+
+// Use the WebSocket from ws package
+declare module 'ws' {
+  interface WebSocket {
+    readyState: number;
+    send(data: any): void;
+    close(): void;
+    on(event: string, callback: Function): void;
+    off(event: string, callback: Function): void;
+  }
+}
 
 const app = new Hono();
 
 // Configuration
-const SERVER_ROOT = process.env.SERVER_ROOT || './server-files';
+const SERVER_ROOT = process.env.SERVER_ROOT || join(process.cwd(), 'server-files');
 const SERVER_STATUS_FILE = join(SERVER_ROOT, 'status.json');
 const SERVER_LOGS_DIR = join(SERVER_ROOT, 'logs');
 
-// In-memory state for server process
+// In-memory state for server process and WebSocket connections
 let serverProcess: any = null;
-let serverPort = 25565;
+let wss: WebSocketServer | null = null;
+
+// WebSocket connections for console streaming
+const clients = new Set<any>();
 
 app.use('*', cors({
   origin: ['http://localhost:5173'],
@@ -32,17 +45,12 @@ function ensureServerRoot() {
   }
 }
 
-function mkdirSync(path: string, options: any = {}) {
-  const { mkdirSync } = require('fs');
-  mkdirSync(path, options);
-}
-
 // Helper to get server status
 function getServerStatus() {
   try {
     if (existsSync(SERVER_STATUS_FILE)) {
-      const data = JSON.parse(readFileSync(SERVER_STATUS_FILE, 'utf-8'));
-      return data;
+      const data = readFileSync(SERVER_STATUS_FILE, 'utf-8');
+      return JSON.parse(data);
     }
   } catch (e) {
     console.error('Error reading status file:', e);
@@ -68,6 +76,39 @@ function writeServerStatus(status: any) {
   }
 }
 
+// Broadcast console message to all clients
+function broadcastConsoleMessage(message: string) {
+  clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(JSON.stringify({ type: 'console', data: message }));
+    }
+  });
+}
+
+// Initialize WebSocket server
+function initWebSocket() {
+  if (!wss) {
+    wss = new WebSocketServer({ noProxy: true });
+    wss.on('connection', (ws: any) => {
+      console.log('Client connected to console');
+      clients.add(ws);
+      
+      ws.on('close', () => {
+        console.log('Client disconnected from console');
+        clients.delete(ws);
+      });
+      
+      ws.on('message', (data: Buffer) => {
+        // Handle console commands
+        const cmd = data.toString().trim();
+        if (serverProcess && serverProcess.stdin) {
+          serverProcess.stdin.write(cmd + '\n');
+        }
+      });
+    });
+  }
+}
+
 // Server Management Endpoints
 
 // GET /api/status - Get server status
@@ -78,8 +119,6 @@ app.get('/api/status', (c) => {
 // POST /api/start - Start the server
 app.post('/api/start', (c) => {
   ensureServerRoot();
-  const { spawn } = require('child_process');
-  const { exec } = require('child_process');
   
   const status = getServerStatus();
   if (status.running) {
@@ -91,34 +130,53 @@ app.post('/api/start', (c) => {
   const serverJar = join(SERVER_ROOT, 'server.jar');
   
   if (existsSync(startupScript)) {
-    exec(`chmod +x ${startupScript} && ${startupScript}`, { cwd: SERVER_ROOT });
-  } else if (existsSync(serverJar)) {
-    // Auto-detect Java if no startup script
-    serverProcess = spawn('java', ['-Xmx1024M', '-Xms1024M', '-jar', 'server.jar', 'nogui'], {
+    // Use startup script if exists
+    serverProcess = spawn('bash', [startupScript], {
       cwd: SERVER_ROOT,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, SERVER_PORT: String(serverPort) }
+      stdio: ['pipe', 'pipe', 'pipe']
     });
-
-    serverProcess.stdout.on('data', (data: Buffer) => {
-      broadcastConsoleMessage(data.toString());
-    });
-
-    serverProcess.stderr.on('data', (data: Buffer) => {
-      broadcastConsoleMessage(data.toString());
-    });
-
-    serverProcess.on('exit', () => {
-      stopConsoleMonitoring();
-      const currentStatus = getServerStatus();
-      currentStatus.running = false;
-      writeServerStatus(currentStatus);
+  } else if (existsSync(serverJar)) {
+    // Auto-launch server jar directly
+    serverProcess = spawn('java', [
+      '-Xmx1024M',
+      '-Xms1024M',
+      '-jar',
+      'server.jar',
+      'nogui'
+    ], {
+      cwd: SERVER_ROOT,
+      stdio: ['pipe', 'pipe', 'pipe']
     });
   } else {
     return c.json({ 
       error: 'No server files found. Please place server.jar in the server directory.',
       serverDir: SERVER_ROOT 
     }, 404);
+  }
+
+  if (serverProcess) {
+    serverProcess.stdout.on('data', (data: Buffer) => {
+      const msg = data.toString();
+      broadcastConsoleMessage(msg);
+      // Also write to log file
+      try {
+        appendFileSync(join(SERVER_LOGS_DIR, 'latest.log'), msg);
+      } catch (e) {
+        console.error('Failed to write log:', e);
+      }
+    });
+
+    serverProcess.stderr.on('data', (data: Buffer) => {
+      const msg = data.toString();
+      broadcastConsoleMessage(msg);
+    });
+
+    serverProcess.on('exit', (code: number) => {
+      console.log(`Server process exited with code ${code}`);
+      const currentStatus = getServerStatus();
+      currentStatus.running = false;
+      writeServerStatus(currentStatus);
+    });
   }
 
   const newStatus = getServerStatus();
@@ -132,7 +190,7 @@ app.post('/api/start', (c) => {
 // POST /api/stop - Stop the server
 app.post('/api/stop', (c) => {
   if (!serverProcess) {
-    return c.json({ error: 'No server process found' }, 400);
+    return c.json({ error: 'Server is not running' }, 400);
   }
 
   serverProcess.kill();
@@ -145,68 +203,18 @@ app.post('/api/stop', (c) => {
   return c.json({ message: 'Server stopping...' });
 });
 
-// POST /api/restart - Restart the server
-app.post('/api/restart', async (c) => {
-  await fetch('http://localhost:3000/api/stop', { method: 'POST' }).catch(() => {});
-  await new Promise(r => setTimeout(r, 2000));
-  await fetch('http://localhost:3000/api/start', { method: 'POST' });
-  return c.json({ message: 'Server restarting...' });
-});
-
-// WebSocket setup for console streaming
-let wss: WebSocketServer | null = null;
-
-function initWebSocket() {
-  if (!wss) {
-    wss = new WebSocketServer({ noProxy: true });
-    wss.on('connection', (ws) => {
-      console.log('Client connected to console');
-      ws.on('close', () => {
-        console.log('Client disconnected');
-      });
-    });
-  }
-}
-
-// Broadcast console message to all clients
-function broadcastConsoleMessage(message: string) {
-  if (wss) {
-    wss.clients.forEach(client => {
-      if (client.readyState === 1) {
-        client.send(JSON.stringify({ type: 'console', data: message }));
-      }
-    });
-  }
-}
-
-// Stop console monitoring
-function stopConsoleMonitoring() {
-  if (wss) {
-    wss.clients.forEach(client => {
-      if (client.readyState === 1) {
-        client.send(JSON.stringify({ type: 'status', data: 'disconnected' }));
-      }
-    });
-  }
-}
-
 // GET /api/console - WebSocket endpoint for console streaming
 app.get('/api/console', (c) => {
-  initWebSocket();
-  const upgrade = c.req.raw.headers.get('upgrade');
+  const upgrade = c.req.headers.get('upgrade');
   if (upgrade !== 'websocket') {
     return c.text('WebSocket required', 400);
   }
-
-  const ws = (c as any).env?.ws as WebSocket;
-  if (ws) {
-    wss?.clients.forEach(client => ws = client);
-  }
   
-  // For Hono, we need to handle the WebSocket differently
-  // This is a simplified version - in production you'd use hono/ws properly
-  c.status(400);
-  return c.text('Use the WS endpoint directly');
+  initWebSocket();
+  
+  // Return dynamic response for Hono
+  const response = c.text('');
+  return response;
 });
 
 // File Management Endpoints
@@ -214,20 +222,24 @@ app.get('/api/console', (c) => {
 // GET /api/files - List files in server directory
 app.get('/api/files', (c) => {
   ensureServerRoot();
-  const path = c.req.query.path || '';
+  const path = c.req.query('path') || '';
   const fullPath = join(SERVER_ROOT, path);
+  
+  if (!existsSync(fullPath)) {
+    return c.json({ error: 'Directory not found' }, 404);
+  }
   
   try {
     const files = readdirSync(fullPath);
     const result = files.map(file => {
       const filePath = join(fullPath, file);
-      const stat = existsSync(filePath) ? require('fs').statSync(filePath) : null;
+      const fileStat = statSync(filePath);
       return {
         name: file,
-        path: join(path, file).replace(/^\\/, ''),
-        type: stat?.isDirectory() ? 'directory' : 'file',
-        size: stat?.size || 0,
-        modified: stat?.mtime?.toISOString() || null
+        path: join(path, file).replace(/^\/+/, ''),
+        type: fileStat.isDirectory() ? 'directory' : 'file',
+        size: fileStat.size,
+        modified: fileStat.mtime.toISOString()
       };
     });
     return c.json(result);
@@ -245,8 +257,8 @@ app.get('/api/files/:path', (c) => {
       return c.json({ error: 'File not found' }, 404);
     }
     
-    const stat = require('fs').statSync(filePath);
-    if (stat.isDirectory()) {
+    const fileStat = statSync(filePath);
+    if (fileStat.isDirectory()) {
       return c.json({ error: 'Cannot read directory' }, 400);
     }
     
@@ -258,31 +270,22 @@ app.get('/api/files/:path', (c) => {
 });
 
 // POST /api/files - Create/edit file
-app.post('/api/files', (c) => {
-  const body = c.req.body;
-  const data = c.req.body;
-
-  return new Promise((resolve) => {
-    let rawData = '';
-    c.req.on('data', chunk => rawData += chunk);
-    c.req.on('end', () => {
-      try {
-        const body = JSON.parse(rawData);
-        const { path, content } = body;
-        const fullPath = join(SERVER_ROOT, path);
-        const dir = dirname(fullPath);
-        
-        if (!existsSync(dir)) {
-          mkdirSync(dir, { recursive: true });
-        }
-        
-        writeFileSync(fullPath, content);
-        resolve(c.json({ message: 'File saved', path }));
-      } catch (e) {
-        resolve(c.json({ error: 'Failed to save file' }, 500));
-      }
-    });
-  });
+app.post('/api/files', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { path, content } = body as { path: string; content: string };
+    const fullPath = join(SERVER_ROOT, path);
+    const dir = dirname(fullPath);
+    
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    
+    writeFileSync(fullPath, content);
+    return c.json({ message: 'File saved', path });
+  } catch (e) {
+    return c.json({ error: 'Failed to save file' }, 500);
+  }
 });
 
 // DELETE /api/files/:path - Delete file
@@ -301,7 +304,7 @@ app.delete('/api/files/:path', (c) => {
   }
 });
 
-// GET /api/logs - Get server logs
+// GET /api/logs - Get server logs list
 app.get('/api/logs', (c) => {
   ensureServerRoot();
   
@@ -337,53 +340,27 @@ app.get('/api/logs/:name', (c) => {
   }
 });
 
-// POST /api/config - Save configuration
-app.post('/api/config', (c) => {
+// POST /api/config - Save/server configuration
+app.post('/api/config', async (c) => {
   const configPath = join(SERVER_ROOT, 'server.properties');
   
-  return new Promise((resolve) => {
-    let rawData = '';
-    c.req.on('data', chunk => rawData += chunk);
-    c.req.on('end', () => {
-      try {
-        const config = JSON.parse(rawData);
-        writeFileSync(configPath, JSON.stringify(config, null, 2));
-        resolve(c.json({ message: 'Configuration saved' }));
-      } catch (e) {
-        resolve(c.json({ error: 'Failed to save configuration' }, 500));
-      }
-    });
-  });
+  try {
+    const config = await c.req.json();
+    
+    // Convert JSON config to server.properties format
+    let props = '';
+    for (const [key, value] of Object.entries(config)) {
+      props += `${key}=${value}\n`;
+    }
+    
+    writeFileSync(configPath, props);
+    return c.json({ message: 'Configuration saved' });
+  } catch (e) {
+    return c.json({ error: 'Failed to save configuration' }, 500);
+  }
 });
 
 // Health check
 app.get('/health', (c) => c.json({ status: 'ok' }));
-
-// Type checking
-function writeFileSync(path: string, data: string) {
-  require('fs').writeFileSync(path, data);
-}
-
-const server = {
-  port: process.env.PORT || 3000,
-  start: () => {
-    ensureServerRoot();
-    
-    // Default status
-    if (!existsSync(SERVER_STATUS_FILE)) {
-      writeServerStatus(getServerStatus());
-    }
-    
-    console.log(`Minecraft Panel API server starting on port ${server.port}`);
-    
-    return server;
-  }
-};
-
-const serve = (options: any) => {
-  app.listen(options.port || 3000, () => {
-    console.log(`Server listening on http://localhost:${options.port || 3000}`);
-  });
-};
 
 export { app };
