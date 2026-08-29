@@ -135,7 +135,7 @@ export interface MCPServer {
 
 export type LSPTransport = 'stdio' | 'tcp' | 'socket' | 'websocket' | 'http' | 'sse'
 
-export interface LspServer {
+export interface LSPServer {
   id: string
   name: string
   language: string
@@ -145,19 +145,6 @@ export interface LspServer {
   url?: string
   env?: Record<string, string>
   headers?: Record<string, string>
-  projectId?: string
-  enabled: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export interface LSPServer {
-  id: string
-  name: string
-  language: string
-  command: string
-  args?: string[]
-  env?: Record<string, string>
   projectId?: string
   enabled: boolean
   createdAt: string
@@ -205,6 +192,10 @@ interface DB {
   mcpServers: MCPServer[]
   lspServers: LSPServer[]
 }
+
+// Backwards compat alias
+export type LspServer = LSPServer
+export type LspTransport = LSPTransport
 
 // Storage location: agent root where skills/web/server folders live.
 // Default: <cwd>/storage/ksagent.db  (or <cwd>/data/ksagent.db if KS_DATA_DIR is set for backward compat)
@@ -723,14 +714,17 @@ function loadFromSqlite(s: Database.Database): DB | null {
 
     let lspServers: LSPServer[] = []
     try {
-      const lspRows = s.prepare('SELECT id, name, language, command, args, env, projectId, enabled, createdAt, updatedAt FROM lspServers').all() as any[]
+      const lspRows = s.prepare('SELECT id, name, language, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt FROM lspServers').all() as any[]
       lspServers = lspRows.map((r) => ({
         id: r.id,
         name: r.name,
         language: r.language,
-        command: r.command,
+        transport: r.transport as LSPTransport,
+        command: r.command ?? undefined,
         args: r.args ? JSON.parse(r.args) as string[] : undefined,
+        url: r.url ?? undefined,
         env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
+        headers: r.headers ? JSON.parse(r.headers) as Record<string,string> : undefined,
         projectId: r.projectId ?? undefined,
         enabled: !!r.enabled,
         createdAt: r.createdAt,
@@ -850,6 +844,21 @@ function tryMigrateFromJson(): boolean {
         enabled: m.enabled !== false,
         createdAt: typeof m.createdAt === 'string' ? m.createdAt : new Date().toISOString(),
         updatedAt: typeof m.updatedAt === 'string' ? m.updatedAt : new Date().toISOString()
+      })) : [],
+      lspServers: Array.isArray((parsed as any).lspServers) ? (parsed as any).lspServers.filter((l: any) => l && typeof l.id === 'string' && typeof l.name === 'string' && typeof l.language === 'string').map((l: any) => ({
+        id: String(l.id),
+        name: String(l.name).trim(),
+        language: String(l.language).trim().toLowerCase(),
+        transport: ['stdio','tcp','socket','websocket','http','sse'].includes(String(l.transport)) ? String(l.transport) as LSPTransport : 'stdio',
+        command: typeof l.command === 'string' && l.command.trim() ? String(l.command).trim() : undefined,
+        args: Array.isArray(l.args) ? l.args.map((a: any) => String(a)).filter(Boolean) : undefined,
+        url: typeof l.url === 'string' && l.url.trim() ? String(l.url).trim() : undefined,
+        env: l.env && typeof l.env === 'object' && !Array.isArray(l.env) ? Object.fromEntries(Object.entries(l.env).map(([k,v]: any) => [String(k), String(v)])) as Record<string,string> : undefined,
+        headers: l.headers && typeof l.headers === 'object' && !Array.isArray(l.headers) ? Object.fromEntries(Object.entries(l.headers).map(([k,v]: any) => [String(k), String(v)])) as Record<string,string> : undefined,
+        projectId: typeof l.projectId === 'string' && l.projectId.trim() ? String(l.projectId).trim() : undefined,
+        enabled: l.enabled !== false,
+        createdAt: typeof l.createdAt === 'string' ? l.createdAt : new Date().toISOString(),
+        updatedAt: typeof l.updatedAt === 'string' ? l.updatedAt : new Date().toISOString()
       })) : []
     }
     // Migrate old skills missing updatedAt / projectId
@@ -926,6 +935,13 @@ function tryMigrateFromLegacySqlite(): boolean {
       INSERT OR IGNORE INTO main.previews SELECT * FROM legacy.previews;
       INSERT OR IGNORE INTO main.kv SELECT * FROM legacy.kv;
     `)
+    // LSP servers added in v0.2 — legacy DBs won't have this table; try separately
+    try {
+      s.exec(`INSERT OR IGNORE INTO main.lspServers SELECT * FROM legacy.lspServers`)
+    } catch {}
+    try {
+      s.exec(`INSERT OR IGNORE INTO main.mcpServers SELECT * FROM legacy.mcpServers`)
+    } catch {}
     s.exec('DETACH DATABASE legacy')
     attached = false
     const loaded = loadFromSqlite(s)
@@ -979,7 +995,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [], lspServers: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     } else {
@@ -997,7 +1013,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [], lspServers: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     }
@@ -1121,4 +1137,12 @@ export function getMcpServers(): MCPServer[] {
 
 export function findMcpServer(id: string): MCPServer | undefined {
   return db.mcpServers.find((s) => s.id === id)
+}
+
+export function getLspServers(): LSPServer[] {
+  return [...db.lspServers].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export function findLspServer(id: string): LSPServer | undefined {
+  return db.lspServers.find((s) => s.id === id)
 }
