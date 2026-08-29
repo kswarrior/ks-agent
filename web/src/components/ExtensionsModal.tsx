@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '../api'
-import type { Skill, Project, FileEntry } from '../types'
+import type { Skill, Project, FileEntry, MCPServer, MCPTransport } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
 import {
@@ -40,6 +40,17 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [skillPickerDir, setSkillPickerDir] = useState('')
   const [skillPickerEntries, setSkillPickerEntries] = useState<FileEntry[]>([])
   const [skillPickerLoading, setSkillPickerLoading] = useState(false)
+
+  // --- MCP state ---
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
+  const [mcpLoading, setMcpLoading] = useState(false)
+  const [showMcpForm, setShowMcpForm] = useState(false)
+  const [mcpForm, setMcpForm] = useState<{ name: string; transport: MCPTransport; command: string; args: string; url: string; envText: string; headersText: string; projectId: string; enabled: boolean }>({ name: '', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
+  const [mcpEdit, setMcpEdit] = useState<MCPServer | null>(null)
+  const [mcpEditForm, setMcpEditForm] = useState<{ name: string; transport: MCPTransport; command: string; args: string; url: string; envText: string; headersText: string; projectId: string; enabled: boolean }>({ name: '', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
+  const [mcpActionLoading, setMcpActionLoading] = useState<string | null>(null)
+  const [mcpExpanded, setMcpExpanded] = useState<Record<string, boolean>>({})
+  const [mcpTestResult, setMcpTestResult] = useState<Record<string, { ok: boolean; error?: string; tools?: { name: string; description?: string }[] }>>({})
   const confirm = useDialogs().confirm
   const toast = useToast()
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -86,15 +97,25 @@ export function ExtensionsModal({ open, onClose }: Props) {
   useEffect(() => {
     if (open) {
       loadSkills()
+      loadMcpServers()
       setError(null)
       setShowSkillForm(false)
       setSkillFileBrowserOpen(false)
       setSkillEdit(null)
       setSkillPickerDir('')
       setSkillPickerEntries([])
+      setShowMcpForm(false)
+      setMcpEdit(null)
+      setMcpExpanded({})
+      setMcpTestResult({})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  useEffect(() => {
+    if (open && tab === 'mcp') loadMcpServers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   async function loadSkills() {
     try {
