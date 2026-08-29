@@ -1,33 +1,25 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
-import type { LSPServer } from './store.js'
-import { findLspServer, findProject, getDb } from './store.js'
+import type { LSPServer, LSPTransport } from './store.js'
+import { findLspServer, getDb } from './store.js'
 
 // ---------------- Types ----------------
 
-export interface LSPCapabilities {
-  textDocumentSync?: unknown
-  completionProvider?: unknown
-  hoverProvider?: boolean
-  definitionProvider?: boolean
-  referencesProvider?: boolean
-  documentSymbolProvider?: boolean
-  workspaceSymbolProvider?: boolean
-  [key: string]: unknown
+export interface LspCapabilities {
+  capabilities?: Record<string, unknown>
+  serverInfo?: { name?: string; version?: string }
+  [k: string]: unknown
 }
 
-interface LSPClient {
-  initialize(rootUri: string | null): Promise<LSPCapabilities>
+interface LspClient {
+  initialize(rootUri?: string): Promise<LspCapabilities>
   shutdown(): Promise<void>
   close(): void
-  isAlive(): boolean
 }
 
 interface ServerState {
   server: LSPServer
-  client: LSPClient | null
-  capabilities: LSPCapabilities | null
+  client: LspClient | null
+  capabilities: LspCapabilities | null
   connected: boolean
   connecting: boolean
   error?: string
@@ -37,70 +29,24 @@ interface ServerState {
 // In-memory state
 const states = new Map<string, ServerState>()
 
-// Known language identifiers for validation / UI hints
-export const SUPPORTED_LANGUAGES = [
-  'typescript',
-  'javascript',
-  'python',
-  'go',
-  'rust',
-  'css',
-  'json',
-  'html',
-  'yaml',
-  'bash',
-  'shell',
-  'markdown',
-  'java',
-  'c',
-  'cpp',
-  'csharp',
-  'php',
-  'ruby',
-  'swift',
-  'kotlin',
-  'dart',
-  'toml',
-  'xml',
-  'sql',
-  'graphql',
-  'dockerfile'
-] as const
-
-export type LSPLanguageId = string
+// ---------------- Helpers ----------------
 
 function projectMatches(server: LSPServer, projectId?: string): boolean {
   if (!server.enabled) return false
-  if (!server.projectId) return true
+  if (!server.projectId) return true // global
   if (!projectId) return false
   return server.projectId === projectId
 }
 
-function resolveRootUri(server: LSPServer): string | null {
-  try {
-    if (server.projectId) {
-      const proj = findProject(server.projectId)
-      if (proj?.path) {
-        const abs = path.resolve(proj.path)
-        if (fs.existsSync(abs)) return 'file://' + abs
-      }
-    }
-    // fallback to cwd as root
-    return 'file://' + path.resolve(process.cwd())
-  } catch {
-    return null
-  }
-}
+// ---------------- Stdio client ----------------
 
-// ---------------- Stdio client with Content-Length framing ----------------
-
-class StdioLSPClient implements LSPClient {
+class StdioLspClient implements LspClient {
   private proc: ChildProcess
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void; timeout: ReturnType<typeof setTimeout> }>()
   private nextId = 1
-  private buffer = Buffer.alloc(0)
+  private buffer = ''
   private closed = false
-  private alive = true
+  private contentLengthBuffer = ''
 
   constructor(
     private command: string,
@@ -113,64 +59,81 @@ class StdioLSPClient implements LSPClient {
       env: spawnEnv,
       shell: false
     })
-    this.proc.stdout?.on('data', (chunk: Buffer) => this.onData(chunk))
+    this.proc.stdout?.on('data', (chunk: Buffer) => this.onData(chunk.toString('utf8')))
     this.proc.stderr?.on('data', () => {
-      // stderr is often used for logging; ignore but keep process alive
+      // ignore stderr logs
     })
     this.proc.on('error', (err) => this.failAll(err))
     this.proc.on('exit', (code) => {
-      this.alive = false
       if (!this.closed) {
-        const err = new Error(`LSP process exited with code ${code ?? 'unknown'}`)
+        const err = new Error(`LSP stdio process exited with code ${code ?? 'unknown'}`)
         this.failAll(err)
       }
     })
   }
 
-  private onData(chunk: Buffer): void {
-    this.buffer = Buffer.concat([this.buffer, chunk])
+  private onData(data: string): void {
+    // LSP uses Content-Length header framing OR newline-delimited JSON (both observed)
+    // Try Content-Length first, fallback to newline
+    this.contentLengthBuffer += data
+    // Try Content-Length parsing
     while (true) {
-      const headerEnd = this.buffer.indexOf('\r\n\r\n')
-      if (headerEnd === -1) break
-      const header = this.buffer.slice(0, headerEnd).toString('utf8')
-      const match = header.match(/Content-Length:\s*(\d+)/i)
-      if (!match) {
-        // malformed header, skip
-        this.buffer = this.buffer.slice(headerEnd + 4)
-        continue
-      }
-      const len = Number(match[1])
-      const total = headerEnd + 4 + len
-      if (this.buffer.length < total) break // wait for more data
-      const body = this.buffer.slice(headerEnd + 4, total).toString('utf8')
-      this.buffer = this.buffer.slice(total)
-      if (!body) continue
-      let msg: any
-      try {
-        msg = JSON.parse(body)
-      } catch {
-        continue
-      }
-      if (msg.id != null && this.pending.has(msg.id)) {
-        const entry = this.pending.get(msg.id)!
-        this.pending.delete(msg.id)
-        clearTimeout(entry.timeout)
-        if (msg.error) {
-          const errMsg = msg.error?.message ? String(msg.error.message) : JSON.stringify(msg.error)
-          entry.reject(new Error(errMsg))
+      const headerEnd = this.contentLengthBuffer.indexOf('\r\n\r\n')
+      if (headerEnd !== -1) {
+        const header = this.contentLengthBuffer.slice(0, headerEnd)
+        const m = header.match(/Content-Length:\s*(\d+)/i)
+        if (m) {
+          const len = parseInt(m[1], 10)
+          const totalHeaderLen = headerEnd + 4
+          if (this.contentLengthBuffer.length >= totalHeaderLen + len) {
+            const jsonStr = this.contentLengthBuffer.slice(totalHeaderLen, totalHeaderLen + len)
+            this.contentLengthBuffer = this.contentLengthBuffer.slice(totalHeaderLen + len)
+            let msg: any
+            try { msg = JSON.parse(jsonStr) } catch { continue }
+            this.handleMessage(msg)
+            continue
+          } else {
+            break // wait for more data
+          }
         } else {
-          entry.resolve(msg.result)
+          // malformed header, fallback to newline handling for remaining
+          break
         }
-      } else if (msg.method) {
-        // notification or server-initiated request – ignore for now (diagnostics etc.)
-        // If it's a request from server, we should respond with empty result to avoid hanging
-        if (msg.id != null) {
-          try {
-            const response = JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: null })
-            const header = `Content-Length: ${Buffer.byteLength(response, 'utf8')}\r\n\r\n`
-            this.proc.stdin?.write(header + response)
-          } catch {}
-        }
+      } else {
+        break
+      }
+    }
+    // Fallback newline-delimited for servers that use \n JSON (like MCP) — also handle leftover
+    // Use buffer for newline parsing on what's left after Content-Length processing
+    this.buffer += this.contentLengthBuffer
+    // If we consumed content-length messages, contentLengthBuffer now may contain partial newline JSON
+    // We'll try to parse newline JSON from buffer, and keep remainder in contentLengthBuffer
+    let idx: number
+    while ((idx = this.buffer.indexOf('\n')) >= 0) {
+      const line = this.buffer.slice(0, idx).trim()
+      this.buffer = this.buffer.slice(idx + 1)
+      this.contentLengthBuffer = this.buffer // keep in sync
+      if (!line) continue
+      // ignore non-JSON lines that aren't JSON-RPC (like Content-Length partials already handled)
+      if (!line.startsWith('{')) continue
+      let msg: any
+      try { msg = JSON.parse(line) } catch { continue }
+      this.handleMessage(msg)
+    }
+    // sync back
+    this.contentLengthBuffer = this.buffer
+  }
+
+  private handleMessage(msg: any): void {
+    if (msg.id != null && this.pending.has(msg.id)) {
+      const entry = this.pending.get(msg.id)!
+      this.pending.delete(msg.id)
+      clearTimeout(entry.timeout)
+      if (msg.error) {
+        const errMsg = msg.error?.message ? String(msg.error.message) : JSON.stringify(msg.error)
+        entry.reject(new Error(errMsg))
+      } else {
+        entry.resolve(msg.result)
       }
     }
   }
@@ -183,17 +146,14 @@ class StdioLSPClient implements LSPClient {
     this.pending.clear()
   }
 
-  private send(payload: string): void {
-    if (this.closed) throw new Error('Client closed')
-    // LSP requires Content-Length header
-    const header = `Content-Length: ${Buffer.byteLength(payload, 'utf8')}\r\n\r\n`
-    this.proc.stdin!.write(header + payload)
-  }
-
   private request(method: string, params: unknown, timeoutMs = 10000): Promise<any> {
     if (this.closed) return Promise.reject(new Error('Client closed'))
     const id = this.nextId++
-    const payload = JSON.stringify({ jsonrpc: '2.0', id, method, params })
+    const payloadObj = { jsonrpc: '2.0', id, method, params }
+    const json = JSON.stringify(payloadObj)
+    // LSP spec uses Content-Length framing
+    const payload = `Content-Length: ${Buffer.byteLength(json, 'utf8')}\r\n\r\n${json}`
+    const fallbackPayload = json + '\n'
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id)
@@ -201,7 +161,19 @@ class StdioLSPClient implements LSPClient {
       }, timeoutMs)
       this.pending.set(id, { resolve, reject, timeout })
       try {
-        this.send(payload)
+        // Try Content-Length framing first; most LSP servers support it
+        if (this.proc.stdin?.writable) {
+          this.proc.stdin.write(payload, (e) => {
+            if (e) {
+              // fallback to newline
+              try { this.proc.stdin!.write(fallbackPayload) } catch {}
+            }
+          })
+        } else {
+          clearTimeout(timeout)
+          this.pending.delete(id)
+          reject(new Error('stdin not writable'))
+        }
       } catch (e: any) {
         clearTimeout(timeout)
         this.pending.delete(id)
@@ -212,49 +184,34 @@ class StdioLSPClient implements LSPClient {
 
   private notify(method: string, params: unknown): void {
     if (this.closed) return
-    const payload = JSON.stringify({ jsonrpc: '2.0', method, params })
-    try { this.send(payload) } catch {}
+    const json = JSON.stringify({ jsonrpc: '2.0', method, params })
+    const payload = `Content-Length: ${Buffer.byteLength(json, 'utf8')}\r\n\r\n${json}`
+    try { this.proc.stdin?.write(payload) } catch {}
   }
 
-  async initialize(rootUri: string | null): Promise<LSPCapabilities> {
+  async initialize(rootUri?: string): Promise<LspCapabilities> {
     const params: any = {
       processId: process.pid,
-      rootUri,
-      capabilities: {
-        workspace: { configuration: true, workspaceFolders: true },
-        textDocument: {
-          synchronization: { dynamicRegistration: false, willSave: false, didSave: false },
-          completion: { dynamicRegistration: false, completionItem: { snippetSupport: false } },
-          hover: { dynamicRegistration: false },
-          definition: { dynamicRegistration: false },
-          references: { dynamicRegistration: false },
-          documentSymbol: { dynamicRegistration: false }
-        }
-      },
-      initializationOptions: {}
+      rootUri: rootUri ?? null,
+      capabilities: {},
+      clientInfo: { name: 'ks-agent', version: '0.1.0' }
     }
+    // Some servers require workspaceFolders
     if (rootUri) {
-      params.workspaceFolders = [{ uri: rootUri, name: path.basename(rootUri.replace('file://', '')) || 'workspace' }]
+      params.workspaceFolders = [{ uri: rootUri, name: 'workspace' }]
     }
-    const result = await this.request('initialize', params, 15000)
+    const result = await this.request('initialize', params, 8000)
     this.notify('initialized', {})
-    // small delay to let server process initialized
-    await new Promise((r) => setTimeout(r, 100))
-    if (result && typeof result === 'object' && (result as any).capabilities) {
-      return (result as any).capabilities as LSPCapabilities
-    }
-    return (result as LSPCapabilities) ?? {}
+    // small delay
+    await new Promise((r) => setTimeout(r, 80))
+    return (result ?? {}) as LspCapabilities
   }
 
   async shutdown(): Promise<void> {
     try {
-      await this.request('shutdown', null, 5000)
+      await this.request('shutdown', {}, 3000)
     } catch {}
-    this.notify('exit', null)
-  }
-
-  isAlive(): boolean {
-    return this.alive && !this.closed && this.proc.exitCode === null
+    try { this.notify('exit', {}) } catch {}
   }
 
   close(): void {
@@ -266,21 +223,152 @@ class StdioLSPClient implements LSPClient {
     this.pending.clear()
     try { this.proc.stdin?.end() } catch {}
     try { this.proc.kill() } catch {}
-    // force kill after 2s if still alive
-    setTimeout(() => {
-      try { if (this.proc.exitCode === null) this.proc.kill('SIGKILL') } catch {}
-    }, 2000).unref?.()
   }
+}
+
+// ---------------- HTTP / Socket / WebSocket client ----------------
+
+class HttpLspClient implements LspClient {
+  constructor(
+    private url: string,
+    private headers: Record<string, string> | undefined,
+    private transport: LSPTransport
+  ) {}
+
+  private async rpc(method: string, params: unknown, timeoutMs = 10000): Promise<any> {
+    const body = JSON.stringify({ jsonrpc: '2.0', id: Date.now() + Math.floor(Math.random() * 10000), method, params })
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const res = await fetch(this.url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          ...(this.headers ?? {})
+        },
+        body,
+        signal: controller.signal
+      })
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '').then((s) => s.slice(0, 500))
+        throw new Error(`LSP HTTP ${res.status}: ${txt}`)
+      }
+      const ct = res.headers.get('content-type') || ''
+      if (ct.includes('text/event-stream')) {
+        const text = await res.text()
+        const lines = text.split('\n')
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const l = lines[i].trim()
+          if (l.startsWith('data:')) {
+            const payload = l.slice(5).trim()
+            if (!payload) continue
+            try {
+              const obj = JSON.parse(payload)
+              if (obj.error) throw new Error(obj.error.message || JSON.stringify(obj.error))
+              return obj.result ?? obj
+            } catch (e: any) {
+              if (e?.message && !e.message.includes('Unexpected token')) throw e
+            }
+          }
+        }
+        try {
+          const obj = JSON.parse(text)
+          if (obj.error) throw new Error(obj.error.message || JSON.stringify(obj.error))
+          return obj.result ?? obj
+        } catch {
+          throw new Error('Invalid SSE response from LSP server')
+        }
+      }
+      const json: any = await res.json().catch(async () => {
+        const txt = await res.text()
+        throw new Error(`Invalid JSON from LSP server: ${txt.slice(0, 200)}`)
+      })
+      if (json.error) throw new Error(json.error.message || JSON.stringify(json.error))
+      return json.result ?? json
+    } finally {
+      clearTimeout(t)
+    }
+  }
+
+  async initialize(rootUri?: string): Promise<LspCapabilities> {
+    const params: any = {
+      processId: process.pid,
+      rootUri: rootUri ?? null,
+      capabilities: {},
+      clientInfo: { name: 'ks-agent', version: '0.1.0' }
+    }
+    const result = await this.rpc('initialize', params, 10000)
+    try { await this.rpc('initialized', {}, 2000) } catch {}
+    return (result ?? {}) as LspCapabilities
+  }
+
+  async shutdown(): Promise<void> {
+    try { await this.rpc('shutdown', {}, 3000) } catch {}
+    try { await this.rpc('exit', {}, 2000) } catch {}
+  }
+
+  close(): void {}
+}
+
+class SocketLspClient implements LspClient {
+  private url: string
+  constructor(url: string, _headers?: Record<string, string>) {
+    this.url = url
+  }
+  private async rpc(method: string, params: unknown, timeoutMs = 10000): Promise<any> {
+    // For tcp/socket we treat url as http endpoint; try fetch
+    const body = JSON.stringify({ jsonrpc: '2.0', id: Date.now() + Math.floor(Math.random() * 10000), method, params })
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const endpoint = this.url.startsWith('tcp://') ? this.url.replace('tcp://', 'http://') : this.url
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+        signal: controller.signal
+      })
+      if (!res.ok) throw new Error(`LSP socket ${res.status}`)
+      const json: any = await res.json()
+      if (json.error) throw new Error(json.error.message || JSON.stringify(json.error))
+      return json.result ?? json
+    } finally {
+      clearTimeout(t)
+    }
+  }
+  async initialize(rootUri?: string): Promise<LspCapabilities> {
+    const params: any = { processId: process.pid, rootUri: rootUri ?? null, capabilities: {}, clientInfo: { name: 'ks-agent', version: '0.1.0' } }
+    const result = await this.rpc('initialize', params, 10000)
+    try { await this.rpc('initialized', {}, 2000) } catch {}
+    return (result ?? {}) as LspCapabilities
+  }
+  async shutdown(): Promise<void> {
+    try { await this.rpc('shutdown', {}, 3000) } catch {}
+    try { await this.rpc('exit', {}, 2000) } catch {}
+  }
+  close(): void {}
 }
 
 // ---------------- Public API ----------------
 
-function createClient(server: LSPServer): LSPClient {
-  if (!server.command) throw new Error('LSP server requires command')
-  return new StdioLSPClient(server.command, server.args ?? [], server.env)
+function createClient(server: LSPServer): LspClient {
+  if (server.transport === 'stdio') {
+    if (!server.command) throw new Error('stdio transport requires command')
+    return new StdioLspClient(server.command, server.args ?? [], server.env)
+  }
+  if (server.transport === 'tcp' || server.transport === 'socket') {
+    if (!server.url) throw new Error(`${server.transport} transport requires url`)
+    return new SocketLspClient(server.url, server.headers)
+  }
+  if (server.transport === 'http' || server.transport === 'sse' || server.transport === 'websocket') {
+    if (!server.url) throw new Error(`${server.transport} transport requires url`)
+    return new HttpLspClient(server.url, server.headers, server.transport)
+  }
+  throw new Error(`Unsupported transport: ${server.transport}`)
 }
 
-export async function connectLSPServer(server: LSPServer): Promise<{ ok: boolean; capabilities?: LSPCapabilities; error?: string }> {
+export async function connectLspServer(server: LSPServer): Promise<{ ok: boolean; capabilities?: LspCapabilities; error?: string }> {
   let st = states.get(server.id)
   if (!st) {
     st = { server, client: null, capabilities: null, connected: false, connecting: false }
@@ -297,10 +385,7 @@ export async function connectLSPServer(server: LSPServer): Promise<{ ok: boolean
   st.error = undefined
   try {
     const client = createClient(server)
-    const rootUri = resolveRootUri(server)
-    const caps = await client.initialize(rootUri)
-    // Verify process still alive after initialize
-    if (!client.isAlive()) throw new Error('LSP process died after initialize')
+    const caps = await client.initialize()
     st.client = client
     st.capabilities = caps
     st.connected = true
@@ -319,42 +404,33 @@ export async function connectLSPServer(server: LSPServer): Promise<{ ok: boolean
   }
 }
 
-export function disconnectLSPServer(id: string): void {
+export function disconnectLspServer(id: string): void {
   const st = states.get(id)
   if (!st) return
-  if (st.client) {
-    try {
-      // best-effort shutdown
-      void (st.client as StdioLSPClient).shutdown().catch(() => {})
-      st.client.close()
-    } catch {}
-    st.client = null
-  }
+  if (st.client) { try { st.client.shutdown().catch(() => {}); st.client.close() } catch {} ; st.client = null }
   st.connected = false
   st.connecting = false
   st.capabilities = null
 }
 
-export function disconnectAllLSP(): void {
-  for (const [id] of states) disconnectLSPServer(id)
+export function disconnectAllLsp(): void {
+  for (const [id] of states) disconnectLspServer(id)
 }
 
-export async function refreshLSPServer(id: string): Promise<{ ok: boolean; capabilities?: LSPCapabilities; error?: string }> {
+export async function refreshLspServer(id: string): Promise<{ ok: boolean; capabilities?: LspCapabilities; error?: string }> {
   const server = findLspServer(id)
   if (!server) return { ok: false, error: 'LSP server not found' }
   if (!server.enabled) return { ok: false, error: 'Server is disabled' }
-  disconnectLSPServer(id)
-  return connectLSPServer(server)
+  disconnectLspServer(id)
+  return connectLspServer(server)
 }
 
-export async function testLSPServer(server: LSPServer): Promise<{ ok: boolean; capabilities?: LSPCapabilities; error?: string }> {
-  let client: LSPClient | null = null
+export async function testLspServer(server: LSPServer): Promise<{ ok: boolean; capabilities?: LspCapabilities; error?: string }> {
+  let client: LspClient | null = null
   try {
     client = createClient(server)
-    const rootUri = resolveRootUri(server)
-    const caps = await client.initialize(rootUri)
-    // verify still alive
-    if (!client.isAlive()) throw new Error('Process died after initialize')
+    const caps = await client.initialize()
+    await client.shutdown().catch(() => {})
     return { ok: true, capabilities: caps }
   } catch (e: any) {
     return { ok: false, error: String(e?.message || e).slice(0, 800) }
@@ -363,19 +439,19 @@ export async function testLSPServer(server: LSPServer): Promise<{ ok: boolean; c
   }
 }
 
-export function getLSPServerState(id: string): ServerState | undefined {
+export function getLspServerState(id: string): ServerState | undefined {
   return states.get(id)
 }
 
-export function getAllLSPStates(): ServerState[] {
+export function getAllLspStates(): ServerState[] {
   return [...states.values()]
 }
 
-export function syncLSPStatesFromDb(): void {
+export function syncLspStatesFromDb(): void {
   const validIds = new Set(getDb().lspServers.map((s) => s.id))
   for (const id of [...states.keys()]) {
     if (!validIds.has(id)) {
-      disconnectLSPServer(id)
+      disconnectLspServer(id)
       states.delete(id)
     }
   }
@@ -388,35 +464,32 @@ export function syncLSPStatesFromDb(): void {
   }
 }
 
-export async function ensureLSPConnections(): Promise<void> {
-  syncLSPStatesFromDb()
+export async function ensureLspConnections(): Promise<void> {
+  syncLspStatesFromDb()
   const promises: Promise<any>[] = []
   for (const srv of getDb().lspServers) {
     if (!srv.enabled) {
       const st = states.get(srv.id)
-      if (st?.connected) disconnectLSPServer(srv.id)
+      if (st?.connected) disconnectLspServer(srv.id)
       continue
     }
     const st = states.get(srv.id)
     if (st?.connected || st?.connecting) continue
-    promises.push(connectLSPServer(srv).catch(() => {}))
+    promises.push(connectLspServer(srv).catch(() => {}))
   }
   await Promise.all(promises)
 }
 
-export function getLSPServersForProject(projectId?: string): LSPServer[] {
-  return getDb().lspServers.filter((s) => projectMatches(s, projectId))
-}
-
-export function getLSPStatusForApi(projectId?: string): Array<{
+export function getLspStatusForApi(projectId?: string): Array<{
   id: string
   name: string
   language: string
+  transport: string
   enabled: boolean
   connected: boolean
   connecting: boolean
   error?: string
-  capabilities?: LSPCapabilities | null
+  capabilities: LspCapabilities | null
   projectId?: string
 }> {
   const list: any[] = []
@@ -426,6 +499,7 @@ export function getLSPStatusForApi(projectId?: string): Array<{
       id: st.server.id,
       name: st.server.name,
       language: st.server.language,
+      transport: st.server.transport,
       enabled: st.server.enabled,
       connected: st.connected,
       connecting: st.connecting,
@@ -439,7 +513,7 @@ export function getLSPStatusForApi(projectId?: string): Array<{
 
 // Graceful shutdown
 try {
-  process.on('exit', () => disconnectAllLSP())
-  process.on('SIGINT', () => disconnectAllLSP())
-  process.on('SIGTERM', () => disconnectAllLSP())
+  process.on('exit', () => disconnectAllLsp())
+  process.on('SIGINT', () => disconnectAllLsp())
+  process.on('SIGTERM', () => disconnectAllLsp())
 } catch {}

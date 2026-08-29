@@ -41,7 +41,10 @@ import {
   type MCPServer,
   type MCPTransport,
   findMcpServer,
-  getMcpServers
+  getMcpServers,
+  type LSPServer,
+  findLspServer,
+  getLspServers
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, resolvePendingQuestion, runAgentLoop } from './agent.js'
@@ -56,10 +59,21 @@ import {
   syncMCPStatesFromDb,
   ensureMCPConnections
 } from './mcp.js'
+import {
+  connectLSPServer,
+  disconnectLSPServer,
+  getAllLSPStates,
+  getLSPServerState,
+  refreshLSPServer,
+  testLSPServer,
+  syncLSPStatesFromDb,
+  ensureLSPConnections
+} from './lsp.js'
 
 loadDb()
-// Fire-and-forget: connect enabled MCP servers in background
+// Fire-and-forget: connect enabled MCP/LSP servers in background
 void ensureMCPConnections().catch((e) => console.warn('[mcp] startup connect failed', e))
+void ensureLSPConnections().catch((e) => console.warn('[lsp] startup connect failed', e))
 // On startup, any plan step left as "working" but with no active generation is
 // stale (previous process crashed or retry left it hanging). Revert to pending
 // so UI doesn't stay stuck on "Executing 3/7" after restart.
@@ -339,6 +353,13 @@ app.delete('/api/projects/:id', async (c) => {
     }
   }
   syncMCPStatesFromDb()
+  for (const ls of (db.lspServers ?? [])) {
+    if (ls.projectId === removed.id) {
+      delete ls.projectId
+      ls.updatedAt = new Date().toISOString()
+    }
+  }
+  syncLSPStatesFromDb()
   saveDb()
   return c.json({ ok: true })
 })
