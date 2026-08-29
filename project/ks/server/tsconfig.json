@@ -8,8 +8,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "outDir": "dist-server",
-    "rootDir": "server/src",
+    "rootDir": "src",
     "declaration": true
   },
-  "include": ["server/src"]
+  "include": ["src"]
 }
