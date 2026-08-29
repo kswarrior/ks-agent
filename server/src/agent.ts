@@ -314,6 +314,12 @@ async function execShell(command: string, cwd: string): Promise<{ code: number; 
 }
 
 async function executeTool(name: string, argsJson: string, ctx: ToolContext): Promise<ToolExecResult> {
+  // MCP tools are dynamically registered; handle before static switch
+  if (isMCPTool(name)) {
+    const res = await callMCPTool(name, argsJson)
+    if (res.ok) return ok(res.result, res.summary)
+    return err(res.result.replace(/^Error:\s*/, '').slice(0, 8000))
+  }
   let args: any
   try {
     args = JSON.parse(argsJson || '{}')
@@ -606,6 +612,8 @@ export interface AgentRunOptions {
   projectPath: string
   chatId: string
   signal: AbortSignal
+  /** Optional projectId for scoped MCP servers */
+  projectId?: string
   /** Maximum tokens for LLM response (optional). */
   maxTokens?: number
   /** Live text deltas for the UI. */
@@ -659,6 +667,14 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
   const messages: LLMMessage[] = [...opts.history]
   const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal }
   let content = ''
+  // Build combined tool list including MCP tools scoped to project
+  function combinedTools(): ToolDef[] {
+    try {
+      const mcpDefs = getMCPToolDefs(opts.projectId)
+      if (mcpDefs.length) return [...AGENT_TOOLS, ...mcpDefs]
+    } catch {}
+    return AGENT_TOOLS
+  }
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
@@ -677,7 +693,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           opts.apiKey,
           opts.model,
           messages,
-          AGENT_TOOLS,
+          combinedTools(),
           (text) => {
             roundText += text
             content += text
