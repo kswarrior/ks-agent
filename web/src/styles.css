@@ -1608,7 +1608,6 @@ textarea {
 
 .rsb-tabs {
   position: relative;
-  padding-right: 36px;
   flex-wrap: nowrap;
 }
 
@@ -1616,17 +1615,6 @@ textarea {
   display: none;
   height: 0;
   width: 0;
-}
-
-.rsb-close {
-  position: absolute;
-  right: 8px;
-  top: 6px;
-  width: 28px;
-  height: 28px;
-  display: none;
-  z-index: 1;
-  background: var(--surface);
 }
 
 .rsb-body {
@@ -2573,8 +2561,7 @@ textarea {
 }
 
 @media (min-width: 1200px) {
-  .rsb-toggle,
-  .rsb-close {
+  .rsb-toggle {
     display: none;
   }
 
@@ -2584,9 +2571,6 @@ textarea {
 }
 
 @media (max-width: 1199px) {
-  .rsb-close {
-    display: inline-flex;
-  }
 
   .rsb {
     position: fixed;
