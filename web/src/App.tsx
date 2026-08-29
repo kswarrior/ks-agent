@@ -661,7 +661,7 @@ function KsAgent() {
       // For pure continue preserve plan/activities so AI picks up where it left off
       if (!isPure) {
         // For "any other" with extra instruction but still continuation, preserve if was interrupted
-        const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || !!(lastAssistant as any).error
+        const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
         if (!wasInterrupted) {
           setPlans((prev) => {
             const n = { ...prev }
@@ -710,6 +710,7 @@ function KsAgent() {
       const wasInterrupted = lastAssistant
         ? /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) ||
           /\n\n_\[stream interrupted:/.test(lastAssistant.content) ||
+          /\n\n_\[truncated/.test(lastAssistant.content) ||
           !!(lastAssistant as any).error
         : false
       if (lastAssistant && wasInterrupted) {
@@ -725,6 +726,7 @@ function KsAgent() {
     const prevWasInterruptedForSend = prevAssistantForSend
       ? /\n\n_\[stopped\]_\s*$/.test(prevAssistantForSend.content) ||
         /\n\n_\[stream interrupted:/.test(prevAssistantForSend.content) ||
+        /\n\n_\[truncated/.test(prevAssistantForSend.content) ||
         !!(prevAssistantForSend as any).error
       : false
 
