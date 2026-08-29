@@ -1,4 +1,4 @@
-import type { Activity, Chat, FileListing, MCPServer, Message, ModelEntry, Plan, Preview, Project, Provider, Question, RetrySettings, Skill, Terminal } from './types'
+import type { Activity, Chat, FileListing, LSPServer, MCPServer, Message, ModelEntry, Plan, Preview, Project, Provider, Question, RetrySettings, Skill, Terminal } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -327,3 +327,17 @@ export const testMcpServer = (id: string, overrides?: Record<string, unknown>) =
 export const getMcpTools = (id: string) => req<{ tools: { name: string; description?: string; inputSchema?: unknown }[] }>(`/api/settings/mcp/${id}/tools`)
 export const refreshMcpServer = (id: string) => req<{ ok: true; tools: { name: string; description?: string }[] }>(`/api/settings/mcp/${id}/refresh`, json('POST', {}))
 export const getMcpStatusAll = () => req<MCPServer[]>('/api/settings/mcp/status/all')
+
+// LSP Servers
+export const listLspServers = () => req<LSPServer[]>('/api/settings/lsp')
+export const getLspServer = (id: string) => req<LSPServer>(`/api/settings/lsp/${id}`)
+export const createLspServer = (s: { name: string; language: string; command: string; args?: string[]; env?: Record<string,string>; projectId?: string; enabled?: boolean }) =>
+  req<LSPServer>('/api/settings/lsp', json('POST', s))
+export const updateLspServer = (id: string, patch: Partial<{ name: string; language: string; command?: string; args?: string[]; env?: Record<string,string>; projectId?: string; enabled?: boolean }>) =>
+  req<LSPServer>(`/api/settings/lsp/${id}`, json('PATCH', patch))
+export const deleteLspServer = (id: string) => req<{ ok: true }>(`/api/settings/lsp/${id}`, { method: 'DELETE' })
+export const testLspServer = (id: string, overrides?: Record<string, unknown>) =>
+  req<{ ok: boolean; error?: string; capabilities?: Record<string, unknown> }>(`/api/settings/lsp/${id}/test`, json('POST', overrides ?? {}))
+export const getLspCapabilities = (id: string) => req<{ capabilities: Record<string, unknown> | null }>(`/api/settings/lsp/${id}/capabilities`)
+export const refreshLspServer = (id: string) => req<{ ok: true; capabilities?: Record<string, unknown> }>(`/api/settings/lsp/${id}/refresh`, json('POST', {}))
+export const getLspStatusAll = () => req<LSPServer[]>('/api/settings/lsp/status/all')

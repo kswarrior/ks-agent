@@ -134,6 +134,24 @@ export interface MCPServer {
   lastConnectedAt?: string | null
 }
 
+export interface LSPServer {
+  id: string
+  name: string
+  language: string
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+  projectId?: string | null
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+  connected: boolean
+  connecting: boolean
+  error?: string | null
+  capabilities?: Record<string, unknown> | null
+  lastConnectedAt?: string | null
+}
+
 export interface Preview {
   id: string
   chatId: string

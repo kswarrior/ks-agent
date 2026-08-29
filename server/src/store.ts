@@ -597,8 +597,8 @@ function persistToSqlite(): void {
     const insMcp = s.prepare('INSERT INTO mcpServers (id, name, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
     for (const m of db.mcpServers) insMcp.run(m.id, m.name, m.transport, m.command ?? null, m.args ? JSON.stringify(m.args) : null, m.url ?? null, m.env ? JSON.stringify(m.env) : null, m.headers ? JSON.stringify(m.headers) : null, m.projectId ?? null, m.enabled ? 1 : 0, m.createdAt, m.updatedAt)
 
-    const insLsp = s.prepare('INSERT INTO lspServers (id, name, language, command, args, env, projectId, enabled, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)')
-    for (const l of (db.lspServers ?? [])) insLsp.run(l.id, l.name, l.language, l.command, l.args ? JSON.stringify(l.args) : null, l.env ? JSON.stringify(l.env) : null, l.projectId ?? null, l.enabled ? 1 : 0, l.createdAt, l.updatedAt)
+    const insLsp = s.prepare('INSERT INTO lspServers (id, name, language, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    for (const l of (db.lspServers ?? [])) insLsp.run(l.id, l.name, l.language, l.transport, l.command ?? null, l.args ? JSON.stringify(l.args) : null, l.url ?? null, l.env ? JSON.stringify(l.env) : null, l.headers ? JSON.stringify(l.headers) : null, l.projectId ?? null, l.enabled ? 1 : 0, l.createdAt, l.updatedAt)
 
     const insPreview = s.prepare('INSERT INTO previews (id, chatId, port, createdAt, updatedAt) VALUES (?,?,?,?,?)')
     for (const p of db.previews) insPreview.run(p.id, p.chatId, p.port, p.createdAt, p.updatedAt)

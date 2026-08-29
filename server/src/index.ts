@@ -60,20 +60,20 @@ import {
   ensureMCPConnections
 } from './mcp.js'
 import {
-  connectLSPServer,
-  disconnectLSPServer,
-  getAllLSPStates,
-  getLSPServerState,
-  refreshLSPServer,
-  testLSPServer,
-  syncLSPStatesFromDb,
-  ensureLSPConnections
+  connectLspServer,
+  disconnectLspServer,
+  getAllLspStates,
+  getLspServerState,
+  refreshLspServer,
+  testLspServer,
+  syncLspStatesFromDb,
+  ensureLspConnections
 } from './lsp.js'
 
 loadDb()
 // Fire-and-forget: connect enabled MCP/LSP servers in background
 void ensureMCPConnections().catch((e) => console.warn('[mcp] startup connect failed', e))
-void ensureLSPConnections().catch((e) => console.warn('[lsp] startup connect failed', e))
+void ensureLspConnections().catch((e) => console.warn('[lsp] startup connect failed', e))
 // On startup, any plan step left as "working" but with no active generation is
 // stale (previous process crashed or retry left it hanging). Revert to pending
 // so UI doesn't stay stuck on "Executing 3/7" after restart.
@@ -359,7 +359,7 @@ app.delete('/api/projects/:id', async (c) => {
       ls.updatedAt = new Date().toISOString()
     }
   }
-  syncLSPStatesFromDb()
+  syncLspStatesFromDb()
   saveDb()
   return c.json({ ok: true })
 })
@@ -2040,6 +2040,274 @@ app.get('/api/settings/mcp/status/all', (c) => {
     connecting: st.connecting,
     error: st.error ?? null,
     tools: st.tools,
+    projectId: st.server.projectId ?? null,
+    updatedAt: st.server.updatedAt
+  }))
+  return c.json(states)
+})
+
+// ---------------- LSP Servers ----------------
+
+const SUPPORTED_LSP_LANGUAGES = [
+  'typescript', 'javascript', 'python', 'go', 'rust', 'css', 'json', 'html', 'yaml', 'bash', 'shell', 'markdown', 'java', 'c', 'cpp', 'csharp', 'php', 'ruby', 'swift', 'kotlin', 'dart', 'toml', 'xml', 'sql', 'graphql', 'dockerfile'
+]
+
+function isValidLspName(name: string): boolean {
+  return name.length >= 2 && name.length <= 80
+}
+
+function isValidLspLanguage(lang: string): boolean {
+  if (!lang || lang.length < 1 || lang.length > 32) return false
+  if (!/^[a-z][a-z0-9_-]*$/.test(lang)) return false
+  return true
+}
+
+function normalizeLspArgs(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined
+  if (!Array.isArray(raw)) return undefined
+  const out: string[] = []
+  for (const v of raw) {
+    const s = String(v ?? '').trim()
+    if (!s) continue
+    if (s.length > 500) continue
+    out.push(s)
+    if (out.length >= 20) break
+  }
+  return out.length ? out : undefined
+}
+
+function normalizeLspEnv(raw: unknown): Record<string, string> | undefined {
+  if (raw == null) return undefined
+  if (typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, string> = {}
+  let count = 0
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(k).trim()
+    if (!key || key.length > 80) continue
+    if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) continue
+    const val = String(v ?? '')
+    if (val.length > 2000) continue
+    out[key] = val
+    count++
+    if (count >= 30) break
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+function lspPublic(server: LSPServer): Record<string, unknown> {
+  const state = getLspServerState(server.id)
+  return {
+    id: server.id,
+    name: server.name,
+    language: server.language,
+    command: server.command,
+    args: server.args ?? [],
+    env: server.env ?? {},
+    projectId: server.projectId ?? null,
+    enabled: server.enabled,
+    createdAt: server.createdAt,
+    updatedAt: server.updatedAt,
+    connected: state?.connected ?? false,
+    connecting: state?.connecting ?? false,
+    error: state?.error ?? null,
+    capabilities: state?.capabilities ?? null,
+    lastConnectedAt: state?.lastConnectedAt ?? null
+  }
+}
+
+function validateLspBody(body: any, isPatch = false): { error?: string; value?: Partial<LSPServer> } {
+  const out: Partial<LSPServer> = {}
+  if (body.name !== undefined || !isPatch) {
+    const name = String(body.name ?? '').trim()
+    if (!isPatch && !name) return { error: 'LSP server name is required' }
+    if (name) {
+      if (!isValidLspName(name)) return { error: 'LSP name must be 2-80 chars' }
+      out.name = name
+    } else if (!isPatch) return { error: 'LSP server name is required' }
+  }
+  if (body.language !== undefined || !isPatch) {
+    const lang = String(body.language ?? '').trim().toLowerCase()
+    if (!isPatch && !lang) return { error: 'Language is required' }
+    if (lang) {
+      if (!isValidLspLanguage(lang)) return { error: 'Invalid language id (use 1-32 lowercase letters, numbers, hyphen, underscore)' }
+      out.language = lang
+    } else if (!isPatch) return { error: 'Language is required' }
+  }
+  if (body.command !== undefined || !isPatch) {
+    const cmd = String(body.command ?? '').trim()
+    if (!isPatch && !cmd) return { error: 'Command is required' }
+    if (cmd) {
+      if (cmd.length > 500) return { error: 'Command too long (max 500)' }
+      out.command = cmd
+    } else if (!isPatch) return { error: 'Command is required' }
+    else if (cmd === '') out.command = undefined as any
+  }
+  if (body.args !== undefined) {
+    const args = normalizeLspArgs(body.args)
+    out.args = args
+  }
+  if (body.env !== undefined) {
+    const env = normalizeLspEnv(body.env)
+    out.env = env
+  }
+  if (body.projectId !== undefined) {
+    const pid = body.projectId != null ? String(body.projectId).trim() : ''
+    if (pid) {
+      if (!findProject(pid)) return { error: 'Selected project not found' }
+      out.projectId = pid
+    } else {
+      out.projectId = undefined
+    }
+  }
+  if (body.enabled !== undefined) {
+    out.enabled = Boolean(body.enabled)
+  }
+  return { value: out }
+}
+
+app.get('/api/settings/lsp', (c) => {
+  syncLspStatesFromDb()
+  const servers = getLspServers().map(lspPublic)
+  return c.json(servers)
+})
+
+app.post('/api/settings/lsp', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const validated = validateLspBody(body, false)
+  if (validated.error) return c.json({ error: validated.error }, 400)
+  const v = validated.value!
+  const dup = getDb().lspServers.some((s) => s.name.toLowerCase() === String(v.name).toLowerCase() && s.language === v.language)
+  if (dup) return c.json({ error: 'An LSP server with this name and language already exists' }, 400)
+  const dupName = getDb().lspServers.some((s) => s.name.toLowerCase() === String(v.name).toLowerCase())
+  if (dupName) {
+    // allow same name for different language? already checked above, but if exact name dup even diff language we treat as error for simplicity
+    // Do not block if language differs – keep original check only for name+language
+  }
+  if (!v.command) return c.json({ error: 'Command is required' }, 400)
+  if (!v.language) return c.json({ error: 'Language is required' }, 400)
+  const now = new Date().toISOString()
+  const server: LSPServer = {
+    id: newId(),
+    name: String(v.name),
+    language: String(v.language).toLowerCase(),
+    command: String(v.command),
+    args: v.args,
+    env: v.env,
+    projectId: v.projectId,
+    enabled: v.enabled !== false,
+    createdAt: now,
+    updatedAt: now
+  }
+  getDb().lspServers.push(server)
+  saveDb()
+  syncLspStatesFromDb()
+  if (server.enabled) void connectLspServer(server).catch(() => {})
+  return c.json(lspPublic(server), 201)
+})
+
+app.get('/api/settings/lsp/:id', (c) => {
+  const srv = findLspServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'LSP server not found' }, 404)
+  syncLspStatesFromDb()
+  return c.json(lspPublic(srv))
+})
+
+app.patch('/api/settings/lsp/:id', async (c) => {
+  const srv = findLspServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'LSP server not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const validated = validateLspBody(body, true)
+  if (validated.error) return c.json({ error: validated.error }, 400)
+  const v = validated.value!
+  if (v.name !== undefined) {
+    const dup = getDb().lspServers.some((s) => s.id !== srv.id && s.name.toLowerCase() === String(v.name).toLowerCase() && (v.language ? s.language === v.language : s.language === srv.language))
+    if (dup) return c.json({ error: 'An LSP server with this name and language already exists' }, 400)
+    srv.name = String(v.name)
+  }
+  if (v.language !== undefined) srv.language = String(v.language).toLowerCase()
+  if (v.command !== undefined) {
+    if (!v.command) return c.json({ error: 'Command cannot be empty' }, 400)
+    srv.command = String(v.command)
+  }
+  if (v.args !== undefined) srv.args = v.args
+  if (v.env !== undefined) srv.env = v.env
+  if (v.projectId !== undefined) srv.projectId = v.projectId
+  if (v.enabled !== undefined) srv.enabled = v.enabled
+  if (!srv.command) return c.json({ error: 'Command is required' }, 400)
+  if (!srv.language) return c.json({ error: 'Language is required' }, 400)
+  srv.updatedAt = new Date().toISOString()
+  saveDb()
+  syncLspStatesFromDb()
+  if (srv.enabled) void connectLspServer(srv).catch(() => {})
+  else disconnectLspServer(srv.id)
+  return c.json(lspPublic(srv))
+})
+
+app.delete('/api/settings/lsp/:id', (c) => {
+  const id = c.req.param('id')
+  const idx = getDb().lspServers.findIndex((s) => s.id === id)
+  if (idx === -1) return c.json({ error: 'LSP server not found' }, 404)
+  disconnectLspServer(id)
+  getDb().lspServers.splice(idx, 1)
+  saveDb()
+  syncLspStatesFromDb()
+  return c.json({ ok: true })
+})
+
+app.post('/api/settings/lsp/:id/test', async (c) => {
+  const srv = findLspServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'LSP server not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  let testSrv: LSPServer = srv
+  if (body && (body.command || body.args || body.env || body.language)) {
+    const merged: any = { ...srv, ...body }
+    testSrv = {
+      ...srv,
+      language: merged.language !== undefined ? String(merged.language).trim().toLowerCase() || srv.language : srv.language,
+      command: merged.command !== undefined ? String(merged.command).trim() || srv.command : srv.command,
+      args: merged.args !== undefined ? normalizeLspArgs(merged.args) : srv.args,
+      env: merged.env !== undefined ? normalizeLspEnv(merged.env) : srv.env
+    }
+  }
+  const result = await testLspServer(testSrv)
+  if (!result.ok) return c.json({ ok: false, error: result.error, capabilities: null }, 200)
+  return c.json({ ok: true, capabilities: result.capabilities })
+})
+
+app.post('/api/settings/lsp/:id/refresh', async (c) => {
+  const srv = findLspServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'LSP server not found' }, 404)
+  if (!srv.enabled) return c.json({ error: 'Server is disabled' }, 400)
+  const res = await refreshLspServer(srv.id)
+  if (!res.ok) return c.json({ error: res.error ?? 'Refresh failed' }, 502)
+  return c.json({ ok: true, capabilities: res.capabilities })
+})
+
+app.get('/api/settings/lsp/:id/capabilities', async (c) => {
+  const srv = findLspServer(c.req.param('id'))
+  if (!srv) return c.json({ error: 'LSP server not found' }, 404)
+  syncLspStatesFromDb()
+  const state = getLspServerState(srv.id)
+  if (!state?.connected) {
+    if (!srv.enabled) return c.json({ error: 'Server is disabled' }, 400)
+    const res = await connectLspServer(srv)
+    if (!res.ok) return c.json({ error: res.error ?? 'Failed to connect', capabilities: null }, 502)
+    return c.json({ capabilities: res.capabilities ?? null })
+  }
+  return c.json({ capabilities: state.capabilities })
+})
+
+app.get('/api/settings/lsp/status/all', (c) => {
+  syncLspStatesFromDb()
+  const states = getAllLspStates().map((st) => ({
+    id: st.server.id,
+    name: st.server.name,
+    language: st.server.language,
+    enabled: st.server.enabled,
+    connected: st.connected,
+    connecting: st.connecting,
+    error: st.error ?? null,
+    capabilities: st.capabilities ?? null,
     projectId: st.server.projectId ?? null,
     updatedAt: st.server.updatedAt
   }))
