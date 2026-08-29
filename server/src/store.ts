@@ -347,6 +347,22 @@ function initSchema(s: Database.Database): void {
       FOREIGN KEY(chatId) REFERENCES chats(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_previews_chatId ON previews(chatId);
+    CREATE TABLE IF NOT EXISTS mcpServers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      transport TEXT NOT NULL,
+      command TEXT,
+      args TEXT,
+      url TEXT,
+      env TEXT,
+      headers TEXT,
+      projectId TEXT,
+      enabled INTEGER NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_mcpServers_projectId ON mcpServers(projectId);
     CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -450,6 +466,14 @@ function persistToSqlite(): void {
       }
     }
   }
+  if (db.mcpServers.length) {
+    const validProjects = new Set(db.projects.map((p) => p.id))
+    for (const ms of db.mcpServers) {
+      if (ms.projectId && !validProjects.has(ms.projectId)) {
+        ms.projectId = undefined
+      }
+    }
+  }
   // Keep FK ON throughout: deletes are children-first, inserts are parents-first (both satisfy FK)
   try { s.pragma('foreign_keys = ON') } catch {}
   const txn = s.transaction(() => {
@@ -463,6 +487,7 @@ function persistToSqlite(): void {
     s.prepare('DELETE FROM models').run()
     s.prepare('DELETE FROM providers').run()
     s.prepare('DELETE FROM skills').run()
+    s.prepare('DELETE FROM mcpServers').run()
     s.prepare('DELETE FROM projects').run()
     s.prepare('DELETE FROM kv').run()
 
@@ -495,6 +520,9 @@ function persistToSqlite(): void {
 
     const insSkill = s.prepare('INSERT INTO skills (id, name, note, mainFile, files, projectId, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?)')
     for (const sk of db.skills) insSkill.run(sk.id, sk.name, sk.note, sk.mainFile, JSON.stringify(sk.files), sk.projectId ?? null, sk.createdAt, sk.updatedAt ?? null)
+
+    const insMcp = s.prepare('INSERT INTO mcpServers (id, name, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+    for (const m of db.mcpServers) insMcp.run(m.id, m.name, m.transport, m.command ?? null, m.args ? JSON.stringify(m.args) : null, m.url ?? null, m.env ? JSON.stringify(m.env) : null, m.headers ? JSON.stringify(m.headers) : null, m.projectId ?? null, m.enabled ? 1 : 0, m.createdAt, m.updatedAt)
 
     const insPreview = s.prepare('INSERT INTO previews (id, chatId, port, createdAt, updatedAt) VALUES (?,?,?,?,?)')
     for (const p of db.previews) insPreview.run(p.id, p.chatId, p.port, p.createdAt, p.updatedAt)
@@ -612,6 +640,25 @@ function loadFromSqlite(s: Database.Database): DB | null {
       updatedAt: r.updatedAt ?? undefined
     }))
 
+    let mcpServers: MCPServer[] = []
+    try {
+      const mcpRows = s.prepare('SELECT id, name, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt FROM mcpServers').all() as any[]
+      mcpServers = mcpRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        transport: r.transport as MCPTransport,
+        command: r.command ?? undefined,
+        args: r.args ? JSON.parse(r.args) as string[] : undefined,
+        url: r.url ?? undefined,
+        env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
+        headers: r.headers ? JSON.parse(r.headers) as Record<string,string> : undefined,
+        projectId: r.projectId ?? undefined,
+        enabled: !!r.enabled,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt
+      }))
+    } catch {}
+
     const previews = s.prepare('SELECT id, chatId, port, createdAt, updatedAt FROM previews').all() as Preview[]
 
     const kvRows = s.prepare('SELECT key, value FROM kv').all() as any[]
@@ -637,7 +684,7 @@ function loadFromSqlite(s: Database.Database): DB | null {
       retrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }
     }
 
-    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, skills, previews }
+    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, skills, previews, mcpServers }
   } catch (e) {
     console.error('Failed to load from sqlite:', e)
     return null
@@ -710,7 +757,21 @@ function tryMigrateFromJson(): boolean {
         createdAt: typeof s.createdAt === 'string' ? s.createdAt : new Date().toISOString(),
         updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : undefined
       })) : [],
-      previews: Array.isArray(parsed.previews) ? parsed.previews.filter((p: any) => p && typeof p.id === 'string' && typeof p.chatId === 'string' && Number.isInteger(p.port)) : []
+      previews: Array.isArray(parsed.previews) ? parsed.previews.filter((p: any) => p && typeof p.id === 'string' && typeof p.chatId === 'string' && Number.isInteger(p.port)) : [],
+      mcpServers: Array.isArray(parsed.mcpServers) ? parsed.mcpServers.filter((m: any) => m && typeof m.id === 'string' && typeof m.name === 'string' && typeof m.transport === 'string').map((m: any) => ({
+        id: String(m.id),
+        name: String(m.name).trim(),
+        transport: ['stdio','sse','http','websocket'].includes(String(m.transport)) ? String(m.transport) as MCPTransport : 'stdio',
+        command: typeof m.command === 'string' && m.command.trim() ? String(m.command).trim() : undefined,
+        args: Array.isArray(m.args) ? m.args.map((a: any) => String(a)).filter(Boolean) : undefined,
+        url: typeof m.url === 'string' && m.url.trim() ? String(m.url).trim() : undefined,
+        env: m.env && typeof m.env === 'object' && !Array.isArray(m.env) ? Object.fromEntries(Object.entries(m.env).map(([k,v]: any) => [String(k), String(v)])) as Record<string,string> : undefined,
+        headers: m.headers && typeof m.headers === 'object' && !Array.isArray(m.headers) ? Object.fromEntries(Object.entries(m.headers).map(([k,v]: any) => [String(k), String(v)])) as Record<string,string> : undefined,
+        projectId: typeof m.projectId === 'string' && m.projectId.trim() ? String(m.projectId).trim() : undefined,
+        enabled: m.enabled !== false,
+        createdAt: typeof m.createdAt === 'string' ? m.createdAt : new Date().toISOString(),
+        updatedAt: typeof m.updatedAt === 'string' ? m.updatedAt : new Date().toISOString()
+      })) : []
     }
     // Migrate old skills missing updatedAt / projectId
     let migrated = false
