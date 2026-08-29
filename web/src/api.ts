@@ -331,9 +331,9 @@ export const getMcpStatusAll = () => req<MCPServer[]>('/api/settings/mcp/status/
 // LSP Servers
 export const listLspServers = () => req<LSPServer[]>('/api/settings/lsp')
 export const getLspServer = (id: string) => req<LSPServer>(`/api/settings/lsp/${id}`)
-export const createLspServer = (s: { name: string; language: string; transport: string; command?: string; args?: string[]; url?: string; env?: Record<string,string>; headers?: Record<string,string>; projectId?: string; enabled?: boolean }) =>
+export const createLspServer = (s: { name: string; language: string; command: string; args?: string[]; env?: Record<string,string>; projectId?: string; enabled?: boolean }) =>
   req<LSPServer>('/api/settings/lsp', json('POST', s))
-export const updateLspServer = (id: string, patch: Partial<{ name: string; language: string; transport: string; command?: string; args?: string[]; url?: string; env?: Record<string,string>; headers?: Record<string,string>; projectId?: string; enabled?: boolean }>) =>
+export const updateLspServer = (id: string, patch: Partial<{ name: string; language: string; command?: string; args?: string[]; env?: Record<string,string>; projectId?: string; enabled?: boolean }>) =>
   req<LSPServer>(`/api/settings/lsp/${id}`, json('PATCH', patch))
 export const deleteLspServer = (id: string) => req<{ ok: true }>(`/api/settings/lsp/${id}`, { method: 'DELETE' })
 export const testLspServer = (id: string, overrides?: Record<string, unknown>) =>

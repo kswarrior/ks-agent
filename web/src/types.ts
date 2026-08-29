@@ -134,18 +134,13 @@ export interface MCPServer {
   lastConnectedAt?: string | null
 }
 
-export type LSPTransport = 'stdio' | 'tcp' | 'socket' | 'websocket' | 'http' | 'sse'
-
 export interface LSPServer {
   id: string
   name: string
   language: string
-  transport: LSPTransport
-  command?: string | null
+  command: string
   args?: string[]
-  url?: string | null
   env?: Record<string, string>
-  headers?: Record<string, string>
   projectId?: string | null
   enabled: boolean
   createdAt: string
