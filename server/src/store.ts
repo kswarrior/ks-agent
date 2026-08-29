@@ -395,6 +395,24 @@ function initSchema(s: Database.Database): void {
       FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE SET NULL
     );
     CREATE INDEX IF NOT EXISTS idx_mcpServers_projectId ON mcpServers(projectId);
+    CREATE TABLE IF NOT EXISTS lspServers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      language TEXT NOT NULL,
+      transport TEXT NOT NULL,
+      command TEXT,
+      args TEXT,
+      url TEXT,
+      env TEXT,
+      headers TEXT,
+      projectId TEXT,
+      enabled INTEGER NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_lspServers_projectId ON lspServers(projectId);
+    CREATE INDEX IF NOT EXISTS idx_lspServers_language ON lspServers(language);
     CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -506,6 +524,14 @@ function persistToSqlite(): void {
       }
     }
   }
+  if (db.lspServers.length) {
+    const validProjects = new Set(db.projects.map((p) => p.id))
+    for (const ls of db.lspServers) {
+      if (ls.projectId && !validProjects.has(ls.projectId)) {
+        ls.projectId = undefined
+      }
+    }
+  }
   // Keep FK ON throughout: deletes are children-first, inserts are parents-first (both satisfy FK)
   try { s.pragma('foreign_keys = ON') } catch {}
   const txn = s.transaction(() => {
@@ -520,6 +546,7 @@ function persistToSqlite(): void {
     s.prepare('DELETE FROM providers').run()
     s.prepare('DELETE FROM skills').run()
     s.prepare('DELETE FROM mcpServers').run()
+    s.prepare('DELETE FROM lspServers').run()
     s.prepare('DELETE FROM projects').run()
     s.prepare('DELETE FROM kv').run()
 
@@ -555,6 +582,9 @@ function persistToSqlite(): void {
 
     const insMcp = s.prepare('INSERT INTO mcpServers (id, name, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
     for (const m of db.mcpServers) insMcp.run(m.id, m.name, m.transport, m.command ?? null, m.args ? JSON.stringify(m.args) : null, m.url ?? null, m.env ? JSON.stringify(m.env) : null, m.headers ? JSON.stringify(m.headers) : null, m.projectId ?? null, m.enabled ? 1 : 0, m.createdAt, m.updatedAt)
+
+    const insLsp = s.prepare('INSERT INTO lspServers (id, name, language, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    for (const l of db.lspServers) insLsp.run(l.id, l.name, l.language, l.transport, l.command ?? null, l.args ? JSON.stringify(l.args) : null, l.url ?? null, l.env ? JSON.stringify(l.env) : null, l.headers ? JSON.stringify(l.headers) : null, l.projectId ?? null, l.enabled ? 1 : 0, l.createdAt, l.updatedAt)
 
     const insPreview = s.prepare('INSERT INTO previews (id, chatId, port, createdAt, updatedAt) VALUES (?,?,?,?,?)')
     for (const p of db.previews) insPreview.run(p.id, p.chatId, p.port, p.createdAt, p.updatedAt)
@@ -691,6 +721,23 @@ function loadFromSqlite(s: Database.Database): DB | null {
       }))
     } catch {}
 
+    let lspServers: LSPServer[] = []
+    try {
+      const lspRows = s.prepare('SELECT id, name, language, command, args, env, projectId, enabled, createdAt, updatedAt FROM lspServers').all() as any[]
+      lspServers = lspRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        language: r.language,
+        command: r.command,
+        args: r.args ? JSON.parse(r.args) as string[] : undefined,
+        env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
+        projectId: r.projectId ?? undefined,
+        enabled: !!r.enabled,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt
+      }))
+    } catch {}
+
     const previews = s.prepare('SELECT id, chatId, port, createdAt, updatedAt FROM previews').all() as Preview[]
 
     const kvRows = s.prepare('SELECT key, value FROM kv').all() as any[]
@@ -716,7 +763,7 @@ function loadFromSqlite(s: Database.Database): DB | null {
       retrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }
     }
 
-    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, skills, previews, mcpServers }
+    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, skills, previews, mcpServers, lspServers }
   } catch (e) {
     console.error('Failed to load from sqlite:', e)
     return null
