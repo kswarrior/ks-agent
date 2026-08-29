@@ -350,36 +350,27 @@ export function ExtensionsModal({ open, onClose }: Props) {
     setError(null)
     const name = lspForm.name.trim()
     const language = lspForm.language.trim().toLowerCase()
-    const transport = lspForm.transport
+    const command = lspForm.command.trim()
     if (!name) return setError('LSP server name is required')
     if (name.length < 2 || name.length > 80) return setError('LSP name must be 2-80 characters')
     if (!language) return setError('Language is required')
     if (!/^[a-z][a-z0-9_-]*$/.test(language)) return setError('Invalid language id')
-    if (transport === 'stdio') {
-      if (!lspForm.command.trim()) return setError('Command is required for stdio transport')
-    } else {
-      if (!lspForm.url.trim()) return setError('URL is required for ' + transport + ' transport')
-      try { new URL(lspForm.url.trim()) } catch { return setError('Invalid URL') }
-    }
+    if (!command) return setError('Command is required')
     const args = lspForm.args.trim() ? lspForm.args.split(',').map((s) => s.trim()).filter(Boolean) : undefined
     const env = parseEnvText(lspForm.envText)
-    const headers = parseHeadersText(lspForm.headersText)
     try {
       await api.createLspServer({
         name,
         language,
-        transport,
-        command: lspForm.command.trim() || undefined,
+        command,
         args,
-        url: lspForm.url.trim() || undefined,
         env,
-        headers,
         projectId: lspForm.projectId.trim() || undefined,
         enabled: lspForm.enabled
       })
       toast('LSP server added', 'success')
       setShowLspForm(false)
-      setLspForm({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true })
+      setLspForm({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true })
       await loadLspServers()
     } catch (e: any) {
       setError(e.message)
@@ -390,29 +381,20 @@ export function ExtensionsModal({ open, onClose }: Props) {
     setError(null)
     const name = lspEditForm.name.trim()
     const language = lspEditForm.language.trim().toLowerCase()
-    const transport = lspEditForm.transport
+    const command = lspEditForm.command.trim()
     if (!name) return setError('LSP server name is required')
     if (!language) return setError('Language is required')
     if (!/^[a-z][a-z0-9_-]*$/.test(language)) return setError('Invalid language id')
-    if (transport === 'stdio') {
-      if (!lspEditForm.command.trim()) return setError('Command is required for stdio transport')
-    } else {
-      if (!lspEditForm.url.trim()) return setError('URL is required for ' + transport + ' transport')
-      try { new URL(lspEditForm.url.trim()) } catch { return setError('Invalid URL') }
-    }
+    if (!command) return setError('Command is required')
     const args = lspEditForm.args.trim() ? lspEditForm.args.split(',').map((s) => s.trim()).filter(Boolean) : []
     const env = parseEnvText(lspEditForm.envText)
-    const headers = parseHeadersText(lspEditForm.headersText)
     try {
       await api.updateLspServer(lspEdit.id, {
         name,
         language,
-        transport,
-        command: lspEditForm.command.trim() || undefined,
+        command,
         args,
-        url: lspEditForm.url.trim() || undefined,
         env,
-        headers,
         projectId: lspEditForm.projectId.trim() || undefined,
         enabled: lspEditForm.enabled
       })
@@ -428,12 +410,9 @@ export function ExtensionsModal({ open, onClose }: Props) {
     setLspEditForm({
       name: s.name,
       language: s.language,
-      transport: (s.transport as LSPTransport) ?? 'stdio',
-      command: (s.command as string) ?? '',
+      command: s.command,
       args: (s.args ?? []).join(', '),
-      url: (s.url as string) ?? '',
       envText: stringifyEnv(s.env as any),
-      headersText: stringifyHeaders(s.headers as any),
       projectId: (s.projectId as string) ?? '',
       enabled: s.enabled
     })
@@ -911,12 +890,32 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     {!LSP_LANGUAGES.includes(lspEditForm.language as any) && <option value={lspEditForm.language}>{lspEditForm.language} (custom)</option>}
                   </select>
                   <input className="input" style={{ marginTop: 6 }} placeholder="custom language id (e.g. vue, svelte)" value={LSP_LANGUAGES.includes(lspEditForm.language as any) ? '' : lspEditForm.language} onChange={e => setLspEditForm({ ...lspEditForm, language: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} disabled={LSP_LANGUAGES.includes(lspEditForm.language as any)} />
-                  <label className="field-label">Command <span style={{ fontWeight: 400 }}>(executable)</span></label>
-                  <input className="input" placeholder="e.g. typescript-language-server, pyright-langserver, gopls, rust-analyzer" value={lspEditForm.command} onChange={e => setLspEditForm({ ...lspEditForm, command: e.target.value })} />
-                  <label className="field-label">Args <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
-                  <input className="input" placeholder="e.g. --stdio or --stdio, --log-level, info" value={lspEditForm.args} onChange={e => setLspEditForm({ ...lspEditForm, args: e.target.value })} />
-                  <label className="field-label">Env <span style={{ fontWeight: 400 }}>(KEY=VALUE per line)</span></label>
-                  <textarea className="input" placeholder="NODE_ENV=production&#10;PYTHONPATH=/usr/local/lib" value={lspEditForm.envText} onChange={e => setLspEditForm({ ...lspEditForm, envText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                  <label className="field-label">Transport</label>
+                  <select className="input" value={lspEditForm.transport} onChange={e => setLspEditForm({ ...lspEditForm, transport: e.target.value as LSPTransport })}>
+                    <option value="stdio">stdio — local command</option>
+                    <option value="tcp">tcp — TCP socket</option>
+                    <option value="socket">socket — Unix/TCP socket URL</option>
+                    <option value="websocket">websocket</option>
+                    <option value="http">http — Streamable HTTP</option>
+                    <option value="sse">sse — Server-Sent Events</option>
+                  </select>
+                  {lspEditForm.transport === 'stdio' ? (
+                    <>
+                      <label className="field-label">Command <span style={{ fontWeight: 400 }}>(executable)</span></label>
+                      <input className="input" placeholder="e.g. typescript-language-server, pyright-langserver, gopls, rust-analyzer" value={lspEditForm.command} onChange={e => setLspEditForm({ ...lspEditForm, command: e.target.value })} />
+                      <label className="field-label">Args <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
+                      <input className="input" placeholder="e.g. --stdio or --stdio, --log-level, info" value={lspEditForm.args} onChange={e => setLspEditForm({ ...lspEditForm, args: e.target.value })} />
+                      <label className="field-label">Env <span style={{ fontWeight: 400 }}>(KEY=VALUE per line)</span></label>
+                      <textarea className="input" placeholder="NODE_ENV=production&#10;PYTHONPATH=/usr/local/lib" value={lspEditForm.envText} onChange={e => setLspEditForm({ ...lspEditForm, envText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                    </>
+                  ) : (
+                    <>
+                      <label className="field-label">URL</label>
+                      <input className="input" placeholder="e.g. tcp://127.0.0.1:6008 or http://localhost:3000/lsp" value={lspEditForm.url} onChange={e => setLspEditForm({ ...lspEditForm, url: e.target.value })} />
+                      <label className="field-label">Headers <span style={{ fontWeight: 400 }}>(Key: Value per line, for http/tcp auth)</span></label>
+                      <textarea className="input" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" value={lspEditForm.headersText} onChange={e => setLspEditForm({ ...lspEditForm, headersText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                    </>
+                  )}
                   <label className="field-label">Scope project <span style={{ fontWeight: 400 }}>(leave empty for global)</span></label>
                   <select className="input" value={lspEditForm.projectId} onChange={e => setLspEditForm({ ...lspEditForm, projectId: e.target.value })}>
                     <option value="">Global (all projects)</option>
@@ -940,12 +939,32 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                   <select className="input" value={lspForm.language} onChange={e => setLspForm({ ...lspForm, language: e.target.value })}>
                     {LSP_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
-                  <label className="field-label">Command <span style={{ fontWeight: 400 }}>(executable)</span></label>
-                  <input className="input" placeholder="e.g. typescript-language-server --stdio" value={lspForm.command} onChange={e => setLspForm({ ...lspForm, command: e.target.value })} />
-                  <label className="field-label">Args <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
-                  <input className="input" placeholder="e.g. --stdio or leave empty" value={lspForm.args} onChange={e => setLspForm({ ...lspForm, args: e.target.value })} />
-                  <label className="field-label">Env <span style={{ fontWeight: 400 }}>(KEY=VALUE per line)</span></label>
-                  <textarea className="input" placeholder="NODE_ENV=production&#10;PYTHONPATH=/usr/local/lib" value={lspForm.envText} onChange={e => setLspForm({ ...lspForm, envText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                  <label className="field-label">Transport</label>
+                  <select className="input" value={lspForm.transport} onChange={e => setLspForm({ ...lspForm, transport: e.target.value as LSPTransport })}>
+                    <option value="stdio">stdio — local command</option>
+                    <option value="tcp">tcp — TCP socket</option>
+                    <option value="socket">socket — Unix/TCP socket URL</option>
+                    <option value="websocket">websocket</option>
+                    <option value="http">http — Streamable HTTP</option>
+                    <option value="sse">sse — Server-Sent Events</option>
+                  </select>
+                  {lspForm.transport === 'stdio' ? (
+                    <>
+                      <label className="field-label">Command <span style={{ fontWeight: 400 }}>(executable)</span></label>
+                      <input className="input" placeholder="e.g. typescript-language-server --stdio" value={lspForm.command} onChange={e => setLspForm({ ...lspForm, command: e.target.value })} />
+                      <label className="field-label">Args <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
+                      <input className="input" placeholder="e.g. --stdio or leave empty" value={lspForm.args} onChange={e => setLspForm({ ...lspForm, args: e.target.value })} />
+                      <label className="field-label">Env <span style={{ fontWeight: 400 }}>(KEY=VALUE per line)</span></label>
+                      <textarea className="input" placeholder="NODE_ENV=production&#10;PYTHONPATH=/usr/local/lib" value={lspForm.envText} onChange={e => setLspForm({ ...lspForm, envText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                    </>
+                  ) : (
+                    <>
+                      <label className="field-label">URL</label>
+                      <input className="input" placeholder="e.g. tcp://127.0.0.1:6008 or http://localhost:3000/lsp" value={lspForm.url} onChange={e => setLspForm({ ...lspForm, url: e.target.value })} />
+                      <label className="field-label">Headers <span style={{ fontWeight: 400 }}>(Key: Value per line)</span></label>
+                      <textarea className="input" placeholder="Authorization: Bearer xxx&#10;X-Custom: value" value={lspForm.headersText} onChange={e => setLspForm({ ...lspForm, headersText: e.target.value })} rows={3} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 12 }} />
+                    </>
+                  )}
                   <label className="field-label">Scope project <span style={{ fontWeight: 400 }}>(leave empty for global)</span></label>
                   <select className="input" value={lspForm.projectId} onChange={e => setLspForm({ ...lspForm, projectId: e.target.value })}>
                     <option value="">Global (all projects)</option>
@@ -955,7 +974,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     <input type="checkbox" checked={lspForm.enabled} onChange={e => setLspForm({ ...lspForm, enabled: e.target.checked })} /> Enabled
                   </label>
                   <div className="dialog-actions" style={{ marginTop: 16 }}>
-                    <button className="btn" onClick={() => { setShowLspForm(false); setLspForm({ name: '', language: 'typescript', command: '', args: '', envText: '', projectId: '', enabled: true }); setError(null) }}>Cancel</button>
+                    <button className="btn" onClick={() => { setShowLspForm(false); setLspForm({ name: '', language: 'typescript', transport: 'stdio', command: '', args: '', url: '', envText: '', headersText: '', projectId: '', enabled: true }); setError(null) }}>Cancel</button>
                     <button className="btn btn-primary" onClick={submitLsp}>Add server</button>
                   </div>
                 </div>
@@ -987,6 +1006,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                           <span style={{ width: 8, height: 8, borderRadius: 99, background: statusColor, flexShrink: 0, display: 'inline-block' }} />
                           <span style={{ fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</span>
                           <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)', textTransform: 'lowercase' }}>{s.language}</span>
+                          <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)' }}>{s.transport}</span>
                           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }} title="Enabled">
                             <input type="checkbox" checked={s.enabled} onChange={() => toggleLspEnabled(s)} />
                           </label>
@@ -997,9 +1017,13 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                           <span>{statusLabel}</span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconFolder size={12} /> {scopeName}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
-                          {s.command} {(s.args ?? []).join(' ')}
-                        </div>
+                        {s.transport === 'stdio' ? (
+                          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>
+                            {s.command} {(s.args ?? []).join(' ')}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>{s.url}</div>
+                        )}
                         {s.error && <div style={{ fontSize: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '6px 8px', wordBreak: 'break-word' }}>{s.error}</div>}
                         {s.connected && caps && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
