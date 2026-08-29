@@ -957,6 +957,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   const prevWasInterrupted = prevAssistantForNormal
     ? /\n\n_\[stopped\]_\s*$/.test(prevAssistantForNormal.content) ||
       /\n\n_\[stream interrupted:/.test(prevAssistantForNormal.content) ||
+      /\n\n_\[truncated/.test(prevAssistantForNormal.content) ||
       !!(prevAssistantForNormal as any).error
     : false
   // Clean interrupted marker from DB so history is seamless even for "any other" input
@@ -1065,7 +1066,7 @@ app.post('/api/chats/:id/continue', async (c) => {
   if (!lastAssistant) return c.json({ error: 'No assistant message to continue from' }, 400)
   const isPureContinue = !rawContent || isContinueKeyword(rawContent)
   if (isPureContinue) {
-    const wasInterruptedPure = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || !!(lastAssistant as any).error
+    const wasInterruptedPure = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
     if (!wasInterruptedPure) {
       return c.json({ error: 'No interrupted response to continue from. Send a new message instead.' }, 400)
     }
@@ -1121,7 +1122,7 @@ app.post('/api/chats/:id/continue', async (c) => {
   } else {
     // "any other" input with extra instruction — store as new user message and generate fresh,
     // but history is cleaned so AI continues seamlessly from where it ended.
-    const originalWasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || !!(lastAssistant as any).error
+    const originalWasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
     const stripped = stripInterruptedSuffix(lastAssistant.content)
     if (lastAssistant.content !== stripped) {
       lastAssistant.content = stripped
