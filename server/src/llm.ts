@@ -317,6 +317,7 @@ export async function* streamChat(
   let buf = ''
   let lastContentAt = Date.now()
 
+  let sawDone = false
   while (true) {
     let readResult: { done: boolean; value?: Uint8Array }
     try {
@@ -335,7 +336,7 @@ export async function* streamChat(
       buf = buf.slice(nl + 1)
       if (!line.startsWith('data:')) continue
       const payload = line.slice(5).trim()
-      if (payload === '[DONE]') break
+      if (payload === '[DONE]') { sawDone = true; break }
       const chunk = parseChunk(payload)
       if (!chunk) continue
       // Hide reasoning/thinking — only stream visible content to user
@@ -350,6 +351,7 @@ export async function* streamChat(
         lastContentAt = Date.now()
       }
     }
+    if (sawDone) break
     // Content-level idle detection: provider sent keep-alives/bytes but no
     // visible token for STREAM_IDLE_TIMEOUT_MS means it is stalled
     // ("connected but not working"). Without this, keep-alives prevent
@@ -408,6 +410,7 @@ export async function streamChatWithTools(
   const calls = new Map<number, { id: string; name: string; args: string }>()
   let lastProgressAt = Date.now()
 
+  let sawDone2 = false
   while (true) {
     let readResult: { done: boolean; value?: Uint8Array }
     try {
@@ -426,7 +429,7 @@ export async function streamChatWithTools(
       buf = buf.slice(nl + 1)
       if (!line.startsWith('data:')) continue
       const payload = line.slice(5).trim()
-      if (payload === '[DONE]') break
+      if (payload === '[DONE]') { sawDone2 = true; break }
       const chunk = parseChunk(payload)
       if (!chunk) continue
       // Hide reasoning/thinking — only forward visible content
@@ -457,6 +460,7 @@ export async function streamChatWithTools(
         lastProgressAt = Date.now()
       }
     }
+    if (sawDone2) break
     if (!progressedThisRead && buf.trim() === '' && Date.now() - lastProgressAt > STREAM_IDLE_TIMEOUT_MS) {
       throw timeoutError(STREAM_IDLE_TIMEOUT_MS)
     }
