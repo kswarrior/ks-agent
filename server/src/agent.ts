@@ -112,10 +112,10 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'list_files',
-      description: 'List files and folders in a directory of the active project.',
+      description: 'List files and folders in a directory of the ACTIVE PROJECT ONLY (primary workspace). Path is relative to project root; empty for project root. Do NOT attempt to list outside the project (e.g. ks-agent/server/, /tmp) unless user explicitly asked to go outside or task genuinely needs /tmp.',
       parameters: {
         type: 'object',
-        properties: { path: { type: 'string', description: 'Relative directory path, empty for project root' } }
+        properties: { path: { type: 'string', description: 'Relative directory path inside project, empty for project root' } }
       }
     }
   },
@@ -123,10 +123,10 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Read a text file from the active project (up to 24 KB).',
+      description: 'Read a text file from the ACTIVE PROJECT ONLY (primary workspace, up to 24 KB). Path is relative to project root. Do NOT read outside project unless user explicitly asked or you genuinely need /tmp.',
       parameters: {
         type: 'object',
-        properties: { path: { type: 'string', description: 'Relative file path' } },
+        properties: { path: { type: 'string', description: 'Relative file path inside project' } },
         required: ['path']
       }
     }
@@ -135,11 +135,11 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'write_file',
-      description: 'Create or overwrite a text file inside the active project (up to 256 KB). Parent folders are created automatically.',
+      description: 'Create or overwrite a text file inside the ACTIVE PROJECT ONLY (primary workspace, up to 256 KB). Parent folders are created automatically. Do NOT write outside project unless user explicitly asked or you genuinely need /tmp.',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Relative file path' },
+          path: { type: 'string', description: 'Relative file path inside project' },
           content: { type: 'string', description: 'Full file content' }
         },
         required: ['path', 'content']
@@ -150,11 +150,11 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'edit_file',
-      description: 'Replace an exact unique snippet inside an existing file of the active project.',
+      description: 'Replace an exact unique snippet inside an existing file of the ACTIVE PROJECT ONLY (primary workspace). Do NOT edit outside project unless user explicitly asked.',
       parameters: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Relative file path' },
+          path: { type: 'string', description: 'Relative file path inside project' },
           old_string: { type: 'string', description: 'Exact existing snippet to replace (must occur exactly once)' },
           new_string: { type: 'string', description: 'Replacement snippet' }
         },
@@ -166,10 +166,10 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'run_shell',
-      description: 'Run a shell command in the active project directory (30s timeout). Returns exit code plus stdout/stderr. IMPORTANT: Dangerous commands (rm -rf, sudo, etc.) will automatically trigger a confirmation prompt to the user before execution — you do NOT need to call ask_question for these; the tool handles it. For commands that need user input, use ask_question first to get the answer, then run_shell with the resolved command.',
+      description: 'Run a shell command with CWD = active project directory (30s timeout). PRIMARY: stay inside the project. Only use absolute paths like /tmp when task genuinely needs temp files or user explicitly asked to go outside (e.g. agent codebase). Returns exit code plus stdout/stderr. IMPORTANT: Dangerous commands (rm -rf, sudo, etc.) will automatically trigger a confirmation prompt to the user before execution — you do NOT need to call ask_question for these; the tool handles it. For commands that need user input, use ask_question first to get the answer, then run_shell with the resolved command.',
       parameters: {
         type: 'object',
-        properties: { command: { type: 'string', description: 'The shell command to run' } },
+        properties: { command: { type: 'string', description: 'The shell command to run (stay inside project unless explicitly needed outside)' } },
         required: ['command']
       }
     }
@@ -334,7 +334,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
     case 'list_files': {
       const rel = typeof args.path === 'string' ? args.path : ''
       const abs = rel.trim() ? safeJoin(ctx, rel) : resolveInProject(ctx.projectPath, '.')
-      if (!abs) return err('path escapes the project root')
+      if (!abs) return err('path escapes the project root — primary workspace is the active project only; stay inside it unless user explicitly asked to go outside or you genuinely need /tmp (use run_shell with absolute path for /tmp)')
       let dirents: fs.Dirent[]
       try {
         dirents = fs.readdirSync(abs, { withFileTypes: true })
@@ -389,7 +389,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
 
     case 'read_file': {
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('invalid or escaping path')
+      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside or you genuinely need /tmp (use run_shell for /tmp)')
       let stat: fs.Stats
       try {
         stat = fs.statSync(abs)
@@ -460,7 +460,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
 
     case 'write_file': {
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('invalid or escaping path')
+      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside or you genuinely need /tmp')
       const content = typeof args.content === 'string' ? args.content : ''
       if (Buffer.byteLength(content, 'utf8') > WRITE_MAX_BYTES) return err('content exceeds 256 KB limit')
       try {
