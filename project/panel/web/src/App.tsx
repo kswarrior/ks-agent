@@ -73,49 +73,6 @@ const EditIcon = () => (
 );
 
 // Sidebar component
-const Sidebar: React.FC<{ activeTab: string; onTabChange: (tab: string) => void }> = ({ activeTab, onTabChange }) => {
-  const tabs = [
-    { id: 'dashboard', name: 'Dashboard', icon: DashboardIcon },
-    { id: 'server', name: 'Server', icon: ServerIcon },
-    { id: 'players', name: 'Players', icon: PlayersIcon },
-    { id: 'files', name: 'Files', icon: FilesIcon },
-    { id: 'console', name: 'Console', icon: ConsoleIcon },
-    { id: 'config', name: 'Config', icon: ConfigIcon },
-  ];
-
-  return (
-    <div className="sidebar">
-      <div className="sidebar-header">
-        <div className="sidebar-line"></div>
-        <div className="sidebar-line"></div>
-        <div className="sidebar-line"></div>
-      </div>
-      <div className="sidebar-nav">
-        {tabs.map(tab => (
-          <a
-            key={tab.id}
-            href={`#${tab.id}`}
-            className={`sidebar-nav-item ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => onTabChange(tab.id)}
-          >
-            <tab.icon />
-            {tab.name}
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-function DashboardIcon() {
-  return (
-    <svg className="icon" viewBox="0 0 24 24">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" fill="none" />
-      <line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" fill="none" />
-      <line x1="9" y1="21" x2="9" y2="9" stroke="currentColor" fill="none" />
-    </svg>
-  );
-}
 
 // Dashboard component
 const Dashboard: React.FC = () => {
