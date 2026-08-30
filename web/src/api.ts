@@ -110,75 +110,86 @@ export async function streamChatEvents(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buf = ''
+  let doneCalled = false
+  const callDone = () => { if (!doneCalled) { doneCalled = true; handlers.onDone() } }
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += decoder.decode(value, { stream: true })
-    let sep: number
-    while ((sep = buf.indexOf('\n\n')) >= 0) {
-      const raw = buf.slice(0, sep)
-      buf = buf.slice(sep + 2)
-      if (!raw.trim()) continue
-      const lines = raw.split('\n')
-      let event = 'message'
-      let data = ''
-      for (const l of lines) {
-        const line = l.trimEnd()
-        if (line.startsWith('event:')) {
-          event = line.slice(6).trim()
-        } else if (line.startsWith('data:')) {
-          const chunk = line.slice(5).trim()
-          data = data ? data + '\n' + chunk : chunk
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      let sep: number
+      while ((sep = buf.indexOf('\n\n')) >= 0) {
+        const raw = buf.slice(0, sep)
+        buf = buf.slice(sep + 2)
+        if (!raw.trim()) continue
+        const lines = raw.split('\n')
+        let event = 'message'
+        let data = ''
+        for (const l of lines) {
+          const line = l.trimEnd()
+          if (line.startsWith('event:')) {
+            event = line.slice(6).trim()
+          } else if (line.startsWith('data:')) {
+            const chunk = line.slice(5).trim()
+            data = data ? data + '\n' + chunk : chunk
+          }
         }
+        if (event === 'ping' || event === 'idle') continue
+        if (!data) continue
+        try {
+          const parsed = JSON.parse(data)
+          switch (event) {
+            case 'meta':
+              handlers.onMeta?.({ assistantId: parsed.assistantId, model: parsed.model })
+              break
+            case 'snapshot':
+              handlers.onSnapshot?.(parsed)
+              break
+            case 'delta':
+              handlers.onDelta(parsed)
+              break
+            case 'tool':
+              handlers.onTool?.(parsed)
+              break
+            case 'tool_result':
+              handlers.onToolResult?.(parsed)
+              break
+            case 'plan':
+              handlers.onPlan?.(parsed)
+              break
+            case 'question':
+              handlers.onQuestion?.(parsed)
+              break
+            case 'chat_title':
+              handlers.onChatTitle?.(parsed)
+              break
+            case 'preview':
+              handlers.onPreview?.(parsed as Preview)
+              break
+            case 'retry':
+              handlers.onRetry?.(parsed as { attempt: number; maxAttempts: number; delay: number; reason: string; error: string })
+              break
+            case 'error':
+              handlers.onError(parsed.message)
+              break
+            case 'done':
+            case 'stopped':
+              callDone()
+              break
+          }
+        } catch {}
       }
-      if (event === 'ping' || event === 'idle') continue
-      if (!data) continue
-      try {
-        const parsed = JSON.parse(data)
-        switch (event) {
-          case 'meta':
-            handlers.onMeta?.({ assistantId: parsed.assistantId, model: parsed.model })
-            break
-          case 'snapshot':
-            handlers.onSnapshot?.(parsed)
-            break
-          case 'delta':
-            handlers.onDelta(parsed)
-            break
-          case 'tool':
-            handlers.onTool?.(parsed)
-            break
-          case 'tool_result':
-            handlers.onToolResult?.(parsed)
-            break
-          case 'plan':
-            handlers.onPlan?.(parsed)
-            break
-          case 'question':
-            handlers.onQuestion?.(parsed)
-            break
-          case 'chat_title':
-            handlers.onChatTitle?.(parsed)
-            break
-          case 'preview':
-            handlers.onPreview?.(parsed as Preview)
-            break
-          case 'retry':
-            handlers.onRetry?.(parsed as { attempt: number; maxAttempts: number; delay: number; reason: string; error: string })
-            break
-          case 'error':
-            handlers.onError(parsed.message)
-            break
-          case 'done':
-          case 'stopped':
-            handlers.onDone()
-            break
-        }
-      } catch {}
     }
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw e
+    // network or parse error will be surfaced via catch in caller; ensure done is still called to clean up UI
+    // but don't call onError here to avoid double toast — caller handles
+    throw e
+  } finally {
+    callDone()
+    try { reader.cancel() } catch {}
   }
-  handlers.onDone()
 }
 
 export const listGenerations = () => req<string[]>('/api/generations')
@@ -251,8 +262,6 @@ export const renameTerminal = (id: string, name: string) =>
   req<Terminal>(`/api/terminals/${id}`, json('PATCH', { name }))
 export const deleteTerminal = (id: string) =>
   req<{ ok: true }>(`/api/terminals/${id}`, { method: 'DELETE' })
-export const execTerminal = (id: string, command: string) =>
-  req<{ output: string; exitCode: number; cwd: string }>(`/api/terminals/${id}/exec`, json('POST', { command }))
 
 export type PreviewInfo = {
   port: number

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 
 type ToastType = 'info' | 'error' | 'success'
 
@@ -39,6 +39,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     },
     [dismiss]
   )
+
+  useEffect(() => {
+    return () => {
+      for (const t of timers.current.values()) clearTimeout(t)
+      timers.current.clear()
+    }
+  }, [])
 
   return (
     <Ctx.Provider value={{ toast }}>
