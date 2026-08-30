@@ -490,7 +490,7 @@ export async function streamChatWithTools(
 
   const toolCalls: ParsedToolCall[] = [...calls.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([, c], i) => ({ id: c.id || `call_${i}`, name: c.name, args: c.args }))
+    .map(([, c], i) => ({ id: c.id || `call_${i}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, name: c.name, args: c.args }))
     .filter((c) => c.name)
 
   return { text, finishReason, toolCalls }

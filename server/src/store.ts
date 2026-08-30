@@ -250,6 +250,7 @@ function ensureDb(): Database.Database {
   try { sqlite.pragma('foreign_keys = ON') } catch {}
   initSchema(sqlite)
   migrateLspSchema(sqlite)
+  migrateActivityIndex(sqlite)
   // Re-ensure FK enabled after init (initSchema may have been run on existing DB)
   try { sqlite.pragma('foreign_keys = ON') } catch {}
   return sqlite
@@ -369,7 +370,7 @@ function initSchema(s: Database.Database): void {
       FOREIGN KEY(chatId) REFERENCES chats(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_activities_chatId ON activities(chatId);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_toolCallId ON activities(toolCallId);
+    CREATE INDEX IF NOT EXISTS idx_activities_toolCallId ON activities(toolCallId);
     CREATE TABLE IF NOT EXISTS skills (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -470,6 +471,17 @@ function migrateLspSchema(s: Database.Database): void {
     }
     // If command is NOT NULL but we want nullable, we leave as is — SQLite allows null inserts even if declared NOT NULL? We'll handle by ensuring command has default
     // Also ensure new columns have defaults for existing rows
+  } catch {}
+}
+
+function migrateActivityIndex(s: Database.Database): void {
+  try {
+    const row = s.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_activities_toolCallId'").get() as any
+    if (row && typeof row.sql === 'string' && row.sql.toUpperCase().includes('UNIQUE')) {
+      try { s.exec("DROP INDEX IF EXISTS idx_activities_toolCallId") } catch {}
+      try { s.exec("CREATE INDEX IF NOT EXISTS idx_activities_toolCallId ON activities(toolCallId)") } catch {}
+      console.log('[migrate] Fixed activities toolCallId index from UNIQUE to non-unique')
+    }
   } catch {}
 }
 
