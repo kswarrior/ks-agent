@@ -12,12 +12,24 @@ PORT="${PORT:-8080}"
 PID_FILE="/tmp/ks-agent-${PORT}.pid"
 URL="http://127.0.0.1:${PORT}"
 
+kill_by_pattern() {
+  local sig="$1"
+  local pat="$2"
+  local pids
+  pids=$(pgrep -f "$pat" 2>/dev/null || true)
+  if [[ -n "$pids" ]]; then
+    # shellcheck disable=SC2086
+    echo "$pids" | xargs -r kill "-$sig" 2>/dev/null || true
+    return 0
+  fi
+  return 1
+}
+
 if [[ "${1:-}" == "stop" ]]; then
   STOPPED=0
   if [[ -f "$PID_FILE" ]]; then
     PID=$(cat "$PID_FILE" 2>/dev/null || echo "")
     if [[ -n "$PID" ]] && kill "$PID" 2>/dev/null; then
-      # wait for graceful exit
       for _ in $(seq 1 20); do
         if ! kill -0 "$PID" 2>/dev/null; then break; fi
         sleep 0.2
@@ -28,11 +40,10 @@ if [[ "${1:-}" == "stop" ]]; then
     fi
     rm -f "$PID_FILE"
   fi
-  if pkill -f "node dist-server/index.js" 2>/dev/null; then
+  if kill_by_pattern TERM "node dist-server/index.js"; then
     sleep 0.8
-    # escalate if still running
     if pgrep -f "node dist-server/index.js" >/dev/null 2>&1; then
-      pkill -9 -f "node dist-server/index.js" 2>/dev/null || true
+      kill_by_pattern KILL "node dist-server/index.js" || true
       sleep 0.5
     fi
     [[ $STOPPED -eq 0 ]] && echo "Stopped KS Agent"
@@ -54,10 +65,10 @@ if [[ -f "$PID_FILE" ]]; then
   fi
   rm -f "$PID_FILE"
 fi
-if pkill -f "node dist-server/index.js" 2>/dev/null; then
+if kill_by_pattern TERM "node dist-server/index.js"; then
   sleep 0.8
   if pgrep -f "node dist-server/index.js" >/dev/null 2>&1; then
-    pkill -9 -f "node dist-server/index.js" 2>/dev/null || true
+    kill_by_pattern KILL "node dist-server/index.js" || true
     sleep 0.5
   fi
 fi
@@ -66,7 +77,7 @@ if command -v ss >/dev/null 2>&1; then
   if ss -tln 2>/dev/null | grep -q ":${PORT} "; then
     sleep 0.5
     if ss -tln 2>/dev/null | grep -q ":${PORT} "; then
-      pkill -9 -f "node dist-server/index.js" 2>/dev/null || true
+      kill_by_pattern KILL "node dist-server/index.js" || true
       sleep 1
     fi
   fi
