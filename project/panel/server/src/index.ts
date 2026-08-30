@@ -14,6 +14,7 @@ const FILES_DIR = join(DATA_DIR, 'files');
 
 // Ensure directories exist
 async function ensureDirs() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.mkdir(CONSOLE_PATH, { recursive: true });
   await fs.mkdir(FILES_DIR, { recursive: true });
 }
