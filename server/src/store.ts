@@ -514,6 +514,55 @@ function seedDefaultSkills(): boolean {
       })
       changed = true
     }
+    // Structured frontend skill folder: skills/frontend/skill.md + sub-files (react.md/ts.md/ejs.md)
+    try {
+      const frontendSkillDir = path.join(defaultSkillsDir, 'frontend')
+      const frontendSkillMain = path.join(frontendSkillDir, 'skill.md')
+      if (fs.existsSync(frontendSkillMain)) {
+        const mainFile = 'frontend/skill.md'
+        const expectedFiles = ['frontend/react.md', 'frontend/ts.md', 'frontend/ejs.md']
+        const existingFiles = expectedFiles.filter((f) => fs.existsSync(path.join(defaultSkillsDir, f)))
+        const existingSkill = db.skills.find((s) => s.name.toLowerCase() === 'frontend' || s.mainFile === 'frontend.md' || s.mainFile === mainFile)
+        if (!existingSkill) {
+          let note = 'Frontend Dev Skill'
+          try {
+            const content = fs.readFileSync(frontendSkillMain, 'utf8')
+            const lines = content.split('\n').map((l) => l.trim()).filter(Boolean)
+            const heading = lines.find((l) => l.startsWith('#'))
+            if (heading) note = heading.replace(/^#+\s*/, '').slice(0, 80)
+          } catch {}
+          const now = new Date().toISOString()
+          db.skills.push({
+            id: randomUUID(),
+            name: 'Frontend',
+            note,
+            mainFile,
+            files: existingFiles,
+            createdAt: now,
+            updatedAt: now
+          })
+          changed = true
+        } else {
+          let needUpdate = false
+          if (existingSkill.mainFile === 'frontend.md') {
+            existingSkill.mainFile = mainFile
+            needUpdate = true
+          }
+          const currentFiles = new Set(existingSkill.files || [])
+          for (const f of existingFiles) {
+            if (!currentFiles.has(f)) {
+              currentFiles.add(f)
+              needUpdate = true
+            }
+          }
+          if (needUpdate) {
+            existingSkill.files = [...currentFiles]
+            existingSkill.updatedAt = new Date().toISOString()
+            changed = true
+          }
+        }
+      }
+    } catch {}
   } catch {}
   return changed
 }
