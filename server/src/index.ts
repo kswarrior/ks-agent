@@ -236,6 +236,18 @@ function cleanMessagesForHistory(chatId: string): LLMMessage[] {
   }))
 }
 
+function isPlanIncomplete(plan: { steps: { status: string }[] } | null | undefined): boolean {
+  if (!plan || !Array.isArray(plan.steps) || plan.steps.length === 0) return false
+  return plan.steps.some((s) => s.status !== 'done')
+}
+
+function planResumeContext(plan: { title: string; steps: { title: string; status: string }[] }): string {
+  const lines = plan.steps.map((s, i) => `${i}. [${s.status}] ${s.title}`).join('\n')
+  const done = plan.steps.filter((s) => s.status === 'done').length
+  const total = plan.steps.length
+  return `RESUME NOTICE: A previous plan is still INCOMPLETE and must be continued.\nPlan title: "${plan.title}"\nSteps:\n${lines}\n\nStatus: ${done}/${total} done.\n\nINSTRUCTIONS:\n- Continue working on this existing plan. Do NOT discard it unless the user's new message explicitly asks for a different task or to change scope.\n- Treat the user's new message as additional context / instruction for the ongoing plan. If it requires modifying the plan, call create_plan again to replace it with an updated plan (this is allowed and will replace the old one).\n- If the new message is a clarification or continuation, proceed with the next pending step (call complete_plan_step after each step).\n- Do NOT start from scratch or re-create the same plan if it's already there; resume where you left off.\n- Use existing project context and previous messages as history; understand the new prompt in that context.`
+}
+
 // ---------------- Projects ----------------
 
 app.get('/api/projects', (c) => {
