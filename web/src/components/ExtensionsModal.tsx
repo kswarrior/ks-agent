@@ -450,14 +450,14 @@ export function ExtensionsModal({ open, onClose }: Props) {
         name,
         language,
         transport,
-        command: lspEditForm.command.trim() || undefined,
+        command: lspEditForm.command.trim(),
         args,
-        url: lspEditForm.url.trim() || undefined,
-        env,
-        headers,
-        projectId: lspEditForm.projectId.trim() || undefined,
+        url: lspEditForm.url.trim(),
+        env: env !== undefined ? env : null as any,
+        headers: headers !== undefined ? headers : null as any,
+        projectId: lspEditForm.projectId.trim(),
         enabled: lspEditForm.enabled
-      })
+      } as any)
       toast('LSP server updated', 'success')
       setLspEdit(null)
       await loadLspServers()
