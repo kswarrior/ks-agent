@@ -30,16 +30,18 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
     if (chatPreview && activeChatId) return api.chatPreviewProxyUrl(activeChatId)
     if (activeProject) return api.previewProxyUrl(activeProject.id)
     const hostname = window.location.hostname || 'localhost'
-    return `http://${hostname}:3000`
+    const proto = window.location.protocol === 'https:' ? 'https:' : 'http:'
+    return `${proto}//${hostname}:3000`
   }, [activeProject, activeChatId, chatPreview])
 
   const getDefaultDirectUrl = useCallback(() => {
+    const proto = window.location.protocol === 'https:' ? 'https:' : 'http:'
     if (chatPreview) {
       const hostname = window.location.hostname || 'localhost'
-      return `http://${hostname}:${chatPreview.port}`
+      return `${proto}//${hostname}:${chatPreview.port}`
     }
     const hostname = window.location.hostname || 'localhost'
-    return `http://${hostname}:3000`
+    return `${proto}//${hostname}:3000`
   }, [chatPreview])
 
   const applyChatPreview = useCallback(() => {

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Activity, Chat, Message, ModelEntry, Plan, Question } from '../types'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconRotate, IconSearch, IconStop, IconCopy, IconClock, IconCheck } from '../icons'
+import { IconChevronDown, IconRotate, IconSearch, IconStop, IconCopy, IconCheck } from '../icons'
 import { QuestionList } from './QuestionCard'
 import { useToast } from '../toast'
 
@@ -14,8 +14,12 @@ function ClampedContent({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    setOverflowing(el.scrollHeight > el.clientHeight + 1)
-  }, [])
+    const check = () => setOverflowing(el.scrollHeight > el.clientHeight + 1)
+    check()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(check) : null
+    if (ro) ro.observe(el)
+    return () => { if (ro) ro.disconnect() }
+  }, [children])
 
   return (
     <>
@@ -35,7 +39,6 @@ function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return ''
   if (ms < 1000) return `${ms}ms`
   const totalSec = Math.floor(ms / 1000)
-  const msRem = ms % 1000
   if (totalSec < 60) {
     const sec = (ms / 1000).toFixed(ms < 10000 ? 1 : 0)
     return `${sec}s`
@@ -216,6 +219,28 @@ export function ChatView(props: Props) {
       setProvOpen(false)
       setModelQuery('')
     }
+  }, [modelOpen])
+
+  useEffect(() => {
+    if (!provOpen) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Element | null
+      if (!t || !t.closest('.prov-filter-wrap')) setProvOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setProvOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [provOpen])
+
+  useEffect(() => {
+    if (!modelOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setModelOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [modelOpen])
 
   // Flow status for chat (replaces rectangular while AI writes)

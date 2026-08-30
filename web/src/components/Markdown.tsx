@@ -52,7 +52,7 @@ export const Markdown = memo(function Markdown({ content }: { content: string })
             )
           },
           a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer">
+            <a href={href} target="_blank" rel="noopener noreferrer">
               {children}
             </a>
           )
