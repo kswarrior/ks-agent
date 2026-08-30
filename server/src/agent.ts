@@ -62,11 +62,19 @@ export const DEFAULT_PLAN_PROMPT =
 'For greetings, reply naturally like "Hi! How can I help you today?" with no workflow or tools.';
 
 const MAX_TOOL_ROUNDS = 25
-const READ_MAX_BYTES = 24 * 1024
+const READ_MAX_BYTES = 64 * 1024
+const READ_DEFAULT_LINES = 200
+const READ_MAX_LINES = 1000
+const READ_MAX_FILE_SIZE = 10 * 1024 * 1024
 const WRITE_MAX_BYTES = 256 * 1024
 const SHELL_TIMEOUT_MS = 120_000
 const SHELL_OUTPUT_CAP = 8 * 1024
 const LIST_MAX_ENTRIES = 200
+const LIST_HARD_LIMIT = 500
+const GREP_MAX_RESULTS = 200
+const GLOB_MAX_RESULTS = 500
+const GREP_MAX_FILE_SIZE = 1024 * 1024
+const GREP_MAX_FILES_SCANNED = 3000
 
 export interface ToolExecResult {
   ok: boolean
