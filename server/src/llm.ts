@@ -64,15 +64,20 @@ async function readWithTimeout(
   let timeoutId: ReturnType<typeof setTimeout> | null = null
   let onAbort: (() => void) | null = null
   const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(timeoutError(timeoutMs)), timeoutMs)
+    timeoutId = setTimeout(() => {
+      try { reader.cancel().catch(() => {}) } catch {}
+      reject(timeoutError(timeoutMs))
+    }, timeoutMs)
     if (signal) {
       if (signal.aborted) {
         if (timeoutId) clearTimeout(timeoutId)
+        try { reader.cancel().catch(() => {}) } catch {}
         reject(abortErr())
         return
       }
       onAbort = () => {
         if (timeoutId) clearTimeout(timeoutId)
+        try { reader.cancel().catch(() => {}) } catch {}
         reject(abortErr())
       }
       signal.addEventListener('abort', onAbort, { once: true })
@@ -91,8 +96,24 @@ async function readWithTimeout(
     return result
   } catch (e) {
     cleanup()
+    try { reader.cancel().catch(() => {}) } catch {}
     throw e
   }
+}
+
+function delayWithSignal(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(abortErr())
+    let t: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      if (signal) signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      if (t) clearTimeout(t)
+      reject(abortErr())
+    }
+    if (signal) signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function endpoint(baseUrl: string): string {
@@ -123,16 +144,25 @@ async function openStream(
     if (signal?.aborted) throw new Error('Aborted')
     let res: Response
     try {
-      // Add a 60s connect timeout for hanging providers (e.g. lightning) — race fetch against a timer
+      // Add a 60s connect timeout for hanging providers (e.g. lightning) — race fetch against a timer with proper abort
       const fetchWithTimeout = async (): Promise<Response> => {
         const timeoutMs = 60000
+        const fetchController = new AbortController()
         let timeoutId: ReturnType<typeof setTimeout> | null = null
+        const onOrigAbort = () => fetchController.abort()
+        if (signal) {
+          if (signal.aborted) fetchController.abort()
+          else signal.addEventListener('abort', onOrigAbort, { once: true })
+        }
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => reject(Object.assign(new Error('Provider connect timeout (60s)'), { name: 'TimeoutError' })), timeoutMs)
+          timeoutId = setTimeout(() => {
+            fetchController.abort()
+            reject(Object.assign(new Error('Provider connect timeout (60s)'), { name: 'TimeoutError' }))
+          }, timeoutMs)
         })
         const fetchPromise = fetch(endpoint(baseUrl), {
           method: 'POST',
-          signal,
+          signal: fetchController.signal,
           headers: {
             'content-type': 'application/json',
             authorization: `Bearer ${apiKey}`
@@ -142,9 +172,12 @@ async function openStream(
         try {
           const r = await Promise.race([fetchPromise, timeoutPromise])
           if (timeoutId) clearTimeout(timeoutId)
+          if (signal) signal.removeEventListener('abort', onOrigAbort)
           return r as Response
         } catch (e) {
           if (timeoutId) clearTimeout(timeoutId)
+          if (signal) signal.removeEventListener('abort', onOrigAbort)
+          try { fetchController.abort() } catch {}
           throw e
         }
       }
@@ -155,10 +188,7 @@ async function openStream(
       if (!shouldRetryNet) throw e
       const delayNet = Math.min(settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 800, settings.maxDelayMs)
       console.warn(`[llm retry] Network error — retry ${attempt + 1}/${settings.maxRetries} in ${Math.round(delayNet)}ms: ${String(e?.message||e).slice(0,120)}`)
-      await new Promise((resolve, reject) => {
-        const t = setTimeout(resolve, delayNet)
-        signal?.addEventListener('abort', () => { clearTimeout(t); reject(new Error('Aborted')) }, { once: true })
-      })
+      await delayWithSignal(delayNet, signal).catch((err) => { throw Object.assign(err, { name: 'AbortError' }) })
       attempt++
       continue
     }
@@ -209,10 +239,7 @@ async function openStream(
         }
       }
 
-      await new Promise((resolve, reject) => {
-        const t = setTimeout(resolve, delay)
-        signal?.addEventListener('abort', () => { clearTimeout(t); reject(new Error('Aborted')) }, { once: true })
-      })
+      await delayWithSignal(delay, signal).catch((err) => { throw Object.assign(err, { name: 'AbortError' }) })
       attempt++
       continue
     }
