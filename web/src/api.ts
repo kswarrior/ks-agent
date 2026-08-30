@@ -341,3 +341,14 @@ export const testLspServer = (id: string, overrides?: Record<string, unknown>) =
 export const getLspCapabilities = (id: string) => req<{ capabilities: Record<string, unknown> | null }>(`/api/settings/lsp/${id}/capabilities`)
 export const refreshLspServer = (id: string) => req<{ ok: true; capabilities?: Record<string, unknown> }>(`/api/settings/lsp/${id}/refresh`, json('POST', {}))
 export const getLspStatusAll = () => req<LSPServer[]>('/api/settings/lsp/status/all')
+
+// Plugins
+export const listPlugins = () => req<Plugin[]>('/api/settings/plugins')
+export const listMarketplacePlugins = () => req<MarketplacePlugin[]>('/api/settings/plugins/marketplace')
+export const createPlugin = (p: { name: string; description: string; version: string; publisher?: string; entryPoint?: string; source?: string; marketplaceId?: string; enabled?: boolean; projectId?: string; tags?: string[]; icon?: string }) =>
+  req<Plugin>('/api/settings/plugins', json('POST', p))
+export const installMarketplacePlugin = (marketplaceId: string, opts?: { projectId?: string; enabled?: boolean; entryPoint?: string }) =>
+  req<Plugin>('/api/settings/plugins/install', json('POST', { marketplaceId, ...opts }))
+export const updatePlugin = (id: string, patch: Partial<{ name: string; description: string; version: string; publisher: string; entryPoint: string; source: string; marketplaceId: string; enabled: boolean; projectId: string; tags: string[]; icon: string }>) =>
+  req<Plugin>(`/api/settings/plugins/${id}`, json('PATCH', patch))
+export const deletePlugin = (id: string) => req<{ ok: true }>(`/api/settings/plugins/${id}`, { method: 'DELETE' })

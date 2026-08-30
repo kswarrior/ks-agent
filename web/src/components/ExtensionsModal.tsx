@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '../api'
-import type { Skill, Project, FileEntry, MCPServer, MCPTransport, LSPServer, LSPTransport } from '../types'
+import type { Skill, Project, FileEntry, MCPServer, MCPTransport, LSPServer, LSPTransport, Plugin, MarketplacePlugin } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
 import {
@@ -63,6 +63,25 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [lspActionLoading, setLspActionLoading] = useState<string | null>(null)
   const [lspExpanded, setLspExpanded] = useState<Record<string, boolean>>({})
   const [lspTestResult, setLspTestResult] = useState<Record<string, { ok: boolean; error?: string; capabilities?: Record<string, unknown> }>>({})
+
+  // --- Plugins state ---
+  const [plugins, setPlugins] = useState<Plugin[]>([])
+  const [pluginsLoading, setPluginsLoading] = useState(false)
+  const [marketplace, setMarketplace] = useState<MarketplacePlugin[]>([])
+  const [marketplaceLoading, setMarketplaceLoading] = useState(false)
+  const [pluginsSearch, setPluginsSearch] = useState('')
+  const [pluginCategory, setPluginCategory] = useState<string>('All')
+  const [showPluginForm, setShowPluginForm] = useState(false)
+  const [pluginForm, setPluginForm] = useState<{ name: string; description: string; version: string; publisher: string; entryPoint: string; projectId: string; enabled: boolean; tags: string; icon: string }>({ name: '', description: '', version: '1.0.0', publisher: '', entryPoint: '', projectId: '', enabled: true, tags: '', icon: '🧩' })
+  const [pluginEdit, setPluginEdit] = useState<Plugin | null>(null)
+  const [pluginEditForm, setPluginEditForm] = useState<{ name: string; description: string; version: string; publisher: string; entryPoint: string; projectId: string; enabled: boolean; tags: string; icon: string }>({ name: '', description: '', version: '1.0.0', publisher: '', entryPoint: '', projectId: '', enabled: true, tags: '', icon: '🧩' })
+  const [pluginExpanded, setPluginExpanded] = useState<Record<string, boolean>>({})
+  const [pluginFileBrowserOpen, setPluginFileBrowserOpen] = useState(false)
+  const [pluginFileBrowserProject, setPluginFileBrowserProject] = useState<string | null>(null)
+  const [pluginPickerDir, setPluginPickerDir] = useState('')
+  const [pluginPickerEntries, setPluginPickerEntries] = useState<FileEntry[]>([])
+  const [pluginPickerLoading, setPluginPickerLoading] = useState(false)
+  const [pluginView, setPluginView] = useState<'installed' | 'marketplace'>('installed')
   const confirm = useDialogs().confirm
   const toast = useToast()
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -111,6 +130,8 @@ export function ExtensionsModal({ open, onClose }: Props) {
       loadSkills()
       loadMcpServers()
       loadLspServers()
+      loadPlugins()
+      loadMarketplace()
       setError(null)
       setShowSkillForm(false)
       setSkillFileBrowserOpen(false)
@@ -125,6 +146,15 @@ export function ExtensionsModal({ open, onClose }: Props) {
       setLspEdit(null)
       setLspExpanded({})
       setLspTestResult({})
+      setShowPluginForm(false)
+      setPluginEdit(null)
+      setPluginExpanded({})
+      setPluginFileBrowserOpen(false)
+      setPluginPickerDir('')
+      setPluginPickerEntries([])
+      setPluginsSearch('')
+      setPluginCategory('All')
+      setPluginView('installed')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -136,6 +166,11 @@ export function ExtensionsModal({ open, onClose }: Props) {
     }
     if (open && tab === 'lsp') {
       loadLspServers()
+      if (skillProjects.length === 0) loadSkillProjects()
+    }
+    if (open && tab === 'plugins') {
+      loadPlugins()
+      loadMarketplace()
       if (skillProjects.length === 0) loadSkillProjects()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -491,6 +526,185 @@ export function ExtensionsModal({ open, onClose }: Props) {
       toast(e.message, 'error')
     }
   }
+
+  // ---- Plugin helpers ----
+  async function loadPlugins() {
+    setPluginsLoading(true)
+    try {
+      const list = await api.listPlugins()
+      setPlugins(list)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setPluginsLoading(false)
+    }
+  }
+  async function loadMarketplace() {
+    setMarketplaceLoading(true)
+    try {
+      const list = await api.listMarketplacePlugins()
+      setMarketplace(list)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setMarketplaceLoading(false)
+    }
+  }
+  async function submitPlugin() {
+    setError(null)
+    const name = pluginForm.name.trim()
+    const description = pluginForm.description.trim()
+    const version = pluginForm.version.trim()
+    const publisher = pluginForm.publisher.trim()
+    const entryPoint = pluginForm.entryPoint.trim()
+    const tagsRaw = pluginForm.tags.trim()
+    if (!name) return setError('Plugin name is required')
+    if (name.length < 2 || name.length > 80) return setError('Plugin name must be 2-80 characters')
+    if (description.length > 500) return setError('Description must be ≤500 characters')
+    if (!version) return setError('Version is required')
+    if (!/^\d+\.\d+(\.\d+)?([-.+][0-9A-Za-z.-]+)?$/.test(version)) return setError('Invalid version (expected semver like 1.0.0)')
+    if (publisher && (publisher.length < 2 || publisher.length > 60)) return setError('Publisher must be 2-60 characters')
+    if (entryPoint && entryPoint.length > 500) return setError('Entry point path too long')
+    try {
+      const tags = tagsRaw ? tagsRaw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean) : undefined
+      await api.createPlugin({
+        name,
+        description,
+        version,
+        publisher: publisher || undefined,
+        entryPoint: entryPoint || undefined,
+        source: 'manual',
+        projectId: pluginForm.projectId.trim() || pluginFileBrowserProject || undefined,
+        enabled: pluginForm.enabled,
+        tags,
+        icon: pluginForm.icon.trim() || '🧩'
+      })
+      toast('Plugin added', 'success')
+      setPluginForm({ name: '', description: '', version: '1.0.0', publisher: '', entryPoint: '', projectId: '', enabled: true, tags: '', icon: '🧩' })
+      setShowPluginForm(false)
+      setPluginFileBrowserOpen(false)
+      setPluginPickerDir('')
+      await Promise.all([loadPlugins(), loadMarketplace()])
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+  async function submitEditPlugin() {
+    if (!pluginEdit) return
+    setError(null)
+    const name = pluginEditForm.name.trim()
+    const description = pluginEditForm.description.trim()
+    const version = pluginEditForm.version.trim()
+    const publisher = pluginEditForm.publisher.trim()
+    const entryPoint = pluginEditForm.entryPoint.trim()
+    if (!name) return setError('Plugin name is required')
+    if (name.length < 2 || name.length > 80) return setError('Plugin name must be 2-80 characters')
+    if (description.length > 500) return setError('Description must be ≤500 characters')
+    if (!version) return setError('Version is required')
+    if (!/^\d+\.\d+(\.\d+)?([-.+][0-9A-Za-z.-]+)?$/.test(version)) return setError('Invalid version (expected semver like 1.0.0)')
+    if (publisher && (publisher.length < 2 || publisher.length > 60)) return setError('Publisher must be 2-60 characters')
+    try {
+      const tags = pluginEditForm.tags.trim() ? pluginEditForm.tags.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean) : []
+      await api.updatePlugin(pluginEdit.id, {
+        name,
+        description,
+        version,
+        publisher: publisher || '',
+        entryPoint: entryPoint || '',
+        projectId: pluginEditForm.projectId.trim() || '',
+        enabled: pluginEditForm.enabled,
+        tags,
+        icon: pluginEditForm.icon.trim() || '🧩'
+      } as any)
+      toast('Plugin updated', 'success')
+      setPluginEdit(null)
+      await Promise.all([loadPlugins(), loadMarketplace()])
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+  function startEditPlugin(p: Plugin) {
+    setPluginEdit(p)
+    setPluginEditForm({
+      name: p.name,
+      description: p.description,
+      version: p.version,
+      publisher: p.publisher ?? '',
+      entryPoint: p.entryPoint ?? '',
+      projectId: (p.projectId as string) ?? '',
+      enabled: p.enabled,
+      tags: (p.tags ?? []).join(', '),
+      icon: p.icon ?? '🧩'
+    })
+    setShowPluginForm(false)
+    setError(null)
+    setPluginFileBrowserOpen(false)
+    if (p.projectId) setPluginFileBrowserProject(p.projectId as string)
+  }
+  async function removePlugin(id: string, name: string) {
+    const ok = await confirm({ title: 'Delete plugin?', message: `Uninstall "${name}"? This will remove it from the workspace.`, danger: true, confirmText: 'Uninstall' })
+    if (!ok) return
+    try {
+      await api.deletePlugin(id)
+      toast('Plugin uninstalled', 'success')
+      if (pluginEdit?.id === id) setPluginEdit(null)
+      await Promise.all([loadPlugins(), loadMarketplace()])
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+  async function togglePluginEnabled(p: Plugin) {
+    try {
+      await api.updatePlugin(p.id, { enabled: !p.enabled } as any)
+      await Promise.all([loadPlugins(), loadMarketplace()])
+      toast(p.enabled ? 'Disabled' : 'Enabled', 'success')
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+  async function installFromMarketplace(m: MarketplacePlugin) {
+    try {
+      await api.installMarketplacePlugin(m.id, { projectId: pluginFileBrowserProject || undefined })
+      toast(`Installed ${m.name}`, 'success')
+      await Promise.all([loadPlugins(), loadMarketplace()])
+      setPluginView('installed')
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+  async function refreshPluginPicker() {
+    const pid = pluginFileBrowserProject || pluginForm.projectId || pluginEditForm.projectId || skillProjects[0]?.id
+    if (!pid) {
+      setPluginPickerEntries([])
+      return
+    }
+    if (!pluginFileBrowserProject && pid) setPluginFileBrowserProject(pid)
+    setPluginPickerLoading(true)
+    try {
+      const listing = await api.listFiles(pid, pluginPickerDir)
+      setPluginPickerEntries(listing.entries)
+    } catch (e: any) {
+      toast(e.message, 'error')
+      setPluginPickerEntries([])
+    } finally {
+      setPluginPickerLoading(false)
+    }
+  }
+  useEffect(() => {
+    if (pluginFileBrowserOpen && skillProjects.length === 0) {
+      loadSkillProjects()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pluginFileBrowserOpen])
+  useEffect(() => {
+    if (pluginFileBrowserOpen && pluginFileBrowserProject) {
+      refreshPluginPicker()
+    }
+    if (!pluginFileBrowserOpen) {
+      setPluginPickerEntries([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pluginFileBrowserProject, pluginPickerDir, pluginFileBrowserOpen])
 
   async function submitSkill() {
     setError(null)
