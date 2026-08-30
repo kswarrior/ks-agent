@@ -297,10 +297,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     if (!modelEdit) return
     setError(null)
     try {
-      const maxTokens = modelEdit.maxTokens != null ? Number(modelEdit.maxTokens) : undefined
+      const raw = modelEdit.maxTokens
+      const parsed = raw != null && String(raw).trim() !== '' ? Number(raw) : undefined
+      const maxTokensPayload = parsed != null && Number.isFinite(parsed) && parsed >= 1 ? { maxTokens: Math.floor(parsed) } : { maxTokens: 0 }
       await api.updateModel(modelEdit.id, {
         displayName: modelEdit.displayName?.trim() ?? '',
-        ...(maxTokens != null && !isNaN(maxTokens) && maxTokens >= 1 ? { maxTokens } : { maxTokens: 0 }),
+        ...maxTokensPayload,
         systemPrompt: modelEdit.systemPrompt?.trim() ?? ''
       })
       setModelEdit(null)
