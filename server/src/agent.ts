@@ -282,10 +282,16 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'list_files',
-      description: 'List files and folders in a directory of the ACTIVE PROJECT ONLY (primary workspace). Path is relative to project root; empty for project root. Do NOT attempt to list outside the project (e.g. ks-agent/server/, /tmp) unless user explicitly asked to go outside or task genuinely needs /tmp.',
+      description: 'List files and folders in a directory of the ACTIVE PROJECT ONLY (primary workspace). Path is relative to project root; empty for project root. Supports pagination (offset/limit), recursive listing, and glob pattern filtering. Use recursive:true with pattern:"**/*.ts" to find files in subfolders. Do NOT attempt to list outside the project (e.g. ks-agent/server/, /tmp) unless user explicitly asked to go outside or task genuinely needs /tmp.',
       parameters: {
         type: 'object',
-        properties: { path: { type: 'string', description: 'Relative directory path inside project, empty for project root' } }
+        properties: {
+          path: { type: 'string', description: 'Relative directory path inside project, empty for project root' },
+          offset: { type: 'integer', description: 'Entry offset for pagination (0-indexed, default 0)' },
+          limit: { type: 'integer', description: 'Max entries to return (1-500, default 200)' },
+          recursive: { type: 'boolean', description: 'If true, list recursively under the directory (default false)' },
+          pattern: { type: 'string', description: 'Optional glob pattern to filter results, e.g. "*.ts", "**/*.json", "*.{js,ts}"' }
+        }
       }
     }
   },
@@ -293,11 +299,48 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Read a text file from the ACTIVE PROJECT ONLY (primary workspace, up to 24 KB). Path is relative to project root. Do NOT read outside project unless user explicitly asked or you genuinely need /tmp.',
+      description: 'Read a text file from the ACTIVE PROJECT ONLY (primary workspace). Supports pagination via offset/limit (line numbers) for large files. offset is 1-indexed line number (1 = first line, default 1), limit is max lines to return (1-1000, default 200). For large files, read in chunks using offset/limit or search with grep first. Do NOT read outside project unless user explicitly asked or you genuinely need /tmp.',
       parameters: {
         type: 'object',
-        properties: { path: { type: 'string', description: 'Relative file path inside project' } },
+        properties: {
+          path: { type: 'string', description: 'Relative file path inside project' },
+          offset: { type: 'integer', description: 'Line number to start reading from (1-indexed, default 1)' },
+          limit: { type: 'integer', description: 'Max lines to return (1-1000, default 200)' }
+        },
         required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'grep',
+      description: 'Search for a regex/text pattern inside files of the ACTIVE PROJECT ONLY (primary workspace). Returns matches as "relative/path:lineNumber:content". Supports optional glob include filter and directory scope. Essential for large codebases — use grep to locate relevant code without reading large files fully.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: { type: 'string', description: 'Regex pattern (JS RegExp) or plain text to search for, e.g. "function foo", "import.*React", "TODO"' },
+          path: { type: 'string', description: 'Directory to search in, relative to project root. Empty = project root (default).' },
+          include: { type: 'string', description: 'Optional glob to filter files, e.g. "*.ts", "*.{js,ts}", "src/**/*.tsx". If omitted, searches all text files.' },
+          max_results: { type: 'integer', description: 'Max matches to return (1-200, default 50)' }
+        },
+        required: ['pattern']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'glob',
+      description: 'Find files matching a glob pattern inside the ACTIVE PROJECT ONLY. Fast file discovery without reading contents. Examples: "**/*.ts", "src/**/*.{js,tsx}", "*.json". Use to locate files before reading them. Supports pagination via base path.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: { type: 'string', description: 'Glob pattern to match, e.g. "**/*.ts", "*.md", "src/**/*.tsx"' },
+          path: { type: 'string', description: 'Base directory to search from, relative to project root. Default is project root (empty).' },
+          limit: { type: 'integer', description: 'Max files to return (1-500, default 200)' }
+        },
+        required: ['pattern']
       }
     }
   },
@@ -484,6 +527,151 @@ async function execShell(command: string, cwd: string): Promise<{ code: number; 
       }
     )
   })
+}
+
+function globToRegExp(pattern: string): RegExp {
+  let s = pattern.trim()
+  // Handle brace expansion {a,b} naive first, then glob wildcards
+  // Escape then convert
+  let re = ''
+  let i = 0
+  while (i < s.length) {
+    const c = s[i]
+    if (c === '*') {
+      if (s[i + 1] === '*') {
+        // **
+        if (s[i + 2] === '/') {
+          re += '(?:.*\\/)?'
+          i += 3
+        } else {
+          re += '.*'
+          i += 2
+        }
+      } else {
+        re += '[^\\/]*'
+        i++
+      }
+    } else if (c === '?') {
+      re += '[^\\/]'
+      i++
+    } else if (c === '{') {
+      const j = s.indexOf('}', i)
+      if (j > i) {
+        const inner = s.slice(i + 1, j)
+        const parts = inner.split(',').map((p) => p.trim().replace(/[.*+^${}()|[\]\\]/g, '\\$&'))
+        re += '(?:' + parts.join('|') + ')'
+        i = j + 1
+      } else {
+        re += '\\{'
+        i++
+      }
+    } else if (c === '[') {
+      const j = s.indexOf(']', i)
+      if (j > i) {
+        re += s.slice(i, j + 1)
+        i = j + 1
+      } else {
+        re += '\\['
+        i++
+      }
+    } else if (/[.+^${}()|[\]\\]/.test(c)) {
+      re += '\\' + c
+      i++
+    } else {
+      re += c
+      i++
+    }
+  }
+  return new RegExp('^' + re + '$')
+}
+
+function isIgnoredDir(name: string): boolean {
+  return new Set(['node_modules', '.git', '.hg', '.svn', 'dist', 'dist-server', 'storage', 'data', '.next', 'build', '.turbo', '.vite', 'coverage', '.cache', '.opencode', '.claude', '.cursor']).has(name)
+}
+
+function walkFilesSync(root: string, opts: { recursive: boolean; pattern?: RegExp; maxFiles: number }): string[] {
+  const out: string[] = []
+  const stack: string[] = [root]
+  const ignore = isIgnoredDir
+  while (stack.length && out.length < opts.maxFiles) {
+    const cur = stack.pop()!
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(cur, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const ent of entries) {
+      if (out.length >= opts.maxFiles) break
+      if (ent.name.startsWith('.') && ent.name !== '.env' && ent.name !== '.gitignore') {
+        // allow hidden files like .env but skip heavy hidden dirs already in ignore; keep . but skip?
+        // we still want to traverse hidden dirs if not ignored, but limit.
+      }
+      if (ent.isDirectory()) {
+        if (ignore(ent.name)) continue
+        const full = path.join(cur, ent.name)
+        if (opts.recursive) {
+          stack.push(full)
+        } else if (opts.pattern) {
+          // for non-recursive with pattern containing **, we need recursive anyway; but caller decides
+        }
+        // For non-recursive listing, we still collect dir entries as files? Caller handles.
+        if (!opts.recursive) {
+          // will be collected by caller via dirents, not walk
+        }
+      } else if (ent.isFile()) {
+        const full = path.join(cur, ent.name)
+        if (opts.pattern) {
+          // test against relative from root or basename
+          const relFromRoot = path.relative(root, full).split(path.sep).join('/')
+          const base = ent.name
+          if (!opts.pattern.test(relFromRoot) && !opts.pattern.test(base) && !opts.pattern.test(full)) {
+            continue
+          }
+        }
+        out.push(full)
+      }
+    }
+  }
+  return out
+}
+
+function collectFilesForGrep(root: string, includePattern: string | null, maxFiles: number): string[] {
+  const includeRe = includePattern ? globToRegExp(includePattern) : null
+  const results: string[] = []
+  const stack: string[] = [root]
+  let scannedDirs = 0
+  while (stack.length && results.length < maxFiles && scannedDirs < 2000) {
+    const cur = stack.pop()!
+    scannedDirs++
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(cur, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const ent of entries) {
+      const full = path.join(cur, ent.name)
+      if (ent.isDirectory()) {
+        if (isIgnoredDir(ent.name)) continue
+        // skip hidden dirs like .git already handled, but allow others
+        if (ent.name === '.git' || ent.name === 'node_modules') continue
+        stack.push(full)
+      } else if (ent.isFile()) {
+        if (results.length >= maxFiles) break
+        // apply include filter if present
+        if (includeRe) {
+          const rel = path.relative(root, full).split(path.sep).join('/')
+          if (!includeRe.test(rel) && !includeRe.test(ent.name)) continue
+        }
+        // skip binary-ish extensions quickly? but let grep skip via content check
+        // skip very large files (size check later)
+        results.push(full)
+        if (results.length >= maxFiles) break
+      }
+    }
+  }
+  return results
 }
 
 export async function executeTool(name: string, argsJson: string, ctx: ToolContext): Promise<ToolExecResult> {
