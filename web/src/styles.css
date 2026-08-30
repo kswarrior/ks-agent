@@ -3379,3 +3379,7 @@ textarea {
 .rsb-dot.write { background: #86efac; box-shadow: 0 0 6px rgba(134,239,172,0.45); }
 .rsb-dot.edit { background: #facc15; box-shadow: 0 0 6px rgba(250,204,21,0.45); }
 .rsb-dot.read { background: #60a5fa; box-shadow: 0 0 6px rgba(96,165,250,0.45); }
+
+@media (max-width: 600px) {
+  .hide-mobile { display: none !important; }
+}

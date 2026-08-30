@@ -685,6 +685,12 @@ function KsAgent() {
         delete next[chatId]
         return next
       })
+      // restore optimistically hidden message on failure
+      if (isPure) {
+        setMessages((prev) => (prev.some((m) => m.id === lastAssistant.id) ? prev : [...prev, lastAssistant]))
+      } else {
+        setMessages((prev) => prev.filter((m) => !m.id.startsWith('tmp-')))
+      }
       try {
         const fresh = await api.listMessages(chatId)
         if (activeChatIdRef.current === chatId) setMessages(fresh)
@@ -807,6 +813,8 @@ function KsAgent() {
         delete next[chatId]
         return next
       })
+      // remove optimistic tmp messages so phantom doesn't linger if refetch fails
+      setMessages((prev) => prev.filter((m) => !m.id.startsWith('tmp-')))
       try {
         const fresh = await api.listMessages(chatId)
         if (activeChatIdRef.current === chatId) setMessages(fresh)
@@ -977,7 +985,7 @@ function KsAgent() {
           >
             :{activePreview.port}
           </span>
-          <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 2, display: 'none' }} className="hide-mobile">
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', marginLeft: 2 }} className="hide-mobile">
             active per chat
           </span>
           <button className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 12.5, marginLeft: 8, whiteSpace: 'nowrap' }} onClick={() => setPreviewOpen(true)}>
