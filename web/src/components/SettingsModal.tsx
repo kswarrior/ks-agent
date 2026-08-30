@@ -57,6 +57,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const toast = useToast()
   const tabsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
+  const dragMovedRef = useRef(false)
 
   function handleTabsWheel(e: React.WheelEvent<HTMLDivElement>) {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -71,6 +72,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   function handleTabsPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const el = e.currentTarget
     if (el.scrollWidth <= el.clientWidth) return
+    dragMovedRef.current = false
     dragRef.current = { active: true, startX: e.clientX, startScrollLeft: el.scrollLeft, moved: false }
     el.setPointerCapture(e.pointerId)
     el.style.cursor = 'grabbing'
@@ -82,7 +84,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     const el = e.currentTarget
     if (!drag?.active) return
     const dx = e.clientX - drag.startX
-    if (Math.abs(dx) > 2) drag.moved = true
+    if (Math.abs(dx) > 8) { drag.moved = true; dragMovedRef.current = true }
     el.scrollLeft = drag.startScrollLeft - dx
   }
 
@@ -96,6 +98,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     if (drag?.moved) {
       e.preventDefault()
       e.stopPropagation()
+      setTimeout(() => { dragMovedRef.current = false }, 350)
+    } else {
+      dragMovedRef.current = false
     }
   }
 
@@ -376,7 +381,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           <button
             className={`tab${tab === 'providers' ? ' active' : ''}`}
             onClick={(e) => {
-              if (dragRef.current?.moved) return
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
               setTab('providers')
               setError(null)
               e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
@@ -387,7 +392,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           <button
             className={`tab${tab === 'models' ? ' active' : ''}`}
             onClick={(e) => {
-              if (dragRef.current?.moved) return
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
               setTab('models')
               setError(null)
               e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
@@ -398,7 +403,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           <button
             className={`tab${tab === 'prompt' ? ' active' : ''}`}
             onClick={(e) => {
-              if (dragRef.current?.moved) return
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
               setTab('prompt')
               setError(null)
               e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
@@ -409,7 +414,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           <button
             className={`tab${tab === 'retry' ? ' active' : ''}`}
             onClick={(e) => {
-              if (dragRef.current?.moved) return
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
               setTab('retry')
               setError(null)
               e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })

@@ -86,6 +86,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const toast = useToast()
   const tabsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
+  const dragMovedRef = useRef(false)
 
   function handleTabsWheel(e: React.WheelEvent<HTMLDivElement>) {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -99,6 +100,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
   function handleTabsPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const el = e.currentTarget
     if (el.scrollWidth <= el.clientWidth) return
+    dragMovedRef.current = false
     dragRef.current = { active: true, startX: e.clientX, startScrollLeft: el.scrollLeft, moved: false }
     el.setPointerCapture(e.pointerId)
     el.style.cursor = 'grabbing'
@@ -109,7 +111,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
     const el = e.currentTarget
     if (!drag?.active) return
     const dx = e.clientX - drag.startX
-    if (Math.abs(dx) > 2) drag.moved = true
+    if (Math.abs(dx) > 8) { drag.moved = true; dragMovedRef.current = true }
     el.scrollLeft = drag.startScrollLeft - dx
   }
   function handleTabsPointerUp(e: React.PointerEvent<HTMLDivElement>) {
@@ -122,6 +124,9 @@ export function ExtensionsModal({ open, onClose }: Props) {
     if (drag?.moved) {
       e.preventDefault()
       e.stopPropagation()
+      setTimeout(() => { dragMovedRef.current = false }, 350)
+    } else {
+      dragMovedRef.current = false
     }
   }
 
@@ -858,7 +863,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
             className={`tab${tab === 'mcp' ? ' active' : ''}`}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             onClick={(e) => {
-              if (dragRef.current?.moved) return
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
               setTab('mcp')
               setError(null)
               e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
@@ -870,7 +875,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
             className={`tab${tab === 'lsp' ? ' active' : ''}`}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             onClick={(e) => {
-              if (dragRef.current?.moved) return
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
               setTab('lsp')
               setError(null)
               e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
@@ -882,7 +887,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
             className={`tab${tab === 'plugins' ? ' active' : ''}`}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             onClick={(e) => {
-              if (dragRef.current?.moved) return
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
               setTab('plugins')
               setError(null)
               e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
@@ -894,7 +899,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
             className={`tab${tab === 'skills' ? ' active' : ''}`}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             onClick={(e) => {
-              if (dragRef.current?.moved) return
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
               setTab('skills')
               setError(null)
               e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })

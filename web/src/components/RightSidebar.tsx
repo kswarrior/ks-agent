@@ -432,6 +432,7 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
   const hasRunning = activities.some(a => a.ok === undefined)
   const tabsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
+  const dragMovedRef = useRef(false)
 
   function handleTabsWheel(e: React.WheelEvent<HTMLDivElement>) {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -446,6 +447,7 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
   function handleTabsPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const el = e.currentTarget
     if (el.scrollWidth <= el.clientWidth) return
+    dragMovedRef.current = false
     dragRef.current = { active: true, startX: e.clientX, startScrollLeft: el.scrollLeft, moved: false }
     el.setPointerCapture(e.pointerId)
     el.style.cursor = 'grabbing'
@@ -457,7 +459,7 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
     const el = e.currentTarget
     if (!drag?.active) return
     const dx = e.clientX - drag.startX
-    if (Math.abs(dx) > 2) drag.moved = true
+    if (Math.abs(dx) > 8) { drag.moved = true; dragMovedRef.current = true }
     el.scrollLeft = drag.startScrollLeft - dx
   }
 
@@ -469,9 +471,13 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
     el.style.userSelect = ''
     try { el.releasePointerCapture(e.pointerId) } catch {}
     if (drag?.moved) {
-      // prevent accidental tab click after drag
+      // prevent accidental tab click after drag — keep flag for click handler
       e.preventDefault()
       e.stopPropagation()
+      setTimeout(() => { dragMovedRef.current = false }, 350)
+    } else {
+      // tap without drag — allow click
+      dragMovedRef.current = false
     }
   }
 
@@ -494,8 +500,8 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
                 key={t.id}
                 className={`tab${tab === t.id ? ' active' : ''}`}
                 onClick={(e) => {
-                  // ignore click if it was a drag
-                  if (dragRef.current?.moved) return
+                  // ignore click if it was a drag (threshold 8px, see pointer handlers)
+                  if (dragMovedRef.current) { dragMovedRef.current = false; return }
                   setTab(t.id)
                   e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
                 }}
