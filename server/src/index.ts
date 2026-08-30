@@ -984,18 +984,30 @@ app.post('/api/chats/:id/messages', async (c) => {
         const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
         const skillMessages = buildSkillSystemMessages(project)
         // History ends with the (now cleaned) assistant message; add ephemeral continue instruction
-        const history: LLMMessage[] = [
-          { role: 'system', content: modelSystemPrompt },
-          ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
-          ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-          ...skillMessages,
-          ...cleanMessagesForHistory(chat.id),
-          {
+        // If plan is still incomplete, inject resume context so AI knows to continue the plan
+        const existingPlanForPure = findPlanForChat(chat.id)
+        const planIncompleteForPure = isPlanIncomplete(existingPlanForPure)
+        let history: LLMMessage[]
+        {
+          const prefix: LLMMessage[] = [
+            { role: 'system', content: modelSystemPrompt },
+            ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
+            ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+            ...skillMessages,
+            ...cleanMessagesForHistory(chat.id)
+          ]
+          const continueInstruction: LLMMessage = {
             role: 'user',
             content:
               'Continue exactly where you left off. Do not repeat the content already generated — pick up mid-sentence/paragraph if needed and continue until the task is complete. Do not add any preamble like "Continuing...".'
           }
-        ]
+          if (planIncompleteForPure && existingPlanForPure) {
+            const resume = planResumeContext(existingPlanForPure)
+            history = [...prefix, { role: 'system', content: resume }, continueInstruction]
+          } else {
+            history = [...prefix, continueInstruction]
+          }
+        }
         const job: GenerationJob = {
           chatId: chat.id,
           assistantId: lastAssistant.id,
@@ -1155,7 +1167,9 @@ app.post('/api/chats/:id/continue', async (c) => {
   const isPureContinue = !rawContent || isContinueKeyword(rawContent)
   if (isPureContinue) {
     const wasInterruptedPure = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
-    if (!wasInterruptedPure) {
+    const existingPlanForPure2 = findPlanForChat(chat.id)
+    const planIncompleteForPure2 = isPlanIncomplete(existingPlanForPure2)
+    if (!wasInterruptedPure && !planIncompleteForPure2) {
       return c.json({ error: 'No interrupted response to continue from. Send a new message instead.' }, 400)
     }
     const stripped = stripInterruptedSuffix(lastAssistant.content)
@@ -1176,18 +1190,27 @@ app.post('/api/chats/:id/continue', async (c) => {
       PRIMARY_SYSTEM_PROMPT
     const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
     const skillMessages = buildSkillSystemMessages(project)
-    const history: LLMMessage[] = [
-      { role: 'system', content: modelSystemPrompt },
-      ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
-      ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-      ...skillMessages,
-      ...cleanMessagesForHistory(chat.id),
-      {
+    let history: LLMMessage[]
+    {
+      const prefix: LLMMessage[] = [
+        { role: 'system', content: modelSystemPrompt },
+        ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
+        ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+        ...skillMessages,
+        ...cleanMessagesForHistory(chat.id)
+      ]
+      const continueInstruction: LLMMessage = {
         role: 'user',
         content:
           'Continue exactly where you left off. Do not repeat the content already generated — pick up mid-sentence/paragraph if needed and continue until the task is complete. Do not add any preamble like "Continuing...".'
       }
-    ]
+      if (planIncompleteForPure2 && existingPlanForPure2) {
+        const resume = planResumeContext(existingPlanForPure2)
+        history = [...prefix, { role: 'system', content: resume }, continueInstruction]
+      } else {
+        history = [...prefix, continueInstruction]
+      }
+    }
     const job: GenerationJob = {
       chatId: chat.id,
       assistantId: lastAssistant.id,
@@ -1211,6 +1234,9 @@ app.post('/api/chats/:id/continue', async (c) => {
     // "any other" input with extra instruction — store as new user message and generate fresh,
     // but history is cleaned so AI continues seamlessly from where it ended.
     const originalWasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
+    const existingPlanBeforeClear2 = findPlanForChat(chat.id)
+    const planIncompleteBeforeClear2 = isPlanIncomplete(existingPlanBeforeClear2)
+    const shouldPreserve2 = originalWasInterrupted || planIncompleteBeforeClear2
     const stripped = stripInterruptedSuffix(lastAssistant.content)
     if (lastAssistant.content !== stripped) {
       lastAssistant.content = stripped
@@ -1230,8 +1256,8 @@ app.post('/api/chats/:id/continue', async (c) => {
       if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
     }
     touchChat(chat)
-    // For "any other" we still want seamless pickup, so do NOT clear activities/plans if last was interrupted
-    if (!originalWasInterrupted) {
+    // For "any other" we still want seamless pickup, so do NOT clear activities/plans if last was interrupted OR plan is still incomplete
+    if (!shouldPreserve2) {
       // @ts-ignore
       db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
       db.plans = db.plans.filter((p) => p.chatId !== chat.id)
@@ -1243,13 +1269,28 @@ app.post('/api/chats/:id/continue', async (c) => {
       PRIMARY_SYSTEM_PROMPT
     const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
     const skillMessages = buildSkillSystemMessages(project)
-    const history: LLMMessage[] = [
-      { role: 'system', content: modelSystemPrompt },
-      ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
-      ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-      ...skillMessages,
-      ...cleanMessagesForHistory(chat.id)
-    ]
+    let history: LLMMessage[]
+    {
+      const base = cleanMessagesForHistory(chat.id)
+      const prefix: LLMMessage[] = [
+        { role: 'system', content: modelSystemPrompt },
+        ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
+        ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+        ...skillMessages
+      ]
+      if (planIncompleteBeforeClear2 && existingPlanBeforeClear2) {
+        const resume = planResumeContext(existingPlanBeforeClear2)
+        if (base.length > 0 && base[base.length - 1].role === 'user') {
+          const beforeLast = base.slice(0, -1)
+          const last = base[base.length - 1]
+          history = [...prefix, ...beforeLast, { role: 'system', content: resume }, last]
+        } else {
+          history = [...prefix, ...base, { role: 'system', content: resume }]
+        }
+      } else {
+        history = [...prefix, ...base]
+      }
+    }
     const job: GenerationJob = {
       chatId: chat.id,
       assistantId: newId(),
