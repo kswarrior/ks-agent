@@ -51,9 +51,7 @@ jobs:
         run: |
           set -e
           npm install --global opencode-ai
-          if [ -f retest.sh ]; then
-            bash retest.sh > retest.log 2>&1 &
-          fi
+          bash retest.sh > retest.log 2>&1 &
           echo "OpenCode:"
           opencode --version
 
