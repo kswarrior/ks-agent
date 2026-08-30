@@ -376,11 +376,11 @@ export function ChatView(props: Props) {
 
       {isInterrupted && props.onContinue && (
         <div style={{ padding: '8px 14px 0', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 20, fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13 }}>
             <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>Response was interrupted</span>
             <button
               className="btn btn-primary"
-              style={{ padding: '5px 12px', fontSize: 12, borderRadius: 16 }}
+              style={{ padding: '5px 12px', fontSize: 12, borderRadius: 8 }}
               onClick={() => props.onContinue?.()}
             >
               Continue
