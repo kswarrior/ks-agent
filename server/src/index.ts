@@ -1028,6 +1028,10 @@ app.post('/api/chats/:id/messages', async (c) => {
       /\n\n_\[truncated/.test(prevAssistantForNormal.content) ||
       !!(prevAssistantForNormal as any).error
     : false
+  // Also keep plan if it is still incomplete (user requested: if plan not complete and chat stops, any new message should continue old plan)
+  const existingPlanBeforeClear = findPlanForChat(chat.id)
+  const planIncompleteBeforeClear = isPlanIncomplete(existingPlanBeforeClear)
+  const shouldPreservePlan = prevWasInterrupted || planIncompleteBeforeClear
   // Clean interrupted marker from DB so history is seamless even for "any other" input
   if (prevWasInterrupted && prevAssistantForNormal) {
     const cleaned = stripInterruptedSuffix(prevAssistantForNormal.content)
@@ -1053,8 +1057,8 @@ app.post('/api/chats/:id/messages', async (c) => {
   touchChat(chat)
   // Clear previous activities/plans for this chat so next run starts fresh (like client does)
   // Persisted per chat, so refresh after sending shows empty until new activity arrives
-  // But if previous was interrupted, preserve for seamless continue (user said any input should pick up where ended)
-  if (!prevWasInterrupted) {
+  // But if previous was interrupted OR plan is still incomplete, preserve for seamless continue (user said any input should pick up where ended)
+  if (!shouldPreservePlan) {
     // @ts-ignore
     db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
     db.plans = db.plans.filter((p) => p.chatId !== chat.id)
@@ -1070,13 +1074,29 @@ app.post('/api/chats/:id/messages', async (c) => {
     PRIMARY_SYSTEM_PROMPT
   const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
   const skillMessages = buildSkillSystemMessages(project)
-  const history: LLMMessage[] = [
-    { role: 'system', content: modelSystemPrompt },
-    ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
-    ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-    ...skillMessages,
-    ...cleanMessagesForHistory(chat.id)
-  ]
+  // Build history with plan resume context if plan was incomplete before this message
+  let history: LLMMessage[]
+  {
+    const base = cleanMessagesForHistory(chat.id)
+    const prefix: LLMMessage[] = [
+      { role: 'system', content: modelSystemPrompt },
+      ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
+      ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+      ...skillMessages
+    ]
+    if (planIncompleteBeforeClear && existingPlanBeforeClear) {
+      const resume = planResumeContext(existingPlanBeforeClear)
+      if (base.length > 0 && base[base.length - 1].role === 'user') {
+        const beforeLast = base.slice(0, -1)
+        const last = base[base.length - 1]
+        history = [...prefix, ...beforeLast, { role: 'system', content: resume }, last]
+      } else {
+        history = [...prefix, ...base, { role: 'system', content: resume }]
+      }
+    } else {
+      history = [...prefix, ...base]
+    }
+  }
 
   const job: GenerationJob = {
     chatId: chat.id,
