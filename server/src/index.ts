@@ -115,6 +115,8 @@ interface PtySession {
 
 const ptySessions = new Map<string, PtySession>()
 
+const previewProcs = new Map<string, { port: number; child: ReturnType<typeof spawn> | null; startedAt: number }>()
+
 function resolveShell(): string {
   const envShell = process.env.SHELL
   if (envShell && fs.existsSync(envShell)) return envShell
@@ -3358,8 +3360,6 @@ async function isPortReachable(port: number, timeoutMs = 1500): Promise<boolean>
     return false
   }
 }
-
-const previewProcs = new Map<string, { port: number; child: ReturnType<typeof spawn> | null; startedAt: number }>()
 
 app.get('/api/projects/:id/preview/status', async (c) => {
   const project = findProject(c.req.param('id'))
