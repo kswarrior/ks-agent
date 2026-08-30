@@ -171,6 +171,14 @@ export function isFrontendEdit(rel: string): boolean {
   return r.startsWith('web/') || r.startsWith('web\\') || r.includes('web/src') || r === 'web' || r.startsWith('web/src/') || r.includes('/web/') || r.startsWith('src/') && r.includes('web')
 }
 
+export function clearSkillReadsForChat(chatId: string): void {
+  skillReads.delete(chatId)
+}
+
+export function clearSkillReadsForChats(chatIds: Iterable<string>): void {
+  for (const id of chatIds) skillReads.delete(id)
+}
+
 function getRequiredSkillsForRel(rel: string): string[] {
   // For now, frontend is the primary enforced skill for web edits
   if (isFrontendEdit(rel)) {
