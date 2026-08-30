@@ -102,7 +102,6 @@ export function ExtensionsModal({ open, onClose }: Props) {
     if (el.scrollWidth <= el.clientWidth) return
     dragMovedRef.current = false
     dragRef.current = { active: true, startX: e.clientX, startScrollLeft: el.scrollLeft, moved: false }
-    el.setPointerCapture(e.pointerId)
     el.style.cursor = 'grabbing'
     el.style.userSelect = 'none'
   }
@@ -112,7 +111,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
     if (!drag?.active) return
     const dx = e.clientX - drag.startX
     if (Math.abs(dx) > 8) { drag.moved = true; dragMovedRef.current = true }
-    el.scrollLeft = drag.startScrollLeft - dx
+    if (drag.moved) el.scrollLeft = drag.startScrollLeft - dx
   }
   function handleTabsPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     const el = e.currentTarget
@@ -120,7 +119,6 @@ export function ExtensionsModal({ open, onClose }: Props) {
     dragRef.current = null
     el.style.cursor = ''
     el.style.userSelect = ''
-    try { el.releasePointerCapture(e.pointerId) } catch {}
     if (drag?.moved) {
       e.preventDefault()
       e.stopPropagation()
