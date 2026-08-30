@@ -33,6 +33,8 @@ npm run dev:web      # Vite on :5173 (proxies /api → 8787)
 ## Features
 
 - Projects (with optional auto-`mkdir`) and per-project chats
-- Streaming responses (SSE) with stop button
+- Streaming responses (SSE) with stop button, auto-retry, and “continue” to resume interrupted replies
+- Plans, activities, and previews persisted per chat; terminal (PTY) per project
+- Skills, MCP/LSP servers, and plugins (global or per-project)
 - Rename/delete chats via ⋮ menu — all confirmations use in-app dialogs
 - Responsive: sidebar becomes a drawer on phones (☰ toggles it)

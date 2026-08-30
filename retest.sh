@@ -13,21 +13,68 @@ PID_FILE="/tmp/ks-agent-${PORT}.pid"
 URL="http://127.0.0.1:${PORT}"
 
 if [[ "${1:-}" == "stop" ]]; then
-  if [[ -f "$PID_FILE" ]] && kill "$(cat "$PID_FILE")" 2>/dev/null; then
-    echo "Stopped KS Agent (pid $(cat "$PID_FILE"))"
-  else
-    pkill -f "node dist-server/index.js" 2>/dev/null && echo "Stopped KS Agent" || echo "Nothing to stop"
+  STOPPED=0
+  if [[ -f "$PID_FILE" ]]; then
+    PID=$(cat "$PID_FILE" 2>/dev/null || echo "")
+    if [[ -n "$PID" ]] && kill "$PID" 2>/dev/null; then
+      # wait for graceful exit
+      for _ in $(seq 1 20); do
+        if ! kill -0 "$PID" 2>/dev/null; then break; fi
+        sleep 0.2
+      done
+      if kill -0 "$PID" 2>/dev/null; then kill -9 "$PID" 2>/dev/null || true; fi
+      echo "Stopped KS Agent (pid $PID)"
+      STOPPED=1
+    fi
+    rm -f "$PID_FILE"
   fi
-  rm -f "$PID_FILE"
+  if pkill -f "node dist-server/index.js" 2>/dev/null; then
+    sleep 0.8
+    # escalate if still running
+    if pgrep -f "node dist-server/index.js" >/dev/null 2>&1; then
+      pkill -9 -f "node dist-server/index.js" 2>/dev/null || true
+      sleep 0.5
+    fi
+    [[ $STOPPED -eq 0 ]] && echo "Stopped KS Agent"
+    STOPPED=1
+  fi
+  [[ $STOPPED -eq 0 ]] && echo "Nothing to stop"
   exit 0
 fi
 
-if [[ -f "$PID_FILE" ]] && kill "$(cat "$PID_FILE")" 2>/dev/null; then
-  sleep 0.5
+# Stop any old instance before starting a new one
+if [[ -f "$PID_FILE" ]]; then
+  OLD_PID=$(cat "$PID_FILE" 2>/dev/null || echo "")
+  if [[ -n "$OLD_PID" ]] && kill "$OLD_PID" 2>/dev/null; then
+    for _ in $(seq 1 20); do
+      if ! kill -0 "$OLD_PID" 2>/dev/null; then break; fi
+      sleep 0.2
+    done
+    if kill -0 "$OLD_PID" 2>/dev/null; then kill -9 "$OLD_PID" 2>/dev/null || true; fi
+  fi
+  rm -f "$PID_FILE"
 fi
-rm -f "$PID_FILE"
-pkill -f "node dist-server/index.js" 2>/dev/null || true
-sleep 0.3
+if pkill -f "node dist-server/index.js" 2>/dev/null; then
+  sleep 0.8
+  if pgrep -f "node dist-server/index.js" >/dev/null 2>&1; then
+    pkill -9 -f "node dist-server/index.js" 2>/dev/null || true
+    sleep 0.5
+  fi
+fi
+# Extra guard: if port still bound, wait a bit more
+if command -v ss >/dev/null 2>&1; then
+  if ss -tln 2>/dev/null | grep -q ":${PORT} "; then
+    sleep 0.5
+    if ss -tln 2>/dev/null | grep -q ":${PORT} "; then
+      pkill -9 -f "node dist-server/index.js" 2>/dev/null || true
+      sleep 1
+    fi
+  fi
+elif command -v lsof >/dev/null 2>&1; then
+  if lsof -i :"$PORT" >/dev/null 2>&1; then
+    sleep 0.5
+  fi
+fi
 
 if [[ ! -d node_modules ]]; then
   echo "Installing dependencies..."
