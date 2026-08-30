@@ -216,17 +216,22 @@ function isBlockedProjectPath(resolved: string): string | null {
   if (normalized === '/' || normalized === home || normalized === path.resolve('/home')) {
     return 'Refusing protected path: ' + normalized
   }
-  const blockedPrefixes = ['/etc', '/bin', '/sbin', '/usr', '/var', '/root', '/boot', '/lib', '/lib64']
-  for (const prefix of blockedPrefixes) {
-    if (normalized === prefix || normalized.startsWith(prefix + path.sep)) {
-      // Allow if it's inside cwd (e.g. cwd is /home/runner/work/ks-agent/ks-agent and prefix is /home but we already handled home root; subpath under cwd is ok)
-      if (normalized.startsWith(cwd + path.sep) || normalized === cwd) continue
-      // Allow /var/tmp and /tmp explicitly
-      if (normalized === '/tmp' || normalized.startsWith('/tmp' + path.sep) || normalized === '/var/tmp' || normalized.startsWith('/var/tmp' + path.sep)) continue
-      return 'Refusing protected system path: ' + normalized
+  // Allowlist enforcement: only inside cwd, /tmp, /var/tmp, /dev/shm are permitted for absolute paths.
+  // Relative inputs like "project/foo" resolve to cwd/project/foo, which is inside cwd and thus allowed.
+  const isInsideCwd = normalized === cwd || normalized.startsWith(cwd + path.sep)
+  const isTmp = normalized === '/tmp' || normalized.startsWith('/tmp' + path.sep)
+  const isVarTmp = normalized === '/var/tmp' || normalized.startsWith('/var/tmp' + path.sep)
+  const isDevShm = normalized === '/dev/shm' || normalized.startsWith('/dev/shm' + path.sep)
+  if (isInsideCwd || isTmp || isVarTmp || isDevShm) {
+    // Still block exact system roots even if they happen to be inside cwd (unlikely, but keep explicit check)
+    const blockedExact = ['/etc', '/bin', '/sbin', '/usr', '/var', '/root', '/boot', '/lib', '/lib64']
+    for (const prefix of blockedExact) {
+      if (normalized === prefix) return 'Refusing protected system path: ' + normalized
     }
+    return null
   }
-  return null
+  // Anything outside allowed roots is blocked — prevents arbitrary sibling/home writes like /home/runner/other
+  return 'Refusing protected path (outside allowed project/cwd/tmp): ' + normalized
 }
 
 function publicProvider(p: { id: string; name: string; baseUrl: string; apiKey: string }) {
@@ -334,6 +339,13 @@ app.patch('/api/projects/:id', async (c) => {
     const newPath = resolveProjectPath(String(body.path).trim())
     const blocked = isBlockedProjectPath(newPath)
     if (blocked) return c.json({ error: blocked }, 400)
+    // Validate that the target exists and is a directory, mirroring POST behavior
+    try {
+      const stat = fs.statSync(newPath)
+      if (!stat.isDirectory()) return c.json({ error: `Not a directory: ${newPath}` }, 400)
+    } catch {
+      return c.json({ error: `Path does not exist: ${newPath}` }, 400)
+    }
     project.path = newPath
   }
   saveDb()
@@ -1376,6 +1388,7 @@ app.post('/api/settings/providers', async (c) => {
   const baseUrl = String(body.baseUrl ?? '').trim().replace(/\/+$/, '')
   const apiKey = String(body.apiKey ?? '').trim()
   if (!name) return c.json({ error: 'Provider name is required' }, 400)
+  if (name.length < 2 || name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
   if (!/^https?:\/\/.+/.test(baseUrl)) return c.json({ error: 'Base URL must start with http(s)://' }, 400)
   const provider = { id: newId(), name, baseUrl, apiKey }
   getDb().providers.push(provider)
@@ -1461,21 +1474,43 @@ app.patch('/api/settings/models/:id', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   if (body.displayName !== undefined) {
     const displayName = String(body.displayName).trim()
-    if (displayName) model.displayName = displayName
-    else delete model.displayName
+    if (displayName) {
+      if (displayName.length > 80) return c.json({ error: 'Display name must be 2-80 chars' }, 400)
+      model.displayName = displayName
+    } else delete model.displayName
   }
   if (body.systemPrompt !== undefined) {
     const systemPrompt = String(body.systemPrompt).trim()
-    if (systemPrompt) model.systemPrompt = systemPrompt
-    else delete model.systemPrompt
+    if (systemPrompt) {
+      if (systemPrompt.length > 8000) return c.json({ error: 'System prompt too long (max 8000 chars)' }, 400)
+      model.systemPrompt = systemPrompt
+    } else delete model.systemPrompt
   }
   if (body.maxTokens !== undefined) {
-    const maxTokens = Number(body.maxTokens)
-    if (maxTokens != null && !isNaN(maxTokens) && maxTokens >= 1) model.maxTokens = maxTokens
-    else delete model.maxTokens
+    const raw = body.maxTokens
+    // Allow empty string / null / 0 to mean delete (use provider default)
+    if (raw === '' || raw === null || raw === 0 || raw === '0') {
+      delete model.maxTokens
+    } else {
+      const maxTokens = Number(raw)
+      if (!Number.isFinite(maxTokens) || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 200000) {
+        return c.json({ error: 'Max tokens must be an integer 1-200000' }, 400)
+      }
+      model.maxTokens = maxTokens
+    }
   }
   saveDb()
-  return c.json({ ok: true, model })
+  const providerName = db.providers.find((p) => p.id === model.providerId)?.name ?? 'Unknown'
+  const enriched = {
+    id: model.id,
+    model: model.model,
+    displayName: model.displayName?.trim() ? model.displayName.trim() : model.model,
+    providerId: model.providerId,
+    providerName,
+    maxTokens: model.maxTokens,
+    systemPrompt: model.systemPrompt ?? ''
+  }
+  return c.json({ ok: true, model: enriched })
 })
 
 app.delete('/api/settings/models/:id', (c) => {
@@ -3144,7 +3179,8 @@ app.post('/api/projects/:id/terminals', async (c) => {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
-  const name = String(body.name ?? '').trim() || 'Terminal'
+  let name = String(body.name ?? '').trim() || 'Terminal'
+  if (name.length < 2 || name.length > 80) return c.json({ error: 'Terminal name must be 2-80 chars' }, 400)
   const now = new Date().toISOString()
   const terminal: Terminal = {
     id: newId(),
@@ -3165,6 +3201,7 @@ app.patch('/api/terminals/:id', async (c) => {
   if (body.name !== undefined) {
     const name = String(body.name).trim()
     if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
+    if (name.length < 2 || name.length > 80) return c.json({ error: 'Terminal name must be 2-80 chars' }, 400)
     terminal.name = name
   }
   terminal.updatedAt = new Date().toISOString()
