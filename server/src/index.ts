@@ -1909,18 +1909,18 @@ function validateMCPBody(body: any, isPatch = false): { error?: string; value?: 
     out.enabled = Boolean(body.enabled)
   }
   // Cross-field validation (only when we have enough info; for PATCH we lazily validate if fields present)
-  if (!isPatch || out.transport || out.command !== undefined || out.url !== undefined) {
+  if (!isPatch || out.transport || ('command' in out) || ('url' in out)) {
     const finalTransport = (out.transport ?? effTransport) as MCPTransport | undefined
     // For create, transport is definitely present; for patch we can only validate if transport is known
-    if (finalTransport === 'stdio' && isPatch && out.command === undefined && out.transport !== 'stdio') {
+    if (finalTransport === 'stdio' && isPatch && !('command' in out) && out.transport !== 'stdio') {
       // if patching non-stdio fields, skip stdio check
     } else if (finalTransport === 'stdio') {
       // need command; if patching and command not supplied, we check existing server elsewhere
-      if (out.command !== undefined && !out.command) return { error: 'stdio transport requires command' }
+      if (('command' in out) && !out.command) return { error: 'stdio transport requires command' }
       if (!isPatch && !out.command) return { error: 'stdio transport requires command' }
     }
     if (finalTransport && ['sse', 'http', 'websocket'].includes(finalTransport)) {
-      if (out.url !== undefined && !out.url) return { error: `${finalTransport} transport requires url` }
+      if (('url' in out) && !out.url) return { error: `${finalTransport} transport requires url` }
       if (!isPatch && !out.url) return { error: `${finalTransport} transport requires url` }
     }
   }
@@ -2180,26 +2180,22 @@ function validateLspBody(body: any, isPatch = false): { error?: string; value?: 
   const out: Partial<LSPServer> = {}
   if (body.name !== undefined || !isPatch) {
     const name = String(body.name ?? '').trim()
-    if (!isPatch && !name) return { error: 'LSP server name is required' }
-    if (name) {
-      if (!isValidLspName(name)) return { error: 'LSP name must be 2-80 chars' }
-      out.name = name
-    } else if (!isPatch) return { error: 'LSP server name is required' }
+    if (!name) return { error: 'LSP server name is required' }
+    if (!isValidLspName(name)) return { error: 'LSP name must be 2-80 chars' }
+    out.name = name
   }
   if (body.language !== undefined || !isPatch) {
     const lang = String(body.language ?? '').trim().toLowerCase()
-    if (!isPatch && !lang) return { error: 'Language is required' }
-    if (lang) {
-      if (!isValidLspLanguage(lang)) return { error: 'Invalid language id (use 1-32 lowercase letters, numbers, hyphen, underscore)' }
-      out.language = lang
-    } else if (!isPatch) return { error: 'Language is required' }
+    if (!lang) return { error: 'Language is required' }
+    if (!isValidLspLanguage(lang)) return { error: 'Invalid language id (use 1-32 lowercase letters, numbers, hyphen, underscore)' }
+    out.language = lang
   }
   if (body.transport !== undefined || !isPatch) {
     const t = String(body.transport ?? '').trim() as LSPServer['transport']
     const allowed: LSPServer['transport'][] = ['stdio', 'tcp', 'socket', 'websocket', 'http', 'sse']
-    if (!isPatch && !t) return { error: 'Transport is required (stdio, tcp, socket, websocket, http, sse)' }
-    if (t && !allowed.includes(t)) return { error: 'Transport must be one of: stdio, tcp, socket, websocket, http, sse' }
-    if (t) out.transport = t
+    if (!t) return { error: 'Transport is required (stdio, tcp, socket, websocket, http, sse)' }
+    if (!allowed.includes(t)) return { error: 'Transport must be one of: stdio, tcp, socket, websocket, http, sse' }
+    out.transport = t
   }
   const effTransport = (out.transport ?? (body.transport as any)) as LSPServer['transport'] | undefined
   if (body.command !== undefined) {
@@ -2247,14 +2243,14 @@ function validateLspBody(body: any, isPatch = false): { error?: string; value?: 
   if (body.enabled !== undefined) {
     out.enabled = Boolean(body.enabled)
   }
-  if (!isPatch || out.transport || out.command !== undefined || out.url !== undefined) {
+  if (!isPatch || out.transport || ('command' in out) || ('url' in out)) {
     const finalTransport = (out.transport ?? effTransport) as any
     if (finalTransport === 'stdio') {
-      if (out.command !== undefined && !out.command) return { error: 'stdio transport requires command' }
+      if (('command' in out) && !out.command) return { error: 'stdio transport requires command' }
       if (!isPatch && !out.command) return { error: 'stdio transport requires command' }
     }
     if (finalTransport && ['tcp','socket','http','sse','websocket'].includes(finalTransport)) {
-      if (out.url !== undefined && !out.url) return { error: `${finalTransport} transport requires url` }
+      if (('url' in out) && !out.url) return { error: `${finalTransport} transport requires url` }
       if (!isPatch && !out.url) return { error: `${finalTransport} transport requires url` }
     }
   }
@@ -2321,12 +2317,15 @@ app.patch('/api/settings/lsp/:id', async (c) => {
   }
   if (v.language !== undefined) srv.language = String(v.language).toLowerCase()
   if (v.transport !== undefined) srv.transport = v.transport as LSPServer['transport']
-  if (v.command !== undefined) srv.command = v.command
-  if (v.args !== undefined) srv.args = v.args
-  if (v.url !== undefined) srv.url = v.url
-  if (v.env !== undefined) srv.env = v.env
-  if (v.headers !== undefined) srv.headers = v.headers
-  if (v.projectId !== undefined) srv.projectId = v.projectId
+  if ('command' in v) srv.command = v.command
+  if ('args' in v) srv.args = v.args
+  if ('url' in v) srv.url = v.url
+  if ('env' in v) srv.env = v.env
+  if ('headers' in v) srv.headers = v.headers
+  if ('projectId' in v) {
+    if (v.projectId === undefined) delete srv.projectId
+    else srv.projectId = v.projectId
+  }
   if (v.enabled !== undefined) srv.enabled = v.enabled
   if (srv.transport === 'stdio' && !srv.command) return c.json({ error: 'stdio transport requires command' }, 400)
   if (['tcp','socket','http','sse','websocket'].includes(srv.transport) && !srv.url) return c.json({ error: `${srv.transport} transport requires url` }, 400)
@@ -2478,11 +2477,9 @@ function validatePluginBody(body: any, isPatch = false): { error?: string; value
   const out: Partial<Plugin> = {}
   if (body.name !== undefined || !isPatch) {
     const name = String(body.name ?? '').trim()
-    if (!isPatch && !name) return { error: 'Plugin name is required' }
-    if (name) {
-      if (!isValidPluginName(name)) return { error: 'Plugin name must be 2-80 characters' }
-      out.name = name
-    }
+    if (!name) return { error: 'Plugin name is required' }
+    if (!isValidPluginName(name)) return { error: 'Plugin name must be 2-80 characters' }
+    out.name = name
   }
   if (body.description !== undefined || !isPatch) {
     const desc = String(body.description ?? '').trim()
@@ -2491,11 +2488,9 @@ function validatePluginBody(body: any, isPatch = false): { error?: string; value
   }
   if (body.version !== undefined || !isPatch) {
     const ver = String(body.version ?? '').trim()
-    if (!isPatch && !ver) return { error: 'Version is required' }
-    if (ver) {
-      if (!isValidPluginVersion(ver)) return { error: 'Invalid version (expected semver like 1.0.0)' }
-      out.version = ver
-    }
+    if (!ver) return { error: 'Version is required' }
+    if (!isValidPluginVersion(ver)) return { error: 'Invalid version (expected semver like 1.0.0)' }
+    out.version = ver
   }
   if (body.publisher !== undefined) {
     const p = String(body.publisher ?? '').trim()
@@ -2673,14 +2668,17 @@ app.patch('/api/settings/plugins/:id', async (c) => {
   }
   if (v.description !== undefined) p.description = String(v.description)
   if (v.version !== undefined) p.version = String(v.version)
-  if (v.publisher !== undefined) p.publisher = v.publisher
-  if (v.entryPoint !== undefined) p.entryPoint = v.entryPoint
+  if ('publisher' in v) p.publisher = v.publisher
+  if ('entryPoint' in v) p.entryPoint = v.entryPoint
   if (v.source !== undefined) p.source = v.source as PluginSource
-  if (v.marketplaceId !== undefined) p.marketplaceId = v.marketplaceId
+  if ('marketplaceId' in v) p.marketplaceId = v.marketplaceId
   if (v.enabled !== undefined) p.enabled = Boolean(v.enabled)
-  if (v.projectId !== undefined) p.projectId = v.projectId
-  if (v.tags !== undefined) p.tags = v.tags
-  if (v.icon !== undefined) p.icon = v.icon
+  if ('projectId' in v) {
+    if (v.projectId === undefined) delete p.projectId
+    else p.projectId = v.projectId
+  }
+  if ('tags' in v) p.tags = v.tags
+  if ('icon' in v) p.icon = v.icon
   p.updatedAt = new Date().toISOString()
   saveDb()
   return c.json(p)
