@@ -51,11 +51,22 @@ export const Markdown = memo(function Markdown({ content }: { content: string })
               </>
             )
           },
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer">
-              {children}
-            </a>
-          )
+          a: ({ href, children }) => {
+            const safeHref = (() => {
+              if (!href) return '#'
+              const h = String(href).trim()
+              if (/^(https?:\/\/|mailto:|tel:|\/|#)/i.test(h)) return h
+              if (/^javascript:/i.test(h) || /^data:/i.test(h) || /^vbscript:/i.test(h)) return '#'
+              // allow relative without protocol
+              if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(h)) return h
+              return '#'
+            })()
+            return (
+              <a href={safeHref} target="_blank" rel="noopener noreferrer">
+                {children}
+              </a>
+            )
+          }
         }}
       >
         {content}

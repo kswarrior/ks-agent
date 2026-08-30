@@ -3230,7 +3230,11 @@ function isBlockedHost(hostname: string): boolean {
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal'))
     return true
   if (h === '::1' || h === '::') return true
-  if (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
+  // IPv6 checks only when hostname looks like an IPv6 address (contains colon)
+  if (h.includes(':')) {
+    if (h.startsWith('fe80:') || h.startsWith('fec0:') || h.startsWith('ff')) return true
+    if (/^f[cd][0-9a-f]*:/.test(h)) return true
+  }
   if (h.startsWith('::ffff:')) {
     const v4 = h.slice(7)
     if (v4) return isBlockedHost(v4)
@@ -3369,9 +3373,9 @@ app.post('/api/projects/:id/preview/start', async (c) => {
     try {
       const child = spawn('npm', ['run', 'dev', '--', '--host', '0.0.0.0', '--port', String(detectedPort)], {
         cwd: project.path,
-        shell: true,
+        shell: false,
         detached: false,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['ignore', 'ignore', 'ignore'],
         env: { ...process.env, PORT: String(detectedPort), HOST: '0.0.0.0' } as any
       })
       previewProcs.set(project.id, { port: detectedPort, child, startedAt: Date.now() })

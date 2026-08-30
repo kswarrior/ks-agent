@@ -1504,7 +1504,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         storedArgs.content = (storedArgs.content as string).slice(0, 8000) + '\n…[truncated for storage]'
       }
       const activity: Activity = {
-        id: call.id,
+        id: newId(),
         chatId: ctx.chatId,
         toolType: call.name as Activity['toolType'],
         toolCallId: call.id,
@@ -1525,7 +1525,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       const res = await executeTool(call.name, call.args, ctx)
       // Update persisted activity with result
       try {
-        const act = getDb().activities.find((a) => a.toolCallId === call.id)
+        const act = getDb().activities.find((a) => a.toolCallId === call.id && a.chatId === ctx.chatId)
         if (act) {
           act.summary = res.summary
           act.result = res.result
