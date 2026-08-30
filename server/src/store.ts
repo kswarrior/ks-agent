@@ -178,7 +178,7 @@ export interface Preview {
   updatedAt: string
 }
 
-export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview'
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview'
 
 export interface Activity {
   id: string

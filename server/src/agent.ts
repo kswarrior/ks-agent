@@ -814,13 +814,31 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
     case 'read_file': {
       const abs = safeJoin(ctx, args.path)
       if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
+      // Parse pagination params (new: offset/limit for large files)
+      let offsetNum = 1
+      if (args.offset !== undefined) {
+        const n = Number(args.offset)
+        if (!Number.isNaN(n) && n >= 1) offsetNum = Math.floor(n)
+        else if (!Number.isNaN(n) && n === 0) offsetNum = 1
+      } else if (args.start !== undefined) {
+        const n = Number(args.start)
+        if (!Number.isNaN(n) && n >= 1) offsetNum = Math.floor(n)
+      }
+      let limitNum = READ_DEFAULT_LINES
+      if (args.limit !== undefined) {
+        const n = Number(args.limit)
+        if (!Number.isNaN(n) && n > 0) limitNum = Math.min(Math.floor(n), READ_MAX_LINES)
+      } else if (args.count !== undefined) {
+        const n = Number(args.count)
+        if (!Number.isNaN(n) && n > 0) limitNum = Math.min(Math.floor(n), READ_MAX_LINES)
+      }
+      const startLine = Math.max(0, offsetNum - 1)
+
       let stat: fs.Stats
       try {
         stat = fs.statSync(abs)
       } catch {
         // Fallback: try global ./skills/ and project/skills/ locations before giving up.
-        // This allows read_file("skill.md") or read_file("skills/...") to succeed
-        // even when file lives in global skills/ or project/skills/ instead of project root.
         const rel = String(args.path ?? '').trim()
         const baseName = path.basename(rel)
         const skillsDir = path.join(process.cwd(), 'skills')
@@ -845,44 +863,228 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
           try {
             const st = fs.statSync(norm)
             if (st.isDirectory()) continue
-            if (st.size > READ_MAX_BYTES && st.size > 24 * 1024) {
-              // still allow truncated read via same logic below
-            }
-            if (st.size > 10 * 1024 * 1024) continue
-            const buf2 = st.size > READ_MAX_BYTES ? Buffer.alloc(READ_MAX_BYTES) : Buffer.alloc(st.size)
-            let fd2: number | null = null
-            try {
-              fd2 = fs.openSync(norm, 'r')
-              fs.readSync(fd2, buf2, 0, buf2.length, 0)
-            } finally {
-              if (fd2 !== null) fs.closeSync(fd2)
-            }
-            if (buf2.includes(0)) continue
-            const truncated2 = st.size > READ_MAX_BYTES ? `\n…[truncated at ${READ_MAX_BYTES} bytes]` : ''
-            const relShown = relWithin(ctx.projectPath, norm) || path.relative(process.cwd(), norm) || rel
-            // Record skill read for enforcement (track both requested rel and actual file)
+            if (st.size > READ_MAX_FILE_SIZE) continue
+            // Use paginated read for fallback too
+            let rawFallback: string
+            try { rawFallback = fs.readFileSync(norm, 'utf8') } catch { continue }
+            if (rawFallback.includes('\0')) continue
+            const allLinesFallback = rawFallback.split('\n')
+            const totalLinesFallback = allLinesFallback.length
+            if (startLine >= totalLinesFallback && totalLinesFallback > 0) continue
+            const endFallback = Math.min(startLine + limitNum, totalLinesFallback)
+            const sliceFallback = allLinesFallback.slice(startLine, endFallback).join('\n')
+            const totalBytesFallback = Buffer.byteLength(rawFallback, 'utf8')
+            const headerFallback = `${rel} — lines ${startLine + 1}-${endFallback} of ${totalLinesFallback} (${totalBytesFallback} bytes)${endFallback < totalLinesFallback ? ` — more available (next offset=${endFallback + 1})` : ''}`
+            const suffixFallback = endFallback < totalLinesFallback ? `\n\n…[${totalLinesFallback - endFallback} more lines not shown — use offset=${endFallback + 1} & limit=${limitNum} to continue]` : ''
+            const truncatedFallback = Buffer.byteLength(sliceFallback, 'utf8') > READ_MAX_BYTES ? `\n\n…[slice truncated: showing first ${READ_MAX_BYTES} bytes — reduce limit]` : ''
+            let outFallback = sliceFallback
+            if (Buffer.byteLength(outFallback, 'utf8') > READ_MAX_BYTES) outFallback = Buffer.from(outFallback, 'utf8').slice(0, READ_MAX_BYTES).toString('utf8')
             try { recordSkillRead(ctx.chatId, rel); recordSkillRead(ctx.chatId, path.relative(process.cwd(), norm) || norm) } catch {}
-            // Return success with fallback path hint in result but keep summary as requested path
-            return ok(buf2.toString('utf8') + truncated2 + `\n\n[fallback: read from ${path.relative(process.cwd(), norm) || norm}]`, `${rel} (${st.size}B)`)
+            return ok(`${headerFallback}\n${outFallback}${truncatedFallback}${suffixFallback}\n\n[fallback: read from ${path.relative(process.cwd(), norm) || norm}]`, `${rel} (${st.size}B) lines ${startLine + 1}-${endFallback}/${totalLinesFallback}`)
           } catch {}
         }
         return err(`file not found: ${args.path}`)
       }
       if (stat.isDirectory()) return err(`"${args.path}" is a directory`)
-      const buf = stat.size > READ_MAX_BYTES ? Buffer.alloc(READ_MAX_BYTES) : Buffer.alloc(stat.size)
-      let fd: number | null = null
+      if (stat.size > READ_MAX_FILE_SIZE) {
+        return err(`file too large (${stat.size} bytes, limit ${READ_MAX_FILE_SIZE} bytes) — use grep to search for relevant sections, then read with offset/limit to view chunks`)
+      }
+      // Read full content (up to 10MB) then paginate by lines
+      let raw: string
       try {
-        fd = fs.openSync(abs, 'r')
-        fs.readSync(fd, buf, 0, buf.length, 0)
+        raw = fs.readFileSync(abs, 'utf8')
       } catch (e: any) {
         return err(e?.message || 'cannot read file')
-      } finally {
-        if (fd !== null) fs.closeSync(fd)
       }
-      if (buf.includes(0)) return err('binary file — cannot display')
-      const truncated = stat.size > READ_MAX_BYTES ? `\n…[truncated at ${READ_MAX_BYTES} bytes]` : ''
+      if (raw.includes('\0')) return err('binary file — cannot display')
+      const allLines = raw.split('\n')
+      const totalLines = allLines.length
+      const totalBytes = Buffer.byteLength(raw, 'utf8')
+      if (totalLines === 1 && allLines[0] === '' && totalBytes === 0) {
+        try { recordSkillRead(ctx.chatId, String(args.path ?? '')) } catch {}
+        return ok('', `${args.path} — empty file`)
+      }
+      if (startLine >= totalLines) {
+        return err(`offset ${offsetNum} beyond file length (${totalLines} lines) — file has ${totalLines} lines, ${totalBytes} bytes`)
+      }
+      const endLineExclusive = Math.min(startLine + limitNum, totalLines)
+      const slice = allLines.slice(startLine, endLineExclusive)
+      let output = slice.join('\n')
+      const sliceBytes = Buffer.byteLength(output, 'utf8')
+      let byteTruncated = false
+      if (sliceBytes > READ_MAX_BYTES) {
+        // Truncate slice to byte limit while trying to keep line boundaries
+        let accBytes = 0
+        let cutIdx = slice.length
+        for (let i = 0; i < slice.length; i++) {
+          const lb = Buffer.byteLength(slice[i] + (i < slice.length - 1 ? '\n' : ''), 'utf8')
+          if (accBytes + lb > READ_MAX_BYTES) { cutIdx = i; break }
+          accBytes += lb
+        }
+        if (cutIdx === 0) cutIdx = 1
+        output = slice.slice(0, cutIdx).join('\n')
+        byteTruncated = true
+      }
+      const hasMore = endLineExclusive < totalLines
+      const header = `${args.path} — lines ${startLine + 1}-${endLineExclusive} of ${totalLines} (${totalBytes} bytes)${byteTruncated ? ` — byte-truncated at ${READ_MAX_BYTES} bytes` : ''}${hasMore ? ` — more available (next offset=${endLineExclusive + 1})` : ''}`
+      const suffix = hasMore ? `\n\n…[${totalLines - endLineExclusive} more lines not shown — use offset=${endLineExclusive + 1} & limit=${limitNum} to continue]` : ''
+      const truncNote = byteTruncated ? `\n\n…[truncated: slice was ${sliceBytes} bytes, showing first ${READ_MAX_BYTES} bytes — reduce limit or use grep]` : ''
       try { recordSkillRead(ctx.chatId, String(args.path ?? '')) } catch {}
-      return ok(buf.toString('utf8') + truncated, `${args.path} (${stat.size}B)`)
+      return ok(`${header}\n${output}${truncNote}${suffix}`, `${args.path} (${totalBytes}B) lines ${startLine + 1}-${endLineExclusive}/${totalLines}`)
+    }
+
+    case 'grep': {
+      const rawPattern = typeof args.pattern === 'string' ? args.pattern : ''
+      const pattern = rawPattern.trim()
+      if (!pattern) return err('pattern is required — provide a regex or text to search for')
+      const relDir = typeof args.path === 'string' ? args.path : (typeof args.dir === 'string' ? args.dir : '')
+      const dirAbs = relDir.trim() ? safeJoin(ctx, relDir) : resolveInProject(ctx.projectPath, '.')
+      if (!dirAbs) return err('path escapes the project root — primary workspace is the active project only')
+      let dirStat: fs.Stats | null = null
+      try { dirStat = fs.statSync(dirAbs) } catch { return err(`directory not found: ${relDir || '.'}`) }
+      if (!dirStat.isDirectory()) return err(`not a directory: ${relDir}`)
+      const includeStr = typeof args.include === 'string' ? args.include.trim() : (typeof args.glob === 'string' ? String(args.glob).trim() : (typeof args.filter === 'string' ? String(args.filter).trim() : ''))
+      let maxResults = 50
+      if (args.max_results !== undefined) {
+        const n = Number(args.max_results)
+        if (!Number.isNaN(n) && n > 0) maxResults = Math.min(Math.floor(n), GREP_MAX_RESULTS)
+      } else if (args.maxResults !== undefined) {
+        const n = Number(args.maxResults)
+        if (!Number.isNaN(n) && n > 0) maxResults = Math.min(Math.floor(n), GREP_MAX_RESULTS)
+      } else if (args.limit !== undefined) {
+        const n = Number(args.limit)
+        if (!Number.isNaN(n) && n > 0) maxResults = Math.min(Math.floor(n), GREP_MAX_RESULTS)
+      }
+      // Compile regex; fallback to literal string search if invalid
+      let re: RegExp | null = null
+      let isRegex = true
+      try {
+        re = new RegExp(pattern, 'm')
+      } catch {
+        try {
+          const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          re = new RegExp(escaped, 'm')
+          isRegex = false
+        } catch {
+          return err(`invalid regex pattern: ${pattern}`)
+        }
+      }
+      const files = collectFilesForGrep(dirAbs, includeStr || null, GREP_MAX_FILES_SCANNED)
+      if (files.length === 0) {
+        return ok(`No files found to search in ${relDir || '.'}${includeStr ? ` (filter: ${includeStr})` : ''}`, `grep no files`)
+      }
+      const matches: string[] = []
+      let filesWithMatches = 0
+      let filesSkippedLarge = 0
+      let totalScanned = 0
+      for (const fileAbs of files) {
+        if (matches.length >= maxResults) break
+        totalScanned++
+        let st: fs.Stats
+        try { st = fs.statSync(fileAbs) } catch { continue }
+        if (st.size > GREP_MAX_FILE_SIZE) { filesSkippedLarge++ ; continue }
+        if (st.size > 10 * 1024 * 1024) continue
+        let content: string
+        try { content = fs.readFileSync(fileAbs, 'utf8') } catch { continue }
+        if (content.includes('\0')) continue
+        // Quick pre-check: if literal and content doesn't include, skip regex test
+        if (!isRegex && !content.includes(pattern)) continue
+        const lines = content.split('\n')
+        let fileHasMatch = false
+        for (let i = 0; i < lines.length; i++) {
+          if (matches.length >= maxResults) break
+          const line = lines[i]
+          let matched = false
+          try {
+            if (re) {
+              // reset lastIndex if global
+              if (re.global) re.lastIndex = 0
+              matched = re.test(line)
+              if (re.global) re.lastIndex = 0
+            }
+          } catch { matched = line.includes(pattern) }
+          if (matched) {
+            const relPath = relWithin(ctx.projectPath, fileAbs) || path.relative(process.cwd(), fileAbs)
+            const trimmedLine = line.length > 500 ? line.slice(0, 500) + '…' : line
+            matches.push(`${relPath}:${i + 1}:${trimmedLine}`)
+            fileHasMatch = true
+          }
+        }
+        if (fileHasMatch) filesWithMatches++
+      }
+      const isOutsideTmp = dirAbs === '/tmp' || dirAbs.startsWith('/tmp/') || dirAbs === '/var/tmp' || dirAbs.startsWith('/var/tmp/') || dirAbs === '/dev/shm' || dirAbs.startsWith('/dev/shm/')
+      const shownDir = isOutsideTmp ? dirAbs : (relWithin(ctx.projectPath, dirAbs) || relDir || '.')
+      if (matches.length === 0) {
+        const skipNote = filesSkippedLarge ? ` (${filesSkippedLarge} large files >${GREP_MAX_FILE_SIZE / 1024}KB skipped)` : ''
+        return ok(`No matches for "${pattern}" in ${shownDir}${includeStr ? ` (filter: ${includeStr})` : ''} — scanned ${totalScanned} files${skipNote}`, `grep 0 matches`)
+      }
+      const truncated = matches.length >= maxResults && totalScanned < files.length
+      const header = `Found ${matches.length} match${matches.length !== 1 ? 'es' : ''} for "${pattern}" in ${shownDir}${includeStr ? ` (filter: ${includeStr})` : ''} — ${filesWithMatches} file(s), scanned ${totalScanned}/${files.length} files${truncated ? ` — showing first ${maxResults}, use max_results to see more` : ''}${filesSkippedLarge ? ` — ${filesSkippedLarge} large files skipped` : ''}`
+      const suffix = truncated ? `\n\n…[truncated at ${maxResults} matches — increase max_results (max ${GREP_MAX_RESULTS}) to see more]` : ''
+      return ok(`${header}\n${matches.join('\n')}${suffix}`, `grep ${matches.length} matches`)
+    }
+
+    case 'glob': {
+      const rawPattern = typeof args.pattern === 'string' ? args.pattern : ''
+      const pattern = rawPattern.trim()
+      if (!pattern) return err('pattern is required — provide a glob like "**/*.ts", "*.json", "src/**/*"')
+      const relBase = typeof args.path === 'string' ? args.path : (typeof args.dir === 'string' ? args.dir : '')
+      const baseAbs = relBase.trim() ? safeJoin(ctx, relBase) : resolveInProject(ctx.projectPath, '.')
+      if (!baseAbs) return err('path escapes the project root — primary workspace is the active project only')
+      let baseStat: fs.Stats | null = null
+      try { baseStat = fs.statSync(baseAbs) } catch { return err(`directory not found: ${relBase || '.'}`) }
+      if (!baseStat.isDirectory()) return err(`not a directory: ${relBase}`)
+      let limit = 200
+      if (args.limit !== undefined) {
+        const n = Number(args.limit)
+        if (!Number.isNaN(n) && n > 0) limit = Math.min(Math.floor(n), GLOB_MAX_RESULTS)
+      } else if (args.max_results !== undefined) {
+        const n = Number(args.max_results)
+        if (!Number.isNaN(n) && n > 0) limit = Math.min(Math.floor(n), GLOB_MAX_RESULTS)
+      }
+      let re: RegExp
+      try { re = globToRegExp(pattern) } catch { return err(`invalid glob pattern: ${pattern}`) }
+      const collected: string[] = []
+      const stack: string[] = [baseAbs]
+      const maxCollect = limit * 2 + 200
+      while (stack.length && collected.length < maxCollect) {
+        const cur = stack.pop()!
+        let entries: fs.Dirent[]
+        try { entries = fs.readdirSync(cur, { withFileTypes: true }) } catch { continue }
+        for (const ent of entries) {
+          if (collected.length >= maxCollect) break
+          if (isIgnoredDir(ent.name)) continue
+          const full = path.join(cur, ent.name)
+          const relFromBase = path.relative(baseAbs, full).split(path.sep).join('/')
+          const relFromProject = relWithin(ctx.projectPath, full)
+          // Check if ent is directory: push for further traversal regardless, but only collect if matches
+          if (ent.isDirectory()) {
+            // Always traverse deeper for ** patterns, otherwise also traverse to allow deep matches
+            stack.push(full)
+            // Also consider directory itself if pattern matches dir
+            if (re.test(relFromBase) || re.test(relFromBase + '/') || re.test(ent.name)) {
+              // For glob we usually only report files, but include dirs if they match
+              // skip adding dir unless pattern ends with / or wants dirs — we skip dirs for cleaner file results
+            }
+          } else if (ent.isFile()) {
+            const testTargets = [relFromBase, ent.name, relFromProject]
+            if (testTargets.some((t) => re.test(t))) {
+              collected.push(relFromProject || relFromBase)
+            }
+          }
+        }
+      }
+      collected.sort((a, b) => a.localeCompare(b))
+      const total = collected.length
+      const sliced = collected.slice(0, limit)
+      const isOutsideTmp = baseAbs === '/tmp' || baseAbs.startsWith('/tmp/') || baseAbs === '/var/tmp' || baseAbs.startsWith('/var/tmp/') || baseAbs === '/dev/shm' || baseAbs.startsWith('/dev/shm/')
+      const shownBase = isOutsideTmp ? baseAbs : (relWithin(ctx.projectPath, baseAbs) || relBase || '.')
+      if (sliced.length === 0) {
+        return ok(`No files match "${pattern}" in ${shownBase} — scanned ${total} total`, `glob 0 matches`)
+      }
+      const header = `Found ${sliced.length}/${total} file(s) matching "${pattern}" in ${shownBase}${total > limit ? ` — showing first ${limit}, use limit to see more` : ''}`
+      const suffix = total > limit ? `\n\n…[${total - limit} more not shown — increase limit (max ${GLOB_MAX_RESULTS})]` : ''
+      return ok(`${header}\n${sliced.join('\n')}${suffix}`, `glob ${sliced.length}/${total}`)
     }
 
     case 'write_file': {
