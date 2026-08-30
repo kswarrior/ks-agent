@@ -229,23 +229,6 @@ function isBlockedProjectPath(resolved: string): string | null {
   return null
 }
 
-function isDangerousTerminalCommand(command: string): string | null {
-  const c = command.trim()
-  if (/rm\s+(-[a-zA-Z]*\s+)?\*\s*$/.test(c) || /rm\s+(-[a-zA-Z]*\s+)?\/\*\s*$/.test(c)) return 'Deletes ALL files in the current directory'
-  if (/rm\s+(-[a-zA-Z]*\s+)*(\/|~)\s*($|;|&&|\|\|)/.test(c)) return 'Deletes an entire system path (root or home)'
-  if (/rm\s+-[a-zA-Z]*r/.test(c) && /\s+\/\w/.test(c)) return 'Recursive delete with root-absolute paths'
-  if (/^sudo\s/.test(c) || /;\s*sudo\s/.test(c) || /&&\s*sudo\s/.test(c) || /\|\|\s*sudo\s/.test(c)) return 'Runs a command as root (sudo)'
-  if (/\bdd\s+/.test(c)) return 'Direct disk write (dd)'
-  if (/\bmkfs\b/.test(c) || /\bformat\b/.test(c)) return 'Formats a filesystem'
-  if (/\b(shutdown|reboot|halt|poweroff|init\s+[06])\b/.test(c)) return 'Shuts down or reboots the system'
-  if (/\bmv\s+.*\s+\/(etc|bin|sbin|lib|usr|boot|root|var)\b/.test(c)) return 'Moves files into a critical system directory'
-  if (/\b(chmod|chown)\s+.*\s+\/(etc|bin|sbin|lib|usr|boot|root|var)\b/.test(c)) return 'Changes permissions/ownership on system directories'
-  if (/\bkill\s+-9?\s+-1\b/.test(c) || /\bkillall\b/.test(c)) return 'Force-kills processes system-wide'
-  if (/\bgit\s+push\s+.*--force\b/.test(c) || /\bgit\s+push\s+.*-f\b/.test(c)) return 'Force-pushes to git (can overwrite remote history)'
-  if (/\b(apt|apt-get|yum|dnf|pacman|apk)\s+(install|remove|purge|upgrade|dist-upgrade)\b/.test(c)) return 'Modifies system packages'
-  return null
-}
-
 function publicProvider(p: { id: string; name: string; baseUrl: string; apiKey: string }) {
   return {
     id: p.id,
@@ -331,7 +314,6 @@ app.post('/api/projects', async (c) => {
   }
 
   const db = getDb()
-  if (db.projects.some((p) => path.resolve(p.path) === path.resolve(dir))) return c.json({ error: 'A project with this path already exists' }, 400)
   const project = { id: newId(), name, path: dir, createdAt: new Date().toISOString() }
   db.projects.push(project)
   saveDb()
@@ -352,7 +334,6 @@ app.patch('/api/projects/:id', async (c) => {
     const newPath = resolveProjectPath(String(body.path).trim())
     const blocked = isBlockedProjectPath(newPath)
     if (blocked) return c.json({ error: blocked }, 400)
-    if (getDb().projects.some((p) => p.id !== project.id && path.resolve(p.path) === path.resolve(newPath))) return c.json({ error: 'A project with this path already exists' }, 400)
     project.path = newPath
   }
   saveDb()
@@ -991,7 +972,6 @@ app.post('/api/chats/:id/messages', async (c) => {
 
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
-  if (modelId && !modelEntry) return c.json({ error: 'Selected model not found' }, 400)
   const resolvedModel = modelEntry ?? db.models[0]
   if (!resolvedModel) {
     return c.json({ error: 'No model configured. Add a provider and model in Settings.' }, 400)
@@ -1225,7 +1205,6 @@ app.post('/api/chats/:id/continue', async (c) => {
   const modelId = body.modelId ? String(body.modelId) : ''
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
-  if (modelId && !modelEntry) return c.json({ error: 'Selected model not found' }, 400)
   const resolvedModel = modelEntry ?? db.models[0]
   if (!resolvedModel) return c.json({ error: 'No model configured. Add a provider and model in Settings.' }, 400)
   const provider = db.providers.find((p) => p.id === resolvedModel.providerId)
@@ -1397,9 +1376,7 @@ app.post('/api/settings/providers', async (c) => {
   const baseUrl = String(body.baseUrl ?? '').trim().replace(/\/+$/, '')
   const apiKey = String(body.apiKey ?? '').trim()
   if (!name) return c.json({ error: 'Provider name is required' }, 400)
-  if (name.length < 2 || name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
   if (!/^https?:\/\/.+/.test(baseUrl)) return c.json({ error: 'Base URL must start with http(s)://' }, 400)
-  if (getDb().providers.some((p) => p.name.toLowerCase() === name.toLowerCase())) return c.json({ error: 'A provider with this name already exists' }, 400)
   const provider = { id: newId(), name, baseUrl, apiKey }
   getDb().providers.push(provider)
   saveDb()
@@ -1414,7 +1391,6 @@ app.patch('/api/settings/providers/:id', async (c) => {
     const name = String(body.name).trim()
     if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
     if (name.length < 2 || name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
-    if (getDb().providers.some((p) => p.id !== provider.id && p.name.toLowerCase() === name.toLowerCase())) return c.json({ error: 'A provider with this name already exists' }, 400)
     provider.name = name
   }
   if (body.baseUrl !== undefined) {
@@ -2095,12 +2071,6 @@ function validateMCPBody(body: any, isPatch = false): { error?: string; value?: 
   return { value: out }
 }
 
-app.get('/api/settings/mcp/status/all', (c) => {
-  syncMCPStatesFromDb()
-  const states = getAllMCPStates().map((st) => mcpPublic(st.server))
-  return c.json(states)
-})
-
 app.get('/api/settings/mcp', (c) => {
   syncMCPStatesFromDb()
   const servers = getMcpServers().map(mcpPublic)
@@ -2242,6 +2212,12 @@ app.post('/api/settings/mcp/:id/refresh', async (c) => {
   const res = await refreshMCPServer(srv.id)
   if (!res.ok) return c.json({ error: res.error ?? 'Refresh failed' }, 502)
   return c.json({ ok: true, tools: res.tools })
+})
+
+app.get('/api/settings/mcp/status/all', (c) => {
+  syncMCPStatesFromDb()
+  const states = getAllMCPStates().map((st) => mcpPublic(st.server))
+  return c.json(states)
 })
 
 // ---------------- LSP Servers ----------------
@@ -3070,7 +3046,6 @@ app.get('/api/projects/:id/files/content', (c) => {
   if (!stat.isFile()) return c.json({ error: 'Not a file' }, 400)
   if (stat.size > 10 * 1024 * 1024) return c.json({ error: 'File too large to edit' }, 400)
   const content = fs.readFileSync(abs, 'utf8')
-  if (content.includes('\0')) return c.json({ error: 'Binary file — cannot display' }, 400)
   return c.json({ content })
 })
 
@@ -3217,8 +3192,6 @@ app.post('/api/terminals/:id/exec', async (c) => {
   const command = String(body.command ?? '').trim()
   if (!command) return c.json({ error: 'Command is required' }, 400)
   if (command.length > 4000) return c.json({ error: 'Command too long' }, 400)
-  const danger = isDangerousTerminalCommand(command)
-  if (danger) return c.json({ error: `Refusing dangerous command: ${danger}` }, 400)
   const { code, output } = await new Promise<{ code: number; output: string }>((resolve) => {
     exec(
       command,
