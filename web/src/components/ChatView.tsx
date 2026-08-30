@@ -68,6 +68,136 @@ function formatTimeShort(iso?: string): string {
   } catch { return '' }
 }
 
+function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string } }) {
+  const [remaining, setRemaining] = useState(retryInfo.delay)
+  const [expanded, setExpanded] = useState(false)
+  const startRef = useRef<number>(Date.now())
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const errorCode = useMemo(() => {
+    const err = retryInfo.error || ''
+    const m = err.match(/\b(429|500|502|503|400|401|403|404|408|504|524|529)\b/)
+    if (m) return m[1]
+    if (retryInfo.reason === 'timeout') return 'TIMEOUT'
+    if (retryInfo.reason === 'resource_exhausted') return '429'
+    if (retryInfo.reason === 'provider_error') return 'ERR'
+    return retryInfo.reason ? retryInfo.reason.toUpperCase().slice(0, 12) : 'ERR'
+  }, [retryInfo.error, retryInfo.reason])
+
+  useEffect(() => {
+    startRef.current = Date.now()
+    setRemaining(retryInfo.delay)
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    intervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startRef.current
+      const rem = Math.max(0, retryInfo.delay - elapsed)
+      setRemaining(rem)
+      if (rem <= 0 && intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }, 250)
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [retryInfo.attempt, retryInfo.delay, retryInfo.error, retryInfo.maxAttempts, retryInfo.reason])
+
+  const secs = Math.max(0, Math.ceil(remaining / 1000))
+  const isRetryingNow = remaining <= 0
+
+  return (
+    <div style={{ marginTop: 8, position: 'relative' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: expanded ? 8 : 0,
+          padding: '8px 10px',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          fontSize: 13,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+            <IconRotate size={13} className="spin" style={{ color: 'var(--text-dim)', flexShrink: 0 } as any} />
+            <span style={{ color: 'var(--text-dim)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
+              {isRetryingNow ? 'Retrying…' : `Retry in ${secs}s`}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              title={expanded ? 'Hide details' : 'Show full error'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                background: 'var(--danger-bg)',
+                border: '1px solid #58201f',
+                borderRadius: 6,
+                color: 'var(--danger)',
+                fontSize: 11.5,
+                fontWeight: 700,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                cursor: 'pointer',
+                lineHeight: 1,
+              }}
+            >
+              <span>{errorCode}</span>
+              <IconChevronDown size={10} style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' } as any} />
+            </button>
+            <span
+              title={`${retryInfo.attempt} of ${retryInfo.maxAttempts} retries`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '3px 6px',
+                background: 'var(--btn)',
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                color: 'var(--text-dim)',
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                lineHeight: 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {retryInfo.attempt}/{retryInfo.maxAttempts}
+            </span>
+          </div>
+        </div>
+        {expanded && (
+          <div
+            style={{
+              background: 'var(--input)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              padding: '8px 10px',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+              fontSize: 11.5,
+              color: 'var(--text-dim)',
+              maxHeight: 180,
+              overflowY: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              lineHeight: 1.5,
+            }}
+          >
+            {retryInfo.error?.trim() ? retryInfo.error.trim() : `Reason: ${retryInfo.reason || 'unknown'}`}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AssistantMeta({ message }: { message: Message }) {
   const toast = useToast()
   const [copied, setCopied] = useState(false)
