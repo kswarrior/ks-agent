@@ -51,7 +51,7 @@ import {
   getPlugins
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
-import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, resolvePendingQuestion, runAgentLoop } from './agent.js'
+import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 import {
   connectMCPServer,
@@ -351,6 +351,7 @@ app.delete('/api/projects/:id', async (c) => {
     generations.get(cid)?.controller.abort()
     generations.delete(cid)
   }
+  try { clearSkillReadsForChats(chatIds) } catch {}
   // kill terminals + ptys for this project
   const termIds = db.terminals.filter((t) => t.projectId === removed.id).map((t) => t.id)
   db.terminals = db.terminals.filter((t) => t.projectId !== removed.id)
@@ -441,6 +442,7 @@ app.delete('/api/chats/:id', (c) => {
   db.previews = (db.previews || []).filter((p: any) => p.chatId !== id)
   generations.get(id)?.controller.abort()
   generations.delete(id)
+  try { clearSkillReadsForChat(id) } catch {}
   saveDb()
   return c.json({ ok: true })
 })
