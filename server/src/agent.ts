@@ -342,7 +342,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
     case 'list_files': {
       const rel = typeof args.path === 'string' ? args.path : ''
       const abs = rel.trim() ? safeJoin(ctx, rel) : resolveInProject(ctx.projectPath, '.')
-      if (!abs) return err('path escapes the project root — primary workspace is the active project only; stay inside it unless user explicitly asked to go outside or you genuinely need /tmp (use run_shell with absolute path for /tmp)')
+      if (!abs) return err('path escapes the project root — primary workspace is the active project only; stay inside it unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
       let dirents: fs.Dirent[]
       try {
         dirents = fs.readdirSync(abs, { withFileTypes: true })
@@ -389,7 +389,9 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
         .sort((a, b) => a.name.localeCompare(b.name))
         .slice(0, LIST_MAX_ENTRIES)
         .map((d) => (d.isDirectory() ? `[dir] ${d.name}` : d.name))
-      const shown = relWithin(ctx.projectPath, abs)
+      // For allowed outside paths (/tmp) show absolute, otherwise show relative inside project
+      const isOutsideTmp = abs === '/tmp' || abs.startsWith('/tmp/') || abs === '/var/tmp' || abs.startsWith('/var/tmp/') || abs === '/dev/shm' || abs.startsWith('/dev/shm/')
+      const shown = isOutsideTmp ? abs : relWithin(ctx.projectPath, abs)
       // If listing project root and global skills exist, hint that skills are also available via "skills" path
       // For empty skills-like paths we already handled above. No extra injection needed.
       return ok(`${shown || '.'}\n${lines.join('\n')}`, `${shown || '/'} (${lines.length} entries)`)
