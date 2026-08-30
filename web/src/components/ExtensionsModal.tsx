@@ -296,14 +296,14 @@ export function ExtensionsModal({ open, onClose }: Props) {
       await api.updateMcpServer(mcpEdit.id, {
         name,
         transport,
-        command: mcpEditForm.command.trim() || undefined,
+        command: mcpEditForm.command.trim(),
         args,
-        url: mcpEditForm.url.trim() || undefined,
-        env,
-        headers,
-        projectId: mcpEditForm.projectId.trim() || undefined,
+        url: mcpEditForm.url.trim(),
+        env: env !== undefined ? env : null as any,
+        headers: headers !== undefined ? headers : null as any,
+        projectId: mcpEditForm.projectId.trim(),
         enabled: mcpEditForm.enabled
-      })
+      } as any)
       toast('MCP server updated', 'success')
       setMcpEdit(null)
       await loadMcpServers()
