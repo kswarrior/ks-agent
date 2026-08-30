@@ -974,7 +974,7 @@ app.post('/api/chats/:id/messages', async (c) => {
         // History ends with the (now cleaned) assistant message; add ephemeral continue instruction
         const history: LLMMessage[] = [
           { role: 'system', content: modelSystemPrompt },
-          ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
+          ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
           ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
           ...skillMessages,
           ...cleanMessagesForHistory(chat.id),
@@ -1060,7 +1060,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   const skillMessages = buildSkillSystemMessages(project)
   const history: LLMMessage[] = [
     { role: 'system', content: modelSystemPrompt },
-    ...(project ? [{ role: 'system' as const, content: `Active project: ${project.name} (${project.path})` }] : []),
+    ...(project ? [{ role: 'system' as const, content: `Active project (PRIMARY WORKSPACE — stay inside this folder by default; only leave for /tmp or when user explicitly says to access outside like agent codebase): ${project.name} (${project.path})` }] : []),
     ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
     ...skillMessages,
     ...cleanMessagesForHistory(chat.id)

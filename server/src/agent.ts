@@ -474,7 +474,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
 
     case 'edit_file': {
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('invalid or escaping path')
+      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside or you genuinely need /tmp')
       const oldStr = args.old_string
       const newStr = typeof args.new_string === 'string' ? args.new_string : ''
       if (typeof oldStr !== 'string' || oldStr === '') return err('old_string must be a non-empty string')
