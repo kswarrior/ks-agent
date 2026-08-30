@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { serve } from '@hono/node-server';
 
 const app = new Hono();
 
@@ -360,7 +361,17 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok' });
 });
 
-// Start server
+let port = 3000;
+if (process.env.PORT) {
+  port = parseInt(process.env.PORT, 10);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  serve(app, { port }).then(() => {
+    console.log(`Server running on http://localhost:${port}`);
+  });
+}
+
 export default app;
 
 init().catch(console.error);
