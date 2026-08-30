@@ -327,18 +327,31 @@ app.post('/api/console/command', async (c) => {
 
 // SSE for console streaming
 app.get('/api/console/events', (c) => {
-  const stream = new Response(null, {
+  const stream = new ReadableStream({
+    start(controller) {
+      const encoder = new TextEncoder();
+      
+      // Send initial message
+      const initial = `data: ${JSON.stringify({ type: 'output', content: 'Console connected', timestamp: Date.now() })}\n\n`;
+      controller.enqueue(encoder.encode(initial));
+      
+      // Send a welcome message
+      const welcome = `data: ${JSON.stringify({ type: 'output', content: 'Welcome to KS Minecraft Server Console', timestamp: Date.now() })}\n\n`;
+      controller.enqueue(encoder.encode(welcome));
+    },
+    
+    cancel() {
+      // Cleanup on client disconnect
+    }
+  });
+  
+  return c.body(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     },
   });
-  
-  // Quick initial message
-  stream.write(`data: ${JSON.stringify({ type: 'output', content: 'Console connected', timestamp: Date.now() })}\n\n`);
-  
-  return stream;
 });
 
 // Health check
