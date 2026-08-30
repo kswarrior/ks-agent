@@ -1067,8 +1067,9 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
               // skip adding dir unless pattern ends with / or wants dirs — we skip dirs for cleaner file results
             }
           } else if (ent.isFile()) {
-            const testTargets = [relFromBase, ent.name, relFromProject]
-            if (testTargets.some((t) => re.test(t))) {
+            // Strict glob: test relative path from base (pattern semantics: * doesn't cross /, ** does)
+            // Also test relFromProject for convenience when base is not project root but pattern is absolute-like
+            if (re.test(relFromBase) || (relFromProject && relFromProject !== relFromBase && re.test(relFromProject))) {
               collected.push(relFromProject || relFromBase)
             }
           }
