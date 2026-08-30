@@ -54,13 +54,13 @@ export const api = {
     return handleResponse(response);
   },
 
-  kickPlayer: async (uuid: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/players/${uuid}/kick`, { method: 'POST' });
+  kickPlayer: async (id: number): Promise<void> => {
+    const response = await fetch(`${API_BASE}/players/${id}/kick`, { method: 'POST' });
     return handleResponse(response);
   },
 
-  banPlayer: async (uuid: string): Promise<void> => {
-    const response = await fetch(`${API_BASE}/players/${uuid}/ban`, { method: 'POST' });
+  banPlayer: async (id: number): Promise<void> => {
+    const response = await fetch(`${API_BASE}/players/${id}/ban`, { method: 'POST' });
     return handleResponse(response);
   },
 
