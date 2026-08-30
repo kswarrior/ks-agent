@@ -314,6 +314,7 @@ app.post('/api/projects', async (c) => {
   }
 
   const db = getDb()
+  if (db.projects.some((p) => path.resolve(p.path) === path.resolve(dir))) return c.json({ error: 'A project with this path already exists' }, 400)
   const project = { id: newId(), name, path: dir, createdAt: new Date().toISOString() }
   db.projects.push(project)
   saveDb()
@@ -334,6 +335,7 @@ app.patch('/api/projects/:id', async (c) => {
     const newPath = resolveProjectPath(String(body.path).trim())
     const blocked = isBlockedProjectPath(newPath)
     if (blocked) return c.json({ error: blocked }, 400)
+    if (getDb().projects.some((p) => p.id !== project.id && path.resolve(p.path) === path.resolve(newPath))) return c.json({ error: 'A project with this path already exists' }, 400)
     project.path = newPath
   }
   saveDb()
@@ -972,6 +974,7 @@ app.post('/api/chats/:id/messages', async (c) => {
 
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
+  if (modelId && !modelEntry) return c.json({ error: 'Selected model not found' }, 400)
   const resolvedModel = modelEntry ?? db.models[0]
   if (!resolvedModel) {
     return c.json({ error: 'No model configured. Add a provider and model in Settings.' }, 400)
@@ -1205,6 +1208,7 @@ app.post('/api/chats/:id/continue', async (c) => {
   const modelId = body.modelId ? String(body.modelId) : ''
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
+  if (modelId && !modelEntry) return c.json({ error: 'Selected model not found' }, 400)
   const resolvedModel = modelEntry ?? db.models[0]
   if (!resolvedModel) return c.json({ error: 'No model configured. Add a provider and model in Settings.' }, 400)
   const provider = db.providers.find((p) => p.id === resolvedModel.providerId)
@@ -1376,7 +1380,9 @@ app.post('/api/settings/providers', async (c) => {
   const baseUrl = String(body.baseUrl ?? '').trim().replace(/\/+$/, '')
   const apiKey = String(body.apiKey ?? '').trim()
   if (!name) return c.json({ error: 'Provider name is required' }, 400)
+  if (name.length < 2 || name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
   if (!/^https?:\/\/.+/.test(baseUrl)) return c.json({ error: 'Base URL must start with http(s)://' }, 400)
+  if (getDb().providers.some((p) => p.name.toLowerCase() === name.toLowerCase())) return c.json({ error: 'A provider with this name already exists' }, 400)
   const provider = { id: newId(), name, baseUrl, apiKey }
   getDb().providers.push(provider)
   saveDb()
@@ -1391,6 +1397,7 @@ app.patch('/api/settings/providers/:id', async (c) => {
     const name = String(body.name).trim()
     if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
     if (name.length < 2 || name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
+    if (getDb().providers.some((p) => p.id !== provider.id && p.name.toLowerCase() === name.toLowerCase())) return c.json({ error: 'A provider with this name already exists' }, 400)
     provider.name = name
   }
   if (body.baseUrl !== undefined) {
