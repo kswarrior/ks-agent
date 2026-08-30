@@ -1099,7 +1099,9 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       const occurrences = content.split(oldStr).length - 1
       if (occurrences === 0) return err('old_string not found in file')
       if (occurrences > 1) return err('old_string occurs multiple times — provide more surrounding context')
-      fs.writeFileSync(abs, content.replace(oldStr, newStr), 'utf8')
+      const newContent = content.replace(oldStr, newStr)
+      if (Buffer.byteLength(newContent, 'utf8') > WRITE_MAX_BYTES) return err('resulting content exceeds 256 KB limit')
+      fs.writeFileSync(abs, newContent, 'utf8')
       return ok(`OK edited ${args.path}`, `edited ${args.path}`)
     }
 

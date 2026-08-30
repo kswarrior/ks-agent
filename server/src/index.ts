@@ -1199,6 +1199,7 @@ app.post('/api/chats/:id/continue', async (c) => {
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
   const rawContent = String(body.content ?? body.instruction ?? body.message ?? '').trim()
+  if (rawContent.length > 50000) return c.json({ error: 'Content too long (max 50000 chars)' }, 400)
   const modelId = body.modelId ? String(body.modelId) : ''
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
@@ -2218,10 +2219,6 @@ app.get('/api/settings/mcp/status/all', (c) => {
 })
 
 // ---------------- LSP Servers ----------------
-
-const SUPPORTED_LSP_LANGUAGES = [
-  'typescript', 'javascript', 'python', 'go', 'rust', 'css', 'json', 'html', 'yaml', 'bash', 'shell', 'markdown', 'java', 'c', 'cpp', 'csharp', 'php', 'ruby', 'swift', 'kotlin', 'dart', 'toml', 'xml', 'sql', 'graphql', 'dockerfile'
-]
 
 function isValidLspName(name: string): boolean {
   return name.length >= 2 && name.length <= 80
