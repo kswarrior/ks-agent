@@ -16,6 +16,10 @@ function getToolLabel(type: Activity['toolType']): string {
       return 'Shell'
     case 'list_files':
       return 'List'
+    case 'grep':
+      return 'Grep'
+    case 'glob':
+      return 'Glob'
     case 'create_plan':
       return 'Plan'
     case 'complete_plan_step':
@@ -41,6 +45,10 @@ function getToolBadgeStyle(type: Activity['toolType']): { bg: string; color: str
       return { bg: '#c084fc1a', color: '#c084fc', border: '#c084fc30' }
     case 'list_files':
       return { bg: '#9ca3af1a', color: '#9ca3af', border: '#9ca3af30' }
+    case 'grep':
+      return { bg: '#38bdf81a', color: '#38bdf8', border: '#38bdf830' }
+    case 'glob':
+      return { bg: '#a78bfa1a', color: '#a78bfa', border: '#a78bfa30' }
     case 'create_plan':
       return { bg: '#f973161a', color: '#f97316', border: '#f9731630' }
     case 'complete_plan_step':
@@ -66,6 +74,10 @@ function getToolIcon(type: Activity['toolType']) {
       return <IconTerminal size={12} />
     case 'list_files':
       return <IconFile size={12} />
+    case 'grep':
+      return <IconFile size={12} />
+    case 'glob':
+      return <IconFile size={12} />
     case 'create_plan':
       return <IconActivity size={12} />
     case 'complete_plan_step':
@@ -82,11 +94,15 @@ function getToolIcon(type: Activity['toolType']) {
 function getCommandDisplay(type: Activity['toolType'], args: Record<string, unknown>): string {
   switch (type) {
     case 'read_file':
-      return (args.path as string) || ''
+      return (args.path as string) ? `${args.path as string}${args.offset ? `:${args.offset}` : ''}${args.limit ? `+${args.limit}` : ''}` : ''
     case 'write_file':
       return (args.path as string) || ''
     case 'edit_file':
       return (args.path as string) || ''
+    case 'grep':
+      return (args.pattern as string) ? `${args.pattern as string}${args.include ? ` in ${args.include}` : ''}` : ''
+    case 'glob':
+      return (args.pattern as string) || ''
     case 'run_shell':
       return (args.command as string) || ''
     case 'list_files':
