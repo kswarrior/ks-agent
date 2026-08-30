@@ -447,6 +447,7 @@ app.post('/api/projects/:id/chats', async (c) => {
   const now = new Date().toISOString()
   const seq = nextChatSeq(project.id)
   const rawTitle = String(body.title ?? '').trim()
+  if (rawTitle && rawTitle !== 'New chat' && (rawTitle.length < 2 || rawTitle.length > 80)) return c.json({ error: 'Chat title must be 2-80 chars' }, 400)
   const title = !rawTitle || rawTitle === 'New chat' ? `Chat ${seq}` : rawTitle
   const chat: Chat = {
     id: newId(),
@@ -467,6 +468,7 @@ app.patch('/api/chats/:id', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const title = String(body.title ?? '').trim()
   if (!title) return c.json({ error: 'Title cannot be empty' }, 400)
+  if (title.length < 2 || title.length > 80) return c.json({ error: 'Chat title must be 2-80 chars' }, 400)
   chat.title = title
   saveDb()
   return c.json(chat)
