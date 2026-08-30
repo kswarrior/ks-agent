@@ -1390,7 +1390,7 @@ app.patch('/api/settings/providers/:id', async (c) => {
   if (body.name !== undefined) {
     const name = String(body.name).trim()
     if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
-    if (name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
+    if (name.length < 2 || name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
     provider.name = name
   }
   if (body.baseUrl !== undefined) {
