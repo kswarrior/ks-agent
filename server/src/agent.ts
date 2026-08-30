@@ -64,7 +64,7 @@ export const DEFAULT_PLAN_PROMPT =
 const MAX_TOOL_ROUNDS = 25
 const READ_MAX_BYTES = 24 * 1024
 const WRITE_MAX_BYTES = 256 * 1024
-const SHELL_TIMEOUT_MS = 30_000
+const SHELL_TIMEOUT_MS = 120_000
 const SHELL_OUTPUT_CAP = 8 * 1024
 const LIST_MAX_ENTRIES = 200
 
@@ -320,7 +320,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'run_shell',
-      description: 'Run a shell command with CWD = active project directory (30s timeout). PRIMARY: stay inside the project. Only use absolute paths like /tmp when task genuinely needs temp files or user explicitly asked to go outside (e.g. agent codebase). Returns exit code plus stdout/stderr. IMPORTANT: Dangerous commands (rm -rf, sudo, etc.) will automatically trigger a confirmation prompt to the user before execution — you do NOT need to call ask_question for these; the tool handles it. For commands that need user input, use ask_question first to get the answer, then run_shell with the resolved command.',
+      description: 'Run a shell command with CWD = active project directory (120s timeout). PRIMARY: stay inside the project. Only use absolute paths like /tmp when task genuinely needs temp files or user explicitly asked to go outside (e.g. agent codebase). Returns exit code plus stdout/stderr. IMPORTANT: Dangerous commands (rm -rf, sudo, etc.) will automatically trigger a confirmation prompt to the user before execution — you do NOT need to call ask_question for these; the tool handles it. For commands that need user input, use ask_question first to get the answer, then run_shell with the resolved command.',
       parameters: {
         type: 'object',
         properties: { command: { type: 'string', description: 'The shell command to run (stay inside project unless explicitly needed outside)' } },

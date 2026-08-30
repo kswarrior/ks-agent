@@ -43,9 +43,10 @@ interface RawChunk {
 // considering the provider stalled. 20s was too aggressive for large
 // edits/tool calls or reasoning models that pause between tokens; a
 // longer window avoids spurious "stream interrupted" errors while still
-// surfacing genuine hangs. 90s covers long edit generations without
-// hanging forever on a truly dead stream.
-const STREAM_IDLE_TIMEOUT_MS = 90_000
+// surfacing genuine hangs. 90s was still too short and caused auto-stop
+// after 1-5m for long runs. 10m covers long-running tasks (large edits,
+// reasoning models, slow providers) without hanging forever on a dead stream.
+const STREAM_IDLE_TIMEOUT_MS = 600_000
 
 function timeoutError(ms: number): Error {
   return Object.assign(new Error(`Provider stream timeout (${Math.round(ms / 1000)}s no data)`), { name: 'TimeoutError' })

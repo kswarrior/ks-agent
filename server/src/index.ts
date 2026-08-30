@@ -1465,7 +1465,7 @@ app.patch('/api/settings/retry', async (c) => {
       const val = body[key]
       if (key === 'enabled') patch.enabled = Boolean(val)
       else if (key === 'alwaysRetry') (patch as any).alwaysRetry = Boolean(val)
-      else if (key === 'maxRetries') patch.maxRetries = Math.max(0, Math.min(10, Number(val)))
+      else if (key === 'maxRetries') patch.maxRetries = Math.max(0, Math.min(1000, Number(val) || 0))
       else if (key === 'baseDelayMs') patch.baseDelayMs = Math.max(100, Math.min(60000, Number(val)))
       else if (key === 'maxDelayMs') patch.maxDelayMs = Math.max(1000, Math.min(300000, Number(val)))
       else if (key === 'retryOnStatusCodes' && Array.isArray(val)) {
