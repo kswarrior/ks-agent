@@ -1467,8 +1467,10 @@ app.post('/api/settings/models', async (c) => {
   if (!getDb().providers.some((p) => p.id === providerId)) {
     return c.json({ error: 'Select a valid provider' }, 400)
   }
-  if (maxTokens != null && (isNaN(maxTokens) || maxTokens < 1)) {
-    return c.json({ error: 'Max tokens must be a positive number' }, 400)
+  if (displayName && displayName.length > 80) return c.json({ error: 'Display name must be 2-80 chars' }, 400)
+  if (systemPrompt && systemPrompt.length > 8000) return c.json({ error: 'System prompt too long (max 8000 chars)' }, 400)
+  if (maxTokens != null && (isNaN(maxTokens) || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 200000)) {
+    return c.json({ error: 'Max tokens must be an integer 1-200000' }, 400)
   }
   const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}), ...(systemPrompt ? { systemPrompt } : {}), ...(maxTokens ? { maxTokens } : {}) }
   getDb().models.push(entry)
@@ -3146,14 +3148,45 @@ app.post('/api/projects/:id/files/upload-url', async (c) => {
   if (!validSegment(name)) return c.json({ error: 'Invalid file name' }, 400)
   let res: Response
   try {
-    res = await fetch(parsed, { redirect: 'follow', signal: AbortSignal.timeout(30_000) })
+    // Manual redirect handling to block SSRF via redirect to internal hosts.
+    // Follow up to 5 redirects, checking each Location against isBlockedHost before fetching.
+    let currentUrl: URL = parsed
+    let redirects = 0
+    while (true) {
+      const attempt = await fetch(currentUrl, { redirect: 'manual', signal: AbortSignal.timeout(30_000) } as any)
+      const status = attempt.status
+      if (status >= 300 && status < 400) {
+        const loc = attempt.headers.get('location')
+        if (!loc) {
+          res = attempt
+          break
+        }
+        let nextUrl: URL
+        try {
+          nextUrl = new URL(loc, currentUrl)
+        } catch {
+          return c.json({ error: 'Invalid redirect URL' }, 400)
+        }
+        if (nextUrl.protocol !== 'http:' && nextUrl.protocol !== 'https:') {
+          return c.json({ error: 'Only http(s) URLs are allowed' }, 400)
+        }
+        if (isBlockedHost(nextUrl.hostname)) return c.json({ error: 'Blocked host' }, 400)
+        redirects++
+        if (redirects > 5) return c.json({ error: 'Too many redirects' }, 400)
+        currentUrl = nextUrl
+        continue
+      }
+      res = attempt
+      // For non-redirect, also verify final URL host (in case fetch returned final URL with redirect:follow behavior not used, but we are manual so this is final)
+      try {
+        if (res.url && isBlockedHost(new URL(res.url).hostname)) return c.json({ error: 'Blocked host' }, 400)
+      } catch {
+        return c.json({ error: 'Blocked host' }, 400)
+      }
+      break
+    }
   } catch (e: any) {
     return c.json({ error: e?.message || 'Failed to fetch URL' }, 400)
-  }
-  try {
-    if (res.url && isBlockedHost(new URL(res.url).hostname)) return c.json({ error: 'Blocked host' }, 400)
-  } catch {
-    return c.json({ error: 'Blocked host' }, 400)
   }
   if (!res.ok) return c.json({ error: `Failed to fetch URL (${res.status})` }, 400)
   if (!res.body) return c.json({ error: 'Empty download' }, 400)
