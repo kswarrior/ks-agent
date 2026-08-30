@@ -2668,17 +2668,32 @@ app.patch('/api/settings/plugins/:id', async (c) => {
   }
   if (v.description !== undefined) p.description = String(v.description)
   if (v.version !== undefined) p.version = String(v.version)
-  if ('publisher' in v) p.publisher = v.publisher
-  if ('entryPoint' in v) p.entryPoint = v.entryPoint
+  if ('publisher' in v) {
+    if (v.publisher === undefined) delete p.publisher
+    else p.publisher = v.publisher
+  }
+  if ('entryPoint' in v) {
+    if (v.entryPoint === undefined) delete p.entryPoint
+    else p.entryPoint = v.entryPoint
+  }
   if (v.source !== undefined) p.source = v.source as PluginSource
-  if ('marketplaceId' in v) p.marketplaceId = v.marketplaceId
+  if ('marketplaceId' in v) {
+    if (v.marketplaceId === undefined) delete p.marketplaceId
+    else p.marketplaceId = v.marketplaceId
+  }
   if (v.enabled !== undefined) p.enabled = Boolean(v.enabled)
   if ('projectId' in v) {
     if (v.projectId === undefined) delete p.projectId
     else p.projectId = v.projectId
   }
-  if ('tags' in v) p.tags = v.tags
-  if ('icon' in v) p.icon = v.icon
+  if ('tags' in v) {
+    if (v.tags === undefined) delete p.tags
+    else p.tags = v.tags
+  }
+  if ('icon' in v) {
+    if (v.icon === undefined) delete p.icon
+    else p.icon = v.icon
+  }
   p.updatedAt = new Date().toISOString()
   saveDb()
   return c.json(p)
