@@ -50,7 +50,7 @@ function highlightCode(code: string, lang: string): string {
   if (!code) return ''
   const placeholders: string[] = []
   const store = (s: string, cls: string) => {
-    const token = `__HL_${placeholders.length}__`
+    const token = `__KS_HL_${placeholders.length}__KS__`
     placeholders.push(`<span class="${cls}">${escapeHtml(s)}</span>`)
     return token
   }
@@ -80,7 +80,7 @@ function highlightCode(code: string, lang: string): string {
     working = working.replace(/^(\s*)([\w-]+)(\s*:)/gm, '$1<span class="hl-attr">$2</span>$3')
   }
   placeholders.forEach((html, i) => {
-    const token = `__HL_${i}__`
+    const token = `__KS_HL_${i}__KS__`
     working = working.split(token).join(html)
   })
   return working
