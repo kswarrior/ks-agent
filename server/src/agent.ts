@@ -207,6 +207,38 @@ function getRelevantSkillsFromHistory(chatId: string): string[] {
   }
 }
 
+function getEnforcedSkillsForWrite(rel: string, chatId: string): string[] {
+  const direct = getRequiredSkillsForRel(rel)
+  const fromHistory = getRelevantSkillsFromHistory(chatId)
+  const extra: string[] = []
+  try {
+    const msgs = messagesOf(chatId) as { role: string; content: string }[]
+    const text = ([...msgs].reverse().find((m) => m.role === 'user')?.content || '').toLowerCase()
+    const skills = getSkills() as { name: string; mainFile: string; files: string[] }[]
+    const frontend = skills.find((s) => s.name.toLowerCase() === 'frontend')
+    if (frontend && (direct.includes('frontend/skill.md') || fromHistory.includes(frontend.mainFile.toLowerCase()))) {
+      if (text.includes('react')) {
+        const f = frontend.files.find((f) => f.toLowerCase().includes('react'))
+        if (f) extra.push(f.toLowerCase())
+      }
+      if (text.includes('typescript') || text.includes(' ts ') || text.includes(' ts,') || text.includes('ts.md')) {
+        const f = frontend.files.find((f) => f.toLowerCase().includes('ts'))
+        if (f) extra.push(f.toLowerCase())
+      }
+      if (text.includes('ejs')) {
+        const f = frontend.files.find((f) => f.toLowerCase().includes('ejs'))
+        if (f) extra.push(f.toLowerCase())
+      }
+      const relLower = rel.toLowerCase()
+      if (relLower.includes('react') || relLower.endsWith('.tsx') || relLower.endsWith('.jsx')) {
+        const f = frontend.files.find((f) => f.toLowerCase().includes('react'))
+        if (f && !extra.includes(f.toLowerCase())) extra.push(f.toLowerCase())
+      }
+    }
+  } catch {}
+  return [...new Set([...direct, ...fromHistory, ...extra])]
+}
+
 function err(message: string): ToolExecResult {
   return { ok: false, result: `Error: ${message}`, summary: message.slice(0, 160) }
 }
@@ -560,6 +592,8 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
             if (buf2.includes(0)) continue
             const truncated2 = st.size > READ_MAX_BYTES ? `\n…[truncated at ${READ_MAX_BYTES} bytes]` : ''
             const relShown = relWithin(ctx.projectPath, norm) || path.relative(process.cwd(), norm) || rel
+            // Record skill read for enforcement (track both requested rel and actual file)
+            try { recordSkillRead(ctx.chatId, rel); recordSkillRead(ctx.chatId, path.relative(process.cwd(), norm) || norm) } catch {}
             // Return success with fallback path hint in result but keep summary as requested path
             return ok(buf2.toString('utf8') + truncated2 + `\n\n[fallback: read from ${path.relative(process.cwd(), norm) || norm}]`, `${rel} (${st.size}B)`)
           } catch {}
@@ -579,10 +613,21 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
       }
       if (buf.includes(0)) return err('binary file — cannot display')
       const truncated = stat.size > READ_MAX_BYTES ? `\n…[truncated at ${READ_MAX_BYTES} bytes]` : ''
+      try { recordSkillRead(ctx.chatId, String(args.path ?? '')) } catch {}
       return ok(buf.toString('utf8') + truncated, `${args.path} (${stat.size}B)`)
     }
 
     case 'write_file': {
+      // Skill enforcement: must have read relevant skill before editing
+      {
+        const rel = String(args.path ?? '')
+        const enforced = getEnforcedSkillsForWrite(rel, ctx.chatId)
+        for (const req of enforced) {
+          if (!hasReadSkill(ctx.chatId, req)) {
+            return err(`Skill required: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first. For frontend work also read the matching sub-file (frontend/react.md, frontend/ts.md, frontend/ejs.md) if relevant.`)
+          }
+        }
+      }
       const abs = safeJoin(ctx, args.path)
       if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
       const content = typeof args.content === 'string' ? args.content : ''
