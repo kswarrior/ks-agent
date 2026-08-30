@@ -2851,8 +2851,11 @@ app.post('/api/projects/:id/files', async (c) => {
   if (!abs) return c.json({ error: 'Invalid path' }, 400)
   if (fs.existsSync(abs)) return c.json({ error: `"${rel}" already exists` }, 400)
   try {
-    if (kind === 'folder') fs.mkdirSync(abs)
-    else fs.writeFileSync(abs, '', { flag: 'wx' })
+    if (kind === 'folder') fs.mkdirSync(abs, { recursive: true })
+    else {
+      fs.mkdirSync(path.dirname(abs), { recursive: true })
+      fs.writeFileSync(abs, '', { flag: 'wx' })
+    }
   } catch (e: any) {
     return c.json({ error: e?.message || 'Failed to create' }, 400)
   }
@@ -2980,7 +2983,14 @@ app.post('/api/projects/:id/files/upload', async (c) => {
   const saved: string[] = []
   for (const item of files) {
     const buf = Buffer.from(await item.arrayBuffer())
-    fs.writeFileSync(path.join(t.abs, item.name), buf)
+    if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: `"${item.name}" exceeds size limit` }, 400)
+    const dest = path.join(t.abs, item.name)
+    if (fs.existsSync(dest)) return c.json({ error: `"${item.name}" already exists` }, 400)
+    try {
+      fs.writeFileSync(dest, buf, { flag: 'wx' })
+    } catch (e: any) {
+      return c.json({ error: e?.message || `Failed to save "${item.name}"` }, 400)
+    }
     saved.push(item.name)
   }
   return c.json({ ok: true, saved }, 201)

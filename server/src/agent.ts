@@ -792,15 +792,24 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         stat = fs.statSync(abs)
       } catch {
         // Fallback: try global ./skills/ and project/skills/ locations before giving up.
+        // SECURITY: only allow fallback for .md skill files inside whitelisted skill directories — no arbitrary cwd escape.
         const rel = String(args.path ?? '').trim()
         const baseName = path.basename(rel)
+        // Only engage skill fallback for markdown files; prevents exfiltration of arbitrary files via fallback
+        if (!baseName.toLowerCase().endsWith('.md') && !rel.toLowerCase().endsWith('.md')) {
+          return err(`file not found: ${args.path}`)
+        }
+        // Reject path traversal in fallback
+        if (rel.includes('..') || rel.includes('\0')) {
+          return err(`file not found: ${args.path}`)
+        }
         const skillsDir = path.join(process.cwd(), 'skills')
         const fallbackAbsList: (string | null)[] = [
           path.join(skillsDir, baseName),
-          path.join(skillsDir, rel),
-          path.join(process.cwd(), rel),
+          // Only allow rel if it looks like a skill path (contains 'skill' or 'frontend' or no directory traversal)
+          ...(rel.includes('/') && !rel.includes('..') && rel.toLowerCase().includes('skill') ? [path.join(skillsDir, rel)] : []),
+          ...(rel.includes('/') && !rel.includes('..') && rel.toLowerCase().startsWith('frontend/') ? [path.join(skillsDir, rel)] : []),
           resolveInProject(ctx.projectPath, path.join('skills', baseName)),
-          resolveInProject(ctx.projectPath, path.join('skills', rel)),
           resolveInProject(ctx.projectPath, path.join('.skills', baseName)),
           resolveInProject(ctx.projectPath, path.join('.agent', 'skills', baseName)),
           resolveInProject(ctx.projectPath, path.join('.claude', 'skills', baseName)),
