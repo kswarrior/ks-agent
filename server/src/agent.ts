@@ -693,12 +693,66 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       const rel = typeof args.path === 'string' ? args.path : ''
       const abs = rel.trim() ? safeJoin(ctx, rel) : resolveInProject(ctx.projectPath, '.')
       if (!abs) return err('path escapes the project root — primary workspace is the active project only; stay inside it unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
+      // Parse pagination & options (new: offset/limit/recursive/pattern for large dirs)
+      let offset = 0
+      if (args.offset !== undefined) {
+        const n = Number(args.offset)
+        if (!Number.isNaN(n) && n >= 0) offset = Math.floor(n)
+      }
+      let limit = LIST_MAX_ENTRIES
+      if (args.limit !== undefined) {
+        const n = Number(args.limit)
+        if (!Number.isNaN(n) && n > 0) limit = Math.min(Math.floor(n), LIST_HARD_LIMIT)
+      }
+      const recursive = args.recursive === true || args.recursive === 'true' || args.recursive === 1 || args.recursive === '1'
+      const patternStr = typeof args.pattern === 'string' ? args.pattern.trim() : (typeof args.glob === 'string' ? String(args.glob).trim() : '')
+      let patternRe: RegExp | null = null
+      if (patternStr) {
+        try { patternRe = globToRegExp(patternStr) } catch { patternRe = null }
+      }
+      // Recursive mode: walk entire subtree
+      if (recursive) {
+        let all: string[] = []
+        try {
+          const walk = (cur: string, baseRel: string) => {
+            if (all.length >= LIST_HARD_LIMIT + offset) return
+            let ents: fs.Dirent[]
+            try { ents = fs.readdirSync(cur, { withFileTypes: true }) } catch { return }
+            for (const ent of ents) {
+              if (all.length >= LIST_HARD_LIMIT + offset) break
+              if (isIgnoredDir(ent.name)) continue
+              const full = path.join(cur, ent.name)
+              const relPath = baseRel ? `${baseRel}/${ent.name}` : ent.name
+              if (ent.isDirectory()) {
+                const display = `[dir] ${relPath}`
+                const match = !patternRe || patternRe.test(relPath) || patternRe.test(ent.name)
+                if (match) all.push(display)
+                walk(full, relPath)
+              } else if (ent.isFile()) {
+                const match = !patternRe || patternRe.test(relPath) || patternRe.test(ent.name)
+                if (match) all.push(relPath)
+              }
+            }
+          }
+          walk(abs, '')
+          all.sort((a, b) => a.localeCompare(b))
+          const total = all.length
+          const sliced = all.slice(offset, offset + limit)
+          const isOutsideTmp = abs === '/tmp' || abs.startsWith('/tmp/') || abs === '/var/tmp' || abs.startsWith('/var/tmp/') || abs === '/dev/shm' || abs.startsWith('/dev/shm/')
+          const shown = isOutsideTmp ? abs : relWithin(ctx.projectPath, abs)
+          const header = `${shown || '.'}${patternStr ? ` (pattern: ${patternStr})` : ''} — ${total} total, showing ${offset}-${offset + sliced.length} (recursive)`
+          const suffix = total > offset + sliced.length ? `\n…[${total - offset - sliced.length} more not shown — use offset=${offset + sliced.length} & limit=${limit}]` : ''
+          return ok(`${header}\n${sliced.join('\n')}${suffix}`, `${shown || '/'} (${sliced.length}/${total} entries)`)
+        } catch (e: any) {
+          return err(e?.message || 'cannot read directory')
+        }
+      }
+      // Non-recursive: original logic + pattern + pagination
       let dirents: fs.Dirent[]
       try {
         dirents = fs.readdirSync(abs, { withFileTypes: true })
       } catch (e: any) {
         // Fallback for skills discovery: allow AI to list global ./skills/ even though sandbox is project-scoped.
-        // This fixes "ai knows skills note but not skill.md in ./skills/" — AI may try list_files "skills".
         try {
           const skillsDir = path.join(process.cwd(), 'skills')
           const fallbackCandidates: string[] = []
@@ -709,42 +763,52 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
             fallbackCandidates.push(path.join(process.cwd(), trimmed))
             fallbackCandidates.push(path.join(skillsDir, trimmed.slice('skills/'.length)))
           } else if (trimmed === '.skills' || trimmed === '.agent/skills' || trimmed === '.claude/skills' || trimmed === '.cursor/skills') {
-            // these are virtual; if project missing them, try project/skills variant or global
             fallbackCandidates.push(skillsDir)
           }
-          // also try project/skills/* fallback when listing project root and skills missing? include hint
-          // try project/skills folder explicitly
           if (trimmed === '' || trimmed === '.' || trimmed === '/') {
-            // listing root: if global skills exists, we don't auto-merge, but we can list project/skills if exists
-            // no fallback needed — return original error
+            // no fallback
           }
           for (const cand of fallbackCandidates) {
             try {
               const d = fs.readdirSync(cand, { withFileTypes: true })
-              const lines2 = d
+              let lines2 = d
                 .sort((a, b) => a.name.localeCompare(b.name))
-                .slice(0, LIST_MAX_ENTRIES)
                 .map((dd) => (dd.isDirectory() ? `[dir] ${dd.name}` : dd.name))
-              // show as global skills
+              if (patternRe) {
+                lines2 = lines2.filter((l) => {
+                  const name = l.startsWith('[dir] ') ? l.slice(6) : l
+                  return patternRe!.test(name) || patternRe!.test(l)
+                })
+              }
+              const total2 = lines2.length
+              const sliced2 = lines2.slice(offset, offset + limit)
               const hint = `skills (global ${path.relative(process.cwd(), cand) || 'skills'})`
-              return ok(`${hint}\n${lines2.join('\n')}`, `${hint} (${lines2.length} entries)`)
+              const suffix2 = total2 > offset + sliced2.length ? `\n…[${total2 - offset - sliced2.length} more not shown]` : ''
+              return ok(`${hint} — ${total2} total\n${sliced2.join('\n')}${suffix2}`, `${hint} (${sliced2.length}/${total2} entries)`)
             } catch {}
           }
         } catch {}
-        // Also try project-local skills folder when user listed a missing skills subdir: e.g. skills missing in project but exists globally — show global
-        // Fallback to merged view: if listing project root fails? Not needed.
         return err(e?.message || 'cannot read directory')
       }
-      const lines = dirents
+      let lines = dirents
         .sort((a, b) => a.name.localeCompare(b.name))
-        .slice(0, LIST_MAX_ENTRIES)
         .map((d) => (d.isDirectory() ? `[dir] ${d.name}` : d.name))
-      // For allowed outside paths (/tmp) show absolute, otherwise show relative inside project
+      if (patternRe) {
+        lines = lines.filter((l) => {
+          const name = l.startsWith('[dir] ') ? l.slice(6) : l
+          return patternRe!.test(name) || patternRe!.test(l)
+        })
+      }
+      const total = lines.length
+      const sliced = lines.slice(offset, offset + limit)
       const isOutsideTmp = abs === '/tmp' || abs.startsWith('/tmp/') || abs === '/var/tmp' || abs.startsWith('/var/tmp/') || abs === '/dev/shm' || abs.startsWith('/dev/shm/')
       const shown = isOutsideTmp ? abs : relWithin(ctx.projectPath, abs)
-      // If listing project root and global skills exist, hint that skills are also available via "skills" path
-      // For empty skills-like paths we already handled above. No extra injection needed.
-      return ok(`${shown || '.'}\n${lines.join('\n')}`, `${shown || '/'} (${lines.length} entries)`)
+      const header = `${shown || '.'}${patternStr ? ` (pattern: ${patternStr})` : ''} — ${total} total`
+      const suffix = total > offset + sliced.length ? `\n…[${total - offset - sliced.length} more not shown — use offset=${offset + sliced.length} & limit=${limit}]` : ''
+      if (offset > 0 || total > limit) {
+        return ok(`${header} — showing ${offset}-${offset + sliced.length}\n${sliced.join('\n')}${suffix}`, `${shown || '/'} (${sliced.length}/${total} entries)`)
+      }
+      return ok(`${header}\n${sliced.join('\n')}${suffix}`, `${shown || '/'} (${sliced.length}/${total} entries)`)
     }
 
     case 'read_file': {
