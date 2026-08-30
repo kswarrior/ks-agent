@@ -1849,18 +1849,16 @@ function validateMCPBody(body: any, isPatch = false): { error?: string; value?: 
   const out: Partial<MCPServer> = {}
   if (body.name !== undefined || !isPatch) {
     const name = String(body.name ?? '').trim()
-    if (!isPatch && !name) return { error: 'MCP server name is required' }
-    if (name) {
-      if (!isValidMCPName(name)) return { error: 'MCP name must be 2-80 chars' }
-      out.name = name
-    } else if (!isPatch) return { error: 'MCP server name is required' }
+    if (!name) return { error: 'MCP server name is required' }
+    if (!isValidMCPName(name)) return { error: 'MCP name must be 2-80 chars' }
+    out.name = name
   }
   if (body.transport !== undefined || !isPatch) {
     const t = String(body.transport ?? '').trim() as MCPTransport
     const allowed: MCPTransport[] = ['stdio', 'sse', 'http', 'websocket']
-    if (!isPatch && !t) return { error: 'Transport is required (stdio, sse, http, websocket)' }
-    if (t && !allowed.includes(t)) return { error: 'Transport must be one of: stdio, sse, http, websocket' }
-    if (t) out.transport = t
+    if (!t) return { error: 'Transport is required (stdio, sse, http, websocket)' }
+    if (!allowed.includes(t)) return { error: 'Transport must be one of: stdio, sse, http, websocket' }
+    out.transport = t
   }
   // Determine effective transport for conditional validation
   const effTransport = (out.transport ?? body.transport) as MCPTransport | undefined
@@ -1988,12 +1986,15 @@ app.patch('/api/settings/mcp/:id', async (c) => {
     srv.name = String(v.name)
   }
   if (v.transport !== undefined) srv.transport = v.transport as MCPTransport
-  if (v.command !== undefined) srv.command = v.command
-  if (v.args !== undefined) srv.args = v.args
-  if (v.url !== undefined) srv.url = v.url
-  if (v.env !== undefined) srv.env = v.env
-  if (v.headers !== undefined) srv.headers = v.headers
-  if (v.projectId !== undefined) srv.projectId = v.projectId
+  if ('command' in v) srv.command = v.command
+  if ('args' in v) srv.args = v.args
+  if ('url' in v) srv.url = v.url
+  if ('env' in v) srv.env = v.env
+  if ('headers' in v) srv.headers = v.headers
+  if ('projectId' in v) {
+    if (v.projectId === undefined) delete srv.projectId
+    else srv.projectId = v.projectId
+  }
   if (v.enabled !== undefined) srv.enabled = v.enabled
   // final cross-check
   if (srv.transport === 'stdio' && !srv.command) return c.json({ error: 'stdio transport requires command' }, 400)
