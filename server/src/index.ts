@@ -196,9 +196,16 @@ function resolveProjectPath(input: string): string {
   }
   const normalized = path.normalize(p)
   if (normalized === 'project' || normalized.startsWith('project' + path.sep) || normalized.startsWith('project/')) {
-    return normalized
+    const n = path.normalize(normalized)
+    if (n === 'project' || n.startsWith('project' + path.sep) || n.startsWith('project/')) return n
   }
-  return path.join('project', normalized)
+  const joined = path.normalize(path.join('project', normalized))
+  if (joined === 'project' || joined.startsWith('project' + path.sep) || joined.startsWith('project/')) {
+    return joined
+  }
+  // Escape attempt via ../ — sanitize to project/<basename>
+  const sanitized = normalized.replace(/^(\.\.(\/|\\))+/g, '').replace(/^\//, '')
+  return path.join('project', sanitized || 'unnamed')
 }
 
 function isBlockedProjectPath(resolved: string): string | null {
@@ -358,10 +365,9 @@ app.delete('/api/projects/:id', async (c) => {
     if (blocked) return c.json({ error: blocked }, 400)
     // Extra guard: also block deletion if resolved is not inside project/ or cwd or /tmp
     const cwd = path.resolve(process.cwd())
-    const isAllowedDeletion = resolved.startsWith(path.join(cwd, 'project') + path.sep) || resolved.startsWith(cwd + path.sep) || resolved.startsWith('/tmp' + path.sep) || resolved === '/tmp'
-    if (!isAllowedDeletion && !resolved.startsWith(path.resolve('project') + path.sep)) {
-      // For legacy absolute project paths outside cwd, still allow if not blocked system path
-      // but require explicit confirmation - block remains via isBlockedProjectPath above
+    const isAllowedDeletion = resolved.startsWith(path.join(cwd, 'project') + path.sep) || resolved.startsWith(cwd + path.sep) || resolved.startsWith('/tmp' + path.sep) || resolved === '/tmp' || resolved.startsWith('/var/tmp' + path.sep) || resolved === '/var/tmp'
+    if (!isAllowedDeletion) {
+      return c.json({ error: 'Refusing to delete folder outside allowed paths (project/, cwd, /tmp): ' + resolved }, 400)
     }
     try {
       if (fs.existsSync(resolved)) {
@@ -960,6 +966,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   const modelId = body.modelId ? String(body.modelId) : ''
 
   if (!content) return c.json({ error: 'Message cannot be empty' }, 400)
+  if (content.length > 50000) return c.json({ error: 'Message too long (max 50000 chars)' }, 400)
 
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
@@ -1377,11 +1384,22 @@ app.patch('/api/settings/providers/:id', async (c) => {
   const provider = getDb().providers.find((p) => p.id === c.req.param('id'))
   if (!provider) return c.json({ error: 'Provider not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
-  if (body.name !== undefined && String(body.name).trim()) provider.name = String(body.name).trim()
-  if (body.baseUrl !== undefined && /^https?:\/\/.+/.test(String(body.baseUrl).trim())) {
-    provider.baseUrl = String(body.baseUrl).trim().replace(/\/+$/, '')
+  if (body.name !== undefined) {
+    const name = String(body.name).trim()
+    if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
+    if (name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
+    provider.name = name
   }
-  if (body.apiKey !== undefined && String(body.apiKey).trim()) provider.apiKey = String(body.apiKey).trim()
+  if (body.baseUrl !== undefined) {
+    const baseUrl = String(body.baseUrl).trim().replace(/\/+$/, '')
+    if (!/^https?:\/\/.+/.test(baseUrl)) return c.json({ error: 'Base URL must start with http(s)://' }, 400)
+    provider.baseUrl = baseUrl
+  }
+  if (body.apiKey !== undefined) {
+    const apiKey = String(body.apiKey).trim()
+    if (apiKey) provider.apiKey = apiKey
+    // empty apiKey means keep current — do not clear
+  }
   saveDb()
   return c.json(publicProvider(provider))
 })
