@@ -835,12 +835,17 @@ function loadFromSqlite(s: Database.Database): DB | null {
     const skills: Skill[] = []
     for (const r of skillsRows) {
       try {
+        let parsedFiles: string[] = []
+        try {
+          const v = r.files ? JSON.parse(r.files as string) : []
+          if (Array.isArray(v)) parsedFiles = v.filter((x: any) => typeof x === 'string')
+        } catch {}
         skills.push({
           id: r.id,
           name: r.name,
           note: r.note,
           mainFile: r.mainFile,
-          files: JSON.parse(r.files) as string[],
+          files: parsedFiles,
           projectId: r.projectId ?? undefined,
           createdAt: r.createdAt,
           updatedAt: r.updatedAt ?? undefined

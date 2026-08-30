@@ -1470,9 +1470,16 @@ app.patch('/api/settings/models/:id', async (c) => {
     else delete model.systemPrompt
   }
   if (body.maxTokens !== undefined) {
-    const maxTokens = Number(body.maxTokens)
-    if (maxTokens != null && !isNaN(maxTokens) && maxTokens >= 1) model.maxTokens = maxTokens
-    else delete model.maxTokens
+    const raw = body.maxTokens
+    if (raw === null || raw === '' || (typeof raw === 'string' && raw.trim() === '')) {
+      delete model.maxTokens
+    } else {
+      const maxTokens = Number(raw)
+      if (!Number.isFinite(maxTokens) || !Number.isInteger(maxTokens) || maxTokens < 1) {
+        return c.json({ error: 'Max tokens must be a positive integer' }, 400)
+      }
+      model.maxTokens = maxTokens
+    }
   }
   saveDb()
   return c.json({ ok: true, model })
@@ -2842,6 +2849,14 @@ function fileTarget(c: { json: (data: unknown, status?: number) => Response }, p
   } catch {
     return { error: c.json({ error: 'Path not found' }, 400) }
   }
+  // Symlink escape check for existing targets (e.g. project/evil -> /etc)
+  try {
+    const realRoot = fs.realpathSync(path.resolve(project.path))
+    const realAbs = fs.realpathSync(abs)
+    if (realAbs !== realRoot && !realAbs.startsWith(realRoot + path.sep)) {
+      return { error: c.json({ error: 'Invalid path' }, 400) }
+    }
+  } catch {}
   return { abs, stat }
 }
 
