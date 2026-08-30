@@ -123,12 +123,12 @@ async function openStream(
     if (signal?.aborted) throw new Error('Aborted')
     let res: Response
     try {
-      // Add a 30s connect timeout for hanging providers (e.g. lightning) — race fetch against a timer
+      // Add a 60s connect timeout for hanging providers (e.g. lightning) — race fetch against a timer
       const fetchWithTimeout = async (): Promise<Response> => {
-        const timeoutMs = 30000
+        const timeoutMs = 60000
         let timeoutId: ReturnType<typeof setTimeout> | null = null
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutId = setTimeout(() => reject(Object.assign(new Error('Provider connect timeout (30s)'), { name: 'TimeoutError' })), timeoutMs)
+          timeoutId = setTimeout(() => reject(Object.assign(new Error('Provider connect timeout (60s)'), { name: 'TimeoutError' })), timeoutMs)
         })
         const fetchPromise = fetch(endpoint(baseUrl), {
           method: 'POST',

@@ -188,8 +188,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   async function submitRetrySettings() {
     if (!retryDraft) return
     setError(null)
-    // parse raw strings - allow user to have typed anything, clamp and validate here
-    const parsedMaxRetries = Math.max(0, Math.min(10, parseInt(maxRetriesInput, 10) || 0))
+    // parse raw strings - allow user to have typed anything, clamp and validate here (maxRetries now up to 1000, not 10)
+    const parsedMaxRetries = Math.max(0, Math.min(1000, parseInt(maxRetriesInput, 10) || 0))
     const parsedBaseDelay = Math.max(100, Math.min(60000, parseInt(baseDelayInput, 10) || 100))
     const parsedMaxDelay = Math.max(1000, Math.min(300000, parseInt(maxDelayInput, 10) || 1000))
     const parsedRetryOn = retryOnInput.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n >= 100 && n < 600)
@@ -832,7 +832,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                     className="input"
                     type="text"
                     inputMode="numeric"
-                    placeholder="0-10"
+                    placeholder="0-1000"
                     value={maxRetriesInput}
                     onChange={(e) => {
                       const raw = e.target.value
@@ -842,11 +842,11 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                         setRetryDraft({ ...retryDraft!, maxRetries: 0 })
                       } else {
                         const n = parseInt(raw, 10)
-                        if (!Number.isNaN(n)) setRetryDraft({ ...retryDraft!, maxRetries: n })
+                        if (!Number.isNaN(n)) setRetryDraft({ ...retryDraft!, maxRetries: Math.max(0, Math.min(1000, n)) })
                       }
                     }}
                     onBlur={() => {
-                      const n = Math.max(0, Math.min(10, parseInt(maxRetriesInput, 10) || 0))
+                      const n = Math.max(0, Math.min(1000, parseInt(maxRetriesInput, 10) || 0))
                       setMaxRetriesInput(String(n))
                       setRetryDraft({ ...retryDraft!, maxRetries: n })
                     }}

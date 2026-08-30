@@ -109,7 +109,7 @@ function normalizeSkillRel(rel: string): string {
   return r
 }
 
-function recordSkillRead(chatId: string, rel: string): void {
+export function recordSkillRead(chatId: string, rel: string): void {
   const normalized = normalizeSkillRel(rel)
   // Build set of all known skill files (lowercased) for matching
   let allSkillFiles: Set<string> | null = null
@@ -154,7 +154,7 @@ function recordSkillRead(chatId: string, rel: string): void {
   }
 }
 
-function hasReadSkill(chatId: string, required: string): boolean {
+export function hasReadSkill(chatId: string, required: string): boolean {
   const set = skillReads.get(chatId)
   if (!set) return false
   const norm = required.toLowerCase()
@@ -166,7 +166,7 @@ function hasReadSkill(chatId: string, required: string): boolean {
   return false
 }
 
-function isFrontendEdit(rel: string): boolean {
+export function isFrontendEdit(rel: string): boolean {
   const r = rel.trim().toLowerCase()
   return r.startsWith('web/') || r.startsWith('web\\') || r.includes('web/src') || r === 'web' || r.startsWith('web/src/') || r.includes('/web/') || r.startsWith('src/') && r.includes('web')
 }
@@ -207,7 +207,7 @@ function getRelevantSkillsFromHistory(chatId: string): string[] {
   }
 }
 
-function getEnforcedSkillsForWrite(rel: string, chatId: string): string[] {
+export function getEnforcedSkillsForWrite(rel: string, chatId: string): string[] {
   const direct = getRequiredSkillsForRel(rel)
   const fromHistory = getRelevantSkillsFromHistory(chatId)
   const extra: string[] = []
@@ -470,7 +470,7 @@ async function execShell(command: string, cwd: string): Promise<{ code: number; 
   })
 }
 
-async function executeTool(name: string, argsJson: string, ctx: ToolContext): Promise<ToolExecResult> {
+export async function executeTool(name: string, argsJson: string, ctx: ToolContext): Promise<ToolExecResult> {
   // MCP tools are dynamically registered; handle before static switch
   if (isMCPTool(name)) {
     const res = await callMCPTool(name, argsJson)
