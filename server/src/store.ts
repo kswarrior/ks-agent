@@ -151,6 +151,25 @@ export interface LSPServer {
   updatedAt: string
 }
 
+export type PluginSource = 'manual' | 'marketplace' | 'local' | 'url'
+
+export interface Plugin {
+  id: string
+  name: string
+  description: string
+  version: string
+  publisher?: string
+  entryPoint?: string
+  source: PluginSource
+  marketplaceId?: string
+  enabled: boolean
+  projectId?: string
+  tags?: string[]
+  icon?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Preview {
   id: string
   chatId: string
@@ -191,6 +210,7 @@ interface DB {
   previews: Preview[]
   mcpServers: MCPServer[]
   lspServers: LSPServer[]
+  plugins: Plugin[]
 }
 
 // Backwards compat alias
@@ -214,7 +234,7 @@ const dbFile = process.env.KS_SQLITE_PATH
   ? path.resolve(process.env.KS_SQLITE_PATH)
   : path.join(storageDir, 'ksagent.db')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [], mcpServers: [], lspServers: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
 
 let sqlite: Database.Database | null = null
 
@@ -405,6 +425,25 @@ function initSchema(s: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_lspServers_projectId ON lspServers(projectId);
     CREATE INDEX IF NOT EXISTS idx_lspServers_language ON lspServers(language);
+    CREATE TABLE IF NOT EXISTS plugins (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      version TEXT NOT NULL,
+      publisher TEXT,
+      entryPoint TEXT,
+      source TEXT NOT NULL,
+      marketplaceId TEXT,
+      enabled INTEGER NOT NULL,
+      projectId TEXT,
+      tags TEXT,
+      icon TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_plugins_projectId ON plugins(projectId);
+    CREATE INDEX IF NOT EXISTS idx_plugins_enabled ON plugins(enabled);
     CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -546,6 +585,14 @@ function persistToSqlite(): void {
       }
     }
   }
+  if ((db.plugins ?? []).length) {
+    const validProjects = new Set(db.projects.map((p) => p.id))
+    for (const pl of db.plugins) {
+      if (pl.projectId && !validProjects.has(pl.projectId)) {
+        pl.projectId = undefined
+      }
+    }
+  }
   // Keep FK ON throughout: deletes are children-first, inserts are parents-first (both satisfy FK)
   try { s.pragma('foreign_keys = ON') } catch {}
   const txn = s.transaction(() => {
@@ -561,6 +608,7 @@ function persistToSqlite(): void {
     s.prepare('DELETE FROM skills').run()
     s.prepare('DELETE FROM mcpServers').run()
     s.prepare('DELETE FROM lspServers').run()
+    s.prepare('DELETE FROM plugins').run()
     s.prepare('DELETE FROM projects').run()
     s.prepare('DELETE FROM kv').run()
 
@@ -599,6 +647,9 @@ function persistToSqlite(): void {
 
     const insLsp = s.prepare('INSERT INTO lspServers (id, name, language, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
     for (const l of (db.lspServers ?? [])) insLsp.run(l.id, l.name, l.language, l.transport, l.command ?? null, l.args ? JSON.stringify(l.args) : null, l.url ?? null, l.env ? JSON.stringify(l.env) : null, l.headers ? JSON.stringify(l.headers) : null, l.projectId ?? null, l.enabled ? 1 : 0, l.createdAt, l.updatedAt)
+
+    const insPlugin = s.prepare('INSERT INTO plugins (id, name, description, version, publisher, entryPoint, source, marketplaceId, enabled, projectId, tags, icon, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    for (const pl of (db.plugins ?? [])) insPlugin.run(pl.id, pl.name, pl.description, pl.version, pl.publisher ?? null, pl.entryPoint ?? null, pl.source, pl.marketplaceId ?? null, pl.enabled ? 1 : 0, pl.projectId ?? null, pl.tags ? JSON.stringify(pl.tags) : null, pl.icon ?? null, pl.createdAt, pl.updatedAt)
 
     const insPreview = s.prepare('INSERT INTO previews (id, chatId, port, createdAt, updatedAt) VALUES (?,?,?,?,?)')
     for (const p of db.previews) insPreview.run(p.id, p.chatId, p.port, p.createdAt, p.updatedAt)
@@ -777,6 +828,27 @@ function loadFromSqlite(s: Database.Database): DB | null {
 
     const previews = s.prepare('SELECT id, chatId, port, createdAt, updatedAt FROM previews').all() as Preview[]
 
+    let plugins: Plugin[] = []
+    try {
+      const pluginRows = s.prepare('SELECT id, name, description, version, publisher, entryPoint, source, marketplaceId, enabled, projectId, tags, icon, createdAt, updatedAt FROM plugins ORDER BY createdAt DESC').all() as any[]
+      plugins = pluginRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        version: r.version,
+        publisher: r.publisher ?? undefined,
+        entryPoint: r.entryPoint ?? undefined,
+        source: (r.source as PluginSource) ?? 'manual',
+        marketplaceId: r.marketplaceId ?? undefined,
+        enabled: !!r.enabled,
+        projectId: r.projectId ?? undefined,
+        tags: r.tags ? (JSON.parse(r.tags) as string[]) : undefined,
+        icon: r.icon ?? undefined,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt
+      }))
+    } catch {}
+
     const kvRows = s.prepare('SELECT key, value FROM kv').all() as any[]
     const kv = new Map(kvRows.map((r) => [r.key, r.value]))
     const systemPrompt = typeof kv.get('systemPrompt') === 'string' ? kv.get('systemPrompt') as string : ''
@@ -800,7 +872,7 @@ function loadFromSqlite(s: Database.Database): DB | null {
       retrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }
     }
 
-    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, skills, previews, mcpServers, lspServers }
+    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, skills, previews, mcpServers, lspServers, plugins }
   } catch (e) {
     console.error('Failed to load from sqlite:', e)
     return null
