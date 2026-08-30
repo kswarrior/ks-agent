@@ -97,6 +97,7 @@ elif [[ -n "${KS_DATA_DIR:-}" ]]; then
 else
   SQLITE_PATH="$DEFAULT_SQLITE"
 fi
+LOG_FILE="/tmp/ks-agent-${PORT}.log"
 (
   if command -v setsid >/dev/null 2>&1; then
     setsid env \
@@ -104,14 +105,14 @@ fi
       KS_DATA_DIR="${KS_DATA_DIR:-$PWD/storage}" \
       PORT="$PORT" \
       HOST="${HOST:-0.0.0.0}" \
-      node dist-server/index.js &
+      node dist-server/index.js >"$LOG_FILE" 2>&1 &
   else
     nohup env \
       KS_SQLITE_PATH="$SQLITE_PATH" \
       KS_DATA_DIR="${KS_DATA_DIR:-$PWD/storage}" \
       PORT="$PORT" \
       HOST="${HOST:-0.0.0.0}" \
-      node dist-server/index.js &
+      node dist-server/index.js >"$LOG_FILE" 2>&1 &
   fi
   echo $! > "$PID_FILE"
 )
