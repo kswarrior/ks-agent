@@ -2195,18 +2195,7 @@ app.post('/api/settings/mcp/:id/refresh', async (c) => {
 
 app.get('/api/settings/mcp/status/all', (c) => {
   syncMCPStatesFromDb()
-  const states = getAllMCPStates().map((st) => ({
-    id: st.server.id,
-    name: st.server.name,
-    transport: st.server.transport,
-    enabled: st.server.enabled,
-    connected: st.connected,
-    connecting: st.connecting,
-    error: st.error ?? null,
-    tools: st.tools,
-    projectId: st.server.projectId ?? null,
-    updatedAt: st.server.updatedAt
-  }))
+  const states = getAllMCPStates().map((st) => mcpPublic(st.server))
   return c.json(states)
 })
 
@@ -2520,18 +2509,7 @@ app.get('/api/settings/lsp/:id/capabilities', async (c) => {
 
 app.get('/api/settings/lsp/status/all', (c) => {
   syncLspStatesFromDb()
-  const states = getAllLspStates().map((st) => ({
-    id: st.server.id,
-    name: st.server.name,
-    language: st.server.language,
-    enabled: st.server.enabled,
-    connected: st.connected,
-    connecting: st.connecting,
-    error: st.error ?? null,
-    capabilities: st.capabilities ?? null,
-    projectId: st.server.projectId ?? null,
-    updatedAt: st.server.updatedAt
-  }))
+  const states = getAllLspStates().map((st) => lspPublic(st.server))
   return c.json(states)
 })
 
