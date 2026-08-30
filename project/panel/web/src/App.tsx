@@ -290,12 +290,12 @@ const Players: React.FC = () => {
   };
 
   const handleKick = async (id: number) => {
-    await api.kickPlayer(id.toString());
+    await api.kickPlayer(id);
     loadPlayers();
   };
 
   const handleBan = async (id: number) => {
-    await api.banPlayer(id.toString());
+    await api.banPlayer(id);
     loadPlayers();
   };
 
