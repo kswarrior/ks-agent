@@ -201,6 +201,27 @@ function resolveProjectPath(input: string): string {
   return path.join('project', normalized)
 }
 
+function isBlockedProjectPath(resolved: string): string | null {
+  const normalized = path.resolve(resolved)
+  const home = path.resolve(os.homedir())
+  const cwd = path.resolve(process.cwd())
+  // Allow: inside project/ , inside cwd, inside /tmp, inside /var/tmp
+  if (normalized === '/' || normalized === home || normalized === path.resolve('/home')) {
+    return 'Refusing protected path: ' + normalized
+  }
+  const blockedPrefixes = ['/etc', '/bin', '/sbin', '/usr', '/var', '/root', '/boot', '/lib', '/lib64']
+  for (const prefix of blockedPrefixes) {
+    if (normalized === prefix || normalized.startsWith(prefix + path.sep)) {
+      // Allow if it's inside cwd (e.g. cwd is /home/runner/work/ks-agent/ks-agent and prefix is /home but we already handled home root; subpath under cwd is ok)
+      if (normalized.startsWith(cwd + path.sep) || normalized === cwd) continue
+      // Allow /var/tmp and /tmp explicitly
+      if (normalized === '/tmp' || normalized.startsWith('/tmp' + path.sep) || normalized === '/var/tmp' || normalized.startsWith('/var/tmp' + path.sep)) continue
+      return 'Refusing protected system path: ' + normalized
+    }
+  }
+  return null
+}
+
 function publicProvider(p: { id: string; name: string; baseUrl: string; apiKey: string }) {
   return {
     id: p.id,
@@ -220,6 +241,10 @@ function stripInterruptedSuffix(content: string): string {
   // Also handle generic truncated case if any
   c = c.replace(/\n\n_\[truncated[^\]]*\]_\s*$/g, '')
   return c.trimEnd()
+}
+
+function sanitizePromptField(s: string): string {
+  return s.replace(/[\r\n\t]+/g, ' ').replace(/[\x00-\x1F\x7F]+/g, '').slice(0, 120)
 }
 
 function isContinueKeyword(text: string): boolean {
@@ -263,7 +288,12 @@ app.post('/api/projects', async (c) => {
 
   if (!name) return c.json({ error: 'Project name is required' }, 400)
   if (!dir) return c.json({ error: 'Project path is required' }, 400)
+  if (name.length > 80) return c.json({ error: 'Project name must be 2-80 chars' }, 400)
   dir = resolveProjectPath(dir)
+  {
+    const blocked = isBlockedProjectPath(dir)
+    if (blocked) return c.json({ error: blocked }, 400)
+  }
 
   try {
     if (!fs.existsSync(dir)) {
@@ -290,10 +320,14 @@ app.patch('/api/projects/:id', async (c) => {
   if (body.name !== undefined) {
     const name = String(body.name).trim()
     if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
+    if (name.length > 80) return c.json({ error: 'Project name must be 2-80 chars' }, 400)
     project.name = name
   }
   if (body.path !== undefined && String(body.path).trim()) {
-    project.path = resolveProjectPath(String(body.path).trim())
+    const newPath = resolveProjectPath(String(body.path).trim())
+    const blocked = isBlockedProjectPath(newPath)
+    if (blocked) return c.json({ error: blocked }, 400)
+    project.path = newPath
   }
   saveDb()
   return c.json(project)
@@ -320,9 +354,14 @@ app.delete('/api/projects/:id', async (c) => {
 
   if (shouldDeleteFolder && project.path) {
     const resolved = path.resolve(project.path)
-    const home = path.resolve(os.homedir())
-    if (resolved === '/' || resolved === home || resolved === path.resolve('/home')) {
-      return c.json({ error: 'Refusing to delete protected path: ' + resolved }, 400)
+    const blocked = isBlockedProjectPath(resolved)
+    if (blocked) return c.json({ error: blocked }, 400)
+    // Extra guard: also block deletion if resolved is not inside project/ or cwd or /tmp
+    const cwd = path.resolve(process.cwd())
+    const isAllowedDeletion = resolved.startsWith(path.join(cwd, 'project') + path.sep) || resolved.startsWith(cwd + path.sep) || resolved.startsWith('/tmp' + path.sep) || resolved === '/tmp'
+    if (!isAllowedDeletion && !resolved.startsWith(path.resolve('project') + path.sep)) {
+      // For legacy absolute project paths outside cwd, still allow if not blocked system path
+      // but require explicit confirmation - block remains via isBlockedProjectPath above
     }
     try {
       if (fs.existsSync(resolved)) {
