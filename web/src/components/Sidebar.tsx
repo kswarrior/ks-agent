@@ -10,8 +10,7 @@ import {
   IconPencil,
   IconPlus,
   IconSearch,
-  IconTrash,
-  IconX
+  IconTrash
 } from '../icons'
 
 interface SidebarProps {
@@ -34,13 +33,15 @@ interface SidebarProps {
 
 function useClickOutside(onOutside: () => void) {
   const ref = useRef<HTMLDivElement>(null)
+  const cbRef = useRef(onOutside)
+  useEffect(() => { cbRef.current = onOutside }, [onOutside])
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onOutside()
+      if (ref.current && !ref.current.contains(e.target as Node)) cbRef.current()
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [onOutside])
+  }, [])
   return ref
 }
 
@@ -57,7 +58,7 @@ export function Sidebar(props: SidebarProps) {
   const [chatQuery, setChatQuery] = useState('')
   const [menuFor, setMenuFor] = useState<MenuState | null>(null)
 
-  const ddRef = useClickOutside(() => setProjOpen(false))
+  const projWrapRef = useClickOutside(() => setProjOpen(false))
 
   useEffect(() => {
     if (!menuFor) return
@@ -113,7 +114,7 @@ export function Sidebar(props: SidebarProps) {
     <>
       <aside className={`sidebar${props.open ? ' open' : ''}`}>
         {/* Project selector */}
-        <div className="sidebar-section proj-wrap">
+        <div className="sidebar-section proj-wrap" ref={projWrapRef}>
           <div className="section-label">Project</div>
           <button className="proj-btn" onClick={() => setProjOpen((v) => !v)}>
             <IconFolder size={16} />
@@ -122,7 +123,7 @@ export function Sidebar(props: SidebarProps) {
           </button>
 
           {projOpen && (
-            <div className="dropdown" ref={ddRef}>
+            <div className="dropdown">
               <div className="dd-toolbar">
                 <div className="search-box">
                   <IconSearch size={14} />
@@ -297,4 +298,4 @@ export function Sidebar(props: SidebarProps) {
   )
 }
 
-export { IconX }
+
