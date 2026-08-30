@@ -519,16 +519,6 @@ export function ChatView(props: Props) {
               )}
             </div>
 
-            {isInterrupted && !props.streaming && props.onContinue && (
-              <button
-                className="btn"
-                style={{ padding: '7px 10px', fontSize: 12, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 4 }}
-                onClick={() => props.onContinue?.()}
-                title="Continue where it left off"
-              >
-                <IconRotate size={12} /> Continue
-              </button>
-            )}
             {props.streaming ? (
               <button className="send-btn stop-btn" onClick={props.onStop} aria-label="Stop" title="Stop">
                 <IconStop size={14} />
