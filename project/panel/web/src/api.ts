@@ -103,6 +103,12 @@ export const api = {
     return handleResponse(response);
   },
 
+  // Console messages
+  getConsoleMessages: async (): Promise<{ messages: ConsoleMessage[] }> => {
+    const response = await fetch(`${API_BASE}/console/messages`);
+    return handleResponse(response);
+  },
+
   // SSE for console streaming
   getConsoleStream: (): EventSource => {
     return new EventSource(`${API_BASE}/console/events`);
