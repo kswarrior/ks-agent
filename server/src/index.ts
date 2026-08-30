@@ -1390,7 +1390,8 @@ app.post('/api/settings/models', async (c) => {
   const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}), ...(systemPrompt ? { systemPrompt } : {}), ...(maxTokens ? { maxTokens } : {}) }
   getDb().models.push(entry)
   saveDb()
-  return c.json(entry, 201)
+  const providerName = getDb().providers.find((p) => p.id === providerId)?.name ?? 'Unknown'
+  return c.json({ ...entry, providerName }, 201)
 })
 
 app.patch('/api/settings/models/:id', async (c) => {

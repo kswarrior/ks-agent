@@ -762,116 +762,148 @@ function loadFromSqlite(s: Database.Database): DB | null {
     }))
 
     const plansRows = s.prepare('SELECT id, chatId, title, steps, createdAt, updatedAt FROM plans').all() as any[]
-    const plans: Plan[] = plansRows.map((r) => ({
-      id: r.id,
-      chatId: r.chatId,
-      title: r.title,
-      steps: JSON.parse(r.steps) as PlanStep[],
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt
-    }))
+    const plans: Plan[] = []
+    for (const r of plansRows) {
+      try {
+        plans.push({
+          id: r.id,
+          chatId: r.chatId,
+          title: r.title,
+          steps: JSON.parse(r.steps) as PlanStep[],
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt
+        })
+      } catch (e) { console.warn('Skipping corrupted plan row', r.id, e) }
+    }
 
     const terminals = s.prepare('SELECT id, projectId, name, createdAt, updatedAt FROM terminals').all() as Terminal[]
 
     const questionsRows = s.prepare('SELECT id, chatId, header, question, options, allowCustom, customPlaceholder, status, answer, selectedOption, createdAt, answeredAt, toolCallId FROM questions').all() as any[]
-    const questions: Question[] = questionsRows.map((r) => ({
-      id: r.id,
-      chatId: r.chatId,
-      header: r.header,
-      question: r.question,
-      options: JSON.parse(r.options) as string[],
-      allowCustom: !!r.allowCustom,
-      customPlaceholder: r.customPlaceholder ?? undefined,
-      status: r.status as 'pending' | 'answered',
-      answer: r.answer ?? undefined,
-      selectedOption: r.selectedOption ?? null,
-      createdAt: r.createdAt,
-      answeredAt: r.answeredAt ?? undefined,
-      toolCallId: r.toolCallId ?? undefined
-    }))
+    const questions: Question[] = []
+    for (const r of questionsRows) {
+      try {
+        questions.push({
+          id: r.id,
+          chatId: r.chatId,
+          header: r.header,
+          question: r.question,
+          options: JSON.parse(r.options) as string[],
+          allowCustom: !!r.allowCustom,
+          customPlaceholder: r.customPlaceholder ?? undefined,
+          status: r.status as 'pending' | 'answered',
+          answer: r.answer ?? undefined,
+          selectedOption: r.selectedOption ?? null,
+          createdAt: r.createdAt,
+          answeredAt: r.answeredAt ?? undefined,
+          toolCallId: r.toolCallId ?? undefined
+        })
+      } catch (e) { console.warn('Skipping corrupted question row', r.id, e) }
+    }
 
     const activitiesRows = s.prepare('SELECT id, chatId, toolType, toolCallId, args, summary, result, ok, timestamp, expanded FROM activities ORDER BY timestamp').all() as any[]
-    const activities: Activity[] = activitiesRows.map((r) => ({
-      id: r.id,
-      chatId: r.chatId,
-      toolType: r.toolType as ActivityToolType,
-      toolCallId: r.toolCallId,
-      args: JSON.parse(r.args) as Record<string, unknown>,
-      summary: r.summary,
-      result: r.result ?? undefined,
-      ok: r.ok == null ? undefined : !!r.ok,
-      timestamp: r.timestamp,
-      expanded: r.expanded ? true : undefined
-    }))
+    const activities: Activity[] = []
+    for (const r of activitiesRows) {
+      try {
+        activities.push({
+          id: r.id,
+          chatId: r.chatId,
+          toolType: r.toolType as ActivityToolType,
+          toolCallId: r.toolCallId,
+          args: JSON.parse(r.args) as Record<string, unknown>,
+          summary: r.summary,
+          result: r.result ?? undefined,
+          ok: r.ok == null ? undefined : !!r.ok,
+          timestamp: r.timestamp,
+          expanded: r.expanded ? true : undefined
+        })
+      } catch (e) { console.warn('Skipping corrupted activity row', r.id, e) }
+    }
 
     const skillsRows = s.prepare('SELECT id, name, note, mainFile, files, projectId, createdAt, updatedAt FROM skills').all() as any[]
-    const skills: Skill[] = skillsRows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      note: r.note,
-      mainFile: r.mainFile,
-      files: JSON.parse(r.files) as string[],
-      projectId: r.projectId ?? undefined,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt ?? undefined
-    }))
+    const skills: Skill[] = []
+    for (const r of skillsRows) {
+      try {
+        skills.push({
+          id: r.id,
+          name: r.name,
+          note: r.note,
+          mainFile: r.mainFile,
+          files: JSON.parse(r.files) as string[],
+          projectId: r.projectId ?? undefined,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt ?? undefined
+        })
+      } catch (e) { console.warn('Skipping corrupted skill row', r.id, e) }
+    }
 
     let mcpServers: MCPServer[] = []
     try {
       const mcpRows = s.prepare('SELECT id, name, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt FROM mcpServers').all() as any[]
-      mcpServers = mcpRows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        transport: r.transport as MCPTransport,
-        command: r.command ?? undefined,
-        args: r.args ? JSON.parse(r.args) as string[] : undefined,
-        url: r.url ?? undefined,
-        env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
-        headers: r.headers ? JSON.parse(r.headers) as Record<string,string> : undefined,
-        projectId: r.projectId ?? undefined,
-        enabled: !!r.enabled,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt
-      }))
+      for (const r of mcpRows) {
+        try {
+          mcpServers.push({
+            id: r.id,
+            name: r.name,
+            transport: r.transport as MCPTransport,
+            command: r.command ?? undefined,
+            args: r.args ? JSON.parse(r.args) as string[] : undefined,
+            url: r.url ?? undefined,
+            env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
+            headers: r.headers ? JSON.parse(r.headers) as Record<string,string> : undefined,
+            projectId: r.projectId ?? undefined,
+            enabled: !!r.enabled,
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt
+          })
+        } catch (e) { console.warn('Skipping corrupted mcpServer row', r.id, e) }
+      }
     } catch {}
 
     let lspServers: LSPServer[] = []
     try {
       const lspRows = s.prepare('SELECT id, name, language, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt FROM lspServers').all() as any[]
-      lspServers = lspRows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        language: r.language,
-        transport: (r.transport as LSPTransport) ?? 'stdio',
-        command: r.command ?? undefined,
-        args: r.args ? JSON.parse(r.args) as string[] : undefined,
-        url: r.url ?? undefined,
-        env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
-        headers: r.headers ? JSON.parse(r.headers) as Record<string,string> : undefined,
-        projectId: r.projectId ?? undefined,
-        enabled: !!r.enabled,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt
-      }))
+      for (const r of lspRows) {
+        try {
+          lspServers.push({
+            id: r.id,
+            name: r.name,
+            language: r.language,
+            transport: (r.transport as LSPTransport) ?? 'stdio',
+            command: r.command ?? undefined,
+            args: r.args ? JSON.parse(r.args) as string[] : undefined,
+            url: r.url ?? undefined,
+            env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
+            headers: r.headers ? JSON.parse(r.headers) as Record<string,string> : undefined,
+            projectId: r.projectId ?? undefined,
+            enabled: !!r.enabled,
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt
+          })
+        } catch (e) { console.warn('Skipping corrupted lspServer row', r.id, e) }
+      }
     } catch {
       // fallback for old schema without transport/url/headers
       try {
         const lspRows = s.prepare('SELECT id, name, language, command, args, env, projectId, enabled, createdAt, updatedAt FROM lspServers').all() as any[]
-        lspServers = lspRows.map((r) => ({
-          id: r.id,
-          name: r.name,
-          language: r.language,
-          transport: 'stdio' as LSPTransport,
-          command: r.command ?? undefined,
-          args: r.args ? JSON.parse(r.args) as string[] : undefined,
-          url: undefined,
-          env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
-          headers: undefined,
-          projectId: r.projectId ?? undefined,
-          enabled: !!r.enabled,
-          createdAt: r.createdAt,
-          updatedAt: r.updatedAt
-        }))
+        for (const r of lspRows) {
+          try {
+            lspServers.push({
+              id: r.id,
+              name: r.name,
+              language: r.language,
+              transport: 'stdio' as LSPTransport,
+              command: r.command ?? undefined,
+              args: r.args ? JSON.parse(r.args) as string[] : undefined,
+              url: undefined,
+              env: r.env ? JSON.parse(r.env) as Record<string,string> : undefined,
+              headers: undefined,
+              projectId: r.projectId ?? undefined,
+              enabled: !!r.enabled,
+              createdAt: r.createdAt,
+              updatedAt: r.updatedAt
+            })
+          } catch (e2) { console.warn('Skipping corrupted legacy lspServer row', r.id, e2) }
+        }
       } catch {}
     }
 
@@ -880,22 +912,26 @@ function loadFromSqlite(s: Database.Database): DB | null {
     let plugins: Plugin[] = []
     try {
       const pluginRows = s.prepare('SELECT id, name, description, version, publisher, entryPoint, source, marketplaceId, enabled, projectId, tags, icon, createdAt, updatedAt FROM plugins ORDER BY createdAt DESC').all() as any[]
-      plugins = pluginRows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        description: r.description,
-        version: r.version,
-        publisher: r.publisher ?? undefined,
-        entryPoint: r.entryPoint ?? undefined,
-        source: (r.source as PluginSource) ?? 'manual',
-        marketplaceId: r.marketplaceId ?? undefined,
-        enabled: !!r.enabled,
-        projectId: r.projectId ?? undefined,
-        tags: r.tags ? (JSON.parse(r.tags) as string[]) : undefined,
-        icon: r.icon ?? undefined,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt
-      }))
+      for (const r of pluginRows) {
+        try {
+          plugins.push({
+            id: r.id,
+            name: r.name,
+            description: r.description,
+            version: r.version,
+            publisher: r.publisher ?? undefined,
+            entryPoint: r.entryPoint ?? undefined,
+            source: (r.source as PluginSource) ?? 'manual',
+            marketplaceId: r.marketplaceId ?? undefined,
+            enabled: !!r.enabled,
+            projectId: r.projectId ?? undefined,
+            tags: r.tags ? (JSON.parse(r.tags) as string[]) : undefined,
+            icon: r.icon ?? undefined,
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt
+          })
+        } catch (e) { console.warn('Skipping corrupted plugin row', r.id, e) }
+      }
     } catch {}
 
     const kvRows = s.prepare('SELECT key, value FROM kv').all() as any[]
