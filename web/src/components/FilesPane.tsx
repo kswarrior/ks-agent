@@ -228,6 +228,8 @@ export function FilesPane({ projectId }: FilesPaneProps) {
       setEditContent(res.content)
     } catch (e: any) {
       toast(e.message, 'error')
+      // Do not clear editContent to avoid overwriting a large/binary file with empty on save
+      setSelected(null)
       setEditContent('')
     } finally {
       setEditLoading(false)
