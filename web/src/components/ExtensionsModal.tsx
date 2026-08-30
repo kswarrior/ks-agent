@@ -577,7 +577,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
         publisher: publisher || undefined,
         entryPoint: entryPoint || undefined,
         source: 'manual',
-        projectId: pluginForm.projectId.trim() || pluginFileBrowserProject || undefined,
+        projectId: pluginForm.projectId.trim() || undefined,
         enabled: pluginForm.enabled,
         tags,
         icon: pluginForm.icon.trim() || '🧩'
@@ -667,7 +667,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
   }
   async function installFromMarketplace(m: MarketplacePlugin) {
     try {
-      await api.installMarketplacePlugin(m.id, { projectId: pluginFileBrowserProject || undefined })
+      await api.installMarketplacePlugin(m.id, {})
       toast(`Installed ${m.name}`, 'success')
       await Promise.all([loadPlugins(), loadMarketplace()])
       setPluginView('installed')
@@ -723,7 +723,6 @@ export function ExtensionsModal({ open, onClose }: Props) {
     try {
       const payload: { name: string; note: string; mainFile: string; files: string[]; projectId?: string } = { name, note, mainFile, files: [...new Set(skillForm.files.map((f) => f.trim()).filter(Boolean))] }
       if (skillForm.projectId.trim()) payload.projectId = skillForm.projectId.trim()
-      else if (skillFileBrowserProject) payload.projectId = skillFileBrowserProject
       await api.createSkill(payload)
       toast('Skill added', 'success')
       setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '' })
