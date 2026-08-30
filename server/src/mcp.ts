@@ -93,6 +93,9 @@ class StdioMCPClient implements MCPClient {
     this.proc.stderr?.on('data', () => {
       // ignore stderr logs; useful for debugging but not fatal
     })
+    this.proc.stdin?.on('error', () => {
+      // EPIPE after process exit is expected (e.g. dummy echo server); prevent unhandled error crash
+    })
     this.proc.on('error', (err) => this.failAll(err))
     this.proc.on('exit', (code) => {
       if (!this.closed) {
