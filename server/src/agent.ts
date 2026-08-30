@@ -589,53 +589,6 @@ function isIgnoredDir(name: string): boolean {
   return new Set(['node_modules', '.git', '.hg', '.svn', 'dist', 'dist-server', 'storage', 'data', '.next', 'build', '.turbo', '.vite', 'coverage', '.cache', '.opencode', '.claude', '.cursor']).has(name)
 }
 
-function walkFilesSync(root: string, opts: { recursive: boolean; pattern?: RegExp; maxFiles: number }): string[] {
-  const out: string[] = []
-  const stack: string[] = [root]
-  const ignore = isIgnoredDir
-  while (stack.length && out.length < opts.maxFiles) {
-    const cur = stack.pop()!
-    let entries: fs.Dirent[]
-    try {
-      entries = fs.readdirSync(cur, { withFileTypes: true })
-    } catch {
-      continue
-    }
-    for (const ent of entries) {
-      if (out.length >= opts.maxFiles) break
-      if (ent.name.startsWith('.') && ent.name !== '.env' && ent.name !== '.gitignore') {
-        // allow hidden files like .env but skip heavy hidden dirs already in ignore; keep . but skip?
-        // we still want to traverse hidden dirs if not ignored, but limit.
-      }
-      if (ent.isDirectory()) {
-        if (ignore(ent.name)) continue
-        const full = path.join(cur, ent.name)
-        if (opts.recursive) {
-          stack.push(full)
-        } else if (opts.pattern) {
-          // for non-recursive with pattern containing **, we need recursive anyway; but caller decides
-        }
-        // For non-recursive listing, we still collect dir entries as files? Caller handles.
-        if (!opts.recursive) {
-          // will be collected by caller via dirents, not walk
-        }
-      } else if (ent.isFile()) {
-        const full = path.join(cur, ent.name)
-        if (opts.pattern) {
-          // test against relative from root or basename
-          const relFromRoot = path.relative(root, full).split(path.sep).join('/')
-          const base = ent.name
-          if (!opts.pattern.test(relFromRoot) && !opts.pattern.test(base) && !opts.pattern.test(full)) {
-            continue
-          }
-        }
-        out.push(full)
-      }
-    }
-  }
-  return out
-}
-
 function collectFilesForGrep(root: string, includePattern: string | null, maxFiles: number): string[] {
   const includeRe = includePattern ? globToRegExp(includePattern) : null
   const results: string[] = []
