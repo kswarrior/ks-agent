@@ -115,8 +115,6 @@ interface PtySession {
 
 const ptySessions = new Map<string, PtySession>()
 
-const previewProcs = new Map<string, { port: number; child: ReturnType<typeof spawn> | null; startedAt: number }>()
-
 function resolveShell(): string {
   const envShell = process.env.SHELL
   if (envShell && fs.existsSync(envShell)) return envShell
@@ -218,22 +216,17 @@ function isBlockedProjectPath(resolved: string): string | null {
   if (normalized === '/' || normalized === home || normalized === path.resolve('/home')) {
     return 'Refusing protected path: ' + normalized
   }
-  // Allowlist enforcement: only inside cwd, /tmp, /var/tmp, /dev/shm are permitted for absolute paths.
-  // Relative inputs like "project/foo" resolve to cwd/project/foo, which is inside cwd and thus allowed.
-  const isInsideCwd = normalized === cwd || normalized.startsWith(cwd + path.sep)
-  const isTmp = normalized === '/tmp' || normalized.startsWith('/tmp' + path.sep)
-  const isVarTmp = normalized === '/var/tmp' || normalized.startsWith('/var/tmp' + path.sep)
-  const isDevShm = normalized === '/dev/shm' || normalized.startsWith('/dev/shm' + path.sep)
-  if (isInsideCwd || isTmp || isVarTmp || isDevShm) {
-    // Still block exact system roots even if they happen to be inside cwd (unlikely, but keep explicit check)
-    const blockedExact = ['/etc', '/bin', '/sbin', '/usr', '/var', '/root', '/boot', '/lib', '/lib64']
-    for (const prefix of blockedExact) {
-      if (normalized === prefix) return 'Refusing protected system path: ' + normalized
+  const blockedPrefixes = ['/etc', '/bin', '/sbin', '/usr', '/var', '/root', '/boot', '/lib', '/lib64']
+  for (const prefix of blockedPrefixes) {
+    if (normalized === prefix || normalized.startsWith(prefix + path.sep)) {
+      // Allow if it's inside cwd (e.g. cwd is /home/runner/work/ks-agent/ks-agent and prefix is /home but we already handled home root; subpath under cwd is ok)
+      if (normalized.startsWith(cwd + path.sep) || normalized === cwd) continue
+      // Allow /var/tmp and /tmp explicitly
+      if (normalized === '/tmp' || normalized.startsWith('/tmp' + path.sep) || normalized === '/var/tmp' || normalized.startsWith('/var/tmp' + path.sep)) continue
+      return 'Refusing protected system path: ' + normalized
     }
-    return null
   }
-  // Anything outside allowed roots is blocked — prevents arbitrary sibling/home writes like /home/runner/other
-  return 'Refusing protected path (outside allowed project/cwd/tmp): ' + normalized
+  return null
 }
 
 function publicProvider(p: { id: string; name: string; baseUrl: string; apiKey: string }) {
@@ -341,13 +334,6 @@ app.patch('/api/projects/:id', async (c) => {
     const newPath = resolveProjectPath(String(body.path).trim())
     const blocked = isBlockedProjectPath(newPath)
     if (blocked) return c.json({ error: blocked }, 400)
-    // Validate that the target exists and is a directory, mirroring POST behavior
-    try {
-      const stat = fs.statSync(newPath)
-      if (!stat.isDirectory()) return c.json({ error: `Not a directory: ${newPath}` }, 400)
-    } catch {
-      return c.json({ error: `Path does not exist: ${newPath}` }, 400)
-    }
     project.path = newPath
   }
   saveDb()
@@ -415,14 +401,6 @@ app.delete('/api/projects/:id', async (c) => {
   const termIds = db.terminals.filter((t) => t.projectId === removed.id).map((t) => t.id)
   db.terminals = db.terminals.filter((t) => t.projectId !== removed.id)
   for (const tid of termIds) killPty(tid)
-  // kill managed preview process for this project if any
-  const previewProc = previewProcs.get(removed.id)
-  if (previewProc?.child) {
-    try { previewProc.child.kill('SIGTERM') } catch {}
-    previewProcs.delete(removed.id)
-  } else {
-    previewProcs.delete(removed.id)
-  }
   // Orphaned skills: FK is SET NULL — detach from deleted project so skill becomes global instead of dangling FK
   for (const sk of db.skills) {
     if (sk.projectId === removed.id) {
@@ -1398,7 +1376,6 @@ app.post('/api/settings/providers', async (c) => {
   const baseUrl = String(body.baseUrl ?? '').trim().replace(/\/+$/, '')
   const apiKey = String(body.apiKey ?? '').trim()
   if (!name) return c.json({ error: 'Provider name is required' }, 400)
-  if (name.length < 2 || name.length > 80) return c.json({ error: 'Provider name must be 2-80 chars' }, 400)
   if (!/^https?:\/\/.+/.test(baseUrl)) return c.json({ error: 'Base URL must start with http(s)://' }, 400)
   const provider = { id: newId(), name, baseUrl, apiKey }
   getDb().providers.push(provider)
@@ -1467,10 +1444,8 @@ app.post('/api/settings/models', async (c) => {
   if (!getDb().providers.some((p) => p.id === providerId)) {
     return c.json({ error: 'Select a valid provider' }, 400)
   }
-  if (displayName && displayName.length > 80) return c.json({ error: 'Display name must be 2-80 chars' }, 400)
-  if (systemPrompt && systemPrompt.length > 8000) return c.json({ error: 'System prompt too long (max 8000 chars)' }, 400)
-  if (maxTokens != null && (isNaN(maxTokens) || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 200000)) {
-    return c.json({ error: 'Max tokens must be an integer 1-200000' }, 400)
+  if (maxTokens != null && (isNaN(maxTokens) || maxTokens < 1)) {
+    return c.json({ error: 'Max tokens must be a positive number' }, 400)
   }
   const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}), ...(systemPrompt ? { systemPrompt } : {}), ...(maxTokens ? { maxTokens } : {}) }
   getDb().models.push(entry)
@@ -1486,43 +1461,21 @@ app.patch('/api/settings/models/:id', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   if (body.displayName !== undefined) {
     const displayName = String(body.displayName).trim()
-    if (displayName) {
-      if (displayName.length > 80) return c.json({ error: 'Display name must be 2-80 chars' }, 400)
-      model.displayName = displayName
-    } else delete model.displayName
+    if (displayName) model.displayName = displayName
+    else delete model.displayName
   }
   if (body.systemPrompt !== undefined) {
     const systemPrompt = String(body.systemPrompt).trim()
-    if (systemPrompt) {
-      if (systemPrompt.length > 8000) return c.json({ error: 'System prompt too long (max 8000 chars)' }, 400)
-      model.systemPrompt = systemPrompt
-    } else delete model.systemPrompt
+    if (systemPrompt) model.systemPrompt = systemPrompt
+    else delete model.systemPrompt
   }
   if (body.maxTokens !== undefined) {
-    const raw = body.maxTokens
-    // Allow empty string / null / 0 to mean delete (use provider default)
-    if (raw === '' || raw === null || raw === 0 || raw === '0') {
-      delete model.maxTokens
-    } else {
-      const maxTokens = Number(raw)
-      if (!Number.isFinite(maxTokens) || !Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 200000) {
-        return c.json({ error: 'Max tokens must be an integer 1-200000' }, 400)
-      }
-      model.maxTokens = maxTokens
-    }
+    const maxTokens = Number(body.maxTokens)
+    if (maxTokens != null && !isNaN(maxTokens) && maxTokens >= 1) model.maxTokens = maxTokens
+    else delete model.maxTokens
   }
   saveDb()
-  const providerName = db.providers.find((p) => p.id === model.providerId)?.name ?? 'Unknown'
-  const enriched = {
-    id: model.id,
-    model: model.model,
-    displayName: model.displayName?.trim() ? model.displayName.trim() : model.model,
-    providerId: model.providerId,
-    providerName,
-    maxTokens: model.maxTokens,
-    systemPrompt: model.systemPrompt ?? ''
-  }
-  return c.json({ ok: true, model: enriched })
+  return c.json({ ok: true, model })
 })
 
 app.delete('/api/settings/models/:id', (c) => {
@@ -3148,45 +3101,14 @@ app.post('/api/projects/:id/files/upload-url', async (c) => {
   if (!validSegment(name)) return c.json({ error: 'Invalid file name' }, 400)
   let res: Response
   try {
-    // Manual redirect handling to block SSRF via redirect to internal hosts.
-    // Follow up to 5 redirects, checking each Location against isBlockedHost before fetching.
-    let currentUrl: URL = parsed
-    let redirects = 0
-    while (true) {
-      const attempt = await fetch(currentUrl, { redirect: 'manual', signal: AbortSignal.timeout(30_000) } as any)
-      const status = attempt.status
-      if (status >= 300 && status < 400) {
-        const loc = attempt.headers.get('location')
-        if (!loc) {
-          res = attempt
-          break
-        }
-        let nextUrl: URL
-        try {
-          nextUrl = new URL(loc, currentUrl)
-        } catch {
-          return c.json({ error: 'Invalid redirect URL' }, 400)
-        }
-        if (nextUrl.protocol !== 'http:' && nextUrl.protocol !== 'https:') {
-          return c.json({ error: 'Only http(s) URLs are allowed' }, 400)
-        }
-        if (isBlockedHost(nextUrl.hostname)) return c.json({ error: 'Blocked host' }, 400)
-        redirects++
-        if (redirects > 5) return c.json({ error: 'Too many redirects' }, 400)
-        currentUrl = nextUrl
-        continue
-      }
-      res = attempt
-      // For non-redirect, also verify final URL host (in case fetch returned final URL with redirect:follow behavior not used, but we are manual so this is final)
-      try {
-        if (res.url && isBlockedHost(new URL(res.url).hostname)) return c.json({ error: 'Blocked host' }, 400)
-      } catch {
-        return c.json({ error: 'Blocked host' }, 400)
-      }
-      break
-    }
+    res = await fetch(parsed, { redirect: 'follow', signal: AbortSignal.timeout(30_000) })
   } catch (e: any) {
     return c.json({ error: e?.message || 'Failed to fetch URL' }, 400)
+  }
+  try {
+    if (res.url && isBlockedHost(new URL(res.url).hostname)) return c.json({ error: 'Blocked host' }, 400)
+  } catch {
+    return c.json({ error: 'Blocked host' }, 400)
   }
   if (!res.ok) return c.json({ error: `Failed to fetch URL (${res.status})` }, 400)
   if (!res.body) return c.json({ error: 'Empty download' }, 400)
@@ -3222,8 +3144,7 @@ app.post('/api/projects/:id/terminals', async (c) => {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
-  let name = String(body.name ?? '').trim() || 'Terminal'
-  if (name.length < 2 || name.length > 80) return c.json({ error: 'Terminal name must be 2-80 chars' }, 400)
+  const name = String(body.name ?? '').trim() || 'Terminal'
   const now = new Date().toISOString()
   const terminal: Terminal = {
     id: newId(),
@@ -3244,7 +3165,6 @@ app.patch('/api/terminals/:id', async (c) => {
   if (body.name !== undefined) {
     const name = String(body.name).trim()
     if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
-    if (name.length < 2 || name.length > 80) return c.json({ error: 'Terminal name must be 2-80 chars' }, 400)
     terminal.name = name
   }
   terminal.updatedAt = new Date().toISOString()
@@ -3314,55 +3234,6 @@ function isBlockedHost(hostname: string): boolean {
   if (h.startsWith('::ffff:')) {
     const v4 = h.slice(7)
     if (v4) return isBlockedHost(v4)
-  }
-  // Decimal integer IP (e.g. 2130706433 == 127.0.0.1)
-  if (/^\d+$/.test(h)) {
-    try {
-      const n = Number(h)
-      if (Number.isFinite(n) && n >= 0 && n < 4294967296) {
-        const a = (n >>> 24) & 0xff
-        const b = (n >>> 16) & 0xff
-        if (a === 127 || a === 10 || a === 0) return true
-        if (a === 169 && b === 254) return true
-        if (a === 172 && b >= 16 && b <= 31) return true
-        if (a === 192 && b === 168) return true
-      }
-    } catch {}
-  }
-  // Hex integer IP (e.g. 0x7f000001 == 127.0.0.1)
-  if (/^0x[0-9a-f]+$/i.test(h)) {
-    try {
-      const n = parseInt(h, 16)
-      if (Number.isFinite(n) && n >= 0 && n < 4294967296) {
-        const a = (n >>> 24) & 0xff
-        const b = (n >>> 16) & 0xff
-        if (a === 127 || a === 10 || a === 0) return true
-        if (a === 169 && b === 254) return true
-        if (a === 172 && b >= 16 && b <= 31) return true
-        if (a === 192 && b === 168) return true
-      }
-    } catch {}
-  }
-  // Dotted forms with hex/octal octets (e.g. 0x7f.0.0.1 or 0177.0.0.1)
-  if (h.includes('.')) {
-    const parts = h.split('.')
-    if (parts.length === 4) {
-      try {
-        const nums = parts.map((p) => {
-          if (/^0x[0-9a-f]+$/i.test(p)) return parseInt(p, 16)
-          if (/^0[0-7]+$/.test(p) && p.length > 1) return parseInt(p, 8)
-          if (/^\d+$/.test(p)) return parseInt(p, 10)
-          return NaN
-        })
-        if (nums.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
-          const a = nums[0], b = nums[1]
-          if (a === 127 || a === 10 || a === 0) return true
-          if (a === 169 && b === 254) return true
-          if (a === 172 && b >= 16 && b <= 31) return true
-          if (a === 192 && b === 168) return true
-        }
-      } catch {}
-    }
   }
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
   if (!m) return false
@@ -3450,6 +3321,8 @@ async function isPortReachable(port: number, timeoutMs = 1500): Promise<boolean>
     return false
   }
 }
+
+const previewProcs = new Map<string, { port: number; child: ReturnType<typeof spawn> | null; startedAt: number }>()
 
 app.get('/api/projects/:id/preview/status', async (c) => {
   const project = findProject(c.req.param('id'))
