@@ -181,7 +181,6 @@ function getRequiredSkillsForRel(rel: string): string[] {
 
 function getRelevantSkillsFromHistory(chatId: string): string[] {
   try {
-    const { messagesOf, getSkills } = require('./store.js') as typeof import('./store.js')
     const msgs = messagesOf(chatId) as { role: string; content: string }[]
     const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
     const text = (lastUser?.content || '').toLowerCase()
