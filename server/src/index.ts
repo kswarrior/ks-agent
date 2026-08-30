@@ -44,7 +44,11 @@ import {
   getMcpServers,
   type LSPServer,
   findLspServer,
-  getLspServers
+  getLspServers,
+  type Plugin,
+  type PluginSource,
+  findPlugin,
+  getPlugins
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, resolvePendingQuestion, runAgentLoop } from './agent.js'
@@ -360,6 +364,12 @@ app.delete('/api/projects/:id', async (c) => {
     }
   }
   syncLspStatesFromDb()
+  for (const pl of (db.plugins ?? [])) {
+    if (pl.projectId === removed.id) {
+      delete pl.projectId
+      pl.updatedAt = new Date().toISOString()
+    }
+  }
   saveDb()
   return c.json({ ok: true })
 })

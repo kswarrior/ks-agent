@@ -974,6 +974,22 @@ function tryMigrateFromJson(): boolean {
         enabled: l.enabled !== false,
         createdAt: typeof l.createdAt === 'string' ? l.createdAt : new Date().toISOString(),
         updatedAt: typeof l.updatedAt === 'string' ? l.updatedAt : new Date().toISOString()
+      })) : [],
+      plugins: Array.isArray((parsed as any).plugins) ? (parsed as any).plugins.filter((p: any) => p && typeof p.id === 'string' && typeof p.name === 'string').map((p: any) => ({
+        id: String(p.id),
+        name: String(p.name).trim(),
+        description: typeof p.description === 'string' ? String(p.description).trim() : '',
+        version: typeof p.version === 'string' ? String(p.version).trim() : '1.0.0',
+        publisher: typeof p.publisher === 'string' && p.publisher.trim() ? String(p.publisher).trim() : undefined,
+        entryPoint: typeof p.entryPoint === 'string' && p.entryPoint.trim() ? String(p.entryPoint).trim() : undefined,
+        source: ['manual','marketplace','local','url'].includes(String(p.source)) ? String(p.source) as PluginSource : 'manual',
+        marketplaceId: typeof p.marketplaceId === 'string' && p.marketplaceId.trim() ? String(p.marketplaceId).trim() : undefined,
+        enabled: p.enabled !== false,
+        projectId: typeof p.projectId === 'string' && p.projectId.trim() ? String(p.projectId).trim() : undefined,
+        tags: Array.isArray(p.tags) ? p.tags.map((t: any) => String(t).trim()).filter(Boolean).slice(0, 8) : undefined,
+        icon: typeof p.icon === 'string' && p.icon.trim() ? String(p.icon).trim().slice(0, 4) : undefined,
+        createdAt: typeof p.createdAt === 'string' ? p.createdAt : new Date().toISOString(),
+        updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : new Date().toISOString()
       })) : []
     }
     // Migrate old skills missing updatedAt / projectId
@@ -1110,7 +1126,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [], lspServers: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     } else {
@@ -1128,7 +1144,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [], lspServers: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     }
@@ -1260,4 +1276,12 @@ export function getLspServers(): LSPServer[] {
 
 export function findLspServer(id: string): LSPServer | undefined {
   return db.lspServers.find((s) => s.id === id)
+}
+
+export function getPlugins(): Plugin[] {
+  return [...(db.plugins ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export function findPlugin(id: string): Plugin | undefined {
+  return (db.plugins ?? []).find((p) => p.id === id)
 }
