@@ -295,7 +295,7 @@ app.post('/api/projects', async (c) => {
 
   if (!name) return c.json({ error: 'Project name is required' }, 400)
   if (!dir) return c.json({ error: 'Project path is required' }, 400)
-  if (name.length > 80) return c.json({ error: 'Project name must be 2-80 chars' }, 400)
+  if (name.length < 2 || name.length > 80) return c.json({ error: 'Project name must be 2-80 chars' }, 400)
   dir = resolveProjectPath(dir)
   {
     const blocked = isBlockedProjectPath(dir)
@@ -327,7 +327,7 @@ app.patch('/api/projects/:id', async (c) => {
   if (body.name !== undefined) {
     const name = String(body.name).trim()
     if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
-    if (name.length > 80) return c.json({ error: 'Project name must be 2-80 chars' }, 400)
+    if (name.length < 2 || name.length > 80) return c.json({ error: 'Project name must be 2-80 chars' }, 400)
     project.name = name
   }
   if (body.path !== undefined && String(body.path).trim()) {
