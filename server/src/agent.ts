@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { findPlanForChat, getDb, getRetrySettings, newId, saveDb, type Plan, type Question, type Activity } from './store.js'
+import { findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
@@ -93,6 +93,119 @@ export function resolvePendingQuestion(questionId: string, answer: string): bool
   pendingQuestionResolvers.delete(questionId)
   fn(answer)
   return true
+}
+
+// Skill read tracking: chatId -> Set<normalized skill rel>
+export const skillReads = new Map<string, Set<string>>()
+
+function normalizeSkillRel(rel: string): string {
+  let r = rel.trim().toLowerCase()
+  r = r.replace(/^\.\//, '').replace(/^\//, '')
+  if (r.startsWith('skills/')) r = r.slice('skills/'.length)
+  if (r.startsWith('.skills/')) r = r.slice('.skills/'.length)
+  if (r.startsWith('.agent/skills/')) r = r.slice('.agent/skills/'.length)
+  if (r.startsWith('.claude/skills/')) r = r.slice('.claude/skills/'.length)
+  if (r.startsWith('.cursor/skills/')) r = r.slice('.cursor/skills/'.length)
+  return r
+}
+
+function recordSkillRead(chatId: string, rel: string): void {
+  const normalized = normalizeSkillRel(rel)
+  // Build set of all known skill files (lowercased) for matching
+  let allSkillFiles: Set<string> | null = null
+  try {
+    const skills = getSkills()
+    allSkillFiles = new Set<string>()
+    for (const s of skills) {
+      allSkillFiles.add(s.mainFile.toLowerCase())
+      allSkillFiles.add(path.basename(s.mainFile).toLowerCase())
+      for (const f of s.files) {
+        allSkillFiles.add(f.toLowerCase())
+        allSkillFiles.add(path.basename(f).toLowerCase())
+      }
+    }
+  } catch {}
+  // Also include known frontend sub-files explicitly (in case DB not yet migrated)
+  const frontendFallback = new Set(['frontend/skill.md', 'frontend/react.md', 'frontend/ts.md', 'frontend/ejs.md', 'frontend.md', 'skill.md', 'react.md', 'ts.md', 'ejs.md'])
+  let toRecord: string | null = null
+  if (allSkillFiles && allSkillFiles.has(normalized)) {
+    toRecord = normalized
+  } else if (allSkillFiles && allSkillFiles.has(path.basename(normalized))) {
+    toRecord = path.basename(normalized)
+  } else if (frontendFallback.has(normalized) || frontendFallback.has(path.basename(normalized))) {
+    toRecord = normalized
+  } else if (normalized.endsWith('.md') && (normalized.includes('frontend') || normalized.includes('skill'))) {
+    toRecord = normalized
+  }
+  if (toRecord) {
+    let set = skillReads.get(chatId)
+    if (!set) {
+      set = new Set()
+      skillReads.set(chatId, set)
+    }
+    set.add(toRecord)
+    set.add(normalized)
+    set.add(path.basename(normalized))
+    // legacy frontend.md counts as frontend/skill.md
+    if (normalized === 'frontend.md' || normalized === 'skill.md') {
+      set.add('frontend/skill.md')
+      set.add('frontend.md')
+    }
+  }
+}
+
+function hasReadSkill(chatId: string, required: string): boolean {
+  const set = skillReads.get(chatId)
+  if (!set) return false
+  const norm = required.toLowerCase()
+  if (set.has(norm)) return true
+  const base = path.basename(norm)
+  for (const s of set) {
+    if (s === norm || s === base || path.basename(s) === base) return true
+  }
+  return false
+}
+
+function isFrontendEdit(rel: string): boolean {
+  const r = rel.trim().toLowerCase()
+  return r.startsWith('web/') || r.startsWith('web\\') || r.includes('web/src') || r === 'web' || r.startsWith('web/src/') || r.includes('/web/') || r.startsWith('src/') && r.includes('web')
+}
+
+function getRequiredSkillsForRel(rel: string): string[] {
+  // For now, frontend is the primary enforced skill for web edits
+  if (isFrontendEdit(rel)) {
+    return ['frontend/skill.md']
+  }
+  return []
+}
+
+function getRelevantSkillsFromHistory(chatId: string): string[] {
+  try {
+    const { messagesOf, getSkills } = require('./store.js') as typeof import('./store.js')
+    const msgs = messagesOf(chatId) as { role: string; content: string }[]
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
+    const text = (lastUser?.content || '').toLowerCase()
+    const skills = getSkills() as { name: string; mainFile: string }[]
+    const relevant: string[] = []
+    for (const s of skills) {
+      const name = s.name.toLowerCase()
+      const main = s.mainFile.toLowerCase()
+      if (text.includes(name) || text.includes(main) || text.includes(path.basename(main).replace('.md',''))) {
+        relevant.push(s.mainFile.toLowerCase())
+      }
+      // also check aliases: frontend skill for react/ts/ejs keywords
+      if (name === 'frontend' && (text.includes('react') || text.includes('typescript') || text.includes('ts') || text.includes('ejs') || text.includes('vite') || text.includes('css') || text.includes('component') || text.includes('frontend') || text.includes('ui'))) {
+        if (!relevant.includes(s.mainFile.toLowerCase())) relevant.push(s.mainFile.toLowerCase())
+      }
+      if (name === 'testing' && text.includes('test')) relevant.push(s.mainFile.toLowerCase())
+      if (name === 'debugging' && (text.includes('debug') || text.includes('fix') || text.includes('bug') || text.includes('error'))) relevant.push(s.mainFile.toLowerCase())
+      if (name === 'refactoring' && (text.includes('refactor') || text.includes('clean'))) relevant.push(s.mainFile.toLowerCase())
+      if (name === 'code review' && text.includes('review')) relevant.push(s.mainFile.toLowerCase())
+    }
+    return [...new Set(relevant)]
+  } catch {
+    return []
+  }
 }
 
 function err(message: string): ToolExecResult {
