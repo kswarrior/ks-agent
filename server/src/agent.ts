@@ -642,6 +642,16 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
     }
 
     case 'edit_file': {
+      // Skill enforcement: must have read relevant skill before editing
+      {
+        const rel = String(args.path ?? '')
+        const enforced = getEnforcedSkillsForWrite(rel, ctx.chatId)
+        for (const req of enforced) {
+          if (!hasReadSkill(ctx.chatId, req)) {
+            return err(`Skill required: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first. For frontend work also read the matching sub-file (frontend/react.md, frontend/ts.md, frontend/ejs.md) if relevant.`)
+          }
+        }
+      }
       const abs = safeJoin(ctx, args.path)
       if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
       const oldStr = args.old_string
