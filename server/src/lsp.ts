@@ -46,7 +46,6 @@ class StdioLspClient implements LspClient {
   private nextId = 1
   private buffer = ''
   private closed = false
-  private contentLengthBuffer = ''
 
   constructor(
     private command: string,
@@ -73,21 +72,19 @@ class StdioLspClient implements LspClient {
   }
 
   private onData(data: string): void {
-    // LSP uses Content-Length header framing OR newline-delimited JSON (both observed)
-    // Try Content-Length first, fallback to newline
-    this.contentLengthBuffer += data
-    // Try Content-Length parsing
+    this.buffer += data
+    // LSP spec: Content-Length framing. Also support newline-delimited fallback for MCP-like servers.
     while (true) {
-      const headerEnd = this.contentLengthBuffer.indexOf('\r\n\r\n')
+      const headerEnd = this.buffer.indexOf('\r\n\r\n')
       if (headerEnd !== -1) {
-        const header = this.contentLengthBuffer.slice(0, headerEnd)
+        const header = this.buffer.slice(0, headerEnd)
         const m = header.match(/Content-Length:\s*(\d+)/i)
         if (m) {
           const len = parseInt(m[1], 10)
           const totalHeaderLen = headerEnd + 4
-          if (this.contentLengthBuffer.length >= totalHeaderLen + len) {
-            const jsonStr = this.contentLengthBuffer.slice(totalHeaderLen, totalHeaderLen + len)
-            this.contentLengthBuffer = this.contentLengthBuffer.slice(totalHeaderLen + len)
+          if (this.buffer.length >= totalHeaderLen + len) {
+            const jsonStr = this.buffer.slice(totalHeaderLen, totalHeaderLen + len)
+            this.buffer = this.buffer.slice(totalHeaderLen + len)
             let msg: any
             try { msg = JSON.parse(jsonStr) } catch { continue }
             this.handleMessage(msg)
@@ -96,32 +93,26 @@ class StdioLspClient implements LspClient {
             break // wait for more data
           }
         } else {
-          // malformed header, fallback to newline handling for remaining
+          // malformed header without Content-Length — treat as not Content-Length framing
           break
         }
       } else {
         break
       }
     }
-    // Fallback newline-delimited for servers that use \n JSON (like MCP) — also handle leftover
-    // Use buffer for newline parsing on what's left after Content-Length processing
-    this.buffer += this.contentLengthBuffer
-    // If we consumed content-length messages, contentLengthBuffer now may contain partial newline JSON
-    // We'll try to parse newline JSON from buffer, and keep remainder in contentLengthBuffer
+    // If buffer starts with a partial Content-Length header, wait for more data
+    if (this.buffer.startsWith('Content-Length')) return
+    // Fallback: newline-delimited JSON (for servers that don't use Content-Length)
     let idx: number
     while ((idx = this.buffer.indexOf('\n')) >= 0) {
       const line = this.buffer.slice(0, idx).trim()
       this.buffer = this.buffer.slice(idx + 1)
-      this.contentLengthBuffer = this.buffer // keep in sync
       if (!line) continue
-      // ignore non-JSON lines that aren't JSON-RPC (like Content-Length partials already handled)
       if (!line.startsWith('{')) continue
       let msg: any
       try { msg = JSON.parse(line) } catch { continue }
       this.handleMessage(msg)
     }
-    // sync back
-    this.contentLengthBuffer = this.buffer
   }
 
   private handleMessage(msg: any): void {
