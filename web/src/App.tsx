@@ -504,11 +504,17 @@ function KsAgent() {
       checkboxInitialChecked: false
     })
     if (!confirmed) return
+    // capture chat ids before server deletes them (chats state only holds active project's chats)
+    let deletedChatIds = new Set(chats.filter((c) => c.projectId === project.id).map((c) => c.id))
+    if (deletedChatIds.size === 0 && project.id !== activeProjectId) {
+      try {
+        const remote = await api.listChats(project.id)
+        for (const c of remote) deletedChatIds.add(c.id)
+      } catch {}
+    }
     try {
       await api.deleteProject(project.id, { deleteFolder })
       setProjects((prev) => prev.filter((p) => p.id !== project.id))
-      // clean local state for deleted project's chats
-      const deletedChatIds = new Set(chats.filter((c) => c.projectId === project.id).map((c) => c.id))
       if (deletedChatIds.size > 0) {
         setChats((prev) => prev.filter((c) => !deletedChatIds.has(c.id)))
         setActivities((prev) => prev.filter((a) => !deletedChatIds.has(a.chatId)))

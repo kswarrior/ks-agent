@@ -684,8 +684,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   disabled={providers.length === 0}
                   title={providers.length === 0 ? 'Add a provider first' : undefined}
                   onClick={() => {
+                    const pid = modelForm.providerId || providers[0]?.id || ''
+                    if (pid && pid !== modelForm.providerId) setModelForm((f) => ({ ...f, providerId: pid }))
                     setShowModelForm(true)
-                    if (!modelForm.providerId && providers[0]) setModelForm((f) => ({ ...f, providerId: providers[0].id }))
                   }}
                 >
                   <IconPlus size={15} /> Add

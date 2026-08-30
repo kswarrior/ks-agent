@@ -47,8 +47,9 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
   const applyChatPreview = useCallback(() => {
     if (!activeChatId || !chatPreview) return false
     const hostname = window.location.hostname || 'localhost'
+    const proto = window.location.protocol === 'https:' ? 'https:' : 'http:'
     const proxied = api.chatPreviewProxyUrl(activeChatId)
-    const direct = `http://${hostname}:${chatPreview.port}`
+    const direct = `${proto}//${hostname}:${chatPreview.port}`
     setUrl(proxied)
     setDirectUrl(direct)
     setRunning(true)
@@ -78,7 +79,8 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
       const proxied = res.proxiedUrl || api.previewProxyUrl(activeProject.id)
       // directUrl for "open in new tab"
       const hostname = window.location.hostname || 'localhost'
-      const direct = res.url?.replace('127.0.0.1', hostname).replace('localhost', hostname) || `http://${hostname}:${res.port}`
+      const proto = window.location.protocol === 'https:' ? 'https:' : 'http:'
+      const direct = res.url?.replace('127.0.0.1', hostname).replace('localhost', hostname) || `${proto}//${hostname}:${res.port}`
       setUrl(proxied)
       setDirectUrl(direct)
       setRunning(res.running)
