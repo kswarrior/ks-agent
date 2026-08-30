@@ -1397,24 +1397,400 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
 
           {tab === 'plugins' && (
             <div className="inline-form" style={{ marginTop: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><IconPlug size={16} /> Plugins</h4>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, padding: '3px 8px' }}>Coming soon</span>
-              </div>
-              <p className="hint" style={{ marginBottom: 16 }}>
-                Plugins extend KS Agent with new commands and UI. Install from the marketplace or load local plugins during development.
-              </p>
-              <div className="empty" style={{ padding: '32px 12px', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
-                  <IconPlug size={20} />
-                </div>
-                <h2>No plugins installed</h2>
-                <p>Plugin marketplace is under development. You&apos;ll be able to browse and install plugins here.</p>
-              </div>
-              <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-                <button className="btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>Browse marketplace</button>
-                <button className="btn" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>Install from path</button>
-              </div>
+              {pluginEdit ? (
+                <>
+                  <div className="fp-subhead">
+                    <button className="icon-btn" aria-label="Back to plugins" onClick={() => { setPluginEdit(null); setError(null); setPluginFileBrowserOpen(false) }}>
+                      <IconChevronLeft size={17} />
+                    </button>
+                    <span>Edit plugin</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)', borderLeft: '3px solid #519aba' }}>
+                    <h4 style={{ marginBottom: 12 }}>Edit plugin</h4>
+                    <label className="field-label">Icon <span style={{ fontWeight: 400 }}>(emoji)</span></label>
+                    <input className="input" placeholder="e.g. 🧩" value={pluginEditForm.icon} onChange={e => setPluginEditForm({ ...pluginEditForm, icon: e.target.value })} style={{ maxWidth: 120 }} />
+                    <label className="field-label">Name</label>
+                    <input className="input" placeholder="e.g. My Plugin" value={pluginEditForm.name} onChange={e => setPluginEditForm({ ...pluginEditForm, name: e.target.value })} />
+                    <label className="field-label">Description</label>
+                    <textarea className="input" placeholder="Short description (max 500 chars)" value={pluginEditForm.description} onChange={e => setPluginEditForm({ ...pluginEditForm, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <label className="field-label">Version <span style={{ fontWeight: 400 }}>(semver)</span></label>
+                        <input className="input" placeholder="1.0.0" value={pluginEditForm.version} onChange={e => setPluginEditForm({ ...pluginEditForm, version: e.target.value })} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label className="field-label">Publisher</label>
+                        <input className="input" placeholder="e.g. Acme Inc" value={pluginEditForm.publisher} onChange={e => setPluginEditForm({ ...pluginEditForm, publisher: e.target.value })} />
+                      </div>
+                    </div>
+                    <label className="field-label">Entry point <span style={{ fontWeight: 400 }}>(relative path, optional)</span></label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="input" placeholder="e.g. plugins/my-plugin/index.js" value={pluginEditForm.entryPoint} onChange={e => setPluginEditForm({ ...pluginEditForm, entryPoint: e.target.value })} style={{ flex: 1 }} />
+                      <button className="btn" onClick={() => {
+                        const pid = pluginEditForm.projectId || pluginFileBrowserProject || skillProjects[0]?.id
+                        if (pid) setPluginFileBrowserProject(pid)
+                        setPluginFileBrowserOpen(v => !v)
+                        if (!pluginFileBrowserOpen && skillProjects.length === 0) loadSkillProjects()
+                      }}>{pluginFileBrowserOpen ? 'Hide' : 'Browse'}</button>
+                    </div>
+                    {pluginFileBrowserOpen && (
+                      <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface-2)' }}>
+                        <div style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <IconFolder size={14} style={{ color: 'var(--text-faint)' }} />
+                          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>Project</span>
+                          <select className="input" style={{ flex: 1, minWidth: 140, height: 30, padding: '4px 8px', fontSize: 13 }} value={pluginFileBrowserProject ?? ''} onChange={e => { setPluginFileBrowserProject(e.target.value); setPluginPickerDir('') }}>
+                            {skillProjects.length === 0 && <option value="">No projects</option>}
+                            {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — {p.path}</option>)}
+                          </select>
+                          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={refreshPluginPicker}>Refresh</button>
+                        </div>
+                        <div style={{ padding: 8 }}>
+                          <div className="fp-path" style={{ marginBottom: 6 }}>{pluginPickerDir === '' ? '/' : pluginPickerDir}</div>
+                          {pluginPickerLoading ? (
+                            <div className="hint" style={{ padding: 12 }}>Loading…</div>
+                          ) : (
+                            <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              {pluginPickerDir !== '' && (
+                                <button className="fp-row" style={{ justifyContent: 'flex-start' }} onClick={() => setPluginPickerDir(d => d.includes('/') ? d.slice(0, d.lastIndexOf('/')) : '')}>
+                                  <IconChevronLeft size={14} /> <span>..</span>
+                                </button>
+                              )}
+                              {pluginPickerEntries.length === 0 && <div className="hint" style={{ padding: 8 }}>No files</div>}
+                              {pluginPickerEntries.map(ent => {
+                                const rel = pluginPickerDir ? `${pluginPickerDir}/${ent.name}` : ent.name
+                                const isDir = ent.type === 'dir'
+                                return (
+                                  <div key={ent.name} className="fp-row" style={{ cursor: isDir ? 'pointer' : 'default' }} onClick={() => { if (isDir) setPluginPickerDir(rel) }}>
+                                    {isDir ? <IconFolder size={14} style={{ color: '#dcad3c' }} /> : <IconFile size={14} style={{ color: 'var(--text-faint)' }} />}
+                                    <span className="fp-name" title={rel}>{ent.name}</span>
+                                    {ent.type === 'file' && (
+                                      <button className="btn" style={{ padding: '2px 6px', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); setPluginEditForm({ ...pluginEditForm, entryPoint: rel, projectId: pluginFileBrowserProject ?? pluginEditForm.projectId }); toast('Entry point set', 'success') }}>Set</button>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <label className="field-label">Tags <span style={{ fontWeight: 400 }}>(comma separated, e.g. formatter, productivity)</span></label>
+                    <input className="input" placeholder="e.g. formatter, productivity" value={pluginEditForm.tags} onChange={e => setPluginEditForm({ ...pluginEditForm, tags: e.target.value })} />
+                    <label className="field-label">Scope project <span style={{ fontWeight: 400 }}>(leave empty for global)</span></label>
+                    <select className="input" value={pluginEditForm.projectId} onChange={e => setPluginEditForm({ ...pluginEditForm, projectId: e.target.value })}>
+                      <option value="">Global (all projects)</option>
+                      {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — {p.path}</option>)}
+                    </select>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={pluginEditForm.enabled} onChange={e => setPluginEditForm({ ...pluginEditForm, enabled: e.target.checked })} /> Enabled
+                    </label>
+                    <div className="dialog-actions" style={{ marginTop: 16 }}>
+                      <button className="btn" onClick={() => { setPluginEdit(null); setPluginFileBrowserOpen(false); setError(null) }}>Cancel</button>
+                      <button className="btn btn-primary" onClick={submitEditPlugin}>Save</button>
+                    </div>
+                  </div>
+                </>
+              ) : showPluginForm ? (
+                <>
+                  <div className="fp-subhead">
+                    <button className="icon-btn" aria-label="Back to plugins" onClick={() => { setShowPluginForm(false); setPluginFileBrowserOpen(false); setPluginForm({ name: '', description: '', version: '1.0.0', publisher: '', entryPoint: '', projectId: '', enabled: true, tags: '', icon: '🧩' }); setPluginPickerDir(''); setError(null) }}>
+                      <IconChevronLeft size={17} />
+                    </button>
+                    <span>Add plugin</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 16, background: 'var(--surface)' }}>
+                    <label className="field-label">Icon <span style={{ fontWeight: 400 }}>(emoji, 1-2 chars)</span></label>
+                    <input className="input" placeholder="🧩" value={pluginForm.icon} onChange={e => setPluginForm({ ...pluginForm, icon: e.target.value })} style={{ maxWidth: 120 }} />
+                    <label className="field-label">Name <span style={{ color: '#ef4444' }}>*</span></label>
+                    <input className="input" placeholder="e.g. My Plugin" value={pluginForm.name} onChange={e => setPluginForm({ ...pluginForm, name: e.target.value })} />
+                    <label className="field-label">Description</label>
+                    <textarea className="input" placeholder="What does this plugin do?" value={pluginForm.description} onChange={e => setPluginForm({ ...pluginForm, description: e.target.value })} rows={2} style={{ resize: 'vertical' }} />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div style={{ flex: 1 }}>
+                        <label className="field-label">Version <span style={{ color: '#ef4444' }}>*</span></label>
+                        <input className="input" placeholder="1.0.0" value={pluginForm.version} onChange={e => setPluginForm({ ...pluginForm, version: e.target.value })} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label className="field-label">Publisher</label>
+                        <input className="input" placeholder="e.g. Acme Inc" value={pluginForm.publisher} onChange={e => setPluginForm({ ...pluginForm, publisher: e.target.value })} />
+                      </div>
+                    </div>
+                    <label className="field-label">Entry point <span style={{ fontWeight: 400 }}>(relative path, optional)</span></label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="input" placeholder="e.g. plugins/my-plugin/index.js" value={pluginForm.entryPoint} onChange={e => setPluginForm({ ...pluginForm, entryPoint: e.target.value })} style={{ flex: 1 }} />
+                      <button className="btn" onClick={() => {
+                        const pid = pluginForm.projectId || pluginFileBrowserProject || skillProjects[0]?.id
+                        if (pid) setPluginFileBrowserProject(pid)
+                        setPluginFileBrowserOpen(v => !v)
+                        if (!pluginFileBrowserOpen && skillProjects.length === 0) loadSkillProjects()
+                      }} title="Browse files">{pluginFileBrowserOpen ? 'Hide' : 'Browse'}</button>
+                    </div>
+                    {pluginFileBrowserOpen && (
+                      <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface-2)' }}>
+                        <div style={{ padding: 8, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <IconFolder size={14} style={{ color: 'var(--text-faint)' }} />
+                          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>Project</span>
+                          <select className="input" style={{ flex: 1, minWidth: 140, height: 30, padding: '4px 8px', fontSize: 13 }} value={pluginFileBrowserProject ?? ''} onChange={e => { setPluginFileBrowserProject(e.target.value); setPluginPickerDir('') }}>
+                            {skillProjects.length === 0 && <option value="">No projects</option>}
+                            {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — {p.path}</option>)}
+                          </select>
+                          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={refreshPluginPicker}>Refresh</button>
+                        </div>
+                        <div style={{ padding: 8 }}>
+                          <div className="fp-path" style={{ marginBottom: 6 }}>{pluginPickerDir === '' ? '/' : pluginPickerDir}</div>
+                          {pluginPickerLoading ? (
+                            <div className="hint" style={{ padding: 12 }}>Loading…</div>
+                          ) : (
+                            <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              {pluginPickerDir !== '' && (
+                                <button className="fp-row" style={{ justifyContent: 'flex-start' }} onClick={() => setPluginPickerDir(d => d.includes('/') ? d.slice(0, d.lastIndexOf('/')) : '')}>
+                                  <IconChevronLeft size={14} /> <span>..</span>
+                                </button>
+                              )}
+                              {pluginPickerEntries.length === 0 && <div className="hint" style={{ padding: 8 }}>No files</div>}
+                              {pluginPickerEntries.map(ent => {
+                                const rel = pluginPickerDir ? `${pluginPickerDir}/${ent.name}` : ent.name
+                                const isDir = ent.type === 'dir'
+                                return (
+                                  <div key={ent.name} className="fp-row" style={{ cursor: isDir ? 'pointer' : 'default' }} onClick={() => { if (isDir) setPluginPickerDir(rel) }}>
+                                    {isDir ? <IconFolder size={14} style={{ color: '#dcad3c' }} /> : <IconFile size={14} style={{ color: 'var(--text-faint)' }} />}
+                                    <span className="fp-name" title={rel}>{ent.name}</span>
+                                    {ent.type === 'file' && (
+                                      <button className="btn" style={{ padding: '2px 6px', fontSize: 11 }} onClick={(e) => { e.stopPropagation(); setPluginForm({ ...pluginForm, entryPoint: rel, projectId: pluginFileBrowserProject ?? pluginForm.projectId }); toast('Entry point set', 'success') }}>Set</button>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <label className="field-label">Tags <span style={{ fontWeight: 400 }}>(comma separated)</span></label>
+                    <input className="input" placeholder="e.g. productivity, formatter" value={pluginForm.tags} onChange={e => setPluginForm({ ...pluginForm, tags: e.target.value })} />
+                    <label className="field-label">Scope project <span style={{ fontWeight: 400 }}>(leave empty for global)</span></label>
+                    <select className="input" value={pluginForm.projectId} onChange={e => setPluginForm({ ...pluginForm, projectId: e.target.value })}>
+                      <option value="">Global (all projects)</option>
+                      {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — {p.path}</option>)}
+                    </select>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={pluginForm.enabled} onChange={e => setPluginForm({ ...pluginForm, enabled: e.target.checked })} /> Enabled
+                    </label>
+                    <div className="dialog-actions" style={{ marginTop: 16 }}>
+                      <button className="btn" onClick={() => { setShowPluginForm(false); setPluginFileBrowserOpen(false); setPluginForm({ name: '', description: '', version: '1.0.0', publisher: '', entryPoint: '', projectId: '', enabled: true, tags: '', icon: '🧩' }); setPluginPickerDir(''); setError(null) }}>Cancel</button>
+                      <button className="btn btn-primary" onClick={submitPlugin}>Add plugin</button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+                    <h4 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}><IconPlug size={16} /> Plugins ({plugins.length})</h4>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button className="btn" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => { loadPlugins(); loadMarketplace() }} disabled={pluginsLoading || marketplaceLoading}>{pluginsLoading ? 'Loading…' : 'Refresh'}</button>
+                      <button className="btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setShowPluginForm(true); setError(null); if (skillProjects.length === 0) loadSkillProjects() }}>
+                        <IconPlus size={15} /> Add
+                      </button>
+                    </div>
+                  </div>
+                  <p className="hint" style={{ marginBottom: 12 }}>
+                    Plugins extend KS Agent with new commands, themes and tooling. Install from the marketplace or add a local plugin during development.
+                  </p>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <button className={`btn${pluginView === 'installed' ? ' btn-primary' : ''}`} style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => setPluginView('installed')}>Installed ({plugins.length})</button>
+                    <button className={`btn${pluginView === 'marketplace' ? ' btn-primary' : ''}`} style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => { setPluginView('marketplace'); if (marketplace.length === 0) loadMarketplace() }}>Marketplace ({marketplace.length})</button>
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <input className="input" placeholder={pluginView === 'marketplace' ? 'Search marketplace…' : 'Search plugins…'} value={pluginsSearch} onChange={e => setPluginsSearch(e.target.value)} style={{ height: 32, fontSize: 13 }} />
+                    </div>
+                  </div>
+                  {pluginView === 'marketplace' && (
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+                      {['All', 'Formatters', 'Linters', 'SCM', 'DevOps', 'CSS', 'Productivity', 'Build', 'Notebooks'].map(cat => (
+                        <button key={cat} className="btn" style={{ padding: '3px 10px', fontSize: 11, background: pluginCategory === cat ? 'var(--surface-2)' : undefined, borderColor: pluginCategory === cat ? '#519aba' : undefined, color: pluginCategory === cat ? '#519aba' : undefined, borderWidth: pluginCategory === cat ? '1.5px' : undefined }} onClick={() => setPluginCategory(cat)}>{cat}</button>
+                      ))}
+                    </div>
+                  )}
+                  {pluginView === 'installed' ? (
+                    <>
+                      {pluginsLoading ? (
+                        <div className="fp-skel" aria-label="Loading plugins">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span className="fp-skel-icon" style={{ width: 28, height: 28, borderRadius: 8, animationDelay: `${i * 70}ms` }} />
+                                <span className="fp-skel-bar" style={{ width: '40%', height: 14, animationDelay: `${i * 70}ms` }} />
+                                <span className="fp-skel-bar" style={{ width: 52, height: 18, borderRadius: 99, marginLeft: 'auto', animationDelay: `${i * 70}ms` }} />
+                              </div>
+                              <span className="fp-skel-bar" style={{ width: '82%', height: 11, animationDelay: `${i * 70}ms` }} />
+                              <span className="fp-skel-bar" style={{ width: '64%', height: 11, animationDelay: `${i * 70}ms` }} />
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <span className="fp-skel-bar" style={{ width: 60, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                                <span className="fp-skel-bar" style={{ width: 60, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : plugins.length === 0 ? (
+                        <div className="empty" style={{ padding: '24px 12px', border: '1px dashed var(--border)', borderRadius: 10, background: 'var(--surface)' }}>
+                          <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+                            <IconPlug size={20} />
+                          </div>
+                          <h2>No plugins installed</h2>
+                          <p>Browse the marketplace or add a local plugin to get started.</p>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button className="btn btn-primary" onClick={() => setPluginView('marketplace')}>Browse marketplace</button>
+                            <button className="btn" onClick={() => setShowPluginForm(true)}>Add local plugin</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {plugins
+                            .filter(p => {
+                              if (!pluginsSearch.trim()) return true
+                              const q = pluginsSearch.toLowerCase()
+                              return p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || (p.publisher ?? '').toLowerCase().includes(q) || (p.tags ?? []).join(' ').toLowerCase().includes(q)
+                            })
+                            .map(p => {
+                              const isExpanded = !!pluginExpanded[p.id]
+                              const scopeName = p.projectId ? skillProjects.find(x => x.id === p.projectId)?.name ?? p.projectId.slice(0, 8) : 'Global'
+                              return (
+                                <div key={p.id} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, borderLeft: `3px solid ${p.enabled ? '#22c55e' : '#6b7280'}`, opacity: p.enabled ? 1 : 0.85 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{p.icon ?? '🧩'}</span>
+                                    <span style={{ fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                                    <span style={{ fontSize: 11, padding: '2px 6px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)' }}>v{p.version}</span>
+                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }} title={p.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}>
+                                      <input type="checkbox" checked={p.enabled} onChange={() => togglePluginEnabled(p)} />
+                                    </label>
+                                    <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEditPlugin(p)} aria-label={`Edit ${p.name}`}><IconPencil size={14} /></button>
+                                    <button className="icon-btn" style={{ width: 28, height: 28, color: '#ef4444' }} onClick={() => removePlugin(p.id, p.name)} aria-label={`Uninstall ${p.name}`}><IconTrash size={14} /></button>
+                                  </div>
+                                  <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.4 }}>{p.description || 'No description'}</div>
+                                  <div style={{ fontSize: 12, color: 'var(--text-faint)', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    {p.publisher && <span>by {p.publisher}</span>}
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconFolder size={12} /> {scopeName}</span>
+                                    {p.source && <span style={{ textTransform: 'capitalize', padding: '2px 6px', background: p.source === 'marketplace' ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)', border: `1px solid ${p.source === 'marketplace' ? 'rgba(34,197,94,0.2)' : 'rgba(59,130,246,0.2)'}`, borderRadius: 99, fontSize: 11, color: p.source === 'marketplace' ? '#16a34a' : '#2563eb' }}>{p.source}</span>}
+                                    {!p.enabled && <span style={{ padding: '2px 6px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 99, color: '#ef4444', fontSize: 11 }}>Disabled</span>}
+                                  </div>
+                                  {(p.tags && p.tags.length > 0) && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                      {p.tags.map(t => <span key={t} style={{ fontSize: 10, padding: '2px 6px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)' }}>{t}</span>)}
+                                    </div>
+                                  )}
+                                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setPluginExpanded(prev => ({ ...prev, [p.id]: !prev[p.id] }))}>{isExpanded ? 'Hide details' : 'Details'}</button>
+                                    <span style={{ fontSize: 12, color: p.enabled ? '#16a34a' : 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                      <span style={{ width: 6, height: 6, borderRadius: 99, background: p.enabled ? '#22c55e' : '#6b7280', display: 'inline-block' }} /> {p.enabled ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </div>
+                                  {isExpanded && (
+                                    <div style={{ marginTop: 4, borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+                                      {p.entryPoint && <div style={{ color: 'var(--text-dim)', fontFamily: 'ui-monospace, monospace', wordBreak: 'break-all' }}>Entry: {p.entryPoint}</div>}
+                                      {p.marketplaceId && <div style={{ color: 'var(--text-faint)' }}>Marketplace ID: {p.marketplaceId}</div>}
+                                      <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace' }}>ID: {p.id.slice(0, 8)} · {new Date(p.createdAt).toLocaleString()}{p.updatedAt && p.updatedAt !== p.createdAt ? ` · updated ${new Date(p.updatedAt).toLocaleString()}` : ''}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          {plugins.filter(p => {
+                            if (!pluginsSearch.trim()) return false
+                            const q = pluginsSearch.toLowerCase()
+                            return !(p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || (p.publisher ?? '').toLowerCase().includes(q) || (p.tags ?? []).join(' ').toLowerCase().includes(q))
+                          }).length === plugins.length && pluginsSearch.trim() && (
+                            <div className="hint" style={{ padding: 12, textAlign: 'center' }}>No plugins match “{pluginsSearch}”</div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {marketplaceLoading ? (
+                        <div className="fp-skel" aria-label="Loading marketplace">
+                          {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span className="fp-skel-icon" style={{ width: 32, height: 32, borderRadius: 8, animationDelay: `${i * 70}ms` }} />
+                                <span className="fp-skel-bar" style={{ width: '38%', height: 14, animationDelay: `${i * 70}ms` }} />
+                                <span className="fp-skel-bar" style={{ width: 52, height: 18, borderRadius: 99, marginLeft: 'auto', animationDelay: `${i * 70}ms` }} />
+                              </div>
+                              <span className="fp-skel-bar" style={{ width: '92%', height: 11, animationDelay: `${i * 70}ms` }} />
+                              <span className="fp-skel-bar" style={{ width: '74%', height: 11, animationDelay: `${i * 70}ms` }} />
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <span className="fp-skel-bar" style={{ width: 56, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                                <span className="fp-skel-bar" style={{ width: 72, height: 24, borderRadius: 6, animationDelay: `${i * 70}ms` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+                          {marketplace
+                            .filter(m => {
+                              if (pluginCategory !== 'All' && m.category !== pluginCategory) return false
+                              if (!pluginsSearch.trim()) return true
+                              const q = pluginsSearch.toLowerCase()
+                              return m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q) || m.publisher.toLowerCase().includes(q) || m.tags.join(' ').toLowerCase().includes(q)
+                            })
+                            .map(m => {
+                              const alreadyInstalled = m.installed || plugins.some(p => p.marketplaceId === m.id || p.name.toLowerCase() === m.name.toLowerCase())
+                              return (
+                                <div key={m.id} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 8, borderLeft: `3px solid ${alreadyInstalled ? '#22c55e' : '#519aba'}` }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{m.icon}</span>
+                                    <span style={{ fontWeight: 600, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
+                                    {alreadyInstalled && <span style={{ fontSize: 10, padding: '2px 6px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 99, color: '#16a34a', fontWeight: 700 }}>Installed</span>}
+                                  </div>
+                                  <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 34 }}>{m.description}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-faint)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <span>{m.publisher}</span>
+                                    <span>·</span>
+                                    <span>v{m.version}</span>
+                                    <span>·</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>★ {m.rating.toFixed(1)}</span>
+                                    <span>·</span>
+                                    <span>{(m.downloads / 1000000).toFixed(1)}M ↓</span>
+                                  </div>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    <span style={{ fontSize: 10, padding: '2px 6px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)' }}>{m.category}</span>
+                                    {m.tags.slice(0, 3).map(t => <span key={t} style={{ fontSize: 10, padding: '2px 6px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)' }}>{t}</span>)}
+                                  </div>
+                                  <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                                    {alreadyInstalled ? (
+                                      <button className="btn" disabled style={{ padding: '6px 12px', fontSize: 12, opacity: 0.6, cursor: 'not-allowed' }}>Installed</button>
+                                    ) : (
+                                      <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => installFromMarketplace(m)}>Install</button>
+                                    )}
+                                    <button className="btn" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => { setPluginsSearch(m.name); setPluginView('installed'); }}>View installed</button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          {marketplace.filter(m => {
+                            if (pluginCategory !== 'All' && m.category !== pluginCategory) return false
+                            if (!pluginsSearch.trim()) return true
+                            const q = pluginsSearch.toLowerCase()
+                            return m.name.toLowerCase().includes(q) || m.description.toLowerCase().includes(q) || m.publisher.toLowerCase().includes(q) || m.tags.join(' ').toLowerCase().includes(q)
+                          }).length === 0 && (
+                            <div style={{ gridColumn: '1 / -1', padding: 16, textAlign: 'center', color: 'var(--text-faint)', border: '1px dashed var(--border)', borderRadius: 8, background: 'var(--surface)' }}>
+                              No marketplace plugins match “{pluginsSearch || pluginCategory}”
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div style={{ marginTop: 16, padding: 12, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>How plugins work</div>
+                        <ul style={{ margin: 0, paddingLeft: 16, color: 'var(--text-faint)', fontSize: 13, lineHeight: 1.6 }}>
+                          <li>Marketplace plugins install instantly — they are registered as enabled and appear in Installed</li>
+                          <li>Local plugins need an entry point (relative path to plugin .js) — use Browse to pick a file from a project</li>
+                          <li>Disabled plugins stay installed but are inactive — toggle with the checkbox</li>
+                          <li>Scope per project or global — global plugins apply to all workspaces</li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           )}
 
