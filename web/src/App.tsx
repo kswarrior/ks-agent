@@ -666,9 +666,12 @@ function KsAgent() {
       }
       // For pure continue preserve plan/activities so AI picks up where it left off
       if (!isPure) {
-        // For "any other" with extra instruction but still continuation, preserve if was interrupted
+        // For "any other" with extra instruction but still continuation, preserve if was interrupted OR plan still incomplete
         const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
-        if (!wasInterrupted) {
+        const planForContinueAny = plans[chatId] ?? null
+        const planIncompleteForContinueAny = !!(planForContinueAny && planForContinueAny.steps.some((s) => s.status !== 'done'))
+        const shouldPreserve = wasInterrupted || planIncompleteForContinueAny
+        if (!shouldPreserve) {
           setPlans((prev) => {
             const n = { ...prev }
             delete n[chatId]
@@ -714,9 +717,9 @@ function KsAgent() {
 
     let chatId = activeChatId
 
-    // If user typed pure "continue" and previous response was interrupted, delegate to continuation flow
-    // so it resumes exactly where it ended without creating a new user bubble.
-    // Otherwise treat "continue" as a normal user message.
+    // If user typed pure "continue" and previous response was interrupted or plan is still incomplete,
+    // delegate to continuation flow so it resumes exactly where it ended without creating a new user bubble.
+    // Otherwise treat "continue" as a normal user message (but incomplete plan will still be preserved via resume context).
     if (chatId && isContinueKeyword(content)) {
       const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
       const wasInterrupted = lastAssistant
@@ -725,7 +728,9 @@ function KsAgent() {
           /\n\n_\[truncated/.test(lastAssistant.content) ||
           !!(lastAssistant as any).error
         : false
-      if (lastAssistant && wasInterrupted) {
+      const planForContinue = chatId ? plans[chatId] ?? null : null
+      const planIncompleteForContinue = !!(planForContinue && planForContinue.steps.some((s) => s.status !== 'done'))
+      if (lastAssistant && (wasInterrupted || planIncompleteForContinue)) {
         return handleContinue(content)
       }
     }
@@ -733,7 +738,7 @@ function KsAgent() {
     // Prevent concurrent sends for the same chat
     if (chatId && sendingRef.current.has(chatId)) return
 
-    // Capture whether previous assistant was interrupted for seamless "any other" continuation
+    // Capture whether previous assistant was interrupted or plan is incomplete for seamless "any other" continuation
     const prevAssistantForSend = chatId ? [...messages].reverse().find((m) => m.role === 'assistant') : null
     const prevWasInterruptedForSend = prevAssistantForSend
       ? /\n\n_\[stopped\]_\s*$/.test(prevAssistantForSend.content) ||
@@ -741,6 +746,9 @@ function KsAgent() {
         /\n\n_\[truncated/.test(prevAssistantForSend.content) ||
         !!(prevAssistantForSend as any).error
       : false
+    const planForSend = chatId ? plans[chatId] ?? null : null
+    const planIncompleteForSend = !!(planForSend && planForSend.steps.some((s) => s.status !== 'done'))
+    const shouldPreserveForSend = prevWasInterruptedForSend || planIncompleteForSend
 
     if (!chatId) {
       creatingChatRef.current = true
@@ -788,8 +796,8 @@ function KsAgent() {
       // Without this, hasExplore stays true and old plan (done) makes UI
       // show stale "Executing 7/6" instead of the fresh flow.
       // Do it after send succeeds so a failed send doesn't lose the old plan.
-      // But if previous was interrupted and user said "any other", keep for seamless continuation.
-      if (!prevWasInterruptedForSend) {
+      // But if previous was interrupted OR plan is still incomplete (user requested preserve), keep for seamless continuation and resume with old plan context.
+      if (!shouldPreserveForSend) {
         setPlans((prev) => {
           const n = { ...prev }
           delete n[chatId]
@@ -797,7 +805,7 @@ function KsAgent() {
         })
         setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
       } else {
-        // Clean stale stopped marker from displayed message optimistically
+        // Clean stale stopped marker from displayed message optimistically (also clears incomplete plan's lingering marker if any)
         if (prevAssistantForSend) {
           const cleaned = stripInterrupted(prevAssistantForSend.content)
           if (cleaned !== prevAssistantForSend.content) {
