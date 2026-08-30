@@ -415,6 +415,14 @@ app.delete('/api/projects/:id', async (c) => {
   const termIds = db.terminals.filter((t) => t.projectId === removed.id).map((t) => t.id)
   db.terminals = db.terminals.filter((t) => t.projectId !== removed.id)
   for (const tid of termIds) killPty(tid)
+  // kill managed preview process for this project if any
+  const previewProc = previewProcs.get(removed.id)
+  if (previewProc?.child) {
+    try { previewProc.child.kill('SIGTERM') } catch {}
+    previewProcs.delete(removed.id)
+  } else {
+    previewProcs.delete(removed.id)
+  }
   // Orphaned skills: FK is SET NULL — detach from deleted project so skill becomes global instead of dangling FK
   for (const sk of db.skills) {
     if (sk.projectId === removed.id) {
@@ -3273,6 +3281,55 @@ function isBlockedHost(hostname: string): boolean {
   if (h.startsWith('::ffff:')) {
     const v4 = h.slice(7)
     if (v4) return isBlockedHost(v4)
+  }
+  // Decimal integer IP (e.g. 2130706433 == 127.0.0.1)
+  if (/^\d+$/.test(h)) {
+    try {
+      const n = Number(h)
+      if (Number.isFinite(n) && n >= 0 && n < 4294967296) {
+        const a = (n >>> 24) & 0xff
+        const b = (n >>> 16) & 0xff
+        if (a === 127 || a === 10 || a === 0) return true
+        if (a === 169 && b === 254) return true
+        if (a === 172 && b >= 16 && b <= 31) return true
+        if (a === 192 && b === 168) return true
+      }
+    } catch {}
+  }
+  // Hex integer IP (e.g. 0x7f000001 == 127.0.0.1)
+  if (/^0x[0-9a-f]+$/i.test(h)) {
+    try {
+      const n = parseInt(h, 16)
+      if (Number.isFinite(n) && n >= 0 && n < 4294967296) {
+        const a = (n >>> 24) & 0xff
+        const b = (n >>> 16) & 0xff
+        if (a === 127 || a === 10 || a === 0) return true
+        if (a === 169 && b === 254) return true
+        if (a === 172 && b >= 16 && b <= 31) return true
+        if (a === 192 && b === 168) return true
+      }
+    } catch {}
+  }
+  // Dotted forms with hex/octal octets (e.g. 0x7f.0.0.1 or 0177.0.0.1)
+  if (h.includes('.')) {
+    const parts = h.split('.')
+    if (parts.length === 4) {
+      try {
+        const nums = parts.map((p) => {
+          if (/^0x[0-9a-f]+$/i.test(p)) return parseInt(p, 16)
+          if (/^0[0-7]+$/.test(p) && p.length > 1) return parseInt(p, 8)
+          if (/^\d+$/.test(p)) return parseInt(p, 10)
+          return NaN
+        })
+        if (nums.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
+          const a = nums[0], b = nums[1]
+          if (a === 127 || a === 10 || a === 0) return true
+          if (a === 169 && b === 254) return true
+          if (a === 172 && b >= 16 && b <= 31) return true
+          if (a === 192 && b === 168) return true
+        }
+      } catch {}
+    }
   }
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
   if (!m) return false
