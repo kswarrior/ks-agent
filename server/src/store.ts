@@ -1073,6 +1073,9 @@ function tryMigrateFromLegacySqlite(): boolean {
     try {
       s.exec(`INSERT OR IGNORE INTO main.mcpServers SELECT * FROM legacy.mcpServers`)
     } catch {}
+    try {
+      s.exec(`INSERT OR IGNORE INTO main.plugins SELECT * FROM legacy.plugins`)
+    } catch {}
     s.exec('DETACH DATABASE legacy')
     attached = false
     const loaded = loadFromSqlite(s)

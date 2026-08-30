@@ -161,6 +161,39 @@ export interface LSPServer {
 export type LspServer = LSPServer
 export type LspTransport = LSPTransport
 
+export type PluginSource = 'manual' | 'marketplace' | 'local' | 'url'
+
+export interface Plugin {
+  id: string
+  name: string
+  description: string
+  version: string
+  publisher?: string
+  entryPoint?: string | null
+  source: PluginSource
+  marketplaceId?: string | null
+  enabled: boolean
+  projectId?: string | null
+  tags?: string[]
+  icon?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MarketplacePlugin {
+  id: string
+  name: string
+  description: string
+  version: string
+  publisher: string
+  icon: string
+  tags: string[]
+  downloads: number
+  rating: number
+  category: string
+  installed?: boolean
+}
+
 export interface Preview {
   id: string
   chatId: string

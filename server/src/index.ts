@@ -2409,6 +2409,288 @@ app.get('/api/settings/lsp/status/all', (c) => {
   return c.json(states)
 })
 
+// ---------------- Plugins ----------------
+
+type MarketplacePlugin = {
+  id: string
+  name: string
+  description: string
+  version: string
+  publisher: string
+  icon: string
+  tags: string[]
+  downloads: number
+  rating: number
+  category: string
+}
+
+const PLUGIN_MARKETPLACE: MarketplacePlugin[] = [
+  { id: 'prettier', name: 'Prettier', description: 'Opinionated code formatter. Enforces consistent style by parsing and re-printing code.', version: '3.2.1', publisher: 'Prettier', icon: '✨', tags: ['formatter', 'productivity'], downloads: 12400000, rating: 4.8, category: 'Formatters' },
+  { id: 'eslint', name: 'ESLint', description: 'Find and fix problems in your JavaScript and TypeScript code with pluggable linting rules.', version: '8.57.0', publisher: 'Microsoft', icon: '🔍', tags: ['linter', 'productivity'], downloads: 8700000, rating: 4.7, category: 'Linters' },
+  { id: 'gitlens', name: 'GitLens', description: 'Supercharge Git — blame, history, file annotations and rich commit graph inside KS Agent.', version: '14.9.1', publisher: 'GitKraken', icon: '🌿', tags: ['git', 'scm'], downloads: 6500000, rating: 4.9, category: 'SCM' },
+  { id: 'docker', name: 'Docker', description: 'Manage Docker containers, images and Dockerfiles directly from the workspace. Build and run.', version: '1.28.0', publisher: 'Docker Inc', icon: '🐳', tags: ['container', 'devops'], downloads: 5200000, rating: 4.6, category: 'DevOps' },
+  { id: 'tailwind', name: 'Tailwind CSS IntelliSense', description: 'Intelligent Tailwind CSS code completion, linting and hover previews for utility classes.', version: '0.11.2', publisher: 'Tailwind Labs', icon: '🎨', tags: ['css', 'intellisense'], downloads: 3800000, rating: 4.8, category: 'CSS' },
+  { id: 'jupyter', name: 'Jupyter', description: 'Notebook support for Python — run cells, inspect variables and render rich outputs.', version: '2024.5.0', publisher: 'Microsoft', icon: '📓', tags: ['python', 'notebook'], downloads: 4100000, rating: 4.5, category: 'Notebooks' },
+  { id: 'vite', name: 'Vite', description: 'Next-generation frontend tooling. Instant HMR, optimized builds and preview integration.', version: '5.4.0', publisher: 'Evan You', icon: '⚡', tags: ['build', 'frontend'], downloads: 2900000, rating: 4.7, category: 'Build' },
+  { id: 'todo-tree', name: 'Todo Tree', description: 'Highlight and list TODO, FIXME, HACK comments across your workspace with quick navigation.', version: '0.0.226', publisher: 'Gruntfuggly', icon: '🌳', tags: ['productivity', 'navigation'], downloads: 1800000, rating: 4.6, category: 'Productivity' }
+]
+
+function isValidPluginName(name: string): boolean {
+  return name.length >= 2 && name.length <= 80
+}
+
+function isValidPluginVersion(v: string): boolean {
+  if (!v || v.length > 32) return false
+  // loose semver: 1.0.0 or 1.0 or 1.0.0-beta.1 etc
+  return /^\d+\.\d+(\.\d+)?([-.+][0-9A-Za-z.-]+)?$/.test(v)
+}
+
+function normalizePluginTags(raw: unknown): string[] | undefined {
+  if (raw == null) return undefined
+  if (!Array.isArray(raw)) return undefined
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const v of raw) {
+    const s = String(v ?? '').trim().toLowerCase()
+    if (!s) continue
+    if (s.length < 2 || s.length > 20) continue
+    if (!/^[a-z0-9-]+$/.test(s)) continue
+    if (seen.has(s)) continue
+    seen.add(s)
+    out.push(s)
+    if (out.length >= 8) break
+  }
+  return out.length ? out : undefined
+}
+
+function normalizePluginSource(raw: unknown): PluginSource | undefined {
+  if (raw == null) return undefined
+  const s = String(raw).trim().toLowerCase()
+  if (['manual', 'marketplace', 'local', 'url'].includes(s)) return s as PluginSource
+  return undefined
+}
+
+function validatePluginBody(body: any, isPatch = false): { error?: string; value?: Partial<Plugin> } {
+  const out: Partial<Plugin> = {}
+  if (body.name !== undefined || !isPatch) {
+    const name = String(body.name ?? '').trim()
+    if (!isPatch && !name) return { error: 'Plugin name is required' }
+    if (name) {
+      if (!isValidPluginName(name)) return { error: 'Plugin name must be 2-80 characters' }
+      out.name = name
+    }
+  }
+  if (body.description !== undefined || !isPatch) {
+    const desc = String(body.description ?? '').trim()
+    if (desc.length > 500) return { error: 'Description must be ≤500 characters' }
+    out.description = desc
+  }
+  if (body.version !== undefined || !isPatch) {
+    const ver = String(body.version ?? '').trim()
+    if (!isPatch && !ver) return { error: 'Version is required' }
+    if (ver) {
+      if (!isValidPluginVersion(ver)) return { error: 'Invalid version (expected semver like 1.0.0)' }
+      out.version = ver
+    }
+  }
+  if (body.publisher !== undefined) {
+    const p = String(body.publisher ?? '').trim()
+    if (p) {
+      if (p.length < 2 || p.length > 60) return { error: 'Publisher must be 2-60 characters' }
+      out.publisher = p
+    } else {
+      out.publisher = undefined
+    }
+  }
+  if (body.entryPoint !== undefined) {
+    const ep = String(body.entryPoint ?? '').trim()
+    if (ep) {
+      if (ep.length > 500) return { error: 'Entry point path too long' }
+      if (!isValidRelPath(ep)) return { error: 'Entry point must be a valid relative path' }
+      out.entryPoint = ep
+    } else {
+      out.entryPoint = undefined
+    }
+  }
+  if (body.source !== undefined) {
+    const src = normalizePluginSource(body.source)
+    if (!src) return { error: 'Source must be one of: manual, marketplace, local, url' }
+    out.source = src
+  }
+  if (body.marketplaceId !== undefined) {
+    const mid = String(body.marketplaceId ?? '').trim()
+    if (mid) {
+      if (mid.length > 80) return { error: 'marketplaceId too long' }
+      out.marketplaceId = mid
+    } else {
+      out.marketplaceId = undefined
+    }
+  }
+  if (body.tags !== undefined) {
+    if (body.tags !== null) {
+      const tags = normalizePluginTags(body.tags)
+      out.tags = tags
+    } else {
+      out.tags = undefined
+    }
+  }
+  if (body.icon !== undefined) {
+    const ic = String(body.icon ?? '').trim()
+    if (ic) {
+      if ([...ic].length > 4) return { error: 'Icon too long (max 4 characters)' }
+      out.icon = ic
+    } else {
+      out.icon = undefined
+    }
+  }
+  if (body.enabled !== undefined) {
+    out.enabled = Boolean(body.enabled)
+  }
+  if (body.projectId !== undefined) {
+    const pid = body.projectId != null ? String(body.projectId).trim() : ''
+    if (pid) {
+      if (!findProject(pid)) return { error: 'Selected project not found' }
+      out.projectId = pid
+    } else {
+      out.projectId = undefined
+    }
+  }
+  return { value: out }
+}
+
+app.get('/api/settings/plugins', (c) => {
+  return c.json(getPlugins())
+})
+
+app.get('/api/settings/plugins/marketplace', (c) => {
+  const installed = getPlugins()
+  const installedIds = new Set(installed.filter((p) => p.marketplaceId).map((p) => p.marketplaceId!))
+  const installedNames = new Set(installed.map((p) => p.name.toLowerCase()))
+  const withInstalled = PLUGIN_MARKETPLACE.map((m) => ({
+    ...m,
+    installed: installedIds.has(m.id) || installedNames.has(m.name.toLowerCase())
+  }))
+  return c.json(withInstalled)
+})
+
+app.post('/api/settings/plugins', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const validated = validatePluginBody(body, false)
+  if (validated.error) return c.json({ error: validated.error }, 400)
+  const v = validated.value!
+  if (!v.name || !v.version) return c.json({ error: 'Name and version are required' }, 400)
+  const description = v.description ?? ''
+  // duplicate name check case-insensitive
+  const dup = getPlugins().some((p) => p.name.toLowerCase() === String(v.name).toLowerCase())
+  if (dup) return c.json({ error: 'A plugin with this name already exists' }, 400)
+  if (v.marketplaceId) {
+    const dupMid = getPlugins().some((p) => p.marketplaceId === v.marketplaceId)
+    if (dupMid) return c.json({ error: 'This marketplace plugin is already installed' }, 400)
+  }
+  const now = new Date().toISOString()
+  const plugin: Plugin = {
+    id: newId(),
+    name: String(v.name),
+    description: String(description),
+    version: String(v.version),
+    publisher: v.publisher,
+    entryPoint: v.entryPoint,
+    source: (v.source as PluginSource) ?? 'manual',
+    marketplaceId: v.marketplaceId,
+    enabled: v.enabled !== false,
+    projectId: v.projectId,
+    tags: v.tags,
+    icon: v.icon,
+    createdAt: now,
+    updatedAt: now
+  }
+  getDb().plugins.push(plugin)
+  saveDb()
+  return c.json(plugin, 201)
+})
+
+app.post('/api/settings/plugins/install', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const marketplaceId = String(body.marketplaceId ?? body.id ?? '').trim()
+  if (!marketplaceId) return c.json({ error: 'marketplaceId is required' }, 400)
+  const entry = PLUGIN_MARKETPLACE.find((m) => m.id === marketplaceId)
+  if (!entry) return c.json({ error: 'Marketplace plugin not found' }, 404)
+  const dup = getPlugins().some((p) => p.marketplaceId === marketplaceId || p.name.toLowerCase() === entry.name.toLowerCase())
+  if (dup) return c.json({ error: 'Plugin already installed' }, 400)
+  let projectId: string | undefined
+  if (body.projectId != null && String(body.projectId).trim()) {
+    const pid = String(body.projectId).trim()
+    if (!findProject(pid)) return c.json({ error: 'Selected project not found' }, 400)
+    projectId = pid
+  }
+  const enabled = body.enabled !== undefined ? Boolean(body.enabled) : true
+  const now = new Date().toISOString()
+  const plugin: Plugin = {
+    id: newId(),
+    name: entry.name,
+    description: entry.description,
+    version: entry.version,
+    publisher: entry.publisher,
+    source: 'marketplace',
+    marketplaceId: entry.id,
+    enabled,
+    projectId,
+    tags: entry.tags,
+    icon: entry.icon,
+    createdAt: now,
+    updatedAt: now
+  }
+  if (body.entryPoint) {
+    const ep = String(body.entryPoint).trim()
+    if (ep && isValidRelPath(ep)) plugin.entryPoint = ep
+  }
+  getDb().plugins.push(plugin)
+  saveDb()
+  return c.json(plugin, 201)
+})
+
+app.get('/api/settings/plugins/:id', (c) => {
+  const p = findPlugin(c.req.param('id'))
+  if (!p) return c.json({ error: 'Plugin not found' }, 404)
+  return c.json(p)
+})
+
+app.patch('/api/settings/plugins/:id', async (c) => {
+  const p = findPlugin(c.req.param('id'))
+  if (!p) return c.json({ error: 'Plugin not found' }, 404)
+  const body = await c.req.json().catch(() => ({}))
+  const validated = validatePluginBody(body, true)
+  if (validated.error) return c.json({ error: validated.error }, 400)
+  const v = validated.value!
+  if (v.name !== undefined) {
+    const dup = getPlugins().some((x) => x.id !== p.id && x.name.toLowerCase() === String(v.name).toLowerCase())
+    if (dup) return c.json({ error: 'A plugin with this name already exists' }, 400)
+    p.name = String(v.name)
+  }
+  if (v.description !== undefined) p.description = String(v.description)
+  if (v.version !== undefined) p.version = String(v.version)
+  if (v.publisher !== undefined) p.publisher = v.publisher
+  if (v.entryPoint !== undefined) p.entryPoint = v.entryPoint
+  if (v.source !== undefined) p.source = v.source as PluginSource
+  if (v.marketplaceId !== undefined) p.marketplaceId = v.marketplaceId
+  if (v.enabled !== undefined) p.enabled = Boolean(v.enabled)
+  if (v.projectId !== undefined) p.projectId = v.projectId
+  if (v.tags !== undefined) p.tags = v.tags
+  if (v.icon !== undefined) p.icon = v.icon
+  p.updatedAt = new Date().toISOString()
+  saveDb()
+  return c.json(p)
+})
+
+app.delete('/api/settings/plugins/:id', (c) => {
+  const id = c.req.param('id')
+  const idx = (getDb().plugins ?? []).findIndex((p) => p.id === id)
+  if (idx === -1) return c.json({ error: 'Plugin not found' }, 404)
+  getDb().plugins.splice(idx, 1)
+  saveDb()
+  return c.json({ ok: true })
+})
+
 // ---------------- Project files ----------------
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
