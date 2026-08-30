@@ -62,6 +62,9 @@ class StdioLspClient implements LspClient {
     this.proc.stderr?.on('data', () => {
       // ignore stderr logs
     })
+    this.proc.stdin?.on('error', () => {
+      // swallow EPIPE after exit to prevent unhandled error crash
+    })
     this.proc.on('error', (err) => this.failAll(err))
     this.proc.on('exit', (code) => {
       if (!this.closed) {
