@@ -1236,7 +1236,9 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                   <label className="field-label">Language</label>
                   <select className="input" value={lspForm.language} onChange={e => setLspForm({ ...lspForm, language: e.target.value })}>
                     {LSP_LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+                    {!LSP_LANGUAGES.includes(lspForm.language as any) && lspForm.language && <option value={lspForm.language}>{lspForm.language} (custom)</option>}
                   </select>
+                  <input className="input" style={{ marginTop: 6 }} placeholder="custom language id (e.g. vue, svelte)" value={LSP_LANGUAGES.includes(lspForm.language as any) ? '' : lspForm.language} onChange={e => setLspForm({ ...lspForm, language: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} />
                   <label className="field-label">Transport</label>
                   <select className="input" value={lspForm.transport} onChange={e => setLspForm({ ...lspForm, transport: e.target.value as LSPTransport })}>
                     <option value="stdio">stdio — local command</option>

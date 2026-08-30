@@ -1454,6 +1454,8 @@ app.post('/api/settings/skills', async (c) => {
     }
   }
   const files = normalizeSkillFiles(body.files)
+  if (Array.isArray(body.files) && body.files.length > 20) return c.json({ error: 'Too many files (max 20)' }, 400)
+  if (files.length > 20) return c.json({ error: 'Too many files (max 20)' }, 400)
   if (!name) return c.json({ error: 'Skill name is required' }, 400)
   if (name.length < 2 || name.length > 80) return c.json({ error: 'Skill name must be 2-80 characters' }, 400)
   if (note.length > 500) return c.json({ error: 'Note must be ≤500 characters' }, 400)
@@ -1461,12 +1463,13 @@ app.post('/api/settings/skills', async (c) => {
   if (mainFile.length > 500) return c.json({ error: 'Main file path too long' }, 400)
   if (!mainFile.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
   if (!isValidRelPath(mainFile)) return c.json({ error: 'Main file path is invalid' }, 400)
-  if (files.length > 20) return c.json({ error: 'Too many files (max 20)' }, 400)
   if (projectId) {
     if (!findProject(projectId)) return c.json({ error: 'Selected project not found' }, 400)
   }
   const duplicate = getDb().skills.some((s) => s.name.toLowerCase() === name.toLowerCase())
   if (duplicate) return c.json({ error: 'A skill with this name already exists' }, 400)
+  const duplicateFile = getDb().skills.some((s) => s.mainFile.toLowerCase() === mainFile.toLowerCase())
+  if (duplicateFile) return c.json({ error: 'A skill with this main file already exists' }, 400)
   const now = new Date().toISOString()
   const skill: Skill = { id: newId(), name, note, mainFile, files, projectId: projectId || undefined, createdAt: now, updatedAt: now }
   getDb().skills.push(skill)
@@ -1506,16 +1509,21 @@ app.patch('/api/settings/skills/:id', async (c) => {
     if (v.length > 500) return c.json({ error: 'Main file path too long' }, 400)
     if (!v.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
     if (!isValidRelPath(v)) return c.json({ error: 'Main file path is invalid' }, 400)
+    const dupFile = getDb().skills.some((s) => s.id !== skill.id && s.mainFile.toLowerCase() === v.toLowerCase())
+    if (dupFile) return c.json({ error: 'A skill with this main file already exists' }, 400)
     skill.mainFile = v
   }
   if (body.files !== undefined) {
     if (!Array.isArray(body.files)) return c.json({ error: 'files must be an array' }, 400)
+    if (body.files.length > 20) return c.json({ error: 'Too many files (max 20)' }, 400)
     for (const raw of body.files) {
       const v = String(raw ?? '').trim()
       if (!v) continue
       if (!isValidRelPath(v)) return c.json({ error: `Invalid file path: "${v}"` }, 400)
     }
-    skill.files = normalizeSkillFiles(body.files)
+    const normalized = normalizeSkillFiles(body.files)
+    if (normalized.length > 20) return c.json({ error: 'Too many files (max 20)' }, 400)
+    skill.files = normalized
   }
   if (body.projectId !== undefined) {
     const v = body.projectId != null ? String(body.projectId).trim() : ''
