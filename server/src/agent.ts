@@ -101,9 +101,17 @@ function ok(resultText: string, summary: string): ToolExecResult {
   return { ok: true, result: resultText, summary }
 }
 
-/** Resolves a tool-supplied relative path inside the project; null when invalid. */
+/** Resolves a tool-supplied relative path inside the project; null when invalid.
+ *  Allowed outside exception: absolute /tmp and /var/tmp paths are permitted when
+ *  the task genuinely needs temp files — primary workspace remains the project.
+ */
 function safeJoin(ctx: ToolContext, rel: unknown): string | null {
   if (typeof rel !== 'string') return null
+  const trimmed = rel.trim()
+  // Allowlist for temp dirs — explicit /tmp access is allowed as secondary workspace
+  if (trimmed === '/tmp' || trimmed.startsWith('/tmp/') || trimmed === '/var/tmp' || trimmed.startsWith('/var/tmp/') || trimmed === '/dev/shm' || trimmed.startsWith('/dev/shm/')) {
+    return path.resolve(trimmed)
+  }
   return resolveInProject(ctx.projectPath, rel)
 }
 
