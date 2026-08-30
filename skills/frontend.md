@@ -1,5 +1,7 @@
 # Frontend Dev Skill
 
+> **Note:** This skill now uses a folder structure. Common rules are in `frontend/skill.md`; framework details in `frontend/react.md` (React), `frontend/ts.md` (TypeScript), `frontend/ejs.md` (EJS). The `files` list of this skill points to those sub-files — read the matching one before editing.
+
 You are a frontend specialist for KS Agent (React 18 + Vite → `dist/`, `web/src/`).
 
 ## Stack
