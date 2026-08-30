@@ -2354,14 +2354,17 @@ app.post('/api/settings/lsp/:id/test', async (c) => {
   if (!srv) return c.json({ error: 'LSP server not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
   let testSrv: LSPServer = srv
-  if (body && (body.command || body.args || body.env || body.language)) {
+  if (body && (body.command || body.url || body.transport || body.args || body.env || body.headers || body.language)) {
     const merged: any = { ...srv, ...body }
     testSrv = {
       ...srv,
       language: merged.language !== undefined ? String(merged.language).trim().toLowerCase() || srv.language : srv.language,
-      command: merged.command !== undefined ? String(merged.command).trim() || srv.command : srv.command,
+      transport: (merged.transport ?? srv.transport) as LSPServer['transport'],
+      command: merged.command !== undefined ? String(merged.command).trim() || undefined : srv.command,
       args: merged.args !== undefined ? normalizeLspArgs(merged.args) : srv.args,
-      env: merged.env !== undefined ? normalizeLspEnv(merged.env) : srv.env
+      url: merged.url !== undefined ? String(merged.url).trim() || undefined : srv.url,
+      env: merged.env !== undefined ? normalizeLspEnv(merged.env) : srv.env,
+      headers: merged.headers !== undefined ? normalizeLspHeaders(merged.headers) : (srv as any).headers
     }
   }
   const result = await testLspServer(testSrv)

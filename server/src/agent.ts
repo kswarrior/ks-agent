@@ -399,7 +399,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
 
     case 'read_file': {
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside or you genuinely need /tmp (use run_shell for /tmp)')
+      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
       let stat: fs.Stats
       try {
         stat = fs.statSync(abs)
@@ -470,7 +470,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
 
     case 'write_file': {
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside or you genuinely need /tmp')
+      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
       const content = typeof args.content === 'string' ? args.content : ''
       if (Buffer.byteLength(content, 'utf8') > WRITE_MAX_BYTES) return err('content exceeds 256 KB limit')
       try {
@@ -484,7 +484,7 @@ async function executeTool(name: string, argsJson: string, ctx: ToolContext): Pr
 
     case 'edit_file': {
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside or you genuinely need /tmp')
+      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
       const oldStr = args.old_string
       const newStr = typeof args.new_string === 'string' ? args.new_string : ''
       if (typeof oldStr !== 'string' || oldStr === '') return err('old_string must be a non-empty string')
