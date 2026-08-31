@@ -296,7 +296,7 @@ export const deleteProvider = (id: string) =>
 export const listModels = () => req<ModelEntry[]>('/api/settings/models')
 export const createModel = (m: { providerId: string; model: string; displayName?: string; maxTokens?: number; systemPrompt?: string }) =>
   req<ModelEntry>('/api/settings/models', json('POST', m))
-export const updateModel = (id: string, m: { displayName?: string; maxTokens?: number; systemPrompt?: string }) =>
+export const updateModel = (id: string, m: { displayName?: string; maxTokens?: number | null | string; systemPrompt?: string }) =>
   req<{ ok: true; model: ModelEntry }>(`/api/settings/models/${id}`, json('PATCH', m))
 export const deleteModel = (id: string) =>
   req<{ ok: true }>(`/api/settings/models/${id}`, { method: 'DELETE' })

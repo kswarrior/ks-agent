@@ -3840,8 +3840,15 @@ async function proxyChatPreview(c: any, suffix: string): Promise<Response> {
 
 const distDir = process.env.KS_WEB_DIST || './dist'
 
-app.use('*', serveStatic({ root: distDir }))
-app.get('*', serveStatic({ root: distDir, rewriteRequestPath: () => '/index.html' }))
+// FIX: API routes must not be shadowed by SPA fallback. Unknown /api/* should be 404 JSON, not index.html
+app.use('*', async (c, next) => {
+  if (c.req.path.startsWith('/api/')) return next()
+  return serveStatic({ root: distDir })(c, next)
+})
+app.get('*', async (c, next) => {
+  if (c.req.path.startsWith('/api/')) return c.json({ error: 'Not found' }, 404)
+  return serveStatic({ root: distDir, rewriteRequestPath: () => '/index.html' })(c, next)
+})
 
 const port = Number(process.env.PORT || 8787)
 const server = serve({ fetch: app.fetch, port, hostname: process.env.HOST || '0.0.0.0' })
