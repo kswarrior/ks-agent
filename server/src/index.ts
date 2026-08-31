@@ -364,8 +364,14 @@ app.delete('/api/projects/:id', async (c) => {
     const blocked = isBlockedProjectPath(resolved)
     if (blocked) return c.json({ error: blocked }, 400)
     // Extra guard: also block deletion if resolved is not inside project/ or cwd or /tmp
+    // CRITICAL FIX: never allow deleting the top-level roots themselves (/tmp, /var/tmp, cwd, project)
     const cwd = path.resolve(process.cwd())
-    const isAllowedDeletion = resolved.startsWith(path.join(cwd, 'project') + path.sep) || resolved.startsWith(cwd + path.sep) || resolved.startsWith('/tmp' + path.sep) || resolved === '/tmp' || resolved.startsWith('/var/tmp' + path.sep) || resolved === '/var/tmp'
+    const projectRoot = path.join(cwd, 'project')
+    const isAllowedDeletion =
+      (resolved !== projectRoot && resolved.startsWith(projectRoot + path.sep)) ||
+      (resolved !== cwd && resolved !== projectRoot && resolved.startsWith(cwd + path.sep)) ||
+      resolved.startsWith('/tmp' + path.sep) ||
+      resolved.startsWith('/var/tmp' + path.sep)
     if (!isAllowedDeletion) {
       return c.json({ error: 'Refusing to delete folder outside allowed paths (project/, cwd, /tmp): ' + resolved }, 400)
     }
