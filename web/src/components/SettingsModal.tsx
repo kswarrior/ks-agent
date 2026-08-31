@@ -302,7 +302,16 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     try {
       const raw = modelEdit.maxTokens
       const parsed = raw != null && String(raw).trim() !== '' ? Number(raw) : undefined
-      const maxTokensPayload = parsed != null && Number.isFinite(parsed) && parsed >= 1 ? { maxTokens: Math.floor(parsed) } : { maxTokens: 0 }
+      // FIX: clearing the field should delete maxTokens (send null), not send 0 which fails validation.
+      // Invalid numbers (<1 or NaN) should still be sent to trigger backend validation error.
+      let maxTokensPayload: Record<string, unknown>
+      if (parsed === undefined) {
+        maxTokensPayload = { maxTokens: null }
+      } else if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 1) {
+        maxTokensPayload = { maxTokens: Math.floor(parsed) }
+      } else {
+        maxTokensPayload = { maxTokens: parsed as unknown as number }
+      }
       await api.updateModel(modelEdit.id, {
         displayName: modelEdit.displayName?.trim() ?? '',
         ...maxTokensPayload,
