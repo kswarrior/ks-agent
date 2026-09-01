@@ -15,11 +15,11 @@ Use with `frontend/skill.md` (common). This file covers **React 18** specifics f
 - **Keys & lists** — Use stable `id` for `key`, never index. For chat/message lists, sort as `types.ts` does.
 - **Performance** — `React.memo` only when measured; prefer `useCallback` for handlers passed to children.
 
-## White/Blue UI in React
-- Use token classes: `btn` (secondary white), `btn-primary` (blue), `btn-danger`, `input`, `search-input`, `dialog`, `dropdown`, `menu-pop`, `overlay`, `modal-lg`. Do not inline dark colors.
+## Black/Blue UI in React (white via Theme)
+- Use token classes: `btn` (secondary), `btn-primary` (blue), `btn-danger`, `input`, `search-input`, `dialog`, `dropdown`, `menu-pop`, `overlay`, `modal-lg`. Do not inline hard-coded `#000`/`#fff`; use `var(--btn)`, `var(--surface)`, `var(--border)`, `var(--text)` so Theme switch works.
 - Primary button: exactly one `btn-primary` per modal/view. Example: `<button className="btn btn-primary">Save</button>`. Secondary: `<button className="btn">Cancel</button>`.
-- All inputs use `input`/`search-input`/`composer-input` — white bg, `var(--border)` border, focus `var(--border-strong)` or `0 0 0 3px var(--primary-ring)`.
-- Header/sidebar/surfaces use `var(--surface)` white + `var(--border)` dividers — not dark gradients.
+- All inputs use `input`/`search-input`/`composer-input` — `background:var(--input)`, `border:1px solid var(--border)`, focus `0 0 0 3px var(--primary-ring)`.
+- Header/sidebar/surfaces use `var(--surface)` + `var(--border)` dividers — not hard-coded.
 
 ## No Native Browser Dialogs — React Rules
 - **Never** call `window.confirm/alert/prompt`. Always use:
@@ -37,11 +37,11 @@ Use with `frontend/skill.md` (common). This file covers **React 18** specifics f
 ## Checklist
 - [ ] Inspected `web/src/components` and `web/src/App.tsx` before changing
 - [ ] Updated `web/src/types.ts` if contract changed (both directions `server ↔ web`)
-- [ ] No new deps, no new CSS framework; used white/blue tokens only
-- [ ] **Zero** `window.confirm|alert|prompt` — grep `web/src` empty; all confirms via `useDialogs()`, all selects via dropdown/popover/drawer
-- [ ] One primary (blue) per view; secondary stays white; focus ring visible
+- [ ] No new deps, no new CSS framework; used tokens (`var(--primary)`, `var(--bg)` etc) — works in black default and white via Theme
+- [ ] **Zero** `window.confirm|alert|prompt` — grep `web/src` empty; all confirms via `useDialogs()`, all selects via dropdown/popover/drawer, color picks via `input[type=color]` + presets
+- [ ] One primary (blue) per view; secondary uses `var(--btn)`; focus ring `var(--primary-ring)` visible
 - [ ] `npm run typecheck && npm run build` passes
-- [ ] Manual UI check on desktop + phone (sidebar drawer, right panel drawer, preview overlay) — white theme, soft shadows, blue primary
+- [ ] Manual UI check on desktop + phone (sidebar drawer, right panel drawer, preview overlay) — default **black** theme, blue primary, theme switch to white works
 
 ## Preview
 When the task builds a previewable site (Vite/Next), call `open_preview` with the port after verification — `PreviewSidebar` shows it per chat.
