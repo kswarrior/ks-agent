@@ -93,6 +93,13 @@ export interface RetrySettings {
   alwaysRetry?: boolean
 }
 
+export interface ThemeSettings {
+  primary: string
+  danger: string
+  background: string
+  radius: number
+}
+
 export interface Skill {
   id: string
   name: string

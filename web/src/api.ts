@@ -316,6 +316,11 @@ export const getRetrySettings = () => req<RetrySettings>('/api/settings/retry')
 export const updateRetrySettings = (patch: Partial<RetrySettings>) =>
   req<RetrySettings>('/api/settings/retry', json('PATCH', patch))
 
+// Settings: theme
+export const getThemeSettings = () => req<ThemeSettings>('/api/settings/theme')
+export const updateThemeSettings = (patch: Partial<ThemeSettings>) =>
+  req<ThemeSettings>('/api/settings/theme', json('PATCH', patch))
+
 // Skills
 export const listSkills = () => req<Skill[]>('/api/settings/skills')
 export const createSkill = (s: { name: string; note: string; mainFile: string; files: string[]; projectId?: string }) =>

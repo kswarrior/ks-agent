@@ -1579,6 +1579,39 @@ app.patch('/api/settings/retry', async (c) => {
   return c.json(updateRetrySettings(patch))
 })
 
+// ---------------- Settings: theme ----------------
+
+app.get('/api/settings/theme', (c) => {
+  return c.json(getThemeSettings())
+})
+
+app.patch('/api/settings/theme', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const patch: Partial<ThemeSettings> = {}
+  if (body.primary !== undefined) {
+    const v = String(body.primary).trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) patch.primary = v.toLowerCase()
+    else return c.json({ error: 'primary must be hex color like #2563eb' }, 400)
+  }
+  if (body.danger !== undefined) {
+    const v = String(body.danger).trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) patch.danger = v.toLowerCase()
+    else return c.json({ error: 'danger must be hex color like #dc2626' }, 400)
+  }
+  if (body.background !== undefined) {
+    const v = String(body.background).trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) patch.background = v.toLowerCase()
+    else return c.json({ error: 'background must be hex color like #ffffff' }, 400)
+  }
+  if (body.radius !== undefined) {
+    const n = Number(body.radius)
+    if (!Number.isFinite(n) || n < 6 || n > 16) return c.json({ error: 'radius must be 6-16' }, 400)
+    patch.radius = Math.round(n)
+  }
+  if (Object.keys(patch).length === 0) return c.json({ error: 'No valid fields to update' }, 400)
+  return c.json(updateThemeSettings(patch))
+})
+
 // ---------------- Skills ----------------
 
 function isValidRelPath(p: string, maxLen = 500): boolean {

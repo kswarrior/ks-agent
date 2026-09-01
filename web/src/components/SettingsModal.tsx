@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import * as api from '../api'
-import type { ModelEntry, Provider, RetrySettings } from '../types'
+import type { ModelEntry, Provider, RetrySettings, ThemeSettings } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
 import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate } from '../icons'
+import { applyTheme, DEFAULT_THEME } from '../theme'
 
 interface Props {
   open: boolean
