@@ -167,15 +167,61 @@ export function recordSkillRead(chatId: string, rel: string): void {
 }
 
 export function hasReadSkill(chatId: string, required: string): boolean {
-  const set = skillReads.get(chatId)
-  if (!set) return false
   const norm = required.toLowerCase()
-  if (set.has(norm)) return true
   const base = path.basename(norm)
-  for (const s of set) {
-    if (s === norm || s === base || path.basename(s) === base) return true
+  const matchesSet = (set: Set<string>): boolean => {
+    if (set.has(norm)) return true
+    if (set.has(base)) return true
+    for (const s of set) {
+      if (s === norm || s === base || path.basename(s) === base) return true
+    }
+    return false
   }
+  const mem = skillReads.get(chatId)
+  if (mem && matchesSet(mem)) return true
+  // Fallback to persisted activities (survives restart and covers any read_file that matched a skill)
+  try {
+    const db = getDb()
+    const acts = (db.activities || []).filter((a: any) => a.chatId === chatId && a.toolType === 'read_file' && a.ok === true)
+    for (const a of acts) {
+      const rawPath = String((a.args as any)?.path ?? '').toLowerCase().trim()
+      if (!rawPath) continue
+      const normP = normalizeSkillRel(rawPath)
+      const baseP = path.basename(normP)
+      const origBase = path.basename(rawPath)
+      if (normP === norm || baseP === base || origBase === base || normP === base || baseP === norm) return true
+      // frontend/skill.md can be satisfied by legacy frontend.md or skill.md reads
+      if (norm === 'frontend/skill.md' && (normP === 'frontend/skill.md' || normP === 'frontend.md' || baseP === 'skill.md' || rawPath === 'skills/frontend/skill.md' || rawPath === 'frontend/skill.md')) return true
+      // also handle skills/ prefix stripped match
+      const stripped = rawPath.replace(/^\.?\/+/, '').replace(/^skills\//, '')
+      if (stripped === norm) return true
+      if (path.basename(stripped) === base) {
+        // ensure it's a skill-like file (contains skill or frontend or is known skill file)
+        const lowerStripped = stripped.toLowerCase()
+        if (lowerStripped.includes('skill') || lowerStripped.includes('frontend') || lowerStripped === base) return true
+      }
+    }
+  } catch {}
   return false
+}
+
+export function getSkillReadStatus(chatId: string): Record<string, boolean> {
+  const skills = (() => { try { return getSkills() } catch { return [] as any[] } })()
+  const out: Record<string, boolean> = {}
+  for (const s of skills) {
+    const key = s.mainFile.toLowerCase()
+    out[key] = hasReadSkill(chatId, key)
+    // also expose by files
+    for (const f of s.files || []) {
+      out[f.toLowerCase()] = hasReadSkill(chatId, f.toLowerCase())
+    }
+  }
+  // frontend fallback keys always included for UI
+  const extra = ['frontend/skill.md', 'frontend/react.md', 'frontend/ts.md', 'frontend/ejs.md']
+  for (const k of extra) {
+    if (!(k in out)) out[k] = hasReadSkill(chatId, k)
+  }
+  return out
 }
 
 export function isFrontendEdit(rel: string): boolean {
