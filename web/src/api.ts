@@ -199,6 +199,7 @@ export const stopGeneration = (chatId: string) =>
 
 // Activities
 export const listActivities = (chatId: string) => req<Activity[]>(`/api/chats/${chatId}/activities`)
+export const getSkillStatus = (chatId: string) => req<{ hasAnyRead: boolean; status: Record<string, boolean>; detailed: Array<{ id: string; name: string; mainFile: string; files: string[]; read: boolean; filesRead: Array<{ file: string; read: boolean }> }> }>(`/api/chats/${chatId}/skill-status`)
 
 // Previews (per chat, like plan)
 export const getChatPreview = (chatId: string) => req<Preview | null>(`/api/chats/${chatId}/preview`)
