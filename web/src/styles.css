@@ -946,15 +946,15 @@ textarea {
   width: 54px;
   height: 54px;
   border-radius: 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: var(--primary-bg);
+  border: 1px solid var(--primary-border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
   letter-spacing: 0.03em;
-  color: var(--text-dim);
-  box-shadow: 0 0 34px rgba(255, 255, 255, 0.03);
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(37,99,235,0.12);
 }
 
 .empty h2 {
@@ -1672,7 +1672,7 @@ textarea {
 }
 
 .toast-success {
-  color: #86efac;
+  color: #15803d; background: #f0fdf4; border-color: #bbf7d0;
 }
 
 @keyframes toast-in {
