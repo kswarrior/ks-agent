@@ -12,7 +12,18 @@ interface Props {
   onDataChanged: () => void
 }
 
-type Tab = 'providers' | 'models' | 'prompt' | 'retry'
+type Tab = 'providers' | 'models' | 'prompt' | 'retry' | 'theme'
+
+const THEME_PRESETS: { name: string; primary: string; danger?: string; background?: string }[] = [
+  { name: 'Blue', primary: '#2563eb' },
+  { name: 'Emerald', primary: '#059669' },
+  { name: 'Violet', primary: '#7c3aed' },
+  { name: 'Rose', primary: '#e11d48' },
+  { name: 'Amber', primary: '#d97706' },
+  { name: 'Cyan', primary: '#0891b2' },
+  { name: 'Slate', primary: '#475569' },
+  { name: 'Teal', primary: '#0d9488' }
+]
 
 const PROVIDER_PRESETS = [
   { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1' },
@@ -53,6 +64,11 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [maxDelayInput, setMaxDelayInput] = useState('')
   const [retryOnInput, setRetryOnInput] = useState('')
   const [stopOnInput, setStopOnInput] = useState('')
+  const [themeSettings, setThemeSettings] = useState<ThemeSettings | null>(null)
+  const [themeDraft, setThemeDraft] = useState<ThemeSettings | null>(null)
+  const [themePrimaryInput, setThemePrimaryInput] = useState('')
+  const [themeDangerInput, setThemeDangerInput] = useState('')
+  const [themeBgInput, setThemeBgInput] = useState('')
   const [error, setError] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()
@@ -109,6 +125,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       loadPlanPrompt()
       loadSystemPrompt()
       loadRetrySettings()
+      loadThemeSettings()
       setProviderForm(null)
       setProviderPicker(false)
       setShowModelForm(false)
@@ -172,6 +189,58 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     } catch (e: any) {
       toast(e.message, 'error')
     }
+  }
+
+  async function loadThemeSettings() {
+    try {
+      const t = await api.getThemeSettings()
+      setThemeSettings(t)
+      setThemeDraft({ ...t })
+      setThemePrimaryInput(t.primary)
+      setThemeDangerInput(t.danger)
+      setThemeBgInput(t.background)
+      applyTheme(t)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }
+
+  async function submitThemeSettings() {
+    if (!themeDraft) return
+    setError(null)
+    const primary = themePrimaryInput.trim().toLowerCase()
+    const danger = themeDangerInput.trim().toLowerCase()
+    const background = themeBgInput.trim().toLowerCase()
+    if (!/^#[0-9a-f]{6}$/.test(primary)) return setError('Primary must be hex like #2563eb')
+    if (!/^#[0-9a-f]{6}$/.test(danger)) return setError('Danger must be hex like #dc2626')
+    if (!/^#[0-9a-f]{6}$/.test(background)) return setError('Background must be hex like #ffffff')
+    const toSave: ThemeSettings = {
+      primary,
+      danger,
+      background,
+      radius: themeDraft.radius
+    }
+    try {
+      const saved = await api.updateThemeSettings(toSave)
+      setThemeSettings(saved)
+      setThemeDraft({ ...saved })
+      setThemePrimaryInput(saved.primary)
+      setThemeDangerInput(saved.danger)
+      setThemeBgInput(saved.background)
+      applyTheme(saved)
+      toast('Theme saved', 'success')
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
+  function resetThemeDefaults() {
+    const d = { ...DEFAULT_THEME }
+    setThemeDraft(d)
+    setThemePrimaryInput(d.primary)
+    setThemeDangerInput(d.danger)
+    setThemeBgInput(d.background)
+    applyTheme(d)
   }
 
   async function submitPlanPrompt() {
