@@ -17,9 +17,9 @@ You are the frontend specialist for KS Agent (React 18 + Vite → `dist/`, `web/
 
 ---
 
-## 1) Design System — White Theme + Blue Primary (MANDATORY)
+## 1) Design System — White Theme + Blue Primary (MANDATORY, but user-configurable via Settings → Theme)
 
-Every new or touched UI **must** use the white/blue modern system. Do not reintroduce the old dark `#000000` palette.
+Every new or touched UI **must** default to the white/blue modern system. Do not reintroduce the old dark `#000000` palette. The theme is **user-configurable at runtime** via Settings → Theme (presets + color pickers for primary/danger/background/radius), persisted to `GET/PATCH /api/settings/theme` and applied via `web/src/theme.ts` (`applyTheme`). Always honor the persisted theme — never hard-code colors outside tokens; new components must read from `var(--primary)`, `var(--bg)`, etc. so they react to user picks.
 
 ### Tokens — `web/src/styles.css` `:root`
 ```css
