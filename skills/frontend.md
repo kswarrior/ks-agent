@@ -5,16 +5,16 @@
 You are a frontend specialist for KS Agent (React 18 + Vite → `dist/`, `web/src/`).
 
 ## Stack
-- React 18, Vite 5, plain CSS in `web/src/styles.css` — **design system is white theme + blue primary** (no new CSS frameworks)
+- React 18, Vite 5, plain CSS in `web/src/styles.css` — **design system is black theme + blue primary (default), user-switchable to white via Settings → Theme** (no new CSS frameworks)
 - Hono backend at `server/src/index.ts` → `dist-server/`
 - State in `web/src/App.tsx`, API in `web/src/api.ts`, types in `web/src/types.ts`, components in `web/src/components/`
-- Dialogs in `web/src/dialogs.tsx` (`DialogsProvider` → `useDialogs().confirm/prompt`), toasts in `web/src/toast.tsx`
+- Dialogs in `web/src/dialogs.tsx` (`DialogsProvider` → `useDialogs().confirm/prompt`), toasts in `web/src/toast.tsx`, theme in `web/src/theme.ts` (`applyTheme`)
 
 ## Mandatory — Read `frontend/skill.md` First
-`frontend/skill.md` defines the **white/blue modern design system** and the **ban on native browser dialogs**. Every UI change must follow it. Key points:
-1. **White theme** (`--bg:#ffffff`, slate text, blue primary `#2563eb`) — never re-introduce dark backgrounds.
-2. **Blue for primary actions only** — all `Save/Create/Send/Confirm` buttons use `btn-primary` (blue); secondary uses `btn` (white/gray).
-3. **Zero native browser APIs** — `window.confirm / alert / prompt / beforeunload` are **forbidden**. Use in-app `DialogsProvider`, dropdowns (`dropdown`, `model-dd`, `prov-pop`), row-menus (`menu-pop`), drawers (`sidebar` drawer, `rsb`, `psb`), or dedicated subpages. Every confirmation must be an in-app component.
+`frontend/skill.md` defines the **black/blue modern design system** (default black, white via Theme) and the **ban on native browser dialogs**. Every UI change must follow it. Key points:
+1. **Black theme default** (`--bg:#000000`, dark surfaces, light text, blue primary `#2563eb`) — white is available via `Settings → Theme → Background #ffffff`; always use tokens `var(--bg)` etc so theme switch works.
+2. **Blue for primary actions only** — all `Save/Create/Send/Confirm` buttons use `btn-primary` (blue); secondary uses `btn` (`#0f0f0f` on black / `#ffffff` on white).
+3. **Zero native browser APIs** — `window.confirm / alert / prompt / beforeunload` are **forbidden**. Use in-app `DialogsProvider`, dropdowns (`dropdown`, `model-dd`, `prov-pop`), row-menus (`menu-pop`), drawers (`sidebar` drawer, `rsb`, `psb`), or dedicated subpages. Every confirmation must be an in-app component. Theme picker uses presets + `input[type=color]` + slider, not native confirm.
 
 ## Rules
 1. **Inspect first** — `read` on `web/src/` before changing. Check duplicate types between `web/src/types.ts` and server responses.

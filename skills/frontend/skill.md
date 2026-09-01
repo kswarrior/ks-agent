@@ -17,37 +17,37 @@ You are the frontend specialist for KS Agent (React 18 + Vite → `dist/`, `web/
 
 ---
 
-## 1) Design System — White Theme + Blue Primary (MANDATORY, but user-configurable via Settings → Theme)
+## 1) Design System — Black Theme + Blue Primary (DEFAULT, but user-configurable via Settings → Theme)
 
-Every new or touched UI **must** default to the white/blue modern system. Do not reintroduce the old dark `#000000` palette. The theme is **user-configurable at runtime** via Settings → Theme (presets + color pickers for primary/danger/background/radius), persisted to `GET/PATCH /api/settings/theme` and applied via `web/src/theme.ts` (`applyTheme`). Always honor the persisted theme — never hard-code colors outside tokens; new components must read from `var(--primary)`, `var(--bg)`, etc. so they react to user picks.
+Every new or touched UI **must** default to the **black** modern system (pure black ` #000000` page, dark surfaces, blue primary). The theme is **user-configurable at runtime** via Settings → Theme (presets + color pickers for primary/danger/background/radius), persisted to `GET/PATCH /api/settings/theme` and applied via `web/src/theme.ts` (`applyTheme`). Always honor the persisted theme — never hard-code colors outside tokens; new components must read from `var(--primary)`, `var(--bg)`, etc. so they react to user picks. User can switch to white via Theme → Background #ffffff.
 
-### Tokens — `web/src/styles.css` `:root`
+### Tokens — `web/src/styles.css` `:root` (default black)
 ```css
 :root {
-  --bg: #ffffff;            /* page */
-  --surface: #ffffff;       /* cards, sidebar, header */
-  --surface-2: #f8fafc;     /* slate-50 — hover, active rows, code bg */
-  --surface-3: #f1f5f9;     /* slate-100 — subtle pressed/selected */
-  --input: #ffffff;
-  --border: #e2e8f0;        /* slate-200 */
-  --border-strong: #cbd5e1; /* slate-300 */
-  --border-2: #f1f5f9;
+  --bg: #000000;            /* page — black default */
+  --surface: #050505;       /* cards, sidebar, header */
+  --surface-2: #0a0a0a;     /* hover, active rows, code bg */
+  --surface-3: #151515;     /* pressed/selected */
+  --input: #080808;
+  --border: #1a1a1a;        /* dark border */
+  --border-strong: #252525;
+  --border-2: #1a1a1a;
 
-  --text: #0f172a;          /* slate-900 */
-  --text-dim: #475569;      /* slate-600 */
-  --text-faint: #94a3b8;    /* slate-400 */
+  --text: #e8e8e8;          /* light on black */
+  --text-dim: #9a9a9a;
+  --text-faint: #6b6b6b;
   --text-on-primary: #ffffff;
 
   --primary: #2563eb;       /* blue-600 — PRIMARY ONLY */
   --primary-hover: #1d4ed8; /* blue-700 */
   --primary-active: #1e40af;/* blue-800 */
-  --primary-bg: #eff6ff;    /* blue-50 — tint, selected rows */
-  --primary-ring: rgba(37,99,235,0.18);
-  --primary-border: #bfdbfe;/* blue-200 */
+  --primary-bg: #0f172a;    /* dark blue tint for dark */
+  --primary-ring: rgba(37,99,235,0.35);
+  --primary-border: #1e3a5f;
 
-  --danger: #dc2626;
-  --danger-bg: #fef2f2;
-  --danger-border: #fecaca;
+  --danger: #ef4444;
+  --danger-bg: #140a0a;
+  --danger-border: #58201f;
   --radius: 10px;
   --radius-sm: 8px;
   --radius-full: 999px;
@@ -57,38 +57,35 @@ Every new or touched UI **must** default to the white/blue modern system. Do not
 ```
 
 ### Color usage
-- **Page/surfaces**: white (`--bg`, `--surface`). Secondary surfaces use `slate-50/100` only.
-- **Text**: `slate-900` primary, `slate-600` secondary, `slate-400` faint. Contrast ≥ 4.5:1.
-- **Borders**: `slate-200` default, `slate-300` strong. No pure black borders.
-- **Blue rule**: Blue (`--primary`) is **only** for primary CTA: `Save`, `Create`, `Send`, `Confirm`, `Continue`, `Add`, active tab underline. Exactly one primary per view/modal. Secondary buttons stay white (`--btn:#ffffff` + `--border` + `--text`); hover `slate-50`; active `slate-100`.
-- **Danger**: red only for `btn-danger` + `dialog-warning` + `toast-error`. Never blue+red together as primary.
+- **Page/surfaces**: default black (`--bg:#000000`, `--surface:#050505`). Secondary surfaces `var(--surface-2)`/`var(--surface-3)`. White theme available via `Settings → Theme → Background #ffffff` — tokens switch to light automatically.
+- **Text**: `var(--text) #e8e8e8` primary on black, `var(--text-dim) #9a9a9a` secondary, `var(--text-faint) #6b6b6b` faint. Light theme swaps to slate-900/600/400. Contrast ≥ 4.5:1 in both modes.
+- **Borders**: `var(--border) #1a1a1a` default, `var(--border-strong) #252525`. Light swaps to slate-200/300.
+- **Blue rule**: Blue (`--primary #2563eb`) is **only** for primary CTA: `Save`, `Create`, `Send`, `Confirm`, `Continue`, `Add`, active tab underline. Exactly one primary per view/modal. Secondary buttons use `var(--btn)` (`#0f0f0f` on black, `#ffffff` on white); hover `var(--btn-hover)`.
+- **Danger**: red only for `btn-danger` + `dialog-warning` + `toast-error` (`#ef4444` on black, `#dc2626` on white). Never blue+red together as primary.
 
 ### Buttons
-- `.btn` — secondary: `background: var(--btn:#fff); border:1px solid var(--border); color:var(--text);` hover `var(--btn-hover:#f8fafc)` + `border-strong`.
+- `.btn` — secondary: `background:var(--btn); border:1px solid var(--border); color:var(--text);` hover `var(--btn-hover)` + `border-strong`.
 - `.btn-primary` — primary: `background:var(--primary); border-color:var(--primary); color:var(--text-on-primary);` hover `var(--primary-hover)`; active `var(--primary-active)`; focus ring `0 0 0 3px var(--primary-ring)`; disabled `opacity:0.45`.
-- `.send-btn` — same as primary (blue circle/square). Do not make send gray.
+- `.send-btn` — same as primary (blue). Do not make send gray.
 - `.btn-danger` — `background:var(--danger-bg); border-color:var(--danger-border); color:var(--danger);`
-- All buttons: `transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease`; no tap highlight (already global); `:focus-visible` uses primary ring.
+- All buttons: `transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease`; no tap highlight; `:focus-visible` uses primary ring.
 
 ### Surfaces & depth (modern)
-- **No heavy dark shadows.** Use soft layered shadows:
-  - Card/dropdown/modal: `0 1px 3px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.06)`
-  - Popover: `0 8px 24px rgba(15,23,42,0.10)`
-  - Header: `0 1px 0 var(--border)` + `0 1px 3px rgba(15,23,42,0.04)` — keep it light, not gradient-black.
-- Radius: `10px` cards/modals/inputs, `8px` buttons/rows, `999px` for pills/toasts.
+- Shadows adapt: dark uses `0 8px 24px rgba(0,0,0,0.5)` / `0 14px 38px rgba(0,0,0,0.75)`; light uses `0 1px 3px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.06)` and `0 8px 24px rgba(15,23,42,0.10)`. Keep `var(--border)` dividers.
+- Radius: `10px` cards/modals/inputs (configurable via Theme radius), `8px` buttons/rows, `999px` pills/toasts.
 - Spacing: 8pt scale (4,8,12,16,24). Padding cards `14px`, rows `9px 10px`, inputs `10px 12px`.
-- Typography: `ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial` — body `14.5px / 1.6`, labels `12-13px/600`, section labels `11px/600/uppercase/0.06em` in `slate-400`.
+- Typography: `ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial` — body `14.5px / 1.6`, labels `12-13px/600`, section labels `11px/600/uppercase/0.06em` in `var(--text-faint)`.
 - Motion: `0.15s ease` for hover, `0.12s ease` pop (`pop` + `rise`), `0.18s ease` toast. Respect `prefers-reduced-motion`.
 
 ### Layout
-- Header `52px`, white, `border-bottom:1px solid var(--border)`, no dark gradient.
-- Sidebar / right panel / preview: white surfaces, `border:1px solid var(--border)`.
-- Chat bubbles: user `background:var(--primary-bg); border:1px solid var(--primary-border);` or `slate-50` — not dark. Assistant seamless with `Markdown`.
-- Scrollbars: `width:8px`, thumb `#cbd5e1` on white track.
-- Mobile: sidebar & right panel become drawers with light scrim `rgba(15,23,42,0.32)`, same z-index scheme.
+- Header `52px`, `background:var(--surface)`, `border-bottom:1px solid var(--border)`, no gradient.
+- Sidebar / right panel / preview: `var(--surface)` + `border:1px solid var(--border)`.
+- Chat bubbles: user `background:var(--primary-bg); border:1px solid var(--primary-border);` — dark tint on black, light tint on white. Assistant seamless with `Markdown`.
+- Scrollbars: `width:8px`, thumb `var(--border-strong)` on `var(--bg)` track.
+- Mobile: sidebar & right panel become drawers with scrim `rgba(0,0,0,0.72)` on black / `rgba(15,23,42,0.32)` on light, same z-index scheme.
 
 ### What NOT to do
-- No `#000`, `#0a0a0a`, `#1a1a1a` backgrounds. No `#ffffff` text on dark. No new CSS framework. No arbitrary colors outside tokens.
+- No hard-coded `#000`/`#fff` outside tokens; use `var(--bg)`, `var(--surface)`, etc. so Theme switch works. No new CSS framework. No arbitrary colors outside tokens.
 
 ---
 

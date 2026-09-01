@@ -6,7 +6,7 @@ Use with `frontend/skill.md` (common). This file covers **React 18** specifics f
 - `web/src/App.tsx` — top state, `useState`/`useEffect`, `subsRef` for SSE, `activeChatIdRef`
 - `web/src/api.ts` — `req<T>` fetch wrapper, `streamChatEvents` SSE reader
 - `web/src/components/*` — `ChatView`, `Sidebar`, `Header`, `SettingsModal`, `ExtensionsModal`, `XTermTerminal`
-- `web/src/styles.css` — **white + blue design system** (plain CSS, no framework) — tokens in `:root`
+- `web/src/styles.css` — **black + blue design system (default, white via Theme)** (plain CSS, no framework) — tokens in `:root`, runtime override via `web/src/theme.ts`
 
 ## Patterns
 - **Hooks style** — Follow existing `useState`, `useEffect`, `useCallback`, `useRef` as in `App.tsx`. Keep deps arrays correct; use `useRef` for latest values inside SSE callbacks.
