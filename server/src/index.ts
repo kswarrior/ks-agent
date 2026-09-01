@@ -1148,7 +1148,7 @@ app.post('/api/chats/:id/messages', async (c) => {
     const base = cleanMessagesForHistory(chat.id)
     const prefix: LLMMessage[] = [
       { role: 'system', content: modelSystemPrompt },
-      ...(project ? [{ role: 'system' as const, content: `Active project ${projectfolder} — PRIMARY WORKSPACE (stay strictly inside ${projectfolder}): ${project.name} at ${project.path}. Only leave ${projectfolder} for /tmp or when user explicitly requests to go inside KS Agent (the agent codebase).` }] : []),
+      ...(project ? [{ role: 'system' as const, content: `Active project \${projectfolder} — PRIMARY WORKSPACE (stay strictly inside \${projectfolder}): ${project.name} at ${project.path}. Only leave \${projectfolder} for /tmp or when user explicitly requests to go inside KS Agent (the agent codebase).` }] : []),
       ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
       ...skillMessages
     ]
@@ -1251,7 +1251,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     {
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
-        ...(project ? [{ role: 'system' as const, content: `Active project ${projectfolder} — PRIMARY WORKSPACE (stay strictly inside ${projectfolder}): ${project.name} at ${project.path}. Only leave ${projectfolder} for /tmp or when user explicitly requests to go inside KS Agent (the agent codebase).` }] : []),
+        ...(project ? [{ role: 'system' as const, content: `Active project \${projectfolder} — PRIMARY WORKSPACE (stay strictly inside \${projectfolder}): ${project.name} at ${project.path}. Only leave \${projectfolder} for /tmp or when user explicitly requests to go inside KS Agent (the agent codebase).` }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
         ...skillMessages,
         ...cleanMessagesForHistory(chat.id)
@@ -1331,7 +1331,7 @@ app.post('/api/chats/:id/continue', async (c) => {
       const base = cleanMessagesForHistory(chat.id)
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
-        ...(project ? [{ role: 'system' as const, content: `Active project ${projectfolder} — PRIMARY WORKSPACE (stay strictly inside ${projectfolder}): ${project.name} at ${project.path}. Only leave ${projectfolder} for /tmp or when user explicitly requests to go inside KS Agent (the agent codebase).` }] : []),
+        ...(project ? [{ role: 'system' as const, content: `Active project \${projectfolder} — PRIMARY WORKSPACE (stay strictly inside \${projectfolder}): ${project.name} at ${project.path}. Only leave \${projectfolder} for /tmp or when user explicitly requests to go inside KS Agent (the agent codebase).` }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
         ...skillMessages
       ]
