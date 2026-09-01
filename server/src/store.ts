@@ -202,8 +202,8 @@ export interface Activity {
 
 export const DEFAULT_THEME: ThemeSettings = {
   primary: '#2563eb',
-  danger: '#dc2626',
-  background: '#ffffff',
+  danger: '#ef4444',
+  background: '#000000',
   radius: 10
 }
 

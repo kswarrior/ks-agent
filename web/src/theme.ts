@@ -2,8 +2,8 @@ import type { ThemeSettings } from './types'
 
 export const DEFAULT_THEME: ThemeSettings = {
   primary: '#2563eb',
-  danger: '#dc2626',
-  background: '#ffffff',
+  danger: '#ef4444',
+  background: '#000000',
   radius: 10
 }
 
@@ -36,6 +36,13 @@ function lighten(hex: string, amount: number): string {
   return mix(hex, '#ffffff', 1 - amount)
 }
 
+function isDark(hex: string): boolean {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return false
+  const lum = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
+  return lum < 140
+}
+
 export function applyTheme(settings: ThemeSettings): void {
   const root = document.documentElement
   const primary = (settings.primary || DEFAULT_THEME.primary).toLowerCase()
@@ -47,21 +54,71 @@ export function applyTheme(settings: ThemeSettings): void {
   const dangerRgb = hexToRgb(danger)
   if (!primaryRgb || !dangerRgb) return
 
+  const dark = isDark(bg)
+
   // Derived primary variants
   const primaryHover = darken(primary, 0.08) // ~ #1d4ed8 for default
   const primaryActive = darken(primary, 0.18)
-  const primaryBg = mix(primary, '#ffffff', 0.08) // very light 8% primary
-  const primaryBorder = mix(primary, '#ffffff', 0.18) // 18% primary
-  const primaryRing = `rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, 0.18)`
+  const primaryBg = dark ? mix(primary, bg, 0.18) : mix(primary, '#ffffff', 0.08) // tint with bg for dark, white for light
+  const primaryBorder = dark ? mix(primary, bg, 0.32) : mix(primary, '#ffffff', 0.18)
+  const primaryRing = `rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, ${dark ? 0.35 : 0.18})`
 
-  const dangerBg = mix(danger, '#ffffff', 0.08)
-  const dangerBorder = mix(danger, '#ffffff', 0.22)
-  const dangerHoverBg = mix(dangerBg, '#ffffff', 0.5)
+  const dangerBg = dark ? mix(danger, bg, 0.14) : mix(danger, '#ffffff', 0.08)
+  const dangerBorder = dark ? mix(danger, bg, 0.30) : mix(danger, '#ffffff', 0.22)
 
-  // Core surfaces — keep slate palette for borders/text, but bg/surface follow background pick
-  // If background is not white, derive surface-2 as slightly darker
-  const surface2 = bg.toLowerCase() === '#ffffff' ? '#f8fafc' : mix(bg, '#000000', 0.96) // 4% darken
-  const surface3 = bg.toLowerCase() === '#ffffff' ? '#f1f5f9' : mix(bg, '#000000', 0.93)
+  // Core surfaces — full palette switch based on bg darkness
+  let surface: string, surface2: string, surface3: string, input: string
+  let border: string, borderStrong: string, border2: string
+  let btn: string, btnHover: string, btnActive: string
+  let text: string, textDim: string, textFaint: string
+
+  if (dark) {
+    surface = '#050505'
+    surface2 = '#0a0a0a'
+    surface3 = '#151515'
+    input = '#080808'
+    border = '#1a1a1a'
+    borderStrong = '#252525'
+    border2 = '#1a1a1a'
+    btn = '#0f0f0f'
+    btnHover = '#151515'
+    btnActive = '#1e1e1e'
+    text = '#e8e8e8'
+    textDim = '#9a9a9a'
+    textFaint = '#6b6b6b'
+    // keep bg as chosen dark (usually #000000) — if user picked not pure black, derive surfaces slightly lighter
+    if (bg !== '#000000') {
+      surface = mix(bg, '#ffffff', 0.04)
+      surface2 = mix(bg, '#ffffff', 0.06)
+      surface3 = mix(bg, '#ffffff', 0.09)
+      input = mix(bg, '#ffffff', 0.03)
+      border = mix(bg, '#ffffff', 0.10)
+      borderStrong = mix(bg, '#ffffff', 0.15)
+      btn = mix(bg, '#ffffff', 0.06)
+      btnHover = mix(bg, '#ffffff', 0.09)
+    }
+  } else {
+    surface = '#ffffff'
+    surface2 = '#f8fafc'
+    surface3 = '#f1f5f9'
+    input = '#ffffff'
+    border = '#e2e8f0'
+    borderStrong = '#cbd5e1'
+    border2 = '#f1f5f9'
+    btn = '#ffffff'
+    btnHover = '#f8fafc'
+    btnActive = '#f1f5f9'
+    text = '#0f172a'
+    textDim = '#475569'
+    textFaint = '#94a3b8'
+    if (bg !== '#ffffff') {
+      // custom light bg (e.g. #fefce8) — tint surfaces a bit
+      surface = bg
+      surface2 = mix(bg, '#000000', 0.96)
+      surface3 = mix(bg, '#000000', 0.93)
+      input = bg
+    }
+  }
 
   root.style.setProperty('--primary', primary)
   root.style.setProperty('--primary-hover', primaryHover)
@@ -75,11 +132,20 @@ export function applyTheme(settings: ThemeSettings): void {
   root.style.setProperty('--danger-border', dangerBorder)
 
   root.style.setProperty('--bg', bg)
-  root.style.setProperty('--surface', bg)
+  root.style.setProperty('--surface', surface)
   root.style.setProperty('--surface-2', surface2)
   root.style.setProperty('--surface-3', surface3)
-  root.style.setProperty('--input', bg)
+  root.style.setProperty('--input', input)
 
+  root.style.setProperty('--border', border)
+  root.style.setProperty('--border-strong', borderStrong)
+  root.style.setProperty('--border-2', border2)
+  root.style.setProperty('--btn', btn)
+  root.style.setProperty('--btn-hover', btnHover)
+  root.style.setProperty('--btn-active', btnActive)
+  root.style.setProperty('--text', text)
+  root.style.setProperty('--text-dim', textDim)
+  root.style.setProperty('--text-faint', textFaint)
   root.style.setProperty('--radius', `${radius}px`)
   root.style.setProperty('--radius-sm', `${Math.max(6, radius - 2)}px`)
 
