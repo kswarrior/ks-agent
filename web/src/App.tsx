@@ -92,6 +92,11 @@ function KsAgent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Load persisted theme (server is source of truth, localStorage is instant fallback already applied in theme.ts)
+  useEffect(() => {
+    api.getThemeSettings().then(applyTheme).catch(() => {})
+  }, [])
+
   useEffect(() => {
     try {
       if (activeProjectId) localStorage.setItem(LS_PROJECT, activeProjectId)

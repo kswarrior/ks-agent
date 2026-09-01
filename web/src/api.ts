@@ -1,4 +1,4 @@
-import type { Activity, Chat, FileListing, LSPServer, MCPServer, MarketplacePlugin, Message, ModelEntry, Plan, Plugin, Preview, Project, Provider, Question, RetrySettings, Skill, Terminal } from './types'
+import type { Activity, Chat, FileListing, LSPServer, MCPServer, MarketplacePlugin, Message, ModelEntry, Plan, Plugin, Preview, Project, Provider, Question, RetrySettings, ThemeSettings, Skill, Terminal } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
