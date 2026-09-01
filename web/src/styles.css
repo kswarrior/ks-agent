@@ -431,13 +431,13 @@ textarea {
   width: 100%;
   padding: 9px 10px;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--text-dim);
   cursor: pointer;
   font-size: 14px;
   text-align: left;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
 .dd-item:hover {
@@ -447,8 +447,8 @@ textarea {
 
 .dd-item.active {
   background: var(--primary-bg);
+  border-color: var(--primary-border);
   color: var(--primary);
-  border: 1px solid var(--primary-border);
 }
 
 .dd-item span {
@@ -643,7 +643,7 @@ textarea {
   align-self: flex-end;
   width: 75%;
   background: var(--primary-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--primary-border);
   border-radius: 14px 14px 4px 14px;
   padding: 10px 14px;
   white-space: pre-wrap;
@@ -1301,6 +1301,7 @@ textarea {
 
 .btn:hover {
   background: var(--btn-hover);
+  border-color: var(--border-strong);
 }
 
 .btn-primary {
@@ -1324,7 +1325,6 @@ textarea {
 .btn-primary:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--primary-ring);
-}
 }
 
 .btn-danger {
@@ -1955,6 +1955,7 @@ textarea {
 
 .fp-row.active {
   background: var(--primary-bg);
+  border: 1px solid var(--primary-border);
   border-color: var(--border);
   color: var(--text);
 }
@@ -3205,7 +3206,7 @@ textarea {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  box-shadow: 0 12px 32px rgba(15,23,42,0.12);
+  box-shadow: 0 8px 24px rgba(15,23,42,0.10), 0 1px 3px rgba(15,23,42,0.08);
   padding: 4px;
   display: flex;
   flex-direction: column;
