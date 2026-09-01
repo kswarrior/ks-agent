@@ -133,11 +133,31 @@ function formatTime(ts: string): string {
   }
 }
 
+function isSkillReadActivity(a: Activity): boolean {
+  if (a.toolType !== 'read_file') return false
+  if (a.ok === false) return false
+  const raw = String((a.args as any)?.path ?? '').toLowerCase().trim()
+  if (!raw) return false
+  // Normalize: strip skills/ prefix and handle various skill file names
+  const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').replace(/^\.skills\//, '')
+  const base = norm.split('/').pop() || norm
+  // Check known skill files and frontend sub-files
+  const knownBases = new Set(['skill.md', 'frontend.md', 'react.md', 'ts.md', 'ejs.md', 'testing.md', 'debugging.md', 'refactoring.md', 'code-review.md'])
+  if (knownBases.has(base)) return true
+  if (norm.includes('skill') && norm.endsWith('.md')) return true
+  if (norm.startsWith('frontend/') && norm.endsWith('.md')) return true
+  // also check original raw for skills prefix
+  if (raw.includes('frontend/skill.md') || raw.includes('frontend/react.md') || raw.includes('frontend/ts.md') || raw.includes('frontend/ejs.md')) return true
+  return false
+}
+
 export function ActivityPane({ activities }: { activities: Activity[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterKey>('all')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
+
+  const hasSkillRead = useMemo(() => activities.some(isSkillReadActivity), [activities])
 
   const sortedActivities = useMemo(
     () => [...activities].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
@@ -202,6 +222,11 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
   if (sortedActivities.length === 0) {
     return (
       <div className="activity-pane">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: hasSkillRead ? '#86efac14' : '#f8717114', border: `1px solid ${hasSkillRead ? '#86efac30' : '#f8717125'}`, borderRadius: 8, fontSize: 12, marginBottom: 10 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: hasSkillRead ? '#86efac' : '#f87171', flexShrink: 0, boxShadow: hasSkillRead ? '0 0 6px rgba(134,239,172,0.6)' : 'none' }} />
+          <span style={{ fontWeight: 700, color: hasSkillRead ? '#86efac' : '#f87171' }}>{hasSkillRead ? 'Skill Read' : 'Skill not Read'}</span>
+          <span style={{ color: 'var(--text-faint)', marginLeft: 'auto', fontSize: 11 }}>{hasSkillRead ? 'ready to edit' : 'read skill before edit'}</span>
+        </div>
         <div className="rsb-empty" style={{ flexDirection: 'column', gap: 10, padding: '24px 12px', textAlign: 'center' }}>
           <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
             <span className="act-empty-pill" style={{ background: '#60a5fa1a', color: '#60a5fa', border: '1px solid #60a5fa30' }}>Read</span>
@@ -218,6 +243,11 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
 
   return (
     <div className="activity-pane">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: hasSkillRead ? '#86efac14' : '#f8717114', border: `1px solid ${hasSkillRead ? '#86efac30' : '#f8717125'}`, borderRadius: 8, fontSize: 12, marginBottom: 10 }}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: hasSkillRead ? '#86efac' : '#f87171', flexShrink: 0, boxShadow: hasSkillRead ? '0 0 6px rgba(134,239,172,0.6)' : 'none' }} />
+        <span style={{ fontWeight: 700, color: hasSkillRead ? '#86efac' : '#f87171' }}>{hasSkillRead ? 'Skill Read' : 'Skill not Read'}</span>
+        <span style={{ color: 'var(--text-faint)', marginLeft: 'auto', fontSize: 11 }}>{hasSkillRead ? 'ready to edit' : 'read skill before edit'}</span>
+      </div>
       <div className="activity-summary">
         <span className="activity-summary-count">
           {activities.length} event{activities.length !== 1 ? 's' : ''}
