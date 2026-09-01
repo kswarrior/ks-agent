@@ -1,22 +1,33 @@
-/* ============ KS Agent — dark theme by ks warrior ============ */
+/* ============ KS Agent — white + blue modern theme ============ */
 
 :root {
-  --bg: #000000;
-  --surface: #050505;
-  --surface-2: #0a0a0a;
-  --input: #080808;
-  --border: #1a1a1a;
-  --border-strong: #252525;
-  --btn: #0f0f0f;
-  --btn-hover: #151515;
-  --btn-active: #1e1e1e;
-  --text: #e8e8e8;
-  --text-dim: #9a9a9a;
-  --text-faint: #6b6b6b;
-  --danger: #ef4444;
-  --danger-bg: #140a0a;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --input: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-2: #f1f5f9;
+  --btn: #ffffff;
+  --btn-hover: #f8fafc;
+  --btn-active: #f1f5f9;
+  --text: #0f172a;
+  --text-dim: #475569;
+  --text-faint: #94a3b8;
+  --text-on-primary: #ffffff;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-active: #1e40af;
+  --primary-bg: #eff6ff;
+  --primary-ring: rgba(37, 99, 235, 0.18);
+  --primary-border: #bfdbfe;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
   --radius: 10px;
   --radius-sm: 8px;
+  --radius-full: 999px;
   --sidebar-w: 284px;
   --header-h: 52px;
   font-size: 15px;
