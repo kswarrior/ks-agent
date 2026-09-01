@@ -1067,6 +1067,14 @@ function tryMigrateFromJson(): boolean {
             alwaysRetry: Boolean(parsed.retrySettings.alwaysRetry ?? defaultRetrySettings.alwaysRetry)
           }
         : defaultRetrySettings,
+      themeSettings: parsed.themeSettings && typeof parsed.themeSettings === 'object' && typeof parsed.themeSettings.primary === 'string'
+        ? {
+            primary: /^#[0-9a-fA-F]{6}$/.test(parsed.themeSettings.primary) ? parsed.themeSettings.primary : DEFAULT_THEME.primary,
+            danger: typeof parsed.themeSettings.danger === 'string' && /^#[0-9a-fA-F]{6}$/.test(parsed.themeSettings.danger) ? parsed.themeSettings.danger : DEFAULT_THEME.danger,
+            background: typeof parsed.themeSettings.background === 'string' && /^#[0-9a-fA-F]{6}$/.test(parsed.themeSettings.background) ? parsed.themeSettings.background : DEFAULT_THEME.background,
+            radius: Number.isFinite(parsed.themeSettings.radius) ? Math.max(6, Math.min(16, Number(parsed.themeSettings.radius))) : DEFAULT_THEME.radius
+          }
+        : { ...DEFAULT_THEME },
       skills: Array.isArray(parsed.skills) ? parsed.skills.filter((s: any) => s && typeof s.id === 'string' && typeof s.name === 'string' && typeof s.mainFile === 'string' && s.mainFile.trim().endsWith('.md')).map((s: any) => ({
         id: String(s.id),
         name: String(s.name).trim(),
@@ -1234,6 +1242,10 @@ export function loadDb(): void {
       db = loaded
       // Migrate old skills missing updatedAt / projectId
       let migrated = false
+      if (!db.themeSettings || typeof db.themeSettings.primary !== 'string') {
+        db.themeSettings = { ...DEFAULT_THEME }
+        migrated = true
+      }
       for (const sk of db.skills) {
         if (!sk.updatedAt) { sk.updatedAt = sk.createdAt; migrated = true }
         if (Array.isArray(sk.files)) {
@@ -1261,7 +1273,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     } else {
@@ -1279,7 +1291,7 @@ export function loadDb(): void {
       stopOnStatusCodes: [400, 401, 403, 404],
       alwaysRetry: false
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     }
@@ -1341,6 +1353,35 @@ export function updateRetrySettings(partial: Partial<RetrySettings>): RetrySetti
   db.retrySettings = { ...db.retrySettings, ...partial }
   saveDb()
   return db.retrySettings
+}
+
+export function getThemeSettings(): ThemeSettings {
+  if (!db.themeSettings) db.themeSettings = { ...DEFAULT_THEME }
+  return db.themeSettings
+}
+
+export function updateThemeSettings(partial: Partial<ThemeSettings>): ThemeSettings {
+  const cur = db.themeSettings ?? { ...DEFAULT_THEME }
+  const next: ThemeSettings = { ...cur }
+  if (partial.primary !== undefined) {
+    const v = String(partial.primary).trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) next.primary = v.toLowerCase()
+  }
+  if (partial.danger !== undefined) {
+    const v = String(partial.danger).trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) next.danger = v.toLowerCase()
+  }
+  if (partial.background !== undefined) {
+    const v = String(partial.background).trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) next.background = v.toLowerCase()
+  }
+  if (partial.radius !== undefined) {
+    const n = Number(partial.radius)
+    if (Number.isFinite(n)) next.radius = Math.max(6, Math.min(16, Math.round(n)))
+  }
+  db.themeSettings = next
+  saveDb()
+  return db.themeSettings
 }
 
 export function terminalsOf(projectId: string): Terminal[] {
