@@ -436,12 +436,25 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     return acc
   }, {})
 
+  function handleClose() {
+    // revert live preview if user closed without saving
+    if (themeDraft && themeSettings) {
+      const isDirty =
+        themeDraft.primary !== themeSettings.primary ||
+        themeDraft.danger !== themeSettings.danger ||
+        themeDraft.background !== themeSettings.background ||
+        themeDraft.radius !== themeSettings.radius
+      if (isDirty) applyTheme(themeSettings)
+    }
+    onClose()
+  }
+
   return (
-    <div className="overlay" onMouseDown={onClose}>
+    <div className="overlay" onMouseDown={handleClose}>
       <div className="modal-lg" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3 className="modal-title">Settings</h3>
-          <button className="icon-btn" aria-label="Close settings" onClick={onClose}>
+          <button className="icon-btn" aria-label="Close settings" onClick={handleClose}>
             <IconX size={18} />
           </button>
         </div>
@@ -498,6 +511,17 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
             }}
           >
             Retry
+          </button>
+          <button
+            className={`tab${tab === 'theme' ? ' active' : ''}`}
+            onClick={(e) => {
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
+              setTab('theme')
+              setError(null)
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }}
+          >
+            Theme
           </button>        </div>
 
         <div className="tab-body">
@@ -1033,6 +1057,207 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   }
                 >
                   Save
+                </button>
+              </div>
+            </div>
+          )}
+
+          {themeDraft && tab === 'theme' && (
+            <div className="inline-form" style={{ marginTop: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h4>Theme & Colors</h4>
+                <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={resetThemeDefaults}>
+                  <IconRotate size={14} /> Reset to defaults
+                </button>
+              </div>
+              <p className="hint" style={{ marginBottom: 16 }}>
+                White theme with blue buttons is the default. Pick a preset or use the color pickers below. Changes preview live and are saved to the server.
+              </p>
+
+              <div className="group-label">Presets</div>
+              <div className="preset-grid" style={{ marginBottom: 16 }}>
+                {THEME_PRESETS.map((pr) => {
+                  const isActive = themeDraft.primary.toLowerCase() === pr.primary.toLowerCase()
+                  return (
+                    <button
+                      key={pr.name}
+                      type="button"
+                      className="preset-card"
+                      style={{ borderColor: isActive ? pr.primary : undefined, boxShadow: isActive ? `0 0 0 2px ${pr.primary}22` : undefined, background: isActive ? `${pr.primary}08` : undefined }}
+                      onClick={() => {
+                        const next = { ...themeDraft, primary: pr.primary.toLowerCase() }
+                        setThemeDraft(next)
+                        setThemePrimaryInput(next.primary)
+                        applyTheme(next)
+                      }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 16, height: 16, borderRadius: 99, background: pr.primary, border: '1px solid rgba(0,0,0,0.08)', flexShrink: 0 }} />
+                        <span className="preset-name">{pr.name}</span>
+                      </span>
+                      <span className="preset-url">{pr.primary}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label className="field-label">Primary (buttons, active)</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="color"
+                      value={themePrimaryInput}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setThemePrimaryInput(v)
+                        const next = { ...themeDraft, primary: v.toLowerCase() }
+                        setThemeDraft(next)
+                        applyTheme(next)
+                      }}
+                      style={{ width: 42, height: 36, padding: 2, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer' }}
+                    />
+                    <input
+                      className="input"
+                      value={themePrimaryInput}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setThemePrimaryInput(v)
+                        if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                          const next = { ...themeDraft, primary: v.toLowerCase() }
+                          setThemeDraft(next)
+                          applyTheme(next)
+                        }
+                      }}
+                      placeholder="#2563eb"
+                      style={{ flex: 1 }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="field-label">Danger (delete)</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="color"
+                      value={themeDangerInput}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setThemeDangerInput(v)
+                        const next = { ...themeDraft, danger: v.toLowerCase() }
+                        setThemeDraft(next)
+                        applyTheme(next)
+                      }}
+                      style={{ width: 42, height: 36, padding: 2, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer' }}
+                    />
+                    <input
+                      className="input"
+                      value={themeDangerInput}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setThemeDangerInput(v)
+                        if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                          const next = { ...themeDraft, danger: v.toLowerCase() }
+                          setThemeDraft(next)
+                          applyTheme(next)
+                        }
+                      }}
+                      placeholder="#dc2626"
+                      style={{ flex: 1 }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label className="field-label">Background</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="color"
+                    value={themeBgInput}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setThemeBgInput(v)
+                      const next = { ...themeDraft, background: v.toLowerCase() }
+                      setThemeDraft(next)
+                      applyTheme(next)
+                    }}
+                    style={{ width: 42, height: 36, padding: 2, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer' }}
+                  />
+                  <input
+                    className="input"
+                    value={themeBgInput}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setThemeBgInput(v)
+                      if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+                        const next = { ...themeDraft, background: v.toLowerCase() }
+                        setThemeDraft(next)
+                        applyTheme(next)
+                      }
+                    }}
+                    placeholder="#ffffff"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    className="btn"
+                    style={{ whiteSpace: 'nowrap' }}
+                    onClick={() => {
+                      const next = { ...themeDraft, background: '#ffffff' }
+                      setThemeDraft(next)
+                      setThemeBgInput('#ffffff')
+                      applyTheme(next)
+                    }}
+                  >
+                    White
+                  </button>
+                </div>
+                <p className="hint" style={{ marginTop: 4 }}>White (#ffffff) is recommended. Custom backgrounds still keep text readable.</p>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label className="field-label">Corner radius: {themeDraft.radius}px</label>
+                <input
+                  type="range"
+                  min={6}
+                  max={16}
+                  step={1}
+                  value={themeDraft.radius}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    const next = { ...themeDraft, radius: n }
+                    setThemeDraft(next)
+                    applyTheme(next)
+                  }}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-faint)' }}>
+                  <span>Sharp (6)</span><span>Rounded (16)</span>
+                </div>
+              </div>
+
+              <div style={{ padding: 14, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-faint)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Preview</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button className="btn btn-primary">Primary</button>
+                  <button className="btn">Secondary</button>
+                  <button className="btn btn-danger">Danger</button>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'var(--primary-bg)', border: '1px solid var(--primary-border)', borderRadius: 8, color: 'var(--primary)', fontSize: 13, fontWeight: 600 }}>Active</span>
+                </div>
+              </div>
+
+              <div className="dialog-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={submitThemeSettings}
+                  disabled={
+                    !themeSettings ||
+                    (themeDraft.primary === themeSettings.primary &&
+                      themeDraft.danger === themeSettings.danger &&
+                      themeDraft.background === themeSettings.background &&
+                      themeDraft.radius === themeSettings.radius)
+                  }
+                >
+                  Save theme
                 </button>
               </div>
             </div>

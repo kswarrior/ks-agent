@@ -11,6 +11,7 @@ import { ChatView } from './components/ChatView'
 import { SettingsModal } from './components/SettingsModal'
 import { ExtensionsModal } from './components/ExtensionsModal'
 import { AddProjectModal } from './components/AddProjectModal'
+import { applyTheme } from './theme'
 
 const LS_PROJECT = 'ks.activeProject'
 const LS_CHAT = 'ks.activeChat'
