@@ -105,6 +105,13 @@ export interface RetrySettings {
   alwaysRetry?: boolean
 }
 
+export interface ThemeSettings {
+  primary: string
+  danger: string
+  background: string
+  radius: number
+}
+
 export interface Skill {
   id: string
   name: string
@@ -193,6 +200,13 @@ export interface Activity {
   expanded?: boolean
 }
 
+export const DEFAULT_THEME: ThemeSettings = {
+  primary: '#2563eb',
+  danger: '#dc2626',
+  background: '#ffffff',
+  radius: 10
+}
+
 interface DB {
   projects: Project[]
   chats: Chat[]
@@ -206,6 +220,7 @@ interface DB {
   questions: Question[]
   activities: Activity[]
   retrySettings: RetrySettings
+  themeSettings: ThemeSettings
   skills: Skill[]
   previews: Preview[]
   mcpServers: MCPServer[]
@@ -234,7 +249,7 @@ const dbFile = process.env.KS_SQLITE_PATH
   ? path.resolve(process.env.KS_SQLITE_PATH)
   : path.join(storageDir, 'ksagent.db')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
 
 let sqlite: Database.Database | null = null
 
@@ -719,6 +734,7 @@ function persistToSqlite(): void {
     insKv.run('systemPrompt', db.systemPrompt)
     insKv.run('planPrompt', db.planPrompt)
     insKv.run('retrySettings', JSON.stringify(db.retrySettings))
+    insKv.run('themeSettings', JSON.stringify(db.themeSettings ?? DEFAULT_THEME))
   })
   try {
     txn()
@@ -973,8 +989,22 @@ function loadFromSqlite(s: Database.Database): DB | null {
     } catch {
       retrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }
     }
+    let themeSettings: ThemeSettings
+    try {
+      const parsed = kv.get('themeSettings') ? JSON.parse(kv.get('themeSettings') as string) : null
+      if (parsed && typeof parsed === 'object' && typeof parsed.primary === 'string') {
+        themeSettings = {
+          primary: /^#[0-9a-fA-F]{6}$/.test(parsed.primary) ? parsed.primary : DEFAULT_THEME.primary,
+          danger: typeof parsed.danger === 'string' && /^#[0-9a-fA-F]{6}$/.test(parsed.danger) ? parsed.danger : DEFAULT_THEME.danger,
+          background: typeof parsed.background === 'string' && /^#[0-9a-fA-F]{6}$/.test(parsed.background) ? parsed.background : DEFAULT_THEME.background,
+          radius: Number.isFinite(parsed.radius) ? Math.max(6, Math.min(16, Number(parsed.radius))) : DEFAULT_THEME.radius
+        }
+      } else themeSettings = { ...DEFAULT_THEME }
+    } catch {
+      themeSettings = { ...DEFAULT_THEME }
+    }
 
-    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, skills, previews, mcpServers, lspServers, plugins }
+    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, themeSettings, skills, previews, mcpServers, lspServers, plugins }
   } catch (e) {
     console.error('Failed to load from sqlite:', e)
     return null
