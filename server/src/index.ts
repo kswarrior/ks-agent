@@ -51,7 +51,7 @@ import {
   getPlugins
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
-import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, resolvePendingQuestion, runAgentLoop } from './agent.js'
+import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 import {
   connectMCPServer,
@@ -522,6 +522,26 @@ app.get('/api/chats/:id/activities', (c) => {
   const chat = findChat(c.req.param('id'))
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
   return c.json(activitiesOf(chat.id))
+})
+
+// ---------------- Skill status (for right sidebar activity) ----------------
+
+app.get('/api/chats/:id/skill-status', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  const status = getSkillReadStatus(chat.id)
+  const hasAnyRead = Object.values(status).some(Boolean)
+  // Also compute whether any skill was actually read via activity (for UI banner)
+  const skills = getSkills()
+  const detailed = skills.map((s) => ({
+    id: s.id,
+    name: s.name,
+    mainFile: s.mainFile,
+    files: s.files,
+    read: !!status[s.mainFile.toLowerCase()],
+    filesRead: (s.files || []).map((f) => ({ file: f, read: !!status[f.toLowerCase()] }))
+  }))
+  return c.json({ hasAnyRead, status, detailed })
 })
 
 // ---------------- Questions ----------------

@@ -642,6 +642,95 @@ function isDangerousCommand(command: string): string | null {
   return null
 }
 
+/**
+ * Detects whether a shell command tries to explore outside ${projectfolder}
+ * Primary workspace is ${projectfolder} ONLY; only /tmp and KS Agent (when explicitly requested) are allowed outside.
+ * Returns null if allowed, or a reason string if it should be blocked / asked first.
+ */
+function isOutsideScopeCommand(command: string, projectPath: string, chatId: string): string | null {
+  const c = command.trim()
+  // Check if user explicitly requested to go outside / inside KS Agent in last user message
+  let userRequestedOutside = false
+  try {
+    const msgs = messagesOf(chatId) as { role: string; content: string }[]
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
+    const text = (lastUser?.content || '').toLowerCase()
+    if (text) {
+      userRequestedOutside = /ks\s*agent|agent code|outside.*project|go\s+inside|explore.*other|check.*ks-agent|look.*at.*agent|fix.*server|inside\s+ks/i.test(text)
+      // also allow if command itself mentions ks-agent and user text mentions any of those, treat as requested
+      if (!userRequestedOutside && /(ks-agent|ks_agent)/i.test(c) && /(agent|outside|other)/i.test(text)) userRequestedOutside = true
+    }
+  } catch {}
+  // Parent traversal via .. is almost always outside ${projectfolder}
+  // Allow only if user requested outside and path is not arbitrary
+  if (c.includes('..')) {
+    // Check if it's a harmless .. inside project like "src/../src"? That's still within project if not escaping root.
+    // We do a stricter check: any ".." that appears as path segment starting with "../" or "/../" or " .. "
+    if (/(?:^|[\s\"'\/])\.\.(?:\/|[\s\"']|$)/.test(c)) {
+      if (!userRequestedOutside) {
+        return 'Traverses outside ${projectfolder} via ".." — stay inside ${projectfolder} unless user explicitly requests to go inside KS Agent (ask via ask_question first)'
+      }
+    }
+  }
+  // Extract absolute paths from command (like /home/... /etc/... /tmp/...)
+  const absRe = /(?:^|[\s\"'`])(\/(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+)/g
+  let m: RegExpExecArray | null
+  const seen = new Set<string>()
+  const ksRoot = path.resolve(process.cwd())
+  const projRoot = path.resolve(projectPath)
+  while ((m = absRe.exec(c)) !== null) {
+    const p = m[1]
+    if (seen.has(p)) continue
+    seen.add(p)
+    // skip /tmp and allowed temp dirs
+    if (p === '/tmp' || p.startsWith('/tmp/') || p === '/var/tmp' || p.startsWith('/var/tmp/') || p === '/dev/shm' || p.startsWith('/dev/shm/')) continue
+    // skip if it's inside project
+    if (p === projRoot || p.startsWith(projRoot + path.sep)) continue
+    // skip relative-looking but absolute for build outputs like /usr/bin etc — those are system tools, not exploration
+    // But if command is trying to list or cat those paths, it's exploration outside
+    const isExploration = /(?:ls|cat|find|grep|glob|read|list|open|code|vim|nano|less|head|tail|tree|du|df|stat|ls\s|-R|walk)/i.test(c) || p.includes('ks-agent') || p.includes('/server') || p.includes('/web')
+    if (!isExploration) {
+      // For non-exploration system paths (e.g. /bin/bash) allow
+      if (p.startsWith('/bin/') || p.startsWith('/usr/bin') || p.startsWith('/usr/local/bin') || p.startsWith('/sbin') || p === '/bin/bash' || p === '/bin/sh' || p === '/bin/zsh') continue
+    }
+    // Now p is outside project
+    const isInsideKsAgent = p === ksRoot || p.startsWith(ksRoot + path.sep)
+    if (isInsideKsAgent) {
+      // Inside KS Agent but outside project — only allow if user requested or path is skills (skills discovery is allowed via list_files fallback, but shell to ks-agent should need request)
+      if (!userRequestedOutside) {
+        // Allow reading skills via shell cat of skills files without explicit request? User said if need, must go inside KS Agent — so we allow skills access but still require staying in project by default.
+        // We treat skills as allowed secondary, but still warn to stay in project.
+        if (p.includes('/skills') || p.endsWith('.md')) {
+          // Allow skills read via shell without blocking, but still log
+          continue
+        }
+        return `Accesses KS Agent codebase (${p}) outside \${projectfolder} — stay inside \${projectfolder} unless user explicitly requests to go inside KS Agent (ask via ask_question first)`
+      }
+      continue
+    }
+    // Arbitrary outside path
+    if (!userRequestedOutside) {
+      return `Accesses outside \${projectfolder}: ${p} — stay strictly inside \${projectfolder}. Only /tmp and KS Agent (when explicitly requested) are allowed outside`
+    }
+  }
+  // Also detect glob/list patterns that explicitly mention ks-agent or server/web outside project via relative path that would resolve outside
+  if (!userRequestedOutside) {
+    const lower = c.toLowerCase()
+    // Detect attempts to list agent code via shell like "ls ../../server" or "ls ks-agent"
+    if (/(ks-agent|dist-server|dist\/|storage\/|server\/src|web\/src)/.test(lower) && /(ls|cat|find|grep|tree|glob|list)/i.test(c)) {
+      // If project is already inside ks-agent, these relative paths might actually be outside project root — block
+      // Check if project is inside ksRoot: if so, "ks-agent/server" from project would be outside
+      if (projRoot.startsWith(ksRoot + path.sep)) {
+        // Project is subdirectory of ks-agent, so accessing sibling like "server/src" from cwd=project would be "../server" — already caught by .. check, but also catch explicit
+        if (lower.includes('server/src') || lower.includes('web/src') || lower.includes('ks-agent')) {
+          return 'Attempts to access KS Agent codebase from ${projectfolder} via relative path — stay inside ${projectfolder} unless user explicitly requests to go inside KS Agent'
+        }
+      }
+    }
+  }
+  return null
+}
+
 async function execShell(command: string, cwd: string): Promise<{ code: number; output: string }> {
   return await new Promise((resolve) => {
     exec(
