@@ -484,24 +484,66 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     return editContent.split('\n').length
   }, [editContent])
 
-  const fileList = useMemo(() => entries.filter((e) => e.type === 'file').map((e) => joinRel(dir, e.name)), [entries, dir])
-  const selectedIndex = selected ? fileList.indexOf(selected) : -1
-  const hasPrev = selectedIndex > 0
-  const hasNext = selectedIndex >= 0 && selectedIndex < fileList.length - 1
+  // undo/redo history for editor content
+  const [editHistory, setEditHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const historyIndexRef = useRef(-1)
+  const editHistoryRef = useRef<string[]>([])
+  const isUndoRedoRef = useRef(false)
 
-  function goPrevFile() {
-    if (!hasPrev) return
-    const prev = fileList[selectedIndex - 1]
-    if (!prev) return
-    setSelected(prev)
-    loadFileContent(prev)
+  useEffect(() => { historyIndexRef.current = historyIndex }, [historyIndex])
+  useEffect(() => { editHistoryRef.current = editHistory }, [editHistory])
+
+  function resetHistory(content: string) {
+    const next = [content]
+    editHistoryRef.current = next
+    historyIndexRef.current = 0
+    setEditHistory(next)
+    setHistoryIndex(0)
   }
 
-  function goNextFile() {
-    if (!hasNext) return
-    const next = fileList[selectedIndex + 1]
-    if (!next) return
-    setSelected(next)
+  function handleContentChange(next: string) {
+    if (isUndoRedoRef.current) {
+      isUndoRedoRef.current = false
+      setEditContent(next)
+      return
+    }
+    setEditContent(next)
+    const base = editHistoryRef.current.slice(0, historyIndexRef.current + 1)
+    if (base[base.length - 1] === next) return
+    const updated = [...base, next]
+    const capped = updated.length > 100 ? updated.slice(-100) : updated
+    const nextIdx = capped.length - 1
+    editHistoryRef.current = capped
+    historyIndexRef.current = nextIdx
+    setEditHistory(capped)
+    setHistoryIndex(nextIdx)
+  }
+
+  const canUndo = historyIndex > 0
+  const canRedo = historyIndex >= 0 && historyIndex < editHistory.length - 1
+
+  function doUndo() {
+    if (!canUndo) return
+    const nextIdx = historyIndex - 1
+    const prevContent = editHistory[nextIdx]
+    if (prevContent === undefined) return
+    isUndoRedoRef.current = true
+    historyIndexRef.current = nextIdx
+    setHistoryIndex(nextIdx)
+    setEditContent(prevContent)
+  }
+
+  function doRedo() {
+    if (!canRedo) return
+    const nextIdx = historyIndex + 1
+    const nextContent = editHistory[nextIdx]
+    if (nextContent === undefined) return
+    isUndoRedoRef.current = true
+    historyIndexRef.current = nextIdx
+    setHistoryIndex(nextIdx)
+    setEditContent(nextContent)
+  }
     loadFileContent(next)
   }
 
