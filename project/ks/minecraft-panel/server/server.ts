@@ -126,7 +126,7 @@ app.post('/api/console/command', async (c) => {
   
   // Keep only last 100 logs
   if (serverStore.consoleLogs.length > 100) {
-    serverStore.serverStore.consoleLogs = serverStore.serverLogs.slice(0, 100);
+    serverStore.consoleLogs = serverStore.consoleLogs.slice(0, 100);
   }
   
   // Simulate player joining if command is /join
