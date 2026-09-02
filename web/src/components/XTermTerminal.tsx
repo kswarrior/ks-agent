@@ -69,6 +69,136 @@ export function XTermTerminal({ terminalId }: Props) {
     el.addEventListener('click', focus)
     term.focus()
 
+    // --- clipboard helpers: support both modern and fallback ---
+    const isMac = navigator.platform.toUpperCase().includes('MAC') || navigator.userAgent.toUpperCase().includes('MAC')
+
+    async function copyToClipboard(text: string): Promise<void> {
+      if (!text) return
+      try {
+        await navigator.clipboard.writeText(text)
+        return
+      } catch {}
+      // fallback via hidden textarea + execCommand
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        ta.style.top = '-9999px'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {}
+    }
+
+    async function pasteFromClipboard(): Promise<void> {
+      let text: string | null = null
+      try {
+        text = await navigator.clipboard.readText()
+      } catch {
+        text = null
+      }
+      if (text) {
+        const cur = wsRef.current
+        if (cur && cur.readyState === WebSocket.OPEN) {
+          try { cur.send(text) } catch {}
+        }
+      } else {
+        // fallback: try to trigger browser paste permission prompt or noop
+        // no reliable fallback without user gesture, so just warn
+        term.write('\r\n\x1b[33m[clipboard read failed — allow clipboard permission or use Ctrl+Shift+V]\x1b[0m\r\n')
+      }
+    }
+
+
+
+    // Custom key handler: make Ctrl+C / Ctrl+V act as copy/paste when possible,
+    // but still support SIGINT (Ctrl+C without selection) and control codes.
+    // - Ctrl+C (or Cmd+C on Mac): copy if selection exists, else send \x03 (SIGINT)
+    // - Ctrl+Shift+C: always copy if selection (Linux standard)
+    // - Ctrl+Insert: copy
+    // - Ctrl+V (or Cmd+V), Ctrl+Shift+V, Shift+Insert: paste from clipboard
+    term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
+      const key = ev.key.toLowerCase()
+      const code = ev.code
+      const ctrl = ev.ctrlKey
+      const meta = ev.metaKey
+      const shift = ev.shiftKey
+      const alt = ev.altKey
+      const ctrlOrCmd = isMac ? meta : ctrl
+
+      // --- Copy: Ctrl+Shift+C (always copy, never SIGINT) ---
+      if (ctrl && shift && (key === 'c' || code === 'KeyC') && !alt && !meta) {
+        if (term.hasSelection()) {
+          copyToClipboard(term.getSelection())
+        }
+        return false
+      }
+      // --- Copy: Ctrl+Insert ---
+      if (ctrl && !shift && !alt && !meta && ev.key === 'Insert') {
+        if (term.hasSelection()) copyToClipboard(term.getSelection())
+        return false
+      }
+      // --- Copy: Ctrl+C / Cmd+C ---
+      // if selection exists -> copy, else allow xterm to send \x03
+      if (ctrlOrCmd && !shift && !alt && (key === 'c' || code === 'KeyC')) {
+        if (term.hasSelection()) {
+          copyToClipboard(term.getSelection())
+          return false
+        }
+        // no selection -> let xterm send SIGINT (0x03) via onData
+        return true
+      }
+
+      // --- Paste: Ctrl+Shift+V (Linux) ---
+      if (ctrl && shift && (key === 'v' || code === 'KeyV') && !alt && !meta) {
+        ev.preventDefault()
+        pasteFromClipboard()
+        return false
+      }
+      // --- Paste: Shift+Insert ---
+      if (shift && !ctrl && !meta && !alt && ev.key === 'Insert') {
+        ev.preventDefault()
+        pasteFromClipboard()
+        return false
+      }
+      // --- Paste: Ctrl+V / Cmd+V ---
+      // handle both Ctrl+V and Cmd+V (Mac)
+      if (ctrlOrCmd && !shift && !alt && (key === 'v' || code === 'KeyV')) {
+        ev.preventDefault()
+        pasteFromClipboard()
+        return false
+      }
+
+      return true
+    })
+
+    // Right-click: copy if selection, else paste (common terminal behavior)
+    // Middle-click also pastes on Linux.
+    const onContextMenu = (e: MouseEvent) => {
+      // only handle when terminal is focused / under cursor
+      // prevent native menu and do terminal copy/paste
+      e.preventDefault()
+      if (term.hasSelection()) {
+        copyToClipboard(term.getSelection())
+      } else {
+        pasteFromClipboard()
+      }
+      term.focus()
+    }
+    const onAuxClick = (e: MouseEvent) => {
+      if (e.button === 1) {
+        // middle button - paste
+        e.preventDefault()
+        pasteFromClipboard()
+        term.focus()
+      }
+    }
+    el.addEventListener('contextmenu', onContextMenu)
+    el.addEventListener('auxclick', onAuxClick)
+
     // Build WS URL — use same host, upgrades via vite proxy in dev
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     // include initial size
@@ -163,6 +293,8 @@ export function XTermTerminal({ terminalId }: Props) {
       closedByUs = true
       if (reconnectTimer) clearTimeout(reconnectTimer)
       el.removeEventListener('click', focus)
+      el.removeEventListener('contextmenu', onContextMenu)
+      el.removeEventListener('auxclick', onAuxClick)
       window.removeEventListener('resize', sendResize)
       if (resizeObserver) {
         try { resizeObserver.disconnect() } catch {}
