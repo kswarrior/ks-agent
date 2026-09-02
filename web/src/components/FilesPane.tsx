@@ -675,13 +675,21 @@ export function FilesPane({ projectId }: FilesPaneProps) {
               <>
                 {dir !== '' && (
                   <div
-                    className="fp-row"
+                    className={`fp-row${dragOver === '..' ? ' drag-over' : ''}`}
                     role="button"
                     onClick={() => {
                       setDir(parentOf(dir))
                       setSelected(null)
                       setQuery('')
                     }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.dataTransfer.dropEffect = 'move'
+                      setDragOver('..')
+                    }}
+                    onDragLeave={() => setDragOver(null)}
+                    onDrop={(e) => handleDropOnParent(e)}
+                    style={dragOver === '..' ? { background: 'var(--primary-bg)', borderColor: 'var(--primary-border)', outline: '1px dashed var(--primary)' } : undefined}
                   >
                     <IconChevronLeft size={15} />
                     <span className="fp-name">..</span>
