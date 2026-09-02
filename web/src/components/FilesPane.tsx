@@ -6,6 +6,7 @@ import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
 import {
   IconChevronLeft,
+  IconChevronRight,
   IconDots,
   IconDownload,
   IconFile,
@@ -483,6 +484,27 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     return editContent.split('\n').length
   }, [editContent])
 
+  const fileList = useMemo(() => entries.filter((e) => e.type === 'file').map((e) => joinRel(dir, e.name)), [entries, dir])
+  const selectedIndex = selected ? fileList.indexOf(selected) : -1
+  const hasPrev = selectedIndex > 0
+  const hasNext = selectedIndex >= 0 && selectedIndex < fileList.length - 1
+
+  function goPrevFile() {
+    if (!hasPrev) return
+    const prev = fileList[selectedIndex - 1]
+    if (!prev) return
+    setSelected(prev)
+    loadFileContent(prev)
+  }
+
+  function goNextFile() {
+    if (!hasNext) return
+    const next = fileList[selectedIndex + 1]
+    if (!next) return
+    setSelected(next)
+    loadFileContent(next)
+  }
+
   function syncScroll() {
     if (textareaRef.current && highlightRef.current) {
       highlightRef.current.scrollTop = textareaRef.current.scrollTop
@@ -602,7 +624,13 @@ export function FilesPane({ projectId }: FilesPaneProps) {
             <span style={{ display: 'inline-flex', alignItems: 'center', color: selectedColor }}><SelectedIcon size={15} /></span>
             <span className="fp-edit-title" title={selected}>{selected}</span>
             <span className="fp-lang-badge" style={{ background: selectedColor, color: selectedColor === '#f7df1e' || selectedColor === '#ecd53f' ? '#000' : '#fff', borderColor: selectedColor }}>{selectedMeta?.label ?? 'FILE'}</span>
-            <div className="fp-editor-actions">
+            <div className="fp-editor-actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <button className="icon-btn" aria-label="Previous file" title="Previous file (<)" disabled={!hasPrev || editLoading} onClick={goPrevFile} style={{ width: 28, height: 28 }}>
+                <IconChevronLeft size={14} />
+              </button>
+              <button className="icon-btn" aria-label="Next file" title="Next file (>)" disabled={!hasNext || editLoading} onClick={goNextFile} style={{ width: 28, height: 28 }}>
+                <IconChevronRight size={14} />
+              </button>
               <button className="btn btn-primary" disabled={editLoading || editSaving} onClick={() => saveFileContent(selected)}>
                 {editSaving ? 'Saving…' : 'Save'}
               </button>
