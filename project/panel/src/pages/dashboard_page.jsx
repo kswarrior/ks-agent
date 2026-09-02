@@ -66,7 +66,7 @@ export function DashboardPage() {
 
       <div className="status-card">
         <h2>Server Status</h2>
-        <div className={"status-indicator " + (serverStatus.state === 'running' ? 'online' : 'offline')}">>
+        <div className={"status-indicator " + (serverStatus.state === 'running' ? 'online' : 'offline')}>
           {serverStatus.state}
         </div>
         <div>
