@@ -199,6 +199,70 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
   )
 }
 
+function ThinkingCard({ stage, stageLabel, workingStep, stepNum, totalSteps, hasContent, retryReason }: { stage: string; stageLabel: string; workingStep: { title: string } | null; stepNum: number; totalSteps: number; hasContent: boolean; retryReason?: string }) {
+  const text = useMemo(() => {
+    if (retryReason) return retryReason === 'timeout' ? 'handling timeout' : retryReason === 'resource_exhausted' ? 'handling capacity' : `retrying ${retryReason}`
+    if (stage === 'executing' && workingStep) return `step ${stepNum}/${totalSteps}: ${workingStep.title}`
+    if (stage === 'executing' && totalSteps > 0) return `executing ${stepNum}/${totalSteps}`
+    if (stage === 'planning') return totalSteps > 0 ? `planning ${totalSteps} steps` : 'planning'
+    if (stage === 'explore') return 'exploring project files'
+    if (stage === 'understand') return 'understanding your request'
+    if (!hasContent) return 'preparing response'
+    return 'generating response'
+  }, [stage, workingStep, stepNum, totalSteps, hasContent, retryReason])
+
+  const label = stageLabel || 'Thinking'
+
+  return (
+    <div className="thinking-card" aria-live="polite">
+      <span className="thinking-label">{label}</span>
+      <span className="thinking-bracket">&lt;</span>
+      <span className="thinking-text" title={text}>{text}</span>
+      <span className="thinking-bracket">&gt;</span>
+      <span className="dots" aria-hidden><span className="dot" /><span className="dot" /><span className="dot" /></span>
+    </div>
+  )
+}
+
+function AnsweredQuestionsCard({ questions }: { questions: Question[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const answered = useMemo(() => questions.filter(q => q.status === 'answered'), [questions])
+  if (answered.length === 0) return null
+  const sorted = [...answered].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  return (
+    <div className={`q-answered-card${expanded ? ' expanded' : ''}`} onClick={() => setExpanded(v => !v)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(v => !v) } }} aria-expanded={expanded}>
+      <div className="q-answered-head">
+        <span className="q-answered-title">Question</span>
+        <span className="q-answered-count">· {answered.length} answered</span>
+        <span className="q-answered-chevron"><IconChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' } as any} /></span>
+        <span className="q-answered-hint">{expanded ? 'Hide' : 'Show'}</span>
+      </div>
+      {expanded && (
+        <div className="q-answered-body" onClick={(e) => e.stopPropagation()}>
+          {sorted.map((q) => (
+            <div key={q.id} className="q-answered-item">
+              <div className="q-answered-header">{q.header}</div>
+              <div className="q-answered-question">{q.question}</div>
+              <div className="q-answered-answer">
+                <span className="q-answered-answer-label">You answered:</span>
+                <span className="q-answered-answer-text">{q.answer}</span>
+                {q.selectedOption && q.selectedOption !== q.answer && <span className="q-answered-selected">({q.selectedOption})</span>}
+              </div>
+              {q.options.length > 0 && (
+                <div className="q-answered-options">
+                  {q.options.map(opt => (
+                    <span key={opt} className={`q-answered-opt${q.answer === opt || q.selectedOption === opt ? ' chosen' : ''}`}>{opt}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AssistantMeta({ message }: { message: Message }) {
   const toast = useToast()
   const [copied, setCopied] = useState(false)
@@ -472,17 +536,35 @@ export function ChatView(props: Props) {
                 <div className="role-tag">KS Agent</div>
                 {props.retryInfo && <RetryCard retryInfo={props.retryInfo} />}
                 {props.streamText ? <Markdown content={props.streamText} /> : null}
-                <span className="cursor-blink" />
+                <ThinkingCard
+                  stage={chatStage}
+                  stageLabel={chatStageLabel}
+                  workingStep={workingStep ?? null}
+                  stepNum={execStepNum}
+                  totalSteps={totalSteps}
+                  hasContent={!!props.streamText}
+                  retryReason={props.retryInfo?.reason}
+                />
               </div>
             )}
-            {props.questions.length > 0 && (
-              <QuestionList questions={props.questions} onAnswer={props.onAnswerQuestion} />
-            )}
+            {(() => {
+              const pending = props.questions.filter(q => q.status === 'pending')
+              if (pending.length > 0) return <QuestionList questions={props.questions} onAnswer={props.onAnswerQuestion} />
+              const answered = props.questions.filter(q => q.status === 'answered')
+              if (answered.length > 0) return <AnsweredQuestionsCard questions={props.questions} />
+              return null
+            })()}
           </div>
         )}
         {props.questions.length > 0 && (!props.chat || props.messages.length === 0) && !props.streaming && (
           <div className="msg-col" style={{ marginTop: 18 }}>
-            <QuestionList questions={props.questions} onAnswer={props.onAnswerQuestion} />
+            {(() => {
+              const pending = props.questions.filter(q => q.status === 'pending')
+              if (pending.length > 0) return <QuestionList questions={props.questions} onAnswer={props.onAnswerQuestion} />
+              const answered = props.questions.filter(q => q.status === 'answered')
+              if (answered.length > 0) return <AnsweredQuestionsCard questions={props.questions} />
+              return null
+            })()}
           </div>
         )}
       </div>
