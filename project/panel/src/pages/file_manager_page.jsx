@@ -6,48 +6,32 @@ import { useWebSocket } from '../api'
 
 export function FileManagerPage() {
   const dispatch = useDispatch()
-  const { files, isLoadingFiles, selectedFile, isAuthenticated } = useSelector((s) => s)
-  const { connected, logs } = useWebSocket()
+  const { files, isLoadingFiles, selectedFile } = useSelector((s) => s)
+  const { connected } = useWebSocket()
 
   const [currentPath, setCurrentPath] = useState('.')
-  const [dirs, setDirs] = useState([])
-  const [filesList, setFilesList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [uploadProgress, setUploadProgress] = useState(0)
   const [renameMode, setRenameMode] = useState(false)
   const [renamingPath, setRenamingPath] = useState('')
   const [newName, setNewName] = useState('')
 
   // Load files on mount
   useEffect(() => {
-    ;(async () => {
-      try {
-        const result = await apiFetch(`/files?path=${currentPath}`)
-        setFiles(result.path || currentPath, result.items || [])
-        setError('')
-      } catch (e) {
-        setError(e.message)
-      }
-    })()
+    loadFiles()
   }, [currentPath, dispatch])
 
   // WebSocket sync
   useEffect(() => {
     if (!connected) return
-    ;(async () => {
-      try {
-        const result = await apiFetch(`/files?path=${currentPath}`)
-        dispatch(setFiles(result.path || currentPath, result.items || []))
-      } catch {}
-    })()
+    loadFiles()
   }, [connected, dispatch, currentPath])
 
-  const refresh = async () => {
+  const loadFiles = async () => {
     setLoading(true)
     try {
       const result = await apiFetch(`/files?path=${currentPath}`)
-      dispatch(setFiles(result.path || currentPath, result.items || []))
+      dispatch(setFiles(result.items || []))
       setError('')
     } catch (e) {
       setError(e.message)
@@ -65,7 +49,7 @@ export function FileManagerPage() {
         body: JSON.stringify({ path: `${currentPath}/${newName.trim()}` }),
       })
       setNewName('')
-      refresh()
+      loadFiles()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -81,7 +65,7 @@ export function FileManagerPage() {
         method: 'POST',
         body: JSON.stringify({ path: `${currentPath}/${name}` }),
       })
-      refresh()
+      loadFiles()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -100,7 +84,7 @@ export function FileManagerPage() {
       setRenameMode(false)
       setRenamingPath('')
       setNewName('')
-      refresh()
+      loadFiles()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -123,8 +107,7 @@ export function FileManagerPage() {
         method: 'POST',
         body: formData,
       })
-      setUploadProgress(0)
-      refresh()
+      loadFiles()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -133,39 +116,33 @@ export function FileManagerPage() {
   }
 
   const handleFileClick = (item) => {
-    const isDir = item.isDirectory
-    if (isDir) {
+    if (item.isDirectory) {
       setCurrentPath(`${currentPath}/${item.name}`)
-      setFilesList([])
-      ;(async () => {
-        try {
-          await apiFetch(`/files?path=${currentPath}`)
-        } catch {}
-      })()
     } else {
       // Read file content
-      ;(async () => {
-        try {
-          const result = await apiFetch(`/files/read?path=${currentPath}/${item.name}`)
-          setSelectedFile({
-            path: `${currentPath}/${item.name}`,
-            name: item.name,
-            content: result.content || '',
-            size: result.size,
-            isDirectory: false,
-          })
-        } catch (e) {
-          setError(e.message)
-        }
-      })()
+      apiFetch(`/files/read?path=${currentPath}/${item.name}`)
+        .then(result => setSelectedFile({
+          path: `${currentPath}/${item.name}`,
+          name: item.name,
+          content: result.content || '',
+          size: result.size,
+          isDirectory: false,
+        }))
+        .catch(e => setError(e.message))
     }
   }
 
-  const handleSelectionChange = (itemPath) => {
-    setSelectedFile((prev) => {
-      if (prev && prev.path === itemPath) return null
-      return { path: itemPath, name: itemPath.split('/').pop(), content: '', size: 0, isDirectory: true }
-    })
+  const handleSaveFile = async () => {
+    if (!selectedFile) return
+    try {
+      await apiFetch('/files/write', {
+        method: 'POST',
+        body: JSON.stringify({ path: selectedFile.path, content: selectedFile.content })
+      })
+      loadFiles()
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   const handleLogout = () => {
@@ -178,22 +155,27 @@ export function FileManagerPage() {
 
       <div className="fm-toolbar">
         <span>Path: {currentPath}</span>
+        <button className="btn btn-secondary" onClick={() => { setCurrentPath('.'); loadFiles(); }}>
+          Home
+        </button>
         <button className="btn btn-secondary" onClick={handleMkdir}>New Folder</button>
         <button className="btn btn-secondary" onClick={handleUpload}>
           Upload
           <input type="file" style={{ display: 'none' }} onChange={handleUpload} />
         </button>
         {renameMode && (
-          <>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Rename to..."
-            />
-            <button className="btn btn-primary" onClick={handleRename}>Rename</button>
-            <button className="btn" onClick={() => setRenameMode(false)}>Cancel</button>
-          </>
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New name..."
+          />
+        )}
+        {renameMode && (
+          <button className="btn btn-primary" onClick={handleRename}>Go</button>
+        )}
+        {renameMode && (
+          <button className="btn" onClick={() => setRenameMode(false)}>Cancel</button>
         )}
         <button className="btn btn-danger" onClick={handleLogout}>Logout</button>
       </div>
@@ -213,15 +195,19 @@ export function FileManagerPage() {
         <div className="fm-grid">
           {loading ? (
             <p>Loading...</p>
-          ) : filesList.length === 0 ? (
+          ) : files.length === 0 ? (
             <p>No files in {currentPath}</p>
           ) : (
             <ul>
-              {filesList.map((item) => (
-                <li key={item.name} className={selectedFile?.path === `${currentPath}/${item.name}` ? 'selected' : ''} onClick={() => handleFileClick(item)}>
+              {files.map((item) => (
+                <li 
+                  key={item.name} 
+                  className={selectedFile?.path === `${currentPath}/${item.name}` ? 'selected' : ''} 
+                  onClick={() => handleFileClick(item)}
+                >
                   <span>{item.name}</span>
                   {item.isDirectory && <span title="Folder">📁</span>}
-                  {item.size && !item.isDirectory && <span title={`${item.size} bytes`}>📄</span>}
+                  {!item.isDirectory && <span title={`${item.size} bytes`}>📄</span>}
                 </li>
               ))}
             </ul>
@@ -236,32 +222,22 @@ export function FileManagerPage() {
           {selectedFile.isDirectory ? (
             <p>This is a folder</p>
           ) : (
-            <textarea
-              rows={10}
-              cols={80}
-              value={selectedFile.content || ''}
-              onChange={(e) => {
-                // Could add save handler
-              }}
-            />
-            <div className="fm-editor-actions">
-              <button className="btn btn-primary" onClick={() => {
-                // Save changes
-                if (selectedFile.content !== e.target.value) {
-                  apiFetch('/files/write', {
-                    method: 'POST',
-                    body: JSON.stringify({ path: selectedFile.path, content: e.target.value })
-                  }).then(() => refresh()).catch(e => console.error(e))
-                }
-              }}>
-                Save
-              </button>
-              <button className="btn" onClick={() => {
-                clearSelectedFile()
-              }}>
-                Cancel
-              </button>
-            </div>
+            <>
+              <textarea
+                rows={10}
+                cols={80}
+                value={selectedFile.content || ''}
+                onChange={(e) => setSelectedFile({ ...selectedFile, content: e.target.value })}
+              />
+              <div className="fm-editor-actions">
+                <button className="btn btn-primary" onClick={handleSaveFile}>
+                  Save
+                </button>
+                <button className="btn" onClick={() => clearSelectedFile()}>
+                  Cancel
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}
