@@ -351,6 +351,26 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     setDragged(null)
   }
 
+  async function handleDropOnParent(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(null)
+    if (!dragged || !projectId) return
+    if (!dir) return
+    const from = joinRel(dir, dragged.name)
+    const parent = parentOf(dir)
+    const to = parent ? `${parent}/${dragged.name}` : `/${dragged.name}`
+    if (from === to || from === to.replace(/^\/+/, '')) return
+    try {
+      await api.renameFileEntry(projectId, from, to)
+      toast(`Moved ${dragged.name} → ${parent || '/'}`, 'success')
+      setSelected((prev) => (prev === from ? to.replace(/^\/+/, '') : prev))
+      await refresh()
+    } catch (err: any) {
+      toast(err.message, 'error')
+    }
+    setDragged(null)
+  }
+
   function triggerDownload() {
     if (!projectId || !selected) {
       toast('Select a file first', 'error')
