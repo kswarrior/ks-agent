@@ -133,6 +133,31 @@ function formatTime(ts: string): string {
   }
 }
 
+function CodeWithLineNumbers({ code, startLine = 1, variant = 'default' }: { code: string; startLine?: number; variant?: 'default' | 'old' | 'new' }) {
+  const lines = code.split('\n')
+  // cap display to avoid huge DOM for very large files (show first 400 lines with note)
+  const maxShow = 400
+  const displayLines = lines.length > maxShow ? lines.slice(0, maxShow) : lines
+  const truncated = lines.length > maxShow
+  const bg = variant === 'old' ? '#fef2f2' : variant === 'new' ? '#f0fdf4' : 'var(--input)'
+  const border = variant === 'old' ? '#fecaca' : variant === 'new' ? '#bbf7d0' : 'var(--border)'
+  const textColor = variant === 'old' ? '#991b1b' : variant === 'new' ? '#166534' : 'var(--text)'
+  return (
+    <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 6, overflow: 'hidden', background: bg, maxHeight: 320, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: 1.5 }}>
+      <div style={{ background: variant === 'default' ? 'var(--surface-2)' : variant === 'old' ? '#fee2e2' : '#dcfce7', borderRight: `1px solid ${border}`, padding: '8px 6px', textAlign: 'right', color: variant === 'default' ? 'var(--text-faint)' : variant === 'old' ? '#b91c1c' : '#15803d', userSelect: 'none', fontSize: 11, lineHeight: 1.5, minWidth: 36, overflow: 'hidden' }}>
+        {displayLines.map((_, i) => (
+          <div key={i} style={{ lineHeight: 1.5, whiteSpace: 'nowrap' }}>{startLine + i}</div>
+        ))}
+        {truncated && <div style={{ color: 'var(--text-faint)', fontStyle: 'italic' }}>…</div>}
+      </div>
+      <pre style={{ flex: 1, margin: 0, padding: '8px 10px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5, color: textColor, background: 'transparent' }}>
+        {displayLines.join('\n')}
+        {truncated ? `\n\n…[${lines.length - maxShow} more lines not shown]` : ''}
+      </pre>
+    </div>
+  )
+}
+
 function isSkillReadActivity(a: Activity): boolean {
   if (a.toolType !== 'read_file') return false
   if (a.ok === false) return false
