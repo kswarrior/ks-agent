@@ -13,10 +13,14 @@ export async function apiFetch(path, options = {}) {
   if (options.body && !(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json'
   }
+  let body = options.body
+  if (body && typeof body !== 'string' && !(body instanceof FormData)) {
+    body = JSON.stringify(body)
+  }
   const opts = {
     method: options.method || 'GET',
     headers,
-    body: options.body,
+    body,
   }
   const res = await fetch(url, opts)
   const data = await res.json()
