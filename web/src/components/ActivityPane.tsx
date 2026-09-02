@@ -190,8 +190,9 @@ function highlightLine(line: string, lang: string): string {
 
 function CodeWithLineNumbers({ code, startLine = 1, variant = 'default', lang = 'typescript' }: { code: string; startLine?: number; variant?: 'default' | 'old' | 'new'; lang?: string }) {
   const lines = code.split('\n')
-  // show full context up to 2000 lines (read limit) — no early truncation that cuts numbers before content
-  const maxShow = 2000
+  // remove trailing empty line produced by split when code ends with \n — avoids extra number with no content
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop()
+  const maxShow = 5000
   const displayLines = lines.length > maxShow ? lines.slice(0, maxShow) : lines
   const truncated = lines.length > maxShow
   const bg = variant === 'old' ? '#fef2f2' : variant === 'new' ? '#f0fdf4' : 'var(--input)'
@@ -199,8 +200,8 @@ function CodeWithLineNumbers({ code, startLine = 1, variant = 'default', lang = 
   const gutterBg = variant === 'default' ? 'var(--surface-2)' : variant === 'old' ? '#fee2e2' : '#dcfce7'
   const gutterColor = variant === 'default' ? 'var(--text-faint)' : variant === 'old' ? '#b91c1c' : '#15803d'
   return (
-    <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', background: bg, maxHeight: 280, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: 1.55 }}>
-      <div style={{ background: gutterBg, borderRight: `1px solid ${border}`, padding: '6px 6px', textAlign: 'right', color: gutterColor, userSelect: 'none', fontSize: 11, lineHeight: 1.55, minWidth: 38, flexShrink: 0, position: 'sticky', left: 0, alignSelf: 'stretch' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', background: bg, maxHeight: 280, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: 1.55 }}>
+      <div style={{ background: gutterBg, borderRight: `1px solid ${border}`, padding: '6px 6px', textAlign: 'right', color: gutterColor, userSelect: 'none', fontSize: 11, lineHeight: 1.55, minWidth: 38, flexShrink: 0, position: 'sticky', left: 0 }}>
         {displayLines.map((_, i) => (
           <div key={i} style={{ lineHeight: 1.55, whiteSpace: 'pre' }}>{startLine + i}</div>
         ))}
