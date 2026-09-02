@@ -199,19 +199,20 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
   )
 }
 
-function ThinkingCard({ stage, stageLabel, workingStep, stepNum, totalSteps, hasContent, retryReason }: { stage: string; stageLabel: string; workingStep: { title: string } | null; stepNum: number; totalSteps: number; hasContent: boolean; retryReason?: string }) {
+function ThinkingCard({ stage, stageLabel, thinking, hasContent, retryReason }: { stage: string; stageLabel: string; thinking?: string; hasContent: boolean; retryReason?: string }) {
   const text = useMemo(() => {
+    const t = (thinking ?? '').trim().replace(/\s+/g, ' ')
+    if (t) return t.length > 120 ? t.slice(0, 120) + '…' : t
     if (retryReason) return retryReason === 'timeout' ? 'handling timeout' : retryReason === 'resource_exhausted' ? 'handling capacity' : `retrying ${retryReason}`
-    if (stage === 'executing' && workingStep) return `step ${stepNum}/${totalSteps}: ${workingStep.title}`
-    if (stage === 'executing' && totalSteps > 0) return `executing ${stepNum}/${totalSteps}`
-    if (stage === 'planning') return totalSteps > 0 ? `planning ${totalSteps} steps` : 'planning'
     if (stage === 'explore') return 'exploring project files'
+    if (stage === 'planning') return 'planning'
+    if (stage === 'executing') return 'working on your request'
     if (stage === 'understand') return 'understanding your request'
     if (!hasContent) return 'preparing response'
     return 'generating response'
-  }, [stage, workingStep, stepNum, totalSteps, hasContent, retryReason])
+  }, [thinking, stage, hasContent, retryReason])
 
-  const label = stageLabel || 'Thinking'
+  const label = stageLabel && stageLabel !== 'Executing' ? stageLabel : 'Thinking'
 
   return (
     <div className="thinking-card" aria-live="polite">

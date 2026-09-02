@@ -55,6 +55,7 @@ function KsAgent() {
 
   // chatId → live text of its background generation (key present = still running)
   const [streams, setStreams] = useState<Record<string, string>>({})
+  const [thinkings, setThinkings] = useState<Record<string, string>>({})
   const [activities, setActivities] = useState<Activity[]>([])
   const [retries, setRetries] = useState<Record<string, { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }>>({})
   const subsRef = useRef(new Map<string, AbortController>())
@@ -271,6 +272,7 @@ function KsAgent() {
       const controller = new AbortController()
       subsRef.current.set(chatId, controller)
       setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
+      setThinkings((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
       let acc = ''
       let assistantId: string | null = null
       const pendingTools = new Map<string, { name: string; args: Record<string, unknown> }>()
@@ -288,6 +290,14 @@ function KsAgent() {
             onDelta: (text) => {
               acc += text
               setStreams((prev) => ({ ...prev, [chatId]: (prev[chatId] ?? '') + text }))
+            },
+            onThinking: (text) => {
+              setThinkings((prev) => {
+                const cur = (prev[chatId] ?? '') + text
+                // keep last 800 chars to avoid unbounded growth, show most recent thinking
+                const capped = cur.length > 800 ? cur.slice(-800) : cur
+                return { ...prev, [chatId]: capped }
+              })
             },
             onTool: (tool) => {
               const { callId, name, args } = tool
@@ -411,6 +421,11 @@ function KsAgent() {
             )
           }
           setStreams((prev) => {
+            const next = { ...prev }
+            delete next[chatId]
+            return next
+          })
+          setThinkings((prev) => {
             const next = { ...prev }
             delete next[chatId]
             return next
