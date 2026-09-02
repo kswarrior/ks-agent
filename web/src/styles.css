@@ -3556,6 +3556,21 @@ textarea {
   color: var(--text);
 }
 
+.activity-row.no-expand {
+  cursor: default;
+  pointer-events: none;
+  opacity: 1;
+}
+
+.activity-row.no-expand:hover {
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.activity-row.no-expand .activity-chevron {
+  pointer-events: none;
+}
+
 .activity-icon {
   flex-shrink: 0;
   width: 18px;

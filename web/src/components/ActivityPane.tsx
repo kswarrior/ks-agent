@@ -479,10 +479,18 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
             const commandDisplay = getCommandDisplay(activity.toolType, activity.args)
             const isExpanded = expandedId === activity.id
             const resultDisplay = getResultDisplay(activity)
+            const isRunning = activity.ok === undefined
+            const isExpandable = !isRunning
 
             return (
               <div key={activity.id} className="activity-item">
-                <button className={`activity-row${isExpanded ? ' expanded' : ''}`} onClick={() => toggleExpand(activity.id)}>
+                <button
+                  className={`activity-row${isExpanded ? ' expanded' : ''}${!isExpandable ? ' no-expand' : ''}`}
+                  onClick={() => { if (isExpandable) toggleExpand(activity.id) }}
+                  disabled={!isExpandable}
+                  style={!isExpandable ? { cursor: 'default', opacity: 0.95 } : undefined}
+                  title={!isExpandable ? `${label} — in progress` : undefined}
+                >
                   <span
                     className="activity-badge"
                     style={{ background: badgeStyle.bg, color: badgeStyle.color, borderColor: badgeStyle.border }}
@@ -501,11 +509,17 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                       <span className="act-status-icon running"><IconRotate size={10} className="spin" /></span>
                     )}
                   </span>
-                  <span className="activity-chevron">
-                    <IconChevronDown size={12} style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }} />
-                  </span>
+                  {isExpandable ? (
+                    <span className="activity-chevron">
+                      <IconChevronDown size={12} style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }} />
+                    </span>
+                  ) : (
+                    <span className="activity-chevron" style={{ opacity: 0.35 }}>
+                      <IconChevronDown size={12} style={{ opacity: 0.35 }} />
+                    </span>
+                  )}
                 </button>
-                {isExpanded && (
+                {isExpanded && isExpandable && (
                   <div className="activity-detail">
                     <div className="activity-detail-header">
                       <span className="activity-detail-time">{formatTime(activity.timestamp)}</span>
