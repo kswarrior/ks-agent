@@ -46,8 +46,8 @@ function App() {
 
   const loadConsoleLogs = async () => {
     try {
-      const data = await fetchConsoleLogs();
-      setConsoleLogs(data);
+      const logs = await fetchConsoleLogs();
+      setConsoleLogs(logs);
     } catch (error) {
       console.error('Failed to load console logs:', error);
     }
