@@ -127,7 +127,8 @@ async function openStream(
   apiKey: string,
   body: Record<string, unknown>,
   signal?: AbortSignal,
-  retrySettings?: RetrySettings
+  retrySettings?: RetrySettings,
+  onRetry?: (info: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }) => void
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const settings = retrySettings ?? {
     enabled: true,
@@ -188,6 +189,7 @@ async function openStream(
       if (!shouldRetryNet) throw e
       const delayNet = Math.min(settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 800, settings.maxDelayMs)
       console.warn(`[llm retry] Network error — retry ${attempt + 1}/${settings.maxRetries} in ${Math.round(delayNet)}ms: ${String(e?.message||e).slice(0,120)}`)
+      try { onRetry?.({ attempt: attempt + 1, maxAttempts: settings.maxRetries, delay: delayNet, reason: 'network', error: String(e?.message || e).slice(0, 500) }) } catch {}
       await delayWithSignal(delayNet, signal).catch((err) => { throw Object.assign(err, { name: 'AbortError' }) })
       attempt++
       continue
