@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx server/index.ts",
     "start": "node dist/index.js",
-    "build": "tsc server/index.ts",
+    "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
