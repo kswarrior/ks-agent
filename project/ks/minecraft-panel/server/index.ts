@@ -67,7 +67,7 @@ const serverStore = {
   },
   
   players: [
-    { id: 1, uuid: '11111111-1111-1111-1111-111111111111', name: 'Player1', mode: 'survival', isOnCooldown: false, level: 15, exp: 856 },
+    { id: 1, uuid: '11111111-1111-1111-1111-111111111111', name: 'Player1', mode: 'survival', ping: 50, isOnCooldown: false, level: 15, exp: 856 },
   ],
   
   consoleLogs: [] as ConsoleLog[],
@@ -181,6 +181,7 @@ app.post('/api/console/command', async (c) => {
       uuid: randomUUID(),
       name: playerName,
       mode: 'survival',
+      ping: 50,
       isOnCooldown: false,
       level: Math.floor(Math.random() * 30) + 1,
       exp: Math.floor(Math.random() * 1000),
