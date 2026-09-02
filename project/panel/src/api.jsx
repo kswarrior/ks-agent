@@ -1,119 +1,75 @@
-import { useEffect, useState } from 'react'
+// Centralized API + WebSocket helpers for the panel.
 
 const API_BASE = '/api'
-const WS_BASE = 'ws://localhost:3001/ws'
+const WS_BASE = (() => {
+  if (typeof window === 'undefined') return 'ws://localhost:3001/ws'
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${window.location.host}/ws`
+})()
+
+function getToken() {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('token')
+}
 
 export async function apiFetch(path, options = {}) {
   const url = `${API_BASE}${path}`
-  const headers = {}
-  const token = localStorage.getItem('token')
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
-  if (options.body && !(options.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json'
-  }
+  const headers = { ...(options.headers || {}) }
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
   let body = options.body
-  if (body && typeof body !== 'string' && !(body instanceof FormData)) {
+  if (body && !(body instanceof FormData) && typeof body !== 'string') {
+    headers['Content-Type'] = 'application/json'
     body = JSON.stringify(body)
   }
-  const opts = {
+  const res = await fetch(url, {
     method: options.method || 'GET',
     headers,
     body,
-  }
-  const res = await fetch(url, opts)
-  const data = await res.json()
+  })
+  const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     throw new Error(data.error || `HTTP ${res.status}`)
   }
   return data
 }
 
-export function useAuth() {
-  const [token, setToken] = useState(() => localStorage.getItem('token') || null)
-  const [user, setUser] = useState(null)
-
-  useEffect(() => {
-    if (token) {
-      try {
-        const payload = jwtDecode(token)
-        setUser({ sub: payload.sub, role: payload.role })
-      } catch {}
-    } else {
-      setUser(null)
-    }
-  }, [token])
-
-  const login = (tok) => {
-    setToken(tok)
-    localStorage.setItem('token', tok)
+export async function login(username, password) {
+  const data = await apiFetch('/auth/login', {
+    method: 'POST',
+    body: { username, password },
+  })
+  if (data?.token) {
+    localStorage.setItem('token', data.token)
   }
-
-  const logout = () => {
-    setToken(null)
-    setUser(null)
-    localStorage.removeItem('token')
-  }
-
-  return { token, user, login, logout }
+  return data
 }
 
-export function useWebSocket() {
-  const [ws, setWs] = useState(null)
-  const [connected, setConnected] = useState(false)
-  const [logs, setLogs] = useState([])
-  const [playerList, setPlayerList] = useState([])
+export function logout() {
+  localStorage.removeItem('token')
+}
 
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) return
-
-    const ws = new WS_BASE + `?token=${token}`
-    const socket = new WebSocket(ws)
-
-    socket.onopen = () => {
-      setWs(socket)
-      setConnected(true)
+export function openWebSocket({ onMessage, onOpen, onClose, onError } = {}) {
+  const token = getToken()
+  if (!token) return null
+  const url = `${WS_BASE}?token=${encodeURIComponent(token)}`
+  const socket = new WebSocket(url)
+  socket.onopen = (e) => onOpen && onOpen(e)
+  socket.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data)
+      onMessage && onMessage(data)
+    } catch {
+      // ignore non-JSON
     }
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'log') {
-          setLogs((prev) => {
-            const newLogs = [...prev, data.line].filter(
-              (l, idx) => idx >= prev.length ? true : l !== prev[prev.length - 1]
-            )
-            return newLogs.slice(-100)
-          })
-        } else if (data.type === 'log-buffer') {
-          setLogs(data.lines)
-        } else if (data.type === 'players') {
-          setPlayerList(data.players)
-        }
-      } catch {}
-    }
-
-    socket.onclose = () => {
-      setConnected(false)
-      setWs(null)
-    }
-
-    socket.onerror = (err) => {
-      console.error('WS error', err)
-    }
-
-    return () => {
-      socket.close()
-    }
-  }, [token])
-
-  return { ws, connected, logs, playerList }
+  }
+  socket.onclose = (e) => onClose && onClose(e)
+  socket.onerror = (e) => onError && onError(e)
+  return socket
 }
 
 // JWT decode helper (no dependency)
-function jwtDecode(token) {
+export function jwtDecode(token) {
   try {
     return JSON.parse(atob(token.split('.')[1]))
   } catch {
