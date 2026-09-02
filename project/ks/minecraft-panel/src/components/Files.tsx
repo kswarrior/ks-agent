@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileNode } from '../types';
+import type { FileNode } from '../types';
 
 interface FilesProps {
   files?: FileNode[];

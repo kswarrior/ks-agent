@@ -1,4 +1,4 @@
-import { ServerInfo } from '../types';
+import type { ServerInfo } from '../types';
 
 interface DashboardProps {
   server?: ServerInfo;
