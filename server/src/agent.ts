@@ -1757,61 +1757,13 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         ctx.onEvent('question', JSON.stringify(q))
       }
 
-      // Scope enforcement: stay strictly inside ${projectfolder} — outside is FORBIDDEN
+      // Scope enforcement: STRICT — stay inside ${projectfolder} (e.g. project/ks) — outside is FORBIDDEN, no exceptions
       {
         const outsideReason = isOutsideScopeCommand(command, ctx.projectPath, ctx.chatId)
         if (outsideReason) {
-          const header = 'Stay in ${projectfolder}'
-          const question = `${outsideReason}\n\nCommand: \`${command}\`\n\nYour primary workspace is \${projectfolder} (\`${ctx.projectPath}\`) — inside is FULL permission, outside is ZERO permission and FORBIDDEN. Do you want to allow this? Deny will keep you inside ${projectfolder}.`
-          const options = ['Yes, allow outside', 'No, stay in project']
-          const db = getDb()
-          const now = new Date().toISOString()
-          const qId = newId()
-          const q: Question = {
-            id: qId,
-            chatId: ctx.chatId,
-            header,
-            question,
-            options,
-            allowCustom: false,
-            status: 'pending',
-            createdAt: now,
-            toolCallId: ctx.toolCallId
-          }
-          db.questions.push(q)
-          saveDb()
-          ctx.onEvent('question', JSON.stringify(q))
-          let answer: string
-          try {
-            answer = await new Promise<string>((resolve, reject) => {
-              const onAbort = () => {
-                pendingQuestionResolvers.delete(qId)
-                reject(abortError())
-              }
-              if (ctx.signal.aborted) {
-                onAbort()
-                return
-              }
-              ctx.signal.addEventListener('abort', onAbort, { once: true })
-              pendingQuestionResolvers.set(qId, (ans: string) => {
-                ctx.signal.removeEventListener('abort', onAbort)
-                resolve(ans)
-              })
-            })
-          } catch (e: any) {
-            if (e?.name === 'AbortError') throw e
-            return err(String(e?.message || e))
-          }
-          if (!options.includes(answer) || answer !== 'Yes, allow outside') {
-            q.status = 'answered'
-            q.answer = answer
-            q.selectedOption = options.includes(answer) ? answer : null
-            q.answeredAt = new Date().toISOString()
-            saveDb()
-            ctx.onEvent('question', JSON.stringify(q))
-            return err(`User denied outside access. Stay inside \${projectfolder} (\`${ctx.projectPath}\`). If you genuinely need KS Agent, ask via ask_question first and get explicit user confirmation.`)
-          }
-          q.status = 'answered'
+          return err(`Outside access blocked. ${outsideReason}. Your primary workspace is \${projectfolder} (\`${ctx.projectPath}\`) — inside is FULL permission (all subfolders/files under it), outside is ZERO permission and FORBIDDEN. Only inside ${projectfolder} is allowed.`)
+        }
+      }
           q.answer = answer
           q.selectedOption = answer
           q.answeredAt = new Date().toISOString()
