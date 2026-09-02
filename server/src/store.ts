@@ -253,7 +253,7 @@ const dbFile = process.env.KS_SQLITE_PATH
   ? path.resolve(process.env.KS_SQLITE_PATH)
   : path.join(storageDir, 'ksagent.db')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
 
 let sqlite: Database.Database | null = null
 
@@ -978,7 +978,7 @@ function loadFromSqlite(s: Database.Database): DB | null {
     let retrySettings: RetrySettings
     try {
       const parsed = kv.get('retrySettings') ? JSON.parse(kv.get('retrySettings') as string) : null
-      const def: RetrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }
+      const def: RetrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }
       if (parsed && typeof parsed === 'object') {
         retrySettings = {
           enabled: Boolean(parsed.enabled ?? def.enabled),
@@ -987,11 +987,15 @@ function loadFromSqlite(s: Database.Database): DB | null {
           maxDelayMs: Number(parsed.maxDelayMs ?? def.maxDelayMs),
           retryOnStatusCodes: Array.isArray(parsed.retryOnStatusCodes) ? parsed.retryOnStatusCodes.filter((x: any) => Number.isInteger(x)) : def.retryOnStatusCodes,
           stopOnStatusCodes: Array.isArray(parsed.stopOnStatusCodes) ? parsed.stopOnStatusCodes.filter((x: any) => Number.isInteger(x)) : def.stopOnStatusCodes,
-          alwaysRetry: Boolean(parsed.alwaysRetry ?? def.alwaysRetry)
+          alwaysRetry: Boolean(parsed.alwaysRetry ?? def.alwaysRetry),
+          autoContinueEnabled: Boolean(parsed.autoContinueEnabled ?? def.autoContinueEnabled),
+          autoContinueDelayMs: Number(parsed.autoContinueDelayMs ?? def.autoContinueDelayMs),
+          autoContinueMaxAttempts: Number(parsed.autoContinueMaxAttempts ?? def.autoContinueMaxAttempts),
+          autoContinueOnPlanIncomplete: Boolean(parsed.autoContinueOnPlanIncomplete ?? def.autoContinueOnPlanIncomplete)
         }
       } else retrySettings = def
     } catch {
-      retrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false }
+      retrySettings = { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }
     }
     let themeSettings: ThemeSettings
     try {
@@ -1042,7 +1046,11 @@ function tryMigrateFromJson(): boolean {
       maxDelayMs: 30000,
       retryOnStatusCodes: [429, 500, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404],
-      alwaysRetry: false
+      alwaysRetry: false,
+      autoContinueEnabled: false,
+      autoContinueDelayMs: 1500,
+      autoContinueMaxAttempts: 5,
+      autoContinueOnPlanIncomplete: true
     }
     db = {
       projects: Array.isArray(parsed.projects) ? parsed.projects : [],
@@ -1068,7 +1076,11 @@ function tryMigrateFromJson(): boolean {
             stopOnStatusCodes: Array.isArray(parsed.retrySettings.stopOnStatusCodes)
               ? parsed.retrySettings.stopOnStatusCodes.filter((x: any) => Number.isInteger(x))
               : defaultRetrySettings.stopOnStatusCodes,
-            alwaysRetry: Boolean(parsed.retrySettings.alwaysRetry ?? defaultRetrySettings.alwaysRetry)
+            alwaysRetry: Boolean(parsed.retrySettings.alwaysRetry ?? defaultRetrySettings.alwaysRetry),
+            autoContinueEnabled: Boolean(parsed.retrySettings.autoContinueEnabled ?? defaultRetrySettings.autoContinueEnabled),
+            autoContinueDelayMs: Number(parsed.retrySettings.autoContinueDelayMs ?? defaultRetrySettings.autoContinueDelayMs),
+            autoContinueMaxAttempts: Number(parsed.retrySettings.autoContinueMaxAttempts ?? defaultRetrySettings.autoContinueMaxAttempts),
+            autoContinueOnPlanIncomplete: Boolean(parsed.retrySettings.autoContinueOnPlanIncomplete ?? defaultRetrySettings.autoContinueOnPlanIncomplete)
           }
         : defaultRetrySettings,
       themeSettings: parsed.themeSettings && typeof parsed.themeSettings === 'object' && typeof parsed.themeSettings.primary === 'string'
@@ -1261,6 +1273,11 @@ export function loadDb(): void {
         db.retrySettings.retryOnStatusCodes = [...new Set([...db.retrySettings.retryOnStatusCodes, 500])].sort((a, b) => a - b)
         migrated = true
       }
+      // migrate new auto-continue fields (existing DBs before this feature)
+      if (db.retrySettings.autoContinueEnabled === undefined) { db.retrySettings.autoContinueEnabled = false; migrated = true }
+      if (db.retrySettings.autoContinueDelayMs === undefined) { db.retrySettings.autoContinueDelayMs = 1500; migrated = true }
+      if (db.retrySettings.autoContinueMaxAttempts === undefined) { db.retrySettings.autoContinueMaxAttempts = 5; migrated = true }
+      if (db.retrySettings.autoContinueOnPlanIncomplete === undefined) { db.retrySettings.autoContinueOnPlanIncomplete = true; migrated = true }
       if (seedDefaultSkills()) migrated = true
       if (ensureChatSeqs(db.chats) || migrated) {
         try { persistToSqlite() } catch {}
@@ -1275,7 +1292,11 @@ export function loadDb(): void {
       maxDelayMs: 30000,
       retryOnStatusCodes: [429, 500, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404],
-      alwaysRetry: false
+      alwaysRetry: false,
+      autoContinueEnabled: false,
+      autoContinueDelayMs: 1500,
+      autoContinueMaxAttempts: 5,
+      autoContinueOnPlanIncomplete: true
     }
     db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
     if (seedDefaultSkills()) {
@@ -1293,7 +1314,11 @@ export function loadDb(): void {
       maxDelayMs: 30000,
       retryOnStatusCodes: [429, 500, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404],
-      alwaysRetry: false
+      alwaysRetry: false,
+      autoContinueEnabled: false,
+      autoContinueDelayMs: 1500,
+      autoContinueMaxAttempts: 5,
+      autoContinueOnPlanIncomplete: true
     }
     db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
     if (seedDefaultSkills()) {
