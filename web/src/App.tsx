@@ -634,6 +634,10 @@ function KsAgent() {
       await api.deleteChat(chat.id)
       subsRef.current.get(chat.id)?.abort()
       subsRef.current.delete(chat.id)
+      const tDel = autoContinueTimersRef.current.get(chat.id)
+      if (tDel) { clearTimeout(tDel); autoContinueTimersRef.current.delete(chat.id) }
+      autoContinueAttemptsRef.current.delete(chat.id)
+      manualStopRef.current.delete(chat.id)
       setStreams((prev) => {
         const next = { ...prev }
         delete next[chat.id]
@@ -700,6 +704,9 @@ function KsAgent() {
       return
     }
     if (sendingRef.current.has(chatId)) return
+    // cancel any pending auto-continue for this chat (manual takes over)
+    const pendingAuto = autoContinueTimersRef.current.get(chatId)
+    if (pendingAuto) { clearTimeout(pendingAuto); autoContinueTimersRef.current.delete(chatId) }
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
     if (!lastAssistant) {
       toast('No previous response to continue', 'error')
@@ -780,6 +787,12 @@ function KsAgent() {
       return
     }
     if (creatingChatRef.current) return
+
+    // if user sends new message while auto-continue pending, cancel that timer and reset attempts unless it's a plan-continue
+    if (activeChatId) {
+      const t = autoContinueTimersRef.current.get(activeChatId)
+      if (t) { clearTimeout(t); autoContinueTimersRef.current.delete(activeChatId) }
+    }
 
     let chatId = activeChatId
 
@@ -870,6 +883,11 @@ function KsAgent() {
           return n
         })
         setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
+        // new task → reset auto-continue attempts for this chat
+        autoContinueAttemptsRef.current.delete(chatId!)
+        const t = autoContinueTimersRef.current.get(chatId!)
+        if (t) { clearTimeout(t); autoContinueTimersRef.current.delete(chatId!) }
+        manualStopRef.current.delete(chatId!)
       } else {
         // Clean stale stopped marker from displayed message optimistically (also clears incomplete plan's lingering marker if any)
         if (prevAssistantForSend) {
@@ -901,6 +919,11 @@ function KsAgent() {
   async function stopStreaming() {
     const chatId = activeChatId
     if (!chatId || !subsRef.current.has(chatId)) return
+    // mark as manual stop so auto-continue won't immediately resume (user intent)
+    manualStopRef.current.add(chatId)
+    // cancel any pending auto-continue
+    const t = autoContinueTimersRef.current.get(chatId)
+    if (t) { clearTimeout(t); autoContinueTimersRef.current.delete(chatId) }
     try {
       await api.stopGeneration(chatId)
     } catch (e: any) {
