@@ -622,6 +622,24 @@ function KsAgent() {
           for (const id of deletedChatIds) delete n[id]
           return n
         })
+        setStreams((prev) => {
+          const n = { ...prev }
+          for (const id of deletedChatIds) delete n[id]
+          return n
+        })
+        setThinkings((prev) => {
+          const n = { ...prev }
+          for (const id of deletedChatIds) delete n[id]
+          return n
+        })
+        for (const id of deletedChatIds) {
+          const t = autoContinueTimersRef.current.get(id)
+          if (t) { clearTimeout(t); autoContinueTimersRef.current.delete(id) }
+          autoContinueAttemptsRef.current.delete(id)
+          manualStopRef.current.delete(id)
+          subsRef.current.get(id)?.abort()
+          subsRef.current.delete(id)
+        }
       }
       if (activeProjectId === project.id) {
         setActiveProjectId(null)
@@ -662,6 +680,11 @@ function KsAgent() {
       autoContinueAttemptsRef.current.delete(chat.id)
       manualStopRef.current.delete(chat.id)
       setStreams((prev) => {
+        const next = { ...prev }
+        delete next[chat.id]
+        return next
+      })
+      setThinkings((prev) => {
         const next = { ...prev }
         delete next[chat.id]
         return next
@@ -1029,6 +1052,7 @@ function KsAgent() {
             messages={messages}
             streaming={activeChat ? streams[activeChat.id] !== undefined : false}
             streamText={activeChat ? streams[activeChat.id] ?? '' : ''}
+            streamThinking={activeChat ? thinkings[activeChat.id] ?? '' : ''}
             models={models}
             selectedModelId={selectedModelId}
             onSelectModel={setSelectedModelId}

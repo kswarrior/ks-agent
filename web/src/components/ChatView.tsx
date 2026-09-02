@@ -337,6 +337,7 @@ interface Props {
   messages: Message[]
   streaming: boolean
   streamText: string
+  streamThinking?: string
   models: ModelEntry[]
   selectedModelId: string | null
   onSelectModel: (id: string) => void
@@ -540,9 +541,7 @@ export function ChatView(props: Props) {
                 <ThinkingCard
                   stage={chatStage}
                   stageLabel={chatStageLabel}
-                  workingStep={workingStep ?? null}
-                  stepNum={execStepNum}
-                  totalSteps={totalSteps}
+                  thinking={props.streamThinking ?? ''}
                   hasContent={!!props.streamText}
                   retryReason={props.retryInfo?.reason}
                 />
