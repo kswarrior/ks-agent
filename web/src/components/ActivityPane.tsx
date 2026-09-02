@@ -189,7 +189,8 @@ function highlightLine(line: string, lang: string): string {
 
 function CodeWithLineNumbers({ code, startLine = 1, variant = 'default', lang = 'typescript' }: { code: string; startLine?: number; variant?: 'default' | 'old' | 'new'; lang?: string }) {
   const lines = code.split('\n')
-  const maxShow = 300
+  // show full context up to 2000 lines (read limit) — no early truncation that cuts numbers before content
+  const maxShow = 2000
   const displayLines = lines.length > maxShow ? lines.slice(0, maxShow) : lines
   const truncated = lines.length > maxShow
   const bg = variant === 'old' ? '#fef2f2' : variant === 'new' ? '#f0fdf4' : 'var(--input)'
@@ -197,18 +198,18 @@ function CodeWithLineNumbers({ code, startLine = 1, variant = 'default', lang = 
   const gutterBg = variant === 'default' ? 'var(--surface-2)' : variant === 'old' ? '#fee2e2' : '#dcfce7'
   const gutterColor = variant === 'default' ? 'var(--text-faint)' : variant === 'old' ? '#b91c1c' : '#15803d'
   return (
-    <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', background: bg, maxHeight: 260, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: 1.5 }}>
-      <div style={{ background: gutterBg, borderRight: `1px solid ${border}`, padding: '6px 6px', textAlign: 'right', color: gutterColor, userSelect: 'none', fontSize: 11, lineHeight: 1.5, minWidth: 36, flexShrink: 0, position: 'sticky', left: 0 }}>
+    <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', background: bg, maxHeight: 280, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: 1.55 }}>
+      <div style={{ background: gutterBg, borderRight: `1px solid ${border}`, padding: '6px 6px', textAlign: 'right', color: gutterColor, userSelect: 'none', fontSize: 11, lineHeight: 1.55, minWidth: 38, flexShrink: 0, position: 'sticky', left: 0, alignSelf: 'stretch' }}>
         {displayLines.map((_, i) => (
-          <div key={i} style={{ lineHeight: 1.5, whiteSpace: 'nowrap' }}>{startLine + i}</div>
+          <div key={i} style={{ lineHeight: 1.55, whiteSpace: 'pre' }}>{startLine + i}</div>
         ))}
-        {truncated && <div style={{ color: gutterColor, fontStyle: 'italic' }}>…</div>}
+        {truncated && <div style={{ color: gutterColor, fontStyle: 'italic', lineHeight: 1.55 }}>…</div>}
       </div>
-      <div style={{ flex: 1, minWidth: 0, padding: '6px 10px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5, overflow: 'visible' }}>
+      <div style={{ flex: 1, minWidth: 0, padding: '6px 10px', whiteSpace: 'pre', wordBreak: 'normal', overflow: 'visible', lineHeight: 1.55 }}>
         {displayLines.map((line, i) => (
-          <div key={i} style={{ lineHeight: 1.5, minHeight: '1.5em' }} dangerouslySetInnerHTML={{ __html: line ? highlightLine(line, lang) : '<br>' }} />
+          <div key={i} style={{ lineHeight: 1.55, minHeight: '1.55em', whiteSpace: 'pre', wordBreak: 'normal', overflow: 'visible' }} dangerouslySetInnerHTML={{ __html: line ? highlightLine(line, lang) : '<br>' }} />
         ))}
-        {truncated && <div style={{ color: 'var(--text-faint)', fontStyle: 'italic', marginTop: 6 }}>…[{lines.length - maxShow} more lines not shown]</div>}
+        {truncated && <div style={{ color: 'var(--text-faint)', fontStyle: 'italic', marginTop: 4, whiteSpace: 'pre-wrap' }}>…[{lines.length - maxShow} more lines not shown — use Read with offset to see more]</div>}
       </div>
     </div>
   )
