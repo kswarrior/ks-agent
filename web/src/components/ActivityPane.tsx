@@ -433,6 +433,62 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                         <pre className={activity.toolType === 'run_shell' ? 'activity-terminal-command' : ''}>{activity.toolType === 'run_shell' ? `$ ${commandDisplay}` : commandDisplay}</pre>
                       </div>
                     )}
+                    {activity.toolType === 'edit_file' && (
+                      <>
+                        {(() => {
+                          const oldStr = String((activity.args as any)?.old_string ?? (activity.args as any)?.oldString ?? '')
+                          const newStr = String((activity.args as any)?.new_string ?? (activity.args as any)?.newString ?? '')
+                          const isReplaceAll = !!(activity.args as any)?.replace_all
+                          const isAddition = !oldStr.trim()
+                          return (
+                            <>
+                              <div className="activity-detail-section">
+                                <strong>Old {isReplaceAll ? '(replace all)' : ''}{isAddition ? ' — empty (addition)' : ''}</strong>
+                                <pre
+                                  style={{
+                                    background: isAddition ? 'var(--surface-2)' : '#fef2f2',
+                                    border: `1px solid ${isAddition ? 'var(--border)' : '#fecaca'}`,
+                                    borderRadius: 6,
+                                    padding: '8px 10px',
+                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                                    fontSize: 11.5,
+                                    color: isAddition ? 'var(--text-faint)' : '#991b1b',
+                                    maxHeight: 180,
+                                    overflowY: 'auto',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word',
+                                    lineHeight: 1.5,
+                                  }}
+                                >
+                                  {oldStr || '(empty — new addition)'}
+                                </pre>
+                              </div>
+                              <div className="activity-detail-section">
+                                <strong>New</strong>
+                                <pre
+                                  style={{
+                                    background: '#f0fdf4',
+                                    border: '1px solid #bbf7d0',
+                                    borderRadius: 6,
+                                    padding: '8px 10px',
+                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                                    fontSize: 11.5,
+                                    color: '#166534',
+                                    maxHeight: 180,
+                                    overflowY: 'auto',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word',
+                                    lineHeight: 1.5,
+                                  }}
+                                >
+                                  {newStr || '(empty)'}
+                                </pre>
+                              </div>
+                            </>
+                          )
+                        })()}
+                      </>
+                    )}
                     {resultDisplay && (
                       <div className="activity-detail-section">
                         <strong>Output</strong>
