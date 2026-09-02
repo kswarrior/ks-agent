@@ -25,6 +25,16 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
   const [iframeKey, setIframeKey] = useState(0)
   const prevProjectIdRef = useRef<string | null>(null)
   const prevChatIdRef = useRef<string | null>(null)
+  // VS Code-like resizable width
+  const [psbWidth, setPsbWidth] = useState<number>(() => {
+    try {
+      const v = localStorage.getItem('ks.psb.width')
+      const n = v ? parseInt(v, 10) : 480
+      return Number.isFinite(n) && n >= 320 && n <= 900 ? n : 480
+    } catch { return 480 }
+  })
+  const psbResizingRef = useRef<{ startX: number; startW: number } | null>(null)
+  const [isPsbResizing, setIsPsbResizing] = useState(false)
 
   const getDefaultProxiedUrl = useCallback(() => {
     if (chatPreview && activeChatId) return api.chatPreviewProxyUrl(activeChatId)

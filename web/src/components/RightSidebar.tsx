@@ -449,6 +449,16 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
   const tabsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
   const dragMovedRef = useRef(false)
+  // VS Code-like resizable width
+  const [rsbWidth, setRsbWidth] = useState<number>(() => {
+    try {
+      const v = localStorage.getItem('ks.rsb.width')
+      const n = v ? parseInt(v, 10) : 340
+      return Number.isFinite(n) && n >= 280 && n <= 800 ? n : 340
+    } catch { return 340 }
+  })
+  const resizingRef = useRef<{ startX: number; startW: number } | null>(null)
+  const [isResizing, setIsResizing] = useState(false)
 
   function handleTabsWheel(e: React.WheelEvent<HTMLDivElement>) {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -495,9 +505,62 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
     }
   }
 
+  function handleRsbResizeStart(e: React.MouseEvent) {
+    e.preventDefault()
+    resizingRef.current = { startX: e.clientX, startW: rsbWidth }
+    setIsResizing(true)
+  }
+
+  function handleRsbResizeDoubleClick() {
+    const def = 340
+    setRsbWidth(def)
+    try { localStorage.setItem('ks.rsb.width', String(def)) } catch {}
+  }
+
+  useEffect(() => {
+    if (!isResizing) return
+    function onMove(e: MouseEvent) {
+      const r = resizingRef.current
+      if (!r) return
+      const dx = r.startX - e.clientX
+      const next = Math.max(280, Math.min(800, r.startW + dx))
+      const maxVw = Math.floor(window.innerWidth * 0.5)
+      const clamped = Math.min(next, maxVw)
+      setRsbWidth(clamped)
+    }
+    function onUp() {
+      setIsResizing(false)
+      resizingRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing])
+
+  useEffect(() => {
+    if (isResizing) return
+    try { localStorage.setItem('ks.rsb.width', String(rsbWidth)) } catch {}
+  }, [rsbWidth, isResizing])
+
   return (
     <>
-      <aside className={`rsb${open ? ' open' : ''}`}>
+      <aside className={`rsb${open ? ' open' : ''}${isResizing ? ' resizing' : ''}`} style={open ? { width: rsbWidth } as any : undefined}>
+        <div
+          className="rsb-resizer"
+          onMouseDown={handleRsbResizeStart}
+          onDoubleClick={handleRsbResizeDoubleClick}
+          title="Drag to resize — double-click to reset"
+          aria-hidden
+        />
         <div
           ref={tabsRef}
           className="tabs rsb-tabs"
