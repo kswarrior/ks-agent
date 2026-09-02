@@ -254,26 +254,28 @@ export function FilesPane({ projectId }: FilesPaneProps) {
 
   async function doRename(entry: FileEntry) {
     if (!projectId) return
-    const name = await prompt({ title: `Rename ${entry.type}`, label: 'Name (use path like public/new.webp to move)', value: entry.name })
+    const name = await prompt({ title: `Rename ${entry.type}`, label: 'Name (use path like public/new.webp to move, /new.webp for root)', value: entry.name })
     if (!name || name.trim() === '' || name === entry.name) return
     const trimmed = name.trim()
     const from = joinRel(dir, entry.name)
-    let dest: string
     let toParam: string
     if (trimmed.includes('/')) {
-      // Path move — like mv: if starts with "/" treat as project-root, else relative to current dir
-      if (trimmed.startsWith('/')) dest = trimmed.replace(/^\/+/, '')
-      else dest = joinRel(dir, trimmed).replace(/\/+/g, '/')
-      toParam = dest
+      // Path move — like mv: if starts with "/" treat as project-root absolute, else relative to current dir
+      if (trimmed.startsWith('/')) toParam = trimmed // keep leading slash so server sees isAbsoluteProjectPath
+      else toParam = joinRel(dir, trimmed).replace(/\/+/g, '/')
     } else {
-      dest = trimmed
-      toParam = dest
+      toParam = trimmed
     }
     try {
       await api.renameFileEntry(projectId, from, toParam)
-      const newSelected = toParam.includes('/') ? toParam : joinRel(dir, toParam)
+      const isAbsolute = trimmed.startsWith('/')
+      const displayDest = toParam.replace(/^\/+/, '')
+      let newSelected: string
+      if (isAbsolute) newSelected = displayDest
+      else if (displayDest.includes('/')) newSelected = displayDest
+      else newSelected = joinRel(dir, displayDest)
       setSelected((prev) => (prev === from ? newSelected : prev))
-      toast(trimmed.includes('/') ? `Moved to ${toParam}` : 'Renamed', 'success')
+      toast(trimmed.includes('/') ? `Moved to ${displayDest}` : 'Renamed', 'success')
       await refresh()
     } catch (e: any) {
       toast(e.message, 'error')

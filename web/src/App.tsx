@@ -951,6 +951,16 @@ function KsAgent() {
           activeChatId={activeChat?.id ?? null}
           chatPreview={activeChat ? previews[activeChat.id] ?? null : null}
           onClose={() => setPreviewOpen(false)}
+          onPreviewUpdate={(preview) => {
+            const cid = activeChat?.id
+            if (!cid) return
+            setPreviews((prev) => {
+              const next = { ...prev }
+              if (preview) next[cid] = preview
+              else delete next[cid]
+              return next
+            })
+          }}
         />
       </div>
 
