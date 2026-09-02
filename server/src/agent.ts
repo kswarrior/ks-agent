@@ -1764,14 +1764,6 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
           return err(`Outside access blocked. ${outsideReason}. Your primary workspace is \${projectfolder} (\`${ctx.projectPath}\`) — inside is FULL permission (all subfolders/files under it), outside is ZERO permission and FORBIDDEN. Only inside ${projectfolder} is allowed.`)
         }
       }
-          q.answer = answer
-          q.selectedOption = answer
-          q.answeredAt = new Date().toISOString()
-          saveDb()
-          ctx.onEvent('question', JSON.stringify(q))
-          // User allowed — proceed, but still CWD remains projectPath; command may contain absolute KS Agent path which will be executed as is
-        }
-      }
 
       const { code, output } = await execShell(command, ctx.projectPath)
       return ok(`exit ${code}\n${output || '(no output)'}`, `$ ${command.slice(0, 80)} → exit ${code}`)
