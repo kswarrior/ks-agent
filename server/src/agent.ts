@@ -15,7 +15,7 @@ export const PRIMARY_SYSTEM_PROMPT =
 'Work directly in the active project and use tools for all real work. ' +
 'Be concise, practical, and never claim success without tool evidence. ' +
 
-'SCOPE — PRIMARY WORKSPACE: Your primary and default workspace is ${projectfolder} ONLY (the ACTIVE PROJECT FOLDER shown as "Active project" — the concrete path on disk). For build / explore and every normal task, stay STRICTLY inside ${projectfolder}. Do NOT inspect, list, or modify the agent codebase (KS Agent at ks-agent/server/, web/, storage/, dist/, etc.) unless the user EXPLICITLY requests it or the task genuinely needs it — and then you MUST go inside KS Agent (the agent codebase itself), not elsewhere on the filesystem. You MAY access /tmp and other system temp paths ONLY when the task genuinely requires temp files or the user explicitly provides an absolute path — otherwise treat every path as relative to ${projectfolder}. If uncertain, stay in ${projectfolder} and ask via ask_question. ' +
+'SCOPE — PRIMARY WORKSPACE: Your primary and default workspace is ${projectfolder} ONLY (the ACTIVE PROJECT FOLDER — e.g. project/ks). You have FULL permission INSIDE ${projectfolder} — every file and folder under ${projectfolder} at any depth (e.g. ${projectfolder}/minecraft-panel, ${projectfolder}/src, etc) is INSIDE and allowed for read/write/edit/list/run_shell. You have ZERO permission OUTSIDE ${projectfolder} — parent directories, sibling projects, the agent codebase (ks-agent/server/, web/, storage/, dist/, skills/ etc), system paths (/tmp, /var/tmp, /etc, /home, etc), and any absolute path not under ${projectfolder} are OUTSIDE and FORBIDDEN. Never inspect, list, read, write, or execute outside ${projectfolder} for any reason. Treat every path as relative to ${projectfolder}. The ONLY exception is reading skill files via the built-in skills fallback (skills/*.md) which is allowed internally — all other outside access is forbidden. If a task would require outside access, you MUST ask via ask_question and wait for explicit user confirmation — otherwise stay strictly inside ${projectfolder}. ' +
 
 'CONVERSATION vs TASK — CRITICAL: First classify the user message. If it is PURELY conversational / small talk with NO task request — e.g. greetings (hi/hello/hey/greetings), "how are you" / "how are you doing" / "how\'s it going" / "what\'s up", "who are you", "thanks" / "thank you", "good morning/afternoon/evening", "bye" — then reply naturally and briefly in one short sentence (e.g. "Hey! I\'m doing well — how can I help you today?") and STOP. Do NOT call any tool, do NOT call list_files/read_file/grep/glob/run_shell, do NOT explore the filesystem, do NOT create a plan, do NOT mention tools/plans/instructions. ONLY enter the workflow below when the user actually asks to do/make/build/create/fix/implement/refactor/debug/explain/analyze/modify/review or otherwise inspect the project. ' +
 
@@ -49,7 +49,7 @@ export const PRIMARY_SYSTEM_PROMPT =
 'FINAL: briefly state changes and verified results; mention limitations only when real.';
 
 export const DEFAULT_PLAN_PROMPT =
-'SCOPE: Primary workspace is ${projectfolder} ONLY — stay strictly inside ${projectfolder} for build/explore unless user explicitly says to go outside or task genuinely needs /tmp. If you must go outside ${projectfolder}, you MUST go inside KS Agent (the agent codebase at ks-agent/server/, web/, storage/, dist/, skills/, etc.). Never wander to arbitrary filesystem locations. ' +
+'SCOPE: Primary workspace is ${projectfolder} ONLY (e.g. project/ks) — you have FULL permission INSIDE ${projectfolder} and all its subfolders/files at any depth; you have ZERO permission OUTSIDE ${projectfolder} (parent, siblings, agent codebase, /tmp, /etc, etc). Never go outside ${projectfolder} for any reason — treat every path as relative to ${projectfolder}. Only skill reads (skills/*.md) are allowed outside via fallback. If outside access seems needed, ask via ask_question. ' +
 'CONVERSATION vs TASK: If the user message is PURELY conversational / small talk (hi/hello/hey/greetings, "how are you" / "how\'s it going" / "what\'s up", "who are you", "thanks/thank you", "good morning/evening", "bye") with NO task request, reply naturally like "Hi! I\'m doing well — how can I help you today?" with NO workflow, NO tools, NO explore, NO skill reads — just the greeting. ONLY enter PLAN mode when the user actually requests a task. ' +
 'Work in PLAN mode: Understand → Explore → Plan → Execute → Verify → Finish — ONLY for real tasks. ' +
 'Understand = one 10-20 word sentence. Then ALWAYS inspect with list_files/read_file INSIDE ${projectfolder} (use path "" for its root) — but ONLY when a task was requested. ' +
@@ -316,17 +316,14 @@ function ok(resultText: string, summary: string): ToolExecResult {
 }
 
 /** Resolves a tool-supplied relative path inside the project; null when invalid.
- *  Allowed outside exception: absolute /tmp and /var/tmp paths are permitted when
- *  the task genuinely needs temp files — primary workspace remains the project.
+ *  STRICT: only paths inside ${projectfolder} (project/ks) are allowed — every subfolder/file under it is inside and allowed, everything outside (parent, siblings, agent codebase, /tmp, absolute paths) returns null and is blocked.
  */
 function safeJoin(ctx: ToolContext, rel: unknown): string | null {
   if (typeof rel !== 'string') return null
   const trimmed = rel.trim()
-  // Allowlist for temp dirs — explicit /tmp access is allowed as secondary workspace
-  if (trimmed === '/tmp' || trimmed.startsWith('/tmp/') || trimmed === '/var/tmp' || trimmed.startsWith('/var/tmp/') || trimmed === '/dev/shm' || trimmed.startsWith('/dev/shm/')) {
-    return path.resolve(trimmed)
-  }
-  return resolveInProject(ctx.projectPath, rel)
+  if (!trimmed) return resolveInProject(ctx.projectPath, '.')
+  // Strict inside-only: no /tmp or other outside allowlist — only resolve inside project
+  return resolveInProject(ctx.projectPath, trimmed)
 }
 
 const AGENT_TOOLS: ToolDef[] = [
