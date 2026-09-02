@@ -115,6 +115,8 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   const [loading, setLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
+  const [dragged, setDragged] = useState<FileEntry | null>(null)
+  const [dragOver, setDragOver] = useState<string | null>(null)
   const [roomMenu, setRoomMenu] = useState<MenuPos | null>(null)
   const [rowMenu, setRowMenu] = useState<{ entry: FileEntry; pos: MenuPos } | null>(null)
   const [subPage, setSubPage] = useState<SubPage | null>(null)
@@ -251,11 +253,26 @@ export function FilesPane({ projectId }: FilesPaneProps) {
 
   async function doRename(entry: FileEntry) {
     if (!projectId) return
-    const name = await prompt({ title: `Rename ${entry.type}`, label: 'Name', value: entry.name })
-    if (!name || name === entry.name) return
+    const name = await prompt({ title: `Rename ${entry.type}`, label: 'Name (use path like public/new.webp to move)', value: entry.name })
+    if (!name || name.trim() === '' || name === entry.name) return
+    const trimmed = name.trim()
+    const from = joinRel(dir, entry.name)
+    let dest: string
+    let toParam: string
+    if (trimmed.includes('/')) {
+      // Path move — like mv: if starts with "/" treat as project-root, else relative to current dir
+      if (trimmed.startsWith('/')) dest = trimmed.replace(/^\/+/, '')
+      else dest = joinRel(dir, trimmed).replace(/\/+/g, '/')
+      toParam = dest
+    } else {
+      dest = trimmed
+      toParam = dest
+    }
     try {
-      await api.renameFileEntry(projectId, joinRel(dir, entry.name), name)
-      setSelected((prev) => (prev === joinRel(dir, entry.name) ? joinRel(dir, name) : prev))
+      await api.renameFileEntry(projectId, from, toParam)
+      const newSelected = toParam.includes('/') ? toParam : joinRel(dir, toParam)
+      setSelected((prev) => (prev === from ? newSelected : prev))
+      toast(trimmed.includes('/') ? `Moved to ${toParam}` : 'Renamed', 'success')
       await refresh()
     } catch (e: any) {
       toast(e.message, 'error')
@@ -282,6 +299,53 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     } catch (e: any) {
       toast(e.message, 'error')
     }
+  }
+
+  function handleDragStart(e: React.DragEvent, entry: FileEntry) {
+    setDragged(entry)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', entry.name)
+    setRowMenu(null)
+    setRoomMenu(null)
+  }
+
+  function handleDragEnd() {
+    setDragged(null)
+    setDragOver(null)
+  }
+
+  function handleDragOverFolder(e: React.DragEvent, folderName: string) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragged && dragged.name !== folderName) {
+      setDragOver(folderName)
+    }
+  }
+
+  function handleDragLeaveFolder() {
+    setDragOver(null)
+  }
+
+  async function handleDropOnFolder(e: React.DragEvent, targetFolder: FileEntry) {
+    e.preventDefault()
+    setDragOver(null)
+    if (!dragged || !projectId) return
+    if (targetFolder.type !== 'dir') return
+    if (dragged.name === targetFolder.name) return
+    if (dragged.type === 'dir' && targetFolder.name === dragged.name) return
+    const from = joinRel(dir, dragged.name)
+    const to = joinRel(dir, `${targetFolder.name}/${dragged.name}`)
+    // prevent dropping folder into itself (simple check)
+    if (from === to) return
+    try {
+      await api.renameFileEntry(projectId, from, to)
+      toast(`Moved ${dragged.name} → ${targetFolder.name}/`, 'success')
+      setSelected((prev) => (prev === from ? to : prev))
+      await refresh()
+    } catch (err: any) {
+      toast(err.message, 'error')
+    }
+    setDragged(null)
   }
 
   function triggerDownload() {
@@ -590,10 +654,18 @@ export function FilesPane({ projectId }: FilesPaneProps) {
                 )}
                 {filtered.map((entry) => {
                   const rel = joinRel(dir, entry.name)
+                  const isDragOver = dragOver === entry.name && entry.type === 'dir'
+                  const isDragged = dragged?.name === entry.name
                   return (
                     <div
                       key={entry.name}
-                      className={`fp-row${selected === rel ? ' active' : ''}${rowMenu?.entry.name === entry.name ? ' menu-open' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, entry)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={entry.type === 'dir' ? (e) => handleDragOverFolder(e, entry.name) : undefined}
+                      onDragLeave={entry.type === 'dir' ? handleDragLeaveFolder : undefined}
+                      onDrop={entry.type === 'dir' ? (e) => handleDropOnFolder(e, entry) : undefined}
+                      className={`fp-row${selected === rel ? ' active' : ''}${rowMenu?.entry.name === entry.name ? ' menu-open' : ''}${isDragOver ? ' drag-over' : ''}${isDragged ? ' dragging' : ''}`}
                       role="button"
                       onClick={() => {
                         if (entry.type === 'dir') {
@@ -603,6 +675,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
                           loadFileContent(rel)
                         }
                       }}
+                      style={isDragOver ? { background: 'var(--primary-bg)', borderColor: 'var(--primary-border)', outline: '1px dashed var(--primary)' } : isDragged ? { opacity: 0.45 } : undefined}
                     >
                       {entry.type === 'dir' ? <IconFolder size={15} style={{ color: '#dcad3c' }} /> : <FileIcon name={entry.name} size={15} />}
                       <span className="fp-name">{entry.name}</span>
