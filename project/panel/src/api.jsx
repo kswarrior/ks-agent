@@ -66,6 +66,7 @@ export function useWebSocket() {
   const [playerList, setPlayerList] = useState([])
 
   useEffect(() => {
+    const token = localStorage.getItem('token')
     if (!token) return
 
     const ws = new WS_BASE + `?token=${token}`
