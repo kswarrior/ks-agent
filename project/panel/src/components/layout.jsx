@@ -1,6 +1,6 @@
 import { Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
-import { toggleSidebar, logout } from '../types'
+import { toggleSidebar, logout } from '../types.js'
 import { Link } from 'react-router-dom'
 
 import { useEffect } from 'react'

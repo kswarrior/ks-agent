@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { addConsoleLog, clearConsole, setServerStatus } from '../store/types'
+import { addConsoleLog, clearConsole, setServerStatus } from '../types.js'
 import { apiFetch } from '../api'
 import { useWebSocket } from '../api'
 

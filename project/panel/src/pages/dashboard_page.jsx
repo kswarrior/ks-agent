@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { setServerStatus, setPlayers, setFiles, setLoadingFiles } from '../store/types'
+import { setServerStatus, setPlayers, setFiles, setLoadingFiles } from '../types.js'
 import { apiFetch } from '../api'
 import { useWebSocket } from '../api'
 

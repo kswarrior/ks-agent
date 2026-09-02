@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { loginStart, loginSuccess, loginFailure } from '../store/types'
+import { loginStart, loginSuccess, loginFailure } from '../types.js'
 import { useDispatch } from 'react-redux'
 import { login } from '../api'
 

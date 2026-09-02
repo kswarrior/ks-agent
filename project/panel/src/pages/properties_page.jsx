@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { setPropLoading, updateProperties } from '../store/types'
+import { setPropLoading, updateProperties } from '../types.js'
 import { apiFetch } from '../api'
 
 export function PropertiesPage() {
