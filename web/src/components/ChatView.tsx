@@ -410,6 +410,11 @@ export function ChatView(props: Props) {
 
   const { hasExplore, workingStep, workingIdx, totalSteps, doneSteps, isPlanDone, chatStage, chatStageLabel } = flowStatus
 
+  const showExecCard = (props.streaming && chatStage === 'executing' && totalSteps > 0) || (!props.streaming && !!workingStep)
+  const execStepNum = workingIdx >= 0 ? workingIdx + 1 : Math.min(doneSteps + 1, totalSteps || 1)
+  const execStepBadge = totalSteps > 0 ? `${execStepNum}/${totalSteps}` : `${execStepNum}`
+  const execTitle = workingStep?.title ?? ''
+
   const lastAssistantMsg = props.messages.length > 0 ? props.messages[props.messages.length - 1] : null
   const isInterrupted = !props.streaming && !!lastAssistantMsg && lastAssistantMsg.role === 'assistant' && (!!lastAssistantMsg.error || /\n\n_\[stopped\]_\s*$/.test(lastAssistantMsg.content) || /\n\n_\[stream interrupted:/.test(lastAssistantMsg.content) || /\n\n_\[truncated/.test(lastAssistantMsg.content))
 
@@ -465,27 +470,9 @@ export function ChatView(props: Props) {
             {props.streaming && (
               <div className="msg-assistant">
                 <div className="role-tag">KS Agent</div>
-                {chatStage !== 'idle' && chatStage !== 'done' ? (
-                  <div className="chat-status">
-                    <span>
-                      {chatStageLabel}
-                      {chatStage === 'executing' && totalSteps > 0 ? ` • Step [${workingIdx >= 0 ? workingIdx + 1 : Math.min(doneSteps + 1, totalSteps)}/${totalSteps}]` : ''}
-                      {chatStage === 'planning' && totalSteps > 0 ? ` • ${totalSteps} steps` : ''}
-                    </span>
-                    <span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span>
-                  </div>
-                ) : null}
                 {props.retryInfo && <RetryCard retryInfo={props.retryInfo} />}
                 {props.streamText ? <Markdown content={props.streamText} /> : null}
                 <span className="cursor-blink" />
-              </div>
-            )}
-            {!props.streaming && plan && workingStep && (
-              <div className="msg-assistant" style={{ border: 'none', background: 'transparent', padding: 0 }}>
-                <div className="chat-status" style={{ margin: '0' }}>
-                  <span>Executing • Step [{workingIdx + 1}/{totalSteps}] {workingStep.title}</span>
-                  <span className="dots"><span className="dot" /><span className="dot" /><span className="dot" /></span>
-                </div>
               </div>
             )}
             {props.questions.length > 0 && (
@@ -644,6 +631,15 @@ export function ChatView(props: Props) {
                 />
               )}
             </div>
+
+            {showExecCard && (
+              <div className="composer-exec-card" title={execTitle ? `Executing • Step [${execStepBadge}] ${execTitle}` : `Executing • Step [${execStepBadge}]`}>
+                <span className="exec-label">Executing</span>
+                <span className="exec-step-badge">[{execStepBadge}]</span>
+                {execTitle && <span className="exec-title">{execTitle}</span>}
+                <span className="dots" aria-hidden><span className="dot" /><span className="dot" /><span className="dot" /></span>
+              </div>
+            )}
 
             {props.streaming ? (
               <button className="send-btn stop-btn" onClick={props.onStop} aria-label="Stop" title="Stop">
