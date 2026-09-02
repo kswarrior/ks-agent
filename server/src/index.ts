@@ -281,7 +281,8 @@ function planResumeContext(plan: { title: string; steps: { title: string; status
   const lines = plan.steps.map((s, i) => `${i}. [${s.status}] ${s.title}`).join('\n')
   const done = plan.steps.filter((s) => s.status === 'done').length
   const total = plan.steps.length
-  return `RESUME NOTICE: A previous plan is still INCOMPLETE and must be continued.\nPlan title: "${plan.title}"\nSteps:\n${lines}\n\nStatus: ${done}/${total} done.\n\nINSTRUCTIONS:\n- Continue working on this existing plan. Do NOT discard it unless the user's new message explicitly asks for a different task or to change scope.\n- Treat the user's new message as additional context / instruction for the ongoing plan. If it requires modifying the plan, call create_plan again to replace it with an updated plan (this is allowed and will replace the old one).\n- If the new message is a clarification or continuation, proceed with the next pending step (call complete_plan_step after each step).\n- Do NOT start from scratch or re-create the same plan if it's already there; resume where you left off.\n- Use existing project context and previous messages as history; understand the new prompt in that context.`
+  const pending = plan.steps.map((s, i) => ({ s, i })).filter(({ s }) => s.status !== 'done').map(({ i, s }) => `${i}: ${s.title} [${s.status}]`).join('; ')
+  return `RESUME NOTICE: A previous plan is still INCOMPLETE and must be continued.\nPlan title: "${plan.title}"\nSteps:\n${lines}\n\nStatus: ${done}/${total} done. Pending: ${pending || 'none'}\n\nINSTRUCTIONS:\n- Continue working on this existing plan. Do NOT discard it unless the user's new message explicitly asks for a different task or to change scope.\n- Treat the user's new message as additional context / instruction for the ongoing plan. If it requires modifying the plan, call create_plan again to replace it with an updated plan (this is allowed and will replace the old one).\n- If the new message is a clarification or continuation, proceed with the next pending step (call complete_plan_step after each step).\n- Do NOT start from scratch or re-create the same plan if it's already there; resume where you left off.\n- Use existing project context and previous messages as history; understand the new prompt in that context.\n- CRITICAL — RECHECK & COMPLETE: If you previously said "done"/"complete" but did NOT call complete_plan_step for every step, you MUST now re-verify: quickly list_files/read_file or run checks for each pending step, confirm the work is truly done, then IMMEDIATELY call complete_plan_step for each finished step (one call per step index). Never claim completion again without calling the tool for every remaining step. If work remains, execute the next pending step fully (tools + edits) before claiming completion.`
 }
 
 // ---------------- Projects ----------------
@@ -1308,10 +1309,20 @@ app.post('/api/chats/:id/continue', async (c) => {
         ...skillMessages,
         ...cleanMessagesForHistory(chat.id)
       ]
-      const continueInstruction: LLMMessage = {
-        role: 'user',
-        content:
-          'Continue exactly where you left off. Do not repeat the content already generated — pick up mid-sentence/paragraph if needed and continue until the task is complete. Do not add any preamble like "Continuing...".'
+      const wasInterruptedPure2 = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
+      let continueInstruction: LLMMessage
+      if (!wasInterruptedPure2 && planIncompleteForPure2 && existingPlanForPure2) {
+        continueInstruction = {
+          role: 'user',
+          content:
+            'Your previous response finished but the plan is still incomplete — some steps were not marked done via complete_plan_step. RECHECK now: verify each pending step by reading files or running checks, then IMMEDIATELY call complete_plan_step for each step that is actually done (one call per index). If work remains, execute the next pending step fully (tools + edits) before claiming completion. Do not add preamble like "Continuing...".'
+        }
+      } else {
+        continueInstruction = {
+          role: 'user',
+          content:
+            'Continue exactly where you left off. Do not repeat the content already generated — pick up mid-sentence/paragraph if needed and continue until the task is complete. Do not add any preamble like "Continuing...".'
+        }
       }
       if (planIncompleteForPure2 && existingPlanForPure2) {
         const resume = planResumeContext(existingPlanForPure2)
