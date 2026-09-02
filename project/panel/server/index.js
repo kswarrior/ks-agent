@@ -4,6 +4,7 @@ import http from 'http'
 import { Server as SocketIOServer } from 'ws'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import cors from 'cors'
 import path from 'node:path'
 import fs from 'node:fs/promises'
 
