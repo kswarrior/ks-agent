@@ -2209,6 +2209,34 @@ textarea {
   background: var(--input);
 }
 
+.fp-gutter {
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  padding: 10px 6px;
+  text-align: right;
+  color: var(--text-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  user-select: none;
+  overflow: hidden;
+  min-width: 38px;
+  flex-shrink: 0;
+}
+
+.fp-gutter-line {
+  line-height: 1.55;
+  white-space: nowrap;
+}
+
+.fp-editor-inner {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+}
+
 .fp-highlight {
   position: absolute;
   inset: 0;
