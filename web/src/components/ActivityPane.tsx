@@ -469,52 +469,55 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                             <>
                               <div className="activity-detail-section">
                                 <strong>Old {isReplaceAll ? '(replace all)' : ''}{isAddition ? ' — empty (addition)' : ''}</strong>
-                                <pre
-                                  style={{
-                                    background: isAddition ? 'var(--surface-2)' : '#fef2f2',
-                                    border: `1px solid ${isAddition ? 'var(--border)' : '#fecaca'}`,
-                                    borderRadius: 6,
-                                    padding: '8px 10px',
-                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                                    fontSize: 11.5,
-                                    color: isAddition ? 'var(--text-faint)' : '#991b1b',
-                                    maxHeight: 180,
-                                    overflowY: 'auto',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word',
-                                    lineHeight: 1.5,
-                                  }}
-                                >
-                                  {oldStr || '(empty — new addition)'}
-                                </pre>
+                                {oldStr ? (
+                                  <CodeWithLineNumbers code={oldStr} startLine={1} variant={isAddition ? 'default' : 'old'} />
+                                ) : (
+                                  <div style={{ padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>(empty — new addition)</div>
+                                )}
                               </div>
                               <div className="activity-detail-section">
                                 <strong>New</strong>
-                                <pre
-                                  style={{
-                                    background: '#f0fdf4',
-                                    border: '1px solid #bbf7d0',
-                                    borderRadius: 6,
-                                    padding: '8px 10px',
-                                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                                    fontSize: 11.5,
-                                    color: '#166534',
-                                    maxHeight: 180,
-                                    overflowY: 'auto',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-word',
-                                    lineHeight: 1.5,
-                                  }}
-                                >
-                                  {newStr || '(empty)'}
-                                </pre>
+                                {newStr ? (
+                                  <CodeWithLineNumbers code={newStr} startLine={1} variant="new" />
+                                ) : (
+                                  <div style={{ padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>(empty)</div>
+                                )}
                               </div>
                             </>
                           )
                         })()}
                       </>
                     )}
-                    {resultDisplay && (
+                    {activity.toolType === 'write_file' && (() => {
+                      const content = String((activity.args as any)?.content ?? '')
+                      if (!content) return null
+                      return (
+                        <div className="activity-detail-section">
+                          <strong>Content</strong>
+                          <CodeWithLineNumbers code={content} startLine={1} variant="default" />
+                        </div>
+                      )
+                    })()}
+                    {activity.toolType === 'read_file' && (() => {
+                      const offset = Number((activity.args as any)?.offset ?? (activity.args as any)?.start ?? 1) || 1
+                      const raw = resultDisplay || ''
+                      const firstNL = raw.indexOf('\n')
+                      let content = firstNL >= 0 ? raw.slice(firstNL + 1) : ''
+                      // strip truncation footers
+                      const truncIdx = content.indexOf('\n\n…[')
+                      if (truncIdx >= 0) content = content.slice(0, truncIdx)
+                      const trunc2 = content.indexOf('\n\n…[slice')
+                      if (trunc2 >= 0) content = content.slice(0, trunc2)
+                      content = content.replace(/\n\n\[fallback: read from.*\]$/s, '').trimEnd()
+                      if (!content || /^(file not found|binary file|is a directory|file too large)/i.test(content.trim())) return null
+                      return (
+                        <div className="activity-detail-section">
+                          <strong>Content {offset !== 1 ? `(lines ${offset}–${offset + content.split('\n').length - 1})` : ''}</strong>
+                          <CodeWithLineNumbers code={content} startLine={offset} variant="default" />
+                        </div>
+                      )
+                    })()}
+                    {resultDisplay && activity.toolType !== 'edit_file' && activity.toolType !== 'write_file' && activity.toolType !== 'read_file' && (
                       <div className="activity-detail-section">
                         <strong>Output</strong>
                         {activity.toolType === 'run_shell' ? (
@@ -522,6 +525,12 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                         ) : (
                           <pre>{resultDisplay}</pre>
                         )}
+                      </div>
+                    )}
+                    {resultDisplay && (activity.toolType === 'edit_file' || activity.toolType === 'write_file') && (
+                      <div className="activity-detail-section">
+                        <strong>Result</strong>
+                        <pre style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px', fontFamily: 'ui-monospace, monospace', fontSize: 11.5, color: 'var(--text-dim)', maxHeight: 120, overflowY: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{resultDisplay}</pre>
                       </div>
                     )}
                   </div>
