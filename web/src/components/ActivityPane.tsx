@@ -521,22 +521,24 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                           const newStr = String((activity.args as any)?.new_string ?? (activity.args as any)?.newString ?? '')
                           const isReplaceAll = !!(activity.args as any)?.replace_all
                           const isAddition = !oldStr.trim()
+                          const filePath = String((activity.args as any)?.path ?? '')
+                          const lang = getLangFromPath(filePath)
                           return (
                             <>
                               <div className="activity-detail-section">
                                 <strong>Old {isReplaceAll ? '(replace all)' : ''}{isAddition ? ' — empty (addition)' : ''}</strong>
                                 {oldStr ? (
-                                  <CodeWithLineNumbers code={oldStr} startLine={1} variant={isAddition ? 'default' : 'old'} />
+                                  <CodeWithLineNumbers code={oldStr} startLine={1} variant={isAddition ? 'default' : 'old'} lang={lang} />
                                 ) : (
-                                  <div style={{ padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>(empty — new addition)</div>
+                                  <div style={{ padding: '6px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>(empty — new addition)</div>
                                 )}
                               </div>
                               <div className="activity-detail-section">
                                 <strong>New</strong>
                                 {newStr ? (
-                                  <CodeWithLineNumbers code={newStr} startLine={1} variant="new" />
+                                  <CodeWithLineNumbers code={newStr} startLine={1} variant="new" lang={lang} />
                                 ) : (
-                                  <div style={{ padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>(empty)</div>
+                                  <div style={{ padding: '6px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>(empty)</div>
                                 )}
                               </div>
                             </>
@@ -547,10 +549,12 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                     {activity.toolType === 'write_file' && (() => {
                       const content = String((activity.args as any)?.content ?? '')
                       if (!content) return null
+                      const filePath = String((activity.args as any)?.path ?? '')
+                      const lang = getLangFromPath(filePath)
                       return (
                         <div className="activity-detail-section">
                           <strong>Content</strong>
-                          <CodeWithLineNumbers code={content} startLine={1} variant="default" />
+                          <CodeWithLineNumbers code={content} startLine={1} variant="default" lang={lang} />
                         </div>
                       )
                     })()}
@@ -566,10 +570,12 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                       if (trunc2 >= 0) content = content.slice(0, trunc2)
                       content = content.replace(/\n\n\[fallback: read from.*\]$/s, '').trimEnd()
                       if (!content || /^(file not found|binary file|is a directory|file too large)/i.test(content.trim())) return null
+                      const filePath = String((activity.args as any)?.path ?? '')
+                      const lang = getLangFromPath(filePath)
                       return (
                         <div className="activity-detail-section">
                           <strong>Content {offset !== 1 ? `(lines ${offset}–${offset + content.split('\n').length - 1})` : ''}</strong>
-                          <CodeWithLineNumbers code={content} startLine={offset} variant="default" />
+                          <CodeWithLineNumbers code={content} startLine={offset} variant="default" lang={lang} />
                         </div>
                       )
                     })()}

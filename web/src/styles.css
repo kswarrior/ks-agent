@@ -3094,7 +3094,7 @@ textarea {
 }
 
 .activity-detail {
-  padding: 8px 8px 10px;
+  padding: 8px 8px 6px;
   background: var(--input);
   border: 1px solid var(--border);
   border-top: none;
@@ -3141,7 +3141,11 @@ textarea {
 }
 
 .activity-detail-section {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+.activity-detail-section:last-child {
+  margin-bottom: 0;
 }
 
 .activity-detail-section strong {
