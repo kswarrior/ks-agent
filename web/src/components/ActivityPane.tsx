@@ -155,6 +155,7 @@ function getLangFromPath(p: string): string {
   if (['css','scss','less'].includes(ext)) return 'css'
   if (['json'].includes(ext)) return 'json'
   if (['html','htm'].includes(ext)) return 'html'
+  if (['md','mdx','markdown'].includes(ext)) return 'markdown'
   return 'typescript'
 }
 
