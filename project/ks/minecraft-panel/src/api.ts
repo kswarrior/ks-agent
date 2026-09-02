@@ -1,4 +1,4 @@
-import { ServerInfo, Player, ConsoleLog, FileNode, BackupInfo } from './types';
+import type { ServerInfo, Player, ConsoleLog, FileNode, BackupInfo } from './types';
 
 const API_BASE = '/api';
 

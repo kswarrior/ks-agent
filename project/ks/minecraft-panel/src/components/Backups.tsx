@@ -1,4 +1,4 @@
-import { BackupInfo } from '../types';
+import type { BackupInfo } from '../types';
 
 interface BackupsProps {
   backups?: BackupInfo[];
