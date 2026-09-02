@@ -1432,10 +1432,21 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       const occurrences = content.split(oldStr).length - 1
       if (occurrences === 0) return err('old_string not found in file')
       if (occurrences > 1 && !replaceAll) return err(`old_string occurs ${occurrences} times — provide more surrounding context or set replace_all:true to replace all occurrences`)
+      const firstIdx = content.indexOf(oldStr)
+      const editStartLine = firstIdx >= 0 ? content.slice(0, firstIdx).split('\n').length : 1
       const newContent = replaceAll ? content.split(oldStr).join(newStr) : content.replace(oldStr, newStr)
       if (Buffer.byteLength(newContent, 'utf8') > WRITE_MAX_BYTES) return err(`resulting content exceeds ${WRITE_MAX_BYTES / 1024} KB limit (2 MB)`)
       fs.writeFileSync(abs, newContent, 'utf8')
-      return ok(`OK edited ${args.path}${replaceAll ? ` (${occurrences} occurrences replaced)` : ''}`, `edited ${args.path}${replaceAll ? ` x${occurrences}` : ''}`)
+      // Persist actual line number for activity display (so client can show real file line numbers, not just 1)
+      try {
+        const act = getDb().activities.find((a) => a.toolCallId === ctx.toolCallId && a.chatId === ctx.chatId)
+        if (act && typeof act.args === 'object' && act.args !== null) {
+          ;(act.args as any).editStartLine = editStartLine
+          if (replaceAll) (act.args as any).editOccurrences = occurrences
+          saveDb()
+        }
+      } catch {}
+      return ok(`OK edited ${args.path} at line ${editStartLine}${replaceAll ? ` (${occurrences} occurrences replaced)` : ''}`, `edited ${args.path} @${editStartLine}${replaceAll ? ` x${occurrences}` : ''}`)
     }
 
     case 'get_file_info': {
