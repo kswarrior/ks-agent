@@ -520,6 +520,34 @@ app.get('/api/chats/:id/preview', (c) => {
   return c.json(findPreviewForChat(chat.id) ?? null)
 })
 
+app.put('/api/chats/:id/preview', async (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const rawPort = body?.port
+  const port = typeof rawPort === 'string' ? Number(rawPort) : Number(rawPort)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return c.json({ error: 'port must be an integer 1-65535' }, 400)
+  const db = getDb()
+  // Replace any existing preview for this chat — one active preview per chat like plan (same as open_preview tool)
+  db.previews = (db.previews || []).filter((p) => p.chatId !== chat.id)
+  const now = new Date().toISOString()
+  const preview: Preview = { id: newId(), chatId: chat.id, port, createdAt: now, updatedAt: now }
+  db.previews.push(preview)
+  saveDb()
+  return c.json(preview)
+})
+
+app.delete('/api/chats/:id/preview', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  const db = getDb()
+  const before = (db.previews || []).length
+  db.previews = (db.previews || []).filter((p) => p.chatId !== chat.id)
+  if (db.previews.length !== before) saveDb()
+  return c.json({ ok: true })
+})
+
 // ---------------- Activities ----------------
 
 app.get('/api/chats/:id/activities', (c) => {

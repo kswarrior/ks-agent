@@ -203,6 +203,8 @@ export const getSkillStatus = (chatId: string) => req<{ hasAnyRead: boolean; sta
 
 // Previews (per chat, like plan)
 export const getChatPreview = (chatId: string) => req<Preview | null>(`/api/chats/${chatId}/preview`)
+export const setChatPreview = (chatId: string, port: number) => req<Preview>(`/api/chats/${chatId}/preview`, json('PUT', { port }))
+export const deleteChatPreview = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/preview`, { method: 'DELETE' })
 export const chatPreviewProxyUrl = (chatId: string, subPath = '') =>
   `/api/chats/${chatId}/preview/proxy/${subPath.replace(/^\//, '')}`
 
