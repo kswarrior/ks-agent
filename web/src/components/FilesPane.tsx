@@ -544,6 +544,25 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     setHistoryIndex(nextIdx)
     setEditContent(nextContent)
   }
+
+  const fileList = useMemo(() => entries.filter((e) => e.type === 'file').map((e) => joinRel(dir, e.name)), [entries, dir])
+  const selectedIndex = selected ? fileList.indexOf(selected) : -1
+  const hasPrev = selectedIndex > 0
+  const hasNext = selectedIndex >= 0 && selectedIndex < fileList.length - 1
+
+  function goPrevFile() {
+    if (!hasPrev) return
+    const prev = fileList[selectedIndex - 1]
+    if (!prev) return
+    setSelected(prev)
+    loadFileContent(prev)
+  }
+
+  function goNextFile() {
+    if (!hasNext) return
+    const next = fileList[selectedIndex + 1]
+    if (!next) return
+    setSelected(next)
     loadFileContent(next)
   }
 
