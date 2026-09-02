@@ -1970,6 +1970,16 @@ textarea {
   color: var(--text);
 }
 
+.fp-row.drag-over {
+  background: var(--primary-bg);
+  border: 1px dashed var(--primary) !important;
+  color: var(--text);
+}
+
+.fp-row.dragging {
+  opacity: 0.45;
+}
+
 .fp-name {
   flex: 1;
   white-space: nowrap;
