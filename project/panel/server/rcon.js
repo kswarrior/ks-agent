@@ -1,11 +1,11 @@
-import Rcon from 'node-rcon'
+import { Rcon } from 'rcon'
 import { config } from './config.js'
 
 let rcon = null
 let connecting = null
 
 function isOpen() {
-  return rcon && rcon.socket && !rcon.socket.destroyed
+  return rcon && rcon.connected
 }
 
 export function connectRcon() {
@@ -15,25 +15,22 @@ export function connectRcon() {
     if (!config.mc.rcon.password) {
       return reject(new Error('RCON_PASSWORD is not configured'))
     }
-    const client = new Rcon(config.mc.rcon.port, config.mc.rcon.password, { host: config.mc.rcon.host })
+    const client = new Rcon(config.mc.rcon.host, config.mc.rcon.port, config.mc.rcon.password)
     rcon = client
-    connecting = new Promise((res, rej) => {
-      const onReady = () => { connecting = null; cleanup(); res(true) }
-      const onErr = (err) => { connecting = null; cleanup(); rej(err) }
-      function cleanup() {
-        client.off('auth', onReady)
-        client.off('error', onErr)
-      }
-      client.once('auth', onReady)
-      client.once('error', onErr)
-      try { client.connect() } catch (e) { connecting = null; rej(e) }
-    })
-    client.on('error', (err) => {
-      // surface to caller only; reconnect on next send
+    connecting = client.connect()
+      .then(() => {
+        connecting = null
+        resolve(true)
+      })
+      .catch((e) => {
+        connecting = null
+        rcon = null
+        reject(e)
+      })
+    client.on('error', () => {
       rcon = null
     })
-    client.on('end', () => { rcon = null })
-    return connecting.then(resolve, reject)
+    return connecting
   })
 }
 
@@ -42,19 +39,20 @@ export function sendCommand(cmd) {
     if (!isOpen()) {
       return reject(new Error('RCON not connected'))
     }
-    rcon.send(cmd, (resp) => {
-      // node-rcon returns undefined on errors
-      if (resp === undefined || resp === null) {
-        return reject(new Error('No RCON response'))
-      }
-      resolve(resp)
-    })
+    const response = rcon.send(cmd)
+    if (response === undefined || response === null) {
+      return reject(new Error('No RCON response'))
+    }
+    resolve(response)
   })
 }
 
 export async function sendSafe(cmd) {
   try {
     await connectRcon()
+    if (!isOpen()) {
+      throw new Error('RCON connection failed')
+    }
     return await sendCommand(cmd)
   } catch (e) {
     throw e
