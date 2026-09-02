@@ -7,7 +7,7 @@ Use with `frontend/skill.md` (common). This file covers **React 18** for **user 
 - React 18 + Vite 5 (or Next.js if SSR needed), plain CSS with tokens in `src/styles.css`
 - Entry `index.html` → `src/main.tsx` → `src/App.tsx` (or `src/pages/` for Next)
 - Keep components in `src/components/`, hooks in `src/hooks/`, types in `src/types.ts` if needed
-- Never import from `web/src`, `server/`, or internal platform code — user site is fully standalone
+- Never import from outside the project — user site is fully standalone with its own `src/`
 
 ## Patterns — For User Sites
 
@@ -46,10 +46,10 @@ Use with `frontend/skill.md` (common). This file covers **React 18** for **user 
 ## Checklist
 
 - [ ] Inspected user's `src/` and `package.json` before changing
-- [ ] No imports from internal platform code; site is standalone (`npm install && npm run dev` works alone)
+- [ ] No imports from outside the project; site is standalone (`npm install && npm run dev` works alone)
 - [ ] No `window.confirm|alert|prompt` in site code
 - [ ] One primary (blue) per view; focus ring visible; responsive on 375px/768px/1200px
-- [ ] No mention of `ks-agent`, `internal platform code`, `web/src`, `server/` in code or UI
+- [ ] No internal strings/paths in code or UI — fully standalone
 - [ ] `npm run build` passes
 
 ## Preview

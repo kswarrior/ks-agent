@@ -16,7 +16,7 @@ Use with `frontend/skill.md` (common). This file covers **TypeScript** for **use
    - Update fetch call in `src/api.ts` or `src/lib/api.ts`
    - Verify with `npm run build` + manual test
 3. **Nullability** — Handle `null`/`undefined` explicitly with `??`/`?.`; provide defaults for optional fields so UI doesn't crash on missing data.
-4. **Imports** — Use `import type { ... }` for types, keep `esModuleInterop` happy. No imports from internal platform code (`web/src`, `server/` forbidden).
+4. **Imports** — Use `import type { ... }` for types, keep `esModuleInterop` happy. No imports from outside the project.
 
 ## Common Types — Example for User Sites
 
@@ -31,5 +31,5 @@ export interface Product { id: string; title: string; price: number; image: stri
 - [ ] `npm run build` passes with `strict true`
 - [ ] No `any`, no `// @ts-ignore`
 - [ ] Types in `src/types.ts` match actual API JSON (names/casing/nullability)
-- [ ] No internal platform code imports or paths
-- [ ] Site remains standalone — no `web/src` or `ks-agent` references
+- [ ] No imports from outside the project
+- [ ] Site remains fully standalone
