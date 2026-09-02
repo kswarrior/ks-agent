@@ -1,26 +1,35 @@
 # TypeScript Skill — Frontend/TS
 
-Use with `frontend/skill.md` (common). This file covers **TypeScript** strictness and contract sync for KS Agent.
+Use with `frontend/skill.md` (common). This file covers **TypeScript** for **user websites**.
 
-## Config
-- `tsconfig.json` (web): `target ES2022`, `jsx react-jsx`, `strict true`, `noEmit true`, `moduleResolution Bundler`
-- `server/tsconfig.json`: `target ES2022`, `strict true`, `outDir ../dist-server`, `rootDir src`
-- Typecheck: `npm run typecheck` runs `tsc --noEmit` (web) + `tsc -p server/tsconfig.json --noEmit`
+## Config — For User Sites
 
-## Rules
-1. **Strict** — No `any` without justification; prefer `unknown` + narrow. Keep `strict` on. Fix all `tsc` errors, never `// @ts-ignore` outside persisted `db.json` compat (`server/src/store.ts`).
-2. **Contracts** — Types duplicated between `web/src/types.ts` and server responses must stay in sync. For any API change:
-   - Update `server/src/index.ts` response shape
-   - Update `web/src/types.ts` interface
-   - Update `web/src/api.ts` `req<T>` call
-   - Verify via `curl` + `V3` in loop.md (names/casing/nullability/types/status codes)
-3. **Nullability** — Persisted `db.json`/`storage/ksagent.db` fields are backward-compat: `missing field ≠ crash`. Use `??`/`?.` and handle `undefined`/`null` explicitly.
-4. **Imports** — Use `type` imports for types (`import type { ... }`), keep `esModuleInterop` and `isolatedModules` happy.
+- `tsconfig.json`: `target ES2022`, `jsx react-jsx`, `strict true`, `moduleResolution Bundler`, `esModuleInterop true`
+- `vite.config.ts`: `plugin-react`, `server.port` 5173 (or 3000)
+- Typecheck: `npm run build` (which runs `tsc && vite build`) must be green
 
-## Common Types
-- `Project {id,name,path,createdAt}`, `Chat {id,projectId,title,seq,createdAt,updatedAt}`, `Message`, `Skill {id,name,note,mainFile,files,projectId}`, `MCPServer`, `LSPServer`, `Plugin`
+## Rules — For User Sites
+
+1. **Strict** — Keep `strict true`. No `any` without justification; prefer `unknown` + narrowing or explicit interfaces. Fix all `tsc` errors, never `// @ts-ignore`.
+2. **Contracts** — If the site has a backend, keep frontend types in `src/types.ts` in sync with API responses. For any API change:
+   - Update `src/types.ts` interface
+   - Update fetch call in `src/api.ts` or `src/lib/api.ts`
+   - Verify with `npm run build` + manual test
+3. **Nullability** — Handle `null`/`undefined` explicitly with `??`/`?.`; provide defaults for optional fields so UI doesn't crash on missing data.
+4. **Imports** — Use `import type { ... }` for types, keep `esModuleInterop` happy. No imports from internal platform code (`web/src`, `server/` forbidden).
+
+## Common Types — Example for User Sites
+
+```ts
+// src/types.ts
+export interface User { id: string; name: string; email: string }
+export interface Product { id: string; title: string; price: number; image: string }
+```
 
 ## Checklist
-- [ ] Ran `npm run typecheck` — must be green (both tsconfigs)
-- [ ] Checked `web/src/types.ts` vs actual server JSON (curl) for any changed field
-- [ ] Handled `null`/`undefined` for legacy `db.json` rows
+
+- [ ] `npm run build` passes with `strict true`
+- [ ] No `any`, no `// @ts-ignore`
+- [ ] Types in `src/types.ts` match actual API JSON (names/casing/nullability)
+- [ ] No internal platform code imports or paths
+- [ ] Site remains standalone — no `web/src` or `ks-agent` references
