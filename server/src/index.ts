@@ -2982,7 +2982,9 @@ app.patch('/api/projects/:id/files', async (c) => {
   const toRaw = String(body.to ?? '').trim()
   const fromParts = from.split('/').filter(Boolean)
   if (fromParts.length === 0 || !fromParts.every(validSegment)) {
-    return c.json({ error: 'Invalid source path' }, 400)
+    const invalidSeg = fromParts.find(p => !validSegment(p)) ?? from
+    console.error(`[rename] Invalid source path: from="${from}" fromParts=${JSON.stringify(fromParts)} invalidSeg="${invalidSeg}"`)
+    return c.json({ error: `Invalid source path "${from}" — segment "${invalidSeg}" is invalid` }, 400)
   }
   if (!toRaw) return c.json({ error: 'Invalid new name' }, 400)
   // Allow `to` to be either a single name (rename in same dir) or a path like `public/background.webp` (move)
