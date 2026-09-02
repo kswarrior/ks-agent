@@ -133,27 +133,83 @@ function formatTime(ts: string): string {
   }
 }
 
-function CodeWithLineNumbers({ code, startLine = 1, variant = 'default' }: { code: string; startLine?: number; variant?: 'default' | 'old' | 'new' }) {
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+const HL_KEYWORDS: Record<string, string[]> = {
+  javascript: ['break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','false','finally','for','function','if','import','in','instanceof','let','new','null','return','super','switch','this','throw','true','try','typeof','var','void','while','with','yield','await','async','static','get','set','of','from','as'],
+  typescript: ['break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','false','finally','for','function','if','import','in','instanceof','let','new','null','return','super','switch','this','throw','true','try','typeof','var','void','while','with','yield','await','async','static','get','set','of','from','as','implements','interface','package','private','protected','public','enum','type','namespace','module','declare','abstract','readonly','keyof','infer','unknown','any','never','string','number','boolean'],
+  python: ['and','as','assert','break','class','continue','def','del','elif','else','except','False','finally','for','from','global','if','import','in','is','lambda','None','nonlocal','not','or','pass','raise','return','True','try','while','with','yield','async','await'],
+  tsx: ['break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','false','finally','for','function','if','import','in','instanceof','let','new','null','return','super','switch','this','throw','true','try','typeof','var','void','while','with','yield','await','async','static','get','set','of','from','as'],
+  jsx: ['break','case','catch','class','const','continue','debugger','default','delete','do','else','export','extends','false','finally','for','function','if','import','in','instanceof','let','new','null','return','super','switch','this','throw','true','try','typeof','var','void','while','with','yield','await','async','static','get','set','of','from','as'],
+}
+
+function getLangFromPath(p: string): string {
+  const ext = p.split('.').pop()?.toLowerCase() ?? ''
+  if (['ts','mts','cts'].includes(ext)) return 'typescript'
+  if (['tsx'].includes(ext)) return 'tsx'
+  if (['js','mjs','cjs'].includes(ext)) return 'javascript'
+  if (['jsx'].includes(ext)) return 'jsx'
+  if (['py'].includes(ext)) return 'python'
+  if (['css','scss','less'].includes(ext)) return 'css'
+  if (['json'].includes(ext)) return 'json'
+  if (['html','htm'].includes(ext)) return 'html'
+  return 'typescript'
+}
+
+function highlightLine(line: string, lang: string): string {
+  if (!line) return ''
+  const placeholders: string[] = []
+  const store = (s: string, cls: string) => {
+    const token = `__HL_${placeholders.length}__`
+    placeholders.push(`<span class="${cls}">${escapeHtml(s)}</span>`)
+    return token
+  }
+  let w = line
+  // strings
+  w = w.replace(/`(?:\\.|[^`\\])*`/g, m => store(m, 'hl-string'))
+  w = w.replace(/"(?:\\.|[^"\\])*"/g, m => store(m, 'hl-string'))
+  w = w.replace(/'(?:\\.|[^'\\])*'/g, m => store(m, 'hl-string'))
+  w = w.replace(/\/\/.*$/g, m => store(m, 'hl-comment'))
+  w = w.replace(/\/\*.*\*\//g, m => store(m, 'hl-comment'))
+  w = w.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const kws = HL_KEYWORDS[lang]
+  if (kws && kws.length) {
+    const pat = new RegExp(`\\b(${kws.join('|')})\\b`, 'g')
+    w = w.replace(pat, '<span class="hl-keyword">$1</span>')
+  }
+  w = w.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="hl-number">$1</span>')
+  placeholders.forEach((html, i) => {
+    const token = `__HL_${i}__`
+    w = w.split(token).join(html)
+  })
+  return w
+}
+
+function CodeWithLineNumbers({ code, startLine = 1, variant = 'default', lang = 'typescript' }: { code: string; startLine?: number; variant?: 'default' | 'old' | 'new'; lang?: string }) {
   const lines = code.split('\n')
-  // cap display to avoid huge DOM for very large files (show first 400 lines with note)
-  const maxShow = 400
+  const maxShow = 300
   const displayLines = lines.length > maxShow ? lines.slice(0, maxShow) : lines
   const truncated = lines.length > maxShow
   const bg = variant === 'old' ? '#fef2f2' : variant === 'new' ? '#f0fdf4' : 'var(--input)'
   const border = variant === 'old' ? '#fecaca' : variant === 'new' ? '#bbf7d0' : 'var(--border)'
-  const textColor = variant === 'old' ? '#991b1b' : variant === 'new' ? '#166534' : 'var(--text)'
+  const gutterBg = variant === 'default' ? 'var(--surface-2)' : variant === 'old' ? '#fee2e2' : '#dcfce7'
+  const gutterColor = variant === 'default' ? 'var(--text-faint)' : variant === 'old' ? '#b91c1c' : '#15803d'
   return (
-    <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 6, overflow: 'hidden', background: bg, maxHeight: 320, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: 1.5 }}>
-      <div style={{ background: variant === 'default' ? 'var(--surface-2)' : variant === 'old' ? '#fee2e2' : '#dcfce7', borderRight: `1px solid ${border}`, padding: '8px 6px', textAlign: 'right', color: variant === 'default' ? 'var(--text-faint)' : variant === 'old' ? '#b91c1c' : '#15803d', userSelect: 'none', fontSize: 11, lineHeight: 1.5, minWidth: 36, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', background: bg, maxHeight: 260, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: 1.5 }}>
+      <div style={{ background: gutterBg, borderRight: `1px solid ${border}`, padding: '6px 6px', textAlign: 'right', color: gutterColor, userSelect: 'none', fontSize: 11, lineHeight: 1.5, minWidth: 36, flexShrink: 0, position: 'sticky', left: 0 }}>
         {displayLines.map((_, i) => (
           <div key={i} style={{ lineHeight: 1.5, whiteSpace: 'nowrap' }}>{startLine + i}</div>
         ))}
-        {truncated && <div style={{ color: 'var(--text-faint)', fontStyle: 'italic' }}>…</div>}
+        {truncated && <div style={{ color: gutterColor, fontStyle: 'italic' }}>…</div>}
       </div>
-      <pre style={{ flex: 1, margin: 0, padding: '8px 10px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5, color: textColor, background: 'transparent' }}>
-        {displayLines.join('\n')}
-        {truncated ? `\n\n…[${lines.length - maxShow} more lines not shown]` : ''}
-      </pre>
+      <div style={{ flex: 1, minWidth: 0, padding: '6px 10px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5, overflow: 'visible' }}>
+        {displayLines.map((line, i) => (
+          <div key={i} style={{ lineHeight: 1.5, minHeight: '1.5em' }} dangerouslySetInnerHTML={{ __html: line ? highlightLine(line, lang) : '<br>' }} />
+        ))}
+        {truncated && <div style={{ color: 'var(--text-faint)', fontStyle: 'italic', marginTop: 6 }}>…[{lines.length - maxShow} more lines not shown]</div>}
+      </div>
     </div>
   )
 }
