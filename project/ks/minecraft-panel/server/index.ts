@@ -242,8 +242,8 @@ app.get('/api/files/download/:filePath', (c) => {
 // Export for Vercel/Node.js
 export default app;
 
-// Start server if run directly
-if (import.meta.main) {
+// Start server if run directly (works with tsx and node --loader ts-node/esm)
+if (process.argv[1] && process.argv[1].endsWith('index.ts')) {
   serve(app, () => {
     console.log('🎮 Minecraft Panel server running on http://localhost:5174');
   });
