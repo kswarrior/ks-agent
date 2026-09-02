@@ -2169,6 +2169,12 @@ function validateMCPBody(body: any, isPatch = false): { error?: string; value?: 
   return { value: out }
 }
 
+app.get('/api/settings/mcp/status/all', (c) => {
+  syncMCPStatesFromDb()
+  const states = getAllMCPStates().map((st) => mcpPublic(st.server))
+  return c.json(states)
+})
+
 app.get('/api/settings/mcp', (c) => {
   syncMCPStatesFromDb()
   const servers = getMcpServers().map(mcpPublic)
@@ -2310,12 +2316,6 @@ app.post('/api/settings/mcp/:id/refresh', async (c) => {
   const res = await refreshMCPServer(srv.id)
   if (!res.ok) return c.json({ error: res.error ?? 'Refresh failed' }, 502)
   return c.json({ ok: true, tools: res.tools })
-})
-
-app.get('/api/settings/mcp/status/all', (c) => {
-  syncMCPStatesFromDb()
-  const states = getAllMCPStates().map((st) => mcpPublic(st.server))
-  return c.json(states)
 })
 
 // ---------------- LSP Servers ----------------
@@ -2484,6 +2484,12 @@ function validateLspBody(body: any, isPatch = false): { error?: string; value?: 
   return { value: out }
 }
 
+app.get('/api/settings/lsp/status/all', (c) => {
+  syncLspStatesFromDb()
+  const states = getAllLspStates().map((st) => lspPublic(st.server))
+  return c.json(states)
+})
+
 app.get('/api/settings/lsp', (c) => {
   syncLspStatesFromDb()
   const servers = getLspServers().map(lspPublic)
@@ -2620,12 +2626,6 @@ app.get('/api/settings/lsp/:id/capabilities', async (c) => {
     return c.json({ capabilities: res.capabilities ?? null })
   }
   return c.json({ capabilities: state.capabilities })
-})
-
-app.get('/api/settings/lsp/status/all', (c) => {
-  syncLspStatesFromDb()
-  const states = getAllLspStates().map((st) => lspPublic(st.server))
-  return c.json(states)
 })
 
 // ---------------- Plugins ----------------
