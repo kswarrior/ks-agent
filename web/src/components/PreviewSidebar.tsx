@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { IconX, IconRefreshCw, IconExternalLink, IconMonitor, IconPlay, IconMaximize, IconMinimize } from '../icons'
+import { IconX, IconRefreshCw, IconExternalLink, IconMonitor, IconPlay, IconMaximize, IconMinimize, IconGear, IconTrash } from '../icons'
 import { useToast } from '../toast'
 import * as api from '../api'
 
@@ -11,9 +11,10 @@ interface PreviewSidebarProps {
   activeProject: { id: string; path: string } | null
   activeChatId?: string | null
   chatPreview?: Preview | null
+  onPreviewUpdate?: (preview: Preview | null) => void
 }
 
-export function PreviewSidebar({ open, onClose, activeProject, activeChatId = null, chatPreview = null }: PreviewSidebarProps) {
+export function PreviewSidebar({ open, onClose, activeProject, activeChatId = null, chatPreview = null, onPreviewUpdate }: PreviewSidebarProps) {
   const toast = useToast()
   const [url, setUrl] = useState<string>('')
   const [directUrl, setDirectUrl] = useState<string>('')
@@ -21,6 +22,10 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState<boolean | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showPortSettings, setShowPortSettings] = useState(false)
+  const [portInput, setPortInput] = useState('')
+  const [portError, setPortError] = useState<string | null>(null)
+  const [savingPort, setSavingPort] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeKey, setIframeKey] = useState(0)
   const prevProjectIdRef = useRef<string | null>(null)
@@ -202,6 +207,82 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
     }
   }, [chatPreview, activeChatId, open, applyChatPreview])
 
+  // Sync port input with current chat preview
+  useEffect(() => {
+    if (chatPreview) setPortInput(String(chatPreview.port))
+    else if (!showPortSettings) setPortInput('')
+  }, [chatPreview?.port]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSavePort = async () => {
+    const raw = portInput.trim()
+    const portNum = Number(raw)
+    if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+      setPortError('Port must be an integer 1-65535')
+      return
+    }
+    setPortError(null)
+    // If activeChatId exists, persist per chat like AI (open_preview) via API
+    if (activeChatId) {
+      setSavingPort(true)
+      try {
+        const preview = await api.setChatPreview(activeChatId, portNum)
+        onPreviewUpdate?.(preview)
+        const hostname = window.location.hostname || 'localhost'
+        const proto = window.location.protocol === 'https:' ? 'https:' : 'http:'
+        const proxied = api.chatPreviewProxyUrl(activeChatId)
+        const direct = `${proto}//${hostname}:${portNum}`
+        setUrl(proxied)
+        setDirectUrl(direct)
+        setRunning(true)
+        setError(null)
+        setIframeKey((k) => k + 1)
+        setShowPortSettings(false)
+        toast(`Preview port set to :${portNum}`, 'success')
+      } catch (e: any) {
+        setPortError(e?.message || 'Failed to set port')
+      } finally {
+        setSavingPort(false)
+      }
+      return
+    }
+    // No active chat: manual port without persistence — load direct URL (project or standalone)
+    if (!portNum) return
+    const hostname = window.location.hostname || 'localhost'
+    const proto = window.location.protocol === 'https:' ? 'https:' : 'http:'
+    const direct = `${proto}//${hostname}:${portNum}`
+    setUrl(direct)
+    setDirectUrl(direct)
+    setRunning(null)
+    setError(null)
+    setIframeKey((k) => k + 1)
+    setShowPortSettings(false)
+    toast(`Preview set to :${portNum}`, 'success')
+  }
+
+  const handleClearPort = async () => {
+    if (!activeChatId || !chatPreview) return
+    setSavingPort(true)
+    try {
+      await api.deleteChatPreview(activeChatId)
+      onPreviewUpdate?.(null)
+      setPortInput('')
+      setShowPortSettings(false)
+      // fallback to project preview or empty
+      if (activeProject) {
+        loadPreview()
+      } else {
+        setUrl(getDefaultDirectUrl())
+        setDirectUrl(getDefaultDirectUrl())
+        setRunning(false)
+      }
+      toast('Preview port cleared', 'success')
+    } catch (e: any) {
+      setPortError(e?.message || 'Failed to clear port')
+    } finally {
+      setSavingPort(false)
+    }
+  }
+
   const handleReload = () => {
     if (chatPreview && activeChatId) {
       applyChatPreview()
@@ -291,6 +372,9 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
             {chatPreview && activeChatId ? <span style={{ fontWeight: 400, color: 'var(--text-faint)', marginLeft: 6, fontSize: 11 }}>chat</span> : null}
           </div>
           <div className="psb-actions">
+            <button className="icon-btn" aria-label="Preview settings" onClick={() => setShowPortSettings((v) => !v)} title={showPortSettings ? 'Close port settings' : 'Preview settings — set port manually (like AI open_preview)'} style={{ color: showPortSettings ? 'var(--primary)' : undefined, background: showPortSettings ? 'var(--primary-bg)' : undefined, borderColor: showPortSettings ? 'var(--primary-border)' : undefined }}>
+              <IconGear size={16} />
+            </button>
             <button className="icon-btn" aria-label="Fullscreen" onClick={() => setIsFullscreen((v) => !v)} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (100% width)'}>
               {isFullscreen ? <IconMinimize size={16} /> : <IconMaximize size={16} />}
             </button>
@@ -305,6 +389,84 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
             </button>
           </div>
         </div>
+        {showPortSettings && (
+          <div style={{ padding: '12px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <IconGear size={13} /> Manual Port
+              </span>
+              <button className="icon-btn" aria-label="Close port settings" onClick={() => setShowPortSettings(false)} style={{ width: 28, height: 28 }}>
+                <IconX size={14} />
+              </button>
+            </div>
+            {!activeChatId && (
+              <p className="hint" style={{ margin: 0, lineHeight: 1.5 }}>
+                No active chat. Port will load directly in preview without saving per chat. For persistent per-chat preview like AI, open a chat first.
+              </p>
+            )}
+            {activeChatId && (
+              <p className="hint" style={{ margin: 0, lineHeight: 1.5 }}>
+                Same as AI <code>open_preview</code> — sets preview port for this chat (saved per chat like plan). Range 1-65535.
+              </p>
+            )}
+            <div>
+              <label className="field-label" style={{ marginTop: 0, marginBottom: 6 }}>Port number</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="numeric"
+                  placeholder={chatPreview ? String(chatPreview.port) : 'e.g. 3000, 5173, 8080'}
+                  value={portInput}
+                  onChange={(e) => { setPortInput(e.target.value); setPortError(null) }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSavePort() }}
+                  style={{ flex: 1 }}
+                  min={1}
+                  max={65535}
+                />
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSavePort}
+                  disabled={savingPort || !portInput.trim()}
+                  style={{ whiteSpace: 'nowrap', padding: '8px 14px' }}
+                >
+                  {savingPort ? 'Saving…' : chatPreview ? 'Update' : 'Set Port'}
+                </button>
+              </div>
+              {portError && <p className="field-error" style={{ marginTop: 6 }}>{portError}</p>}
+              {chatPreview && activeChatId && (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                    Current: <code style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '1px 5px', borderRadius: 4 }}>: {chatPreview.port}</code> {activeChatId ? '(chat)' : ''}
+                  </span>
+                  <button
+                    className="btn"
+                    style={{ padding: '4px 8px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--danger)', borderColor: 'var(--danger-border)' }}
+                    onClick={handleClearPort}
+                    disabled={savingPort}
+                    title="Clear saved port for this chat"
+                  >
+                    <IconTrash size={12} /> Clear
+                  </button>
+                </div>
+              )}
+              <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {[3000, 5173, 8000, 8080].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className="btn"
+                    style={{ padding: '4px 8px', fontSize: 12, background: portInput.trim() === String(p) ? 'var(--primary-bg)' : undefined, borderColor: portInput.trim() === String(p) ? 'var(--primary-border)' : undefined, color: portInput.trim() === String(p) ? 'var(--primary)' : undefined }}
+                    onClick={() => { setPortInput(String(p)); setPortError(null) }}
+                  >
+                    :{p}
+                  </button>
+                ))}
+                <span style={{ fontSize: 11, color: 'var(--text-faint)', alignSelf: 'center', marginLeft: 2 }}>quick picks</span>
+              </div>
+            </div>
+          </div>
+        )}
         {loading && <div className="psb-loading" style={{ display: 'block', padding: '6px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>Loading…</div>}
         {error && (
           <div className="psb-error" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

@@ -3016,18 +3016,27 @@ app.patch('/api/projects/:id/files', async (c) => {
   }
   if (!toRaw) return c.json({ error: 'Invalid new name' }, 400)
   // Allow `to` to be either a single name (rename in same dir) or a path like `public/background.webp` (move)
-  const toTrimmed = toRaw.replace(/^\/+/, '')
+  // Support absolute project paths with leading "/" and parent traversal via ".." as long as final stays inside project
+  const isAbsoluteProjectPath = toRaw.trim().startsWith('/')
+  const toTrimmed = toRaw.trim().replace(/^\/+/, '')
   const toParts = toTrimmed.split('/').filter(Boolean)
-  if (toParts.length === 0 || !toParts.every(validSegment)) {
-    const invalidSeg = toParts.find(p => !validSegment(p)) ?? toTrimmed
-    console.error(`[rename] Invalid new name: toRaw="${toRaw}" toTrimmed="${toTrimmed}" toParts=${JSON.stringify(toParts)} invalidSeg="${invalidSeg}" from="${from}"`)
-    return c.json({ error: `Invalid new name "${toRaw}" — segment "${invalidSeg}" is invalid` }, 400)
+  if (toParts.length === 0) {
+    console.error(`[rename] Invalid new name: toRaw="${toRaw}" toTrimmed="${toTrimmed}" from="${from}"`)
+    return c.json({ error: `Invalid new name "${toRaw}"` }, 400)
+  }
+  // Validate each segment: allow ".." for navigation but otherwise must be validSegment; "." is never valid as segment for destination
+  for (const seg of toParts) {
+    if (seg === '..' || seg === '.') continue
+    if (!validSegment(seg)) {
+      console.error(`[rename] Invalid segment: toRaw="${toRaw}" seg="${seg}" from="${from}"`)
+      return c.json({ error: `Invalid new name "${toRaw}" — segment "${seg}" is invalid` }, 400)
+    }
   }
   const fromAbs = resolveInProject(project.path, from)
   if (!fromAbs) return c.json({ error: 'Invalid path' }, 400)
   let toAbs: string | null
-  if (toTrimmed.includes('/')) {
-    // Destination is a path — treat as project-relative (like mv public/background.webp)
+  if (isAbsoluteProjectPath || toTrimmed.includes('/')) {
+    // Destination is a path — treat as project-relative (like mv public/background.webp or /background.webp)
     toAbs = resolveInProject(project.path, toTrimmed)
   } else {
     toAbs = path.join(path.dirname(fromAbs), toTrimmed)
