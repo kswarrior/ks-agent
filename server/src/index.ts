@@ -2989,7 +2989,9 @@ app.patch('/api/projects/:id/files', async (c) => {
   const toTrimmed = toRaw.replace(/^\/+/, '')
   const toParts = toTrimmed.split('/').filter(Boolean)
   if (toParts.length === 0 || !toParts.every(validSegment)) {
-    return c.json({ error: 'Invalid new name' }, 400)
+    const invalidSeg = toParts.find(p => !validSegment(p)) ?? toTrimmed
+    console.error(`[rename] Invalid new name: toRaw="${toRaw}" toTrimmed="${toTrimmed}" toParts=${JSON.stringify(toParts)} invalidSeg="${invalidSeg}" from="${from}"`)
+    return c.json({ error: `Invalid new name "${toRaw}" — segment "${invalidSeg}" is invalid` }, 400)
   }
   const fromAbs = resolveInProject(project.path, from)
   if (!fromAbs) return c.json({ error: 'Invalid path' }, 400)
