@@ -79,8 +79,10 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
     const m = err.match(/\b(429|500|502|503|400|401|403|404|408|504|524|529)\b/)
     if (m) return m[1]
     if (retryInfo.reason === 'timeout') return 'TIMEOUT'
+    if (retryInfo.reason === 'rate_limit') return '429'
     if (retryInfo.reason === 'resource_exhausted') return '429'
     if (retryInfo.reason === 'provider_error') return 'ERR'
+    if (retryInfo.reason === 'network') return 'NET'
     return retryInfo.reason ? retryInfo.reason.toUpperCase().slice(0, 12) : 'ERR'
   }, [retryInfo.error, retryInfo.reason])
 
@@ -483,6 +485,8 @@ export function ChatView(props: Props) {
 
   const lastAssistantMsg = props.messages.length > 0 ? props.messages[props.messages.length - 1] : null
   const isInterrupted = !props.streaming && !!lastAssistantMsg && lastAssistantMsg.role === 'assistant' && (!!lastAssistantMsg.error || /\n\n_\[stopped\]_\s*$/.test(lastAssistantMsg.content) || /\n\n_\[stream interrupted:/.test(lastAssistantMsg.content) || /\n\n_\[truncated/.test(lastAssistantMsg.content))
+  const isPlanIncomplete = !props.streaming && !!plan && totalSteps > 0 && !isPlanDone
+  const showContinue = !props.streaming && !!props.onContinue && (isInterrupted || isPlanIncomplete)
 
   return (
     <>
@@ -567,12 +571,17 @@ export function ChatView(props: Props) {
             })()}
           </div>
         )}
+        {props.retryInfo && !props.streaming && (
+          <div className="msg-col" style={{ marginTop: 10 }}>
+            <RetryCard retryInfo={props.retryInfo} />
+          </div>
+        )}
       </div>
 
-      {isInterrupted && props.onContinue && (
+      {showContinue && (
         <div style={{ padding: '8px 14px 0', display: 'flex', justifyContent: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13 }}>
-            <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>Response was interrupted</span>
+            <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>{isPlanIncomplete && !isInterrupted ? `Plan incomplete · ${doneSteps}/${totalSteps} done` : isInterrupted && isPlanIncomplete ? `Interrupted · ${doneSteps}/${totalSteps} done` : 'Response was interrupted'}</span>
             <button
               className="btn btn-primary"
               style={{ padding: '5px 12px', fontSize: 12, borderRadius: 8 }}

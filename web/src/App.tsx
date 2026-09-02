@@ -273,6 +273,13 @@ function KsAgent() {
       subsRef.current.set(chatId, controller)
       setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
       setThinkings((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
+      // clear previous retry indicator when starting new generation
+      setRetries((prev) => {
+        if (!(chatId in prev)) return prev
+        const n = { ...prev }
+        delete n[chatId]
+        return n
+      })
       let acc = ''
       let assistantId: string | null = null
       const pendingTools = new Map<string, { name: string; args: Record<string, unknown> }>()
@@ -379,22 +386,26 @@ function KsAgent() {
             },
             onRetry: (info) => {
               setRetries((prev) => ({ ...prev, [chatId]: info }))
-              // clear retry indicator after delay passes
-              setTimeout(() => {
-                setRetries((prev) => {
-                  if (prev[chatId]?.attempt === info.attempt) {
-                    const n = { ...prev }
-                    delete n[chatId]
-                    return n
-                  }
-                  return prev
-                })
-              }, Math.min(info.delay + 500, 4000))
-              const reasonLabel = info.reason === 'timeout' ? 'timeout' : info.reason === 'resource_exhausted' ? 'capacity limit' : 'provider error'
+              const reasonLabel = info.reason === 'timeout' ? 'timeout' : info.reason === 'resource_exhausted' ? 'capacity limit' : info.reason === 'rate_limit' ? 'rate limit' : 'provider error'
               toast(`Retrying (${info.attempt}/${info.maxAttempts}) after ${reasonLabel} — next in ${Math.round(info.delay/1000)}s`, 'error')
             },
-            onError: (message) => toast(message.split('\n')[0], 'error'),
-            onDone: () => { setRetries((prev) => { const n={...prev}; delete n[chatId]; return n }) }
+            onError: (message) => {
+              toast(message.split('\n')[0], 'error')
+              // keep last retry visible for 4s after error so user sees all attempts
+              setTimeout(() => {
+                setRetries((prev) => {
+                  const n = { ...prev }
+                  delete n[chatId]
+                  return n
+                })
+              }, 4000)
+            },
+            onDone: () => {
+              // keep retry visible briefly after success, then clear
+              setTimeout(() => {
+                setRetries((prev) => { const n={...prev}; delete n[chatId]; return n })
+              }, 1500)
+            }
           },
           controller.signal
         )
