@@ -518,6 +518,14 @@ function KsAgent() {
     [toast]
   )
 
+  // cleanup auto-continue timers on unmount
+  useEffect(() => {
+    return () => {
+      for (const t of autoContinueTimersRef.current.values()) clearTimeout(t)
+      autoContinueTimersRef.current.clear()
+    }
+  }, [])
+
   // resume watching generations still running on the server (e.g. after tab reopen)
   useEffect(() => {
     api

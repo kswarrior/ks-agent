@@ -1309,9 +1309,8 @@ app.post('/api/chats/:id/continue', async (c) => {
         ...skillMessages,
         ...cleanMessagesForHistory(chat.id)
       ]
-      const wasInterruptedPure2 = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
       let continueInstruction: LLMMessage
-      if (!wasInterruptedPure2 && planIncompleteForPure2 && existingPlanForPure2) {
+      if (!wasInterruptedPure && planIncompleteForPure2 && existingPlanForPure2) {
         continueInstruction = {
           role: 'user',
           content:
