@@ -331,7 +331,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'list_files',
-      description: 'List files and folders in a directory of ${projectfolder} ONLY (primary workspace — the active project folder). Path is relative to ${projectfolder} root; empty for its root. Supports pagination (offset/limit), recursive listing, and glob pattern filtering. Use recursive:true with pattern:"**/*.ts" to find files in subfolders. Optimized for large projects. Do NOT attempt to list outside ${projectfolder}. If you must go outside, you MUST go inside KS Agent (the agent codebase) and ONLY when user explicitly asked or task genuinely needs it; otherwise stay in ${projectfolder}. /tmp is allowed for temp files.',
+      description: 'List files and folders in a directory of ${projectfolder} ONLY (primary workspace — the active project folder). Path is relative to ${projectfolder} root; empty for its root. Supports pagination (offset/limit), recursive listing, and glob pattern filtering. Use recursive:true with pattern:"**/*.ts" to find files in subfolders. Optimized for large projects. Do NOT attempt to list outside ${projectfolder} — outside is FORBIDDEN (parent, siblings, agent codebase, /tmp, absolute paths). Only inside ${projectfolder} and all its subfolders/files is allowed.',
       parameters: {
         type: 'object',
         properties: {
@@ -348,7 +348,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Read a text file from ${projectfolder} ONLY (primary workspace — the active project folder). Supports pagination via offset/limit (line numbers) for large files. offset is 1-indexed (1 = first line, default 1), limit 1-2000 (default 200). Efficiently streams large files up to 50 MB. For huge files, read in chunks or use grep/get_file_info first. Do NOT read outside ${projectfolder} unless user explicitly asked to go inside KS Agent or you genuinely need /tmp.',
+      description: 'Read a text file from ${projectfolder} ONLY (primary workspace — the active project folder). Supports pagination via offset/limit (line numbers) for large files. offset is 1-indexed (1 = first line, default 1), limit 1-2000 (default 200). Efficiently streams large files up to 50 MB. For huge files, read in chunks or use grep/get_file_info first. Do NOT read outside ${projectfolder} — outside is FORBIDDEN. Only inside ${projectfolder} is allowed.',
       parameters: {
         type: 'object',
         properties: {
@@ -364,7 +364,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'grep',
-      description: 'Search for a regex/text pattern inside files of ${projectfolder} ONLY (primary workspace). Returns matches as "relative/path:lineNumber:content". Supports optional glob include filter, directory scope, and pagination. Scales to 1000+ files. Do NOT search outside ${projectfolder} unless user explicitly asked to go inside KS Agent.',
+      description: 'Search for a regex/text pattern inside files of ${projectfolder} ONLY (primary workspace). Returns matches as "relative/path:lineNumber:content". Supports optional glob include filter, directory scope, and pagination. Scales to 1000+ files. Do NOT search outside ${projectfolder} — outside is FORBIDDEN. Only inside ${projectfolder} is allowed.',
       parameters: {
         type: 'object',
         properties: {
@@ -382,7 +382,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'glob',
-      description: 'Find files matching a glob pattern inside ${projectfolder} ONLY (primary workspace). Fast file discovery without reading contents. Examples: "**/*.ts", "src/**/*.{js,tsx}", "*.json". Use to locate files before reading them. Scales to 1000+ files. Do NOT search outside ${projectfolder} unless user explicitly asked to go inside KS Agent.',
+      description: 'Find files matching a glob pattern inside ${projectfolder} ONLY (primary workspace). Fast file discovery without reading contents. Examples: "**/*.ts", "src/**/*.{js,tsx}", "*.json". Use to locate files before reading them. Scales to 1000+ files. Do NOT search outside ${projectfolder} — outside is FORBIDDEN. Only inside ${projectfolder} is allowed.',
       parameters: {
         type: 'object',
         properties: {
@@ -399,7 +399,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'write_file',
-      description: 'Create or overwrite a text file inside ${projectfolder} ONLY (primary workspace, up to 2 MB). Parent folders are created automatically. Do NOT write outside ${projectfolder} unless user explicitly asked to go inside KS Agent or you genuinely need /tmp.',
+      description: 'Create or overwrite a text file inside ${projectfolder} ONLY (primary workspace, up to 2 MB). Parent folders are created automatically. Do NOT write outside ${projectfolder} — outside is FORBIDDEN. Only inside ${projectfolder} is allowed.',
       parameters: {
         type: 'object',
         properties: {
@@ -414,7 +414,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'edit_file',
-      description: 'Replace an exact snippet inside an existing file of ${projectfolder} ONLY (primary workspace). By default requires unique occurrence; set replace_all:true to replace all occurrences. For very large files, use offset reads and smaller edits. Do NOT edit outside ${projectfolder} unless user explicitly asked to go inside KS Agent.',
+      description: 'Replace an exact snippet inside an existing file of ${projectfolder} ONLY (primary workspace). By default requires unique occurrence; set replace_all:true to replace all occurrences. For very large files, use offset reads and smaller edits. Do NOT edit outside ${projectfolder} — outside is FORBIDDEN. Only inside ${projectfolder} is allowed.',
       parameters: {
         type: 'object',
         properties: {
@@ -431,7 +431,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'get_file_info',
-      description: 'Get metadata for a file or directory inside ${projectfolder} ONLY without reading full content. Returns size, line count (for text files), type (file/dir), modified time, and whether binary. Essential for large projects / large files to decide how to read — call this before reading huge files. Stay inside ${projectfolder} unless user explicitly asked to go inside KS Agent.',
+      description: 'Get metadata for a file or directory inside ${projectfolder} ONLY without reading full content. Returns size, line count (for text files), type (file/dir), modified time, and whether binary. Essential for large projects / large files to decide how to read — call this before reading huge files. Stay strictly inside ${projectfolder} — outside is FORBIDDEN.',
       parameters: {
         type: 'object',
         properties: {
@@ -445,7 +445,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'delete_file',
-      description: 'Delete a file or directory inside ${projectfolder} ONLY. For directories, use recursive:true to delete recursively. Handles large projects efficiently. Protected paths (outside ${projectfolder}) are blocked — to delete inside KS Agent you must have explicit user request.',
+      description: 'Delete a file or directory inside ${projectfolder} ONLY. For directories, use recursive:true to delete recursively. Handles large projects efficiently. Protected paths (outside ${projectfolder}) are blocked — outside is FORBIDDEN.',
       parameters: {
         type: 'object',
         properties: {
@@ -460,7 +460,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'move_file',
-      description: 'Move or rename a file/directory inside ${projectfolder} ONLY. Creates parent folders as needed. Overwrites destination if it exists only when overwrite:true. Stay inside ${projectfolder} unless user explicitly asked to go inside KS Agent.',
+      description: 'Move or rename a file/directory inside ${projectfolder} ONLY. Creates parent folders as needed. Overwrites destination if it exists only when overwrite:true. Stay strictly inside ${projectfolder} — outside is FORBIDDEN.',
       parameters: {
         type: 'object',
         properties: {
@@ -476,7 +476,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'append_file',
-      description: 'Append content to the end of a file inside ${projectfolder} ONLY (up to 2 MB total). Creates file if not exists. Useful for large files where you want to add without reading entire file. Stay inside ${projectfolder} unless user explicitly asked to go inside KS Agent.',
+      description: 'Append content to the end of a file inside ${projectfolder} ONLY (up to 2 MB total). Creates file if not exists. Useful for large files where you want to add without reading entire file. Stay strictly inside ${projectfolder} — outside is FORBIDDEN.',
       parameters: {
         type: 'object',
         properties: {
@@ -491,7 +491,7 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'apply_patch',
-      description: 'Apply a unified diff patch to a file inside ${projectfolder} ONLY. Provide the full file content as patch is applied via diff hunks — more robust than exact-string edit for large files. Args: path and patch (unified diff string with @@ hunks) OR diff content. Creates file if not exists when patch adds it. Stay inside ${projectfolder} unless user explicitly asked to go inside KS Agent.',
+      description: 'Apply a unified diff patch to a file inside ${projectfolder} ONLY. Provide the full file content as patch is applied via diff hunks — more robust than exact-string edit for large files. Args: path and patch (unified diff string with @@ hunks) OR diff content. Creates file if not exists when patch adds it. Stay strictly inside ${projectfolder} — outside is FORBIDDEN.',
       parameters: {
         type: 'object',
         properties: {
@@ -506,10 +506,10 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'run_shell',
-      description: 'Run a shell command with CWD = ${projectfolder} (active project directory, 300s timeout, 32 KB output cap). PRIMARY: stay inside ${projectfolder}. Only use absolute paths like /tmp when task genuinely needs temp files or user explicitly asked to go inside KS Agent (the agent codebase). Returns exit code plus stdout/stderr. IMPORTANT: Dangerous commands (rm -rf, sudo, etc.) will automatically trigger a confirmation prompt to the user before execution — you do NOT need to call ask_question for these; the tool handles it. For commands that need user input, use ask_question first to get the answer, then run_shell with the resolved command. Never run shell commands that escape ${projectfolder} to inspect unrelated filesystem locations unless explicitly requested.',
+      description: 'Run a shell command with CWD = ${projectfolder} (active project directory, 300s timeout, 32 KB output cap). STRICT: stay inside ${projectfolder} — outside is FORBIDDEN (parent, siblings, agent codebase, /tmp, absolute paths). Only inside ${projectfolder} and all its subfolders/files is allowed. Returns exit code plus stdout/stderr. IMPORTANT: Dangerous commands (rm -rf, sudo, etc.) will automatically trigger a confirmation prompt — you do NOT need to call ask_question for these; the tool handles it. For commands that need user input, use ask_question first, then run_shell. Never run shell commands that escape ${projectfolder}.',
       parameters: {
         type: 'object',
-        properties: { command: { type: 'string', description: 'The shell command to run (stay inside ${projectfolder} unless explicitly needed inside KS Agent or /tmp)' } },
+        properties: { command: { type: 'string', description: 'The shell command to run (stay strictly inside ${projectfolder} — outside is FORBIDDEN)' } },
         required: ['command']
       }
     }
@@ -643,89 +643,44 @@ function isDangerousCommand(command: string): string | null {
 
 /**
  * Detects whether a shell command tries to explore outside ${projectfolder}
- * Primary workspace is ${projectfolder} ONLY; only /tmp and KS Agent (when explicitly requested) are allowed outside.
+ * Primary workspace is ${projectfolder} ONLY (e.g. project/ks) — inside is FULL permission, outside is ZERO permission and FORBIDDEN (no /tmp, no agent codebase, no absolute paths).
  * Returns null if allowed, or a reason string if it should be blocked / asked first.
  */
-function isOutsideScopeCommand(command: string, projectPath: string, chatId: string): string | null {
+function isOutsideScopeCommand(command: string, projectPath: string, _chatId: string): string | null {
   const c = command.trim()
-  // Check if user explicitly requested to go outside / inside KS Agent in last user message
-  let userRequestedOutside = false
-  try {
-    const msgs = messagesOf(chatId) as { role: string; content: string }[]
-    const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
-    const text = (lastUser?.content || '').toLowerCase()
-    if (text) {
-      userRequestedOutside = /ks\s*agent|agent code|outside.*project|go\s+inside|explore.*other|check.*ks-agent|look.*at.*agent|fix.*server|inside\s+ks/i.test(text)
-      // also allow if command itself mentions ks-agent and user text mentions any of those, treat as requested
-      if (!userRequestedOutside && /(ks-agent|ks_agent)/i.test(c) && /(agent|outside|other)/i.test(text)) userRequestedOutside = true
-    }
-  } catch {}
-  // Parent traversal via .. is almost always outside ${projectfolder}
-  // Allow only if user requested outside and path is not arbitrary
-  if (c.includes('..')) {
-    // Check if it's a harmless .. inside project like "src/../src"? That's still within project if not escaping root.
-    // We do a stricter check: any ".." that appears as path segment starting with "../" or "/../" or " .. "
-    if (/(?:^|[\s\"'\/])\.\.(?:\/|[\s\"']|$)/.test(c)) {
-      if (!userRequestedOutside) {
-        return 'Traverses outside ${projectfolder} via ".." — stay inside ${projectfolder} unless user explicitly requests to go inside KS Agent (ask via ask_question first)'
-      }
-    }
+  // STRICT: any ".." traversal is forbidden — outside is FORBIDDEN
+  if (/(?:^|[\s\"'\/])\.\.(?:\/|[\s\"']|$)/.test(c)) {
+    return 'Traverses outside ${projectfolder} via ".." — outside is FORBIDDEN. Stay strictly inside ${projectfolder}'
   }
   // Extract absolute paths from command (like /home/... /etc/... /tmp/...)
   const absRe = /(?:^|[\s\"'`])(\/(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+)/g
   let m: RegExpExecArray | null
   const seen = new Set<string>()
-  const ksRoot = path.resolve(process.cwd())
   const projRoot = path.resolve(projectPath)
   while ((m = absRe.exec(c)) !== null) {
     const p = m[1]
     if (seen.has(p)) continue
     seen.add(p)
-    // skip /tmp and allowed temp dirs
-    if (p === '/tmp' || p.startsWith('/tmp/') || p === '/var/tmp' || p.startsWith('/var/tmp/') || p === '/dev/shm' || p.startsWith('/dev/shm/')) continue
-    // skip if it's inside project
+    // Inside project is allowed
     if (p === projRoot || p.startsWith(projRoot + path.sep)) continue
-    // skip relative-looking but absolute for build outputs like /usr/bin etc — those are system tools, not exploration
-    // But if command is trying to list or cat those paths, it's exploration outside
-    const isExploration = /(?:ls|cat|find|grep|glob|read|list|open|code|vim|nano|less|head|tail|tree|du|df|stat|ls\s|-R|walk)/i.test(c) || p.includes('ks-agent') || p.includes('/server') || p.includes('/web')
-    if (!isExploration) {
-      // For non-exploration system paths (e.g. /bin/bash) allow
-      if (p.startsWith('/bin/') || p.startsWith('/usr/bin') || p.startsWith('/usr/local/bin') || p.startsWith('/sbin') || p === '/bin/bash' || p === '/bin/sh' || p === '/bin/zsh') continue
-    }
-    // Now p is outside project
-    const isInsideKsAgent = p === ksRoot || p.startsWith(ksRoot + path.sep)
-    if (isInsideKsAgent) {
-      // Inside KS Agent but outside project — only allow if user requested or path is skills (skills discovery is allowed via list_files fallback, but shell to ks-agent should need request)
-      if (!userRequestedOutside) {
-        // Allow reading skills via shell cat of skills files without explicit request? User said if need, must go inside KS Agent — so we allow skills access but still require staying in project by default.
-        // We treat skills as allowed secondary, but still warn to stay in project.
-        if (p.includes('/skills') || p.endsWith('.md')) {
-          // Allow skills read via shell without blocking, but still log
-          continue
-        }
-        return `Accesses KS Agent codebase (${p}) outside \${projectfolder} — stay inside \${projectfolder} unless user explicitly requests to go inside KS Agent (ask via ask_question first)`
+    // Allow system binary execution itself (e.g. /bin/bash, /usr/bin/env) when not exploring — but exploring outside is still forbidden
+    const isExploration = /(?:ls|cat|find|grep|glob|read|list|open|code|vim|nano|less|head|tail|tree|du|df|stat|for|while|walk)/i.test(c)
+    // System interpreter paths are allowed as command itself, not as target
+    if (!isExploration && (p === '/bin/bash' || p === '/bin/sh' || p === '/bin/zsh' || p.startsWith('/bin/') || p.startsWith('/usr/bin/') || p.startsWith('/usr/local/bin/'))) {
+      // Only allow if the command starts with this binary (e.g. "/bin/bash -c ...") — otherwise it's a target outside
+      const atStart = c.startsWith(p) || c.includes(` ${p}`) && !c.includes(` ${p}/`) // crude
+      if (c.trim().startsWith(p) || c.includes(` ${p} `) || c.startsWith(`/bin/`)) {
+        // If it's the shell itself, allow; if it's a target like "/tmp" or "/etc/hosts" being cat'd, block below
+        if (p === '/bin/bash' || p === '/bin/sh' || p === '/usr/bin/env') continue
       }
-      continue
     }
-    // Arbitrary outside path
-    if (!userRequestedOutside) {
-      return `Accesses outside \${projectfolder}: ${p} — stay strictly inside \${projectfolder}. Only /tmp and KS Agent (when explicitly requested) are allowed outside`
-    }
+    // Any other absolute path outside project is FORBIDDEN — no /tmp or KS Agent exception
+    return `Accesses outside \${projectfolder}: ${p} — outside is FORBIDDEN. Only inside \${projectfolder} is allowed`
   }
-  // Also detect glob/list patterns that explicitly mention ks-agent or server/web outside project via relative path that would resolve outside
-  if (!userRequestedOutside) {
-    const lower = c.toLowerCase()
-    // Detect attempts to list agent code via shell like "ls ../../server" or "ls ks-agent"
-    if (/(ks-agent|dist-server|dist\/|storage\/|server\/src|web\/src)/.test(lower) && /(ls|cat|find|grep|tree|glob|list)/i.test(c)) {
-      // If project is already inside ks-agent, these relative paths might actually be outside project root — block
-      // Check if project is inside ksRoot: if so, "ks-agent/server" from project would be outside
-      if (projRoot.startsWith(ksRoot + path.sep)) {
-        // Project is subdirectory of ks-agent, so accessing sibling like "server/src" from cwd=project would be "../server" — already caught by .. check, but also catch explicit
-        if (lower.includes('server/src') || lower.includes('web/src') || lower.includes('ks-agent')) {
-          return 'Attempts to access KS Agent codebase from ${projectfolder} via relative path — stay inside ${projectfolder} unless user explicitly requests to go inside KS Agent'
-        }
-      }
-    }
+  // Also block relative agent paths that would escape project (e.g. ks-agent, server/src from inside project)
+  const lower = c.toLowerCase()
+  if (/(ks-agent|dist-server|dist\/|storage\/|server\/src|web\/src)/.test(lower) && /(ls|cat|find|grep|tree|glob|list|code|open)/i.test(c)) {
+    return 'Attempts to access outside ${projectfolder} — outside is FORBIDDEN. Stay strictly inside ${projectfolder}'
   }
   return null
 }
@@ -926,7 +881,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
     case 'list_files': {
       const rel = typeof args.path === 'string' ? args.path : ''
       const abs = rel.trim() ? safeJoin(ctx, rel) : resolveInProject(ctx.projectPath, '.')
-      if (!abs) return err('path escapes the project root — primary workspace is the active project only; stay inside it unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
+      if (!abs) return err('path escapes the project root — primary workspace is ${projectfolder} ONLY (e.g. project/ks) — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
       // Parse pagination & options (new: offset/limit/recursive/pattern for large dirs)
       let offset = 0
       if (args.offset !== undefined) {
@@ -1047,7 +1002,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
 
     case 'read_file': {
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
+      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
       // Parse pagination params (supports large files up to 50 MB with streaming)
       let offsetNum = 1
       if (args.offset !== undefined) {
@@ -1418,7 +1373,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         }
       }
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
+      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
       const content = typeof args.content === 'string' ? args.content : ''
       if (Buffer.byteLength(content, 'utf8') > WRITE_MAX_BYTES) return err(`content exceeds ${WRITE_MAX_BYTES / 1024} KB limit (2 MB)`)
       try {
@@ -1442,7 +1397,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         }
       }
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is active project only; stay inside unless user explicitly asked to go outside (use run_shell for agent codebase) or you genuinely need /tmp (allowed via absolute /tmp or /var/tmp path)')
+      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
       const oldStr = args.old_string
       const newStr = typeof args.new_string === 'string' ? args.new_string : ''
       const replaceAll = args.replace_all === true || args.replaceAll === true
@@ -1802,12 +1757,12 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         ctx.onEvent('question', JSON.stringify(q))
       }
 
-      // Scope enforcement: stay inside ${projectfolder} unless user explicitly requested KS Agent
+      // Scope enforcement: stay strictly inside ${projectfolder} — outside is FORBIDDEN
       {
         const outsideReason = isOutsideScopeCommand(command, ctx.projectPath, ctx.chatId)
         if (outsideReason) {
           const header = 'Stay in ${projectfolder}'
-          const question = `${outsideReason}\n\nCommand: \`${command}\`\n\nYour primary workspace is \${projectfolder} (\`${ctx.projectPath}\`). Only /tmp and KS Agent (when explicitly requested) are allowed outside. Do you want to allow this to run inside KS Agent instead?`
+          const question = `${outsideReason}\n\nCommand: \`${command}\`\n\nYour primary workspace is \${projectfolder} (\`${ctx.projectPath}\`) — inside is FULL permission, outside is ZERO permission and FORBIDDEN. Do you want to allow this? Deny will keep you inside ${projectfolder}.`
           const options = ['Yes, allow outside', 'No, stay in project']
           const db = getDb()
           const now = new Date().toISOString()
