@@ -1,4 +1,4 @@
-import { Player } from '../types';
+import type { Player } from '../types';
 
 interface PlayersProps {
   players?: Player[];
