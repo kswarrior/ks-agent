@@ -469,6 +469,30 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
         </div>
       </div>
 
+      {(() => {
+        const running = visibleActivities.filter(a => a.ok === undefined)
+        if (running.length === 0) return null
+        // Aggregate running stats: show Write/Read/Edit/Shell counts for running only
+        const runCounts: Record<string, number> = {}
+        for (const a of running) runCounts[a.toolType] = (runCounts[a.toolType] || 0) + 1
+        const runLabels = Object.entries(runCounts).map(([t, c]) => `${getToolLabel(t as Activity['toolType'])}${c > 1 ? ` · ${c}` : ''}`).join('  ·  ')
+        const top = running[0]
+        const topLabel = getToolLabel(top.toolType)
+        const topStyle = getToolBadgeStyle(top.toolType)
+        const topCmd = getCommandDisplay(top.toolType, top.args)
+        return (
+          <div className="activity-top-status" title={topCmd || runLabels} aria-live="polite">
+            <span className="activity-badge" style={{ background: topStyle.bg, color: topStyle.color, borderColor: topStyle.border }}>
+              <span className="activity-badge-icon">{getToolIcon(top.toolType)}</span>
+              <span className="activity-badge-label">{topLabel}</span>
+            </span>
+            <span className="activity-args" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{topCmd || runLabels}</span>
+            <span className="act-status-icon running"><IconRotate size={10} className="spin" /></span>
+            {running.length > 1 && <span className="activity-top-count">+{running.length - 1}</span>}
+          </div>
+        )
+      })()}
+
       <div className="activity-list">
         {filtered.length === 0 ? (
           <div className="rsb-empty" style={{ padding: '16px 0', fontSize: 13 }}>No {filter !== 'all' ? getToolLabel(filter as Activity['toolType']) : ''} events</div>
