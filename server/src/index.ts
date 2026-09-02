@@ -3601,16 +3601,27 @@ app.all('/api/chats/:id/preview/proxy/*', async (c) => {
 // force prefers-color-scheme: dark inside the preview (which makes a white
 // button appear black) and so that absolute URLs like /styles.css are correctly
 // resolved through the proxy when the iframe is not top-level.
+// Also fully isolates preview CSS from host: spoofs prefers-color-scheme to light,
+// resets html/body background, and ensures host :root vars don't leak.
 function buildPreviewIsolationHead(baseProxyPath: string): string {
   const base = baseProxyPath.endsWith('/') ? baseProxyPath : baseProxyPath + '/'
   const baseJson = JSON.stringify(base)
   // FIX: previous version double-rewrote already-proxied URLs (e.g. /api/.../proxy/assets/app.css
   // became /api/.../proxy/api/.../proxy/assets/app.css → 404 → CSS not loaded).
   // Now we guard with !isProxied and also patch fetch/XHR/WS for runtime absolute fetches.
+  // FIX2: host CSS was bleeding conceptually via prefers-color-scheme: dark. Preview sites
+  // that use @media (prefers-color-scheme: dark) were rendering dark inside a dark host
+  // (white button → black). We now hard-force light: spoof matchMedia, set color-scheme,
+  // and inject strong html/body reset so preview always renders as light independent of host theme.
   return (
     `<meta name="color-scheme" content="light">` +
-    `<style>html{color-scheme:light !important;}</style>` +
-    `<script>(function(){var base=${baseJson};` +
+    `<meta name="supported-color-schemes" content="light">` +
+    `<style id="ks-preview-isolation">html{color-scheme:light !important;background:#ffffff !important;}body{background:#ffffff !important;color:#111827 !important;}@media (prefers-color-scheme: dark){html,body{background:#ffffff !important;color:#111827 !important;}}</style>` +
+    `<style id="ks-preview-reset">:root{color-scheme:light !important;}</style>` +
+    `<script>(function(){` +
+    `try{document.documentElement.style.colorScheme="light";}catch(e){}` +
+    `try{var _origMM=window.matchMedia;window.matchMedia=function(q){if(typeof q==="string"&&q.indexOf("prefers-color-scheme")!==-1){var isDark=q.indexOf("dark")!==-1;return{matches:!isDark,media:q,onchange:null,addListener:function(){},removeListener:function(){},addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){return false}}}return _origMM?_origMM.call(window,q):{matches:false,media:q,onchange:null,addListener:function(){},removeListener:function(){},addEventListener:function(){},removeEventListener:function(){},dispatchEvent:function(){return false}}};}catch(e){}` +
+    `var base=${baseJson};` +
     `function isProxied(u){return typeof u==='string'&&u.indexOf(base)===0;}` +
     `function shouldRewrite(u){return typeof u==='string'&&u.charAt(0)==='/'&&u.charAt(1)!=='/'&&!isProxied(u);}` +
     `function rw(el,a){try{var v=el.getAttribute(a);if(shouldRewrite(v))el.setAttribute(a,base+v.slice(1));}catch(e){}}` +

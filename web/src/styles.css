@@ -1946,6 +1946,10 @@ textarea {
   border: none;
   background: #fff;
   display: block;
+  color-scheme: light;
+  /* Strict isolation so host styles cannot bleed into preview via inherited props on the iframe element itself */
+  isolation: isolate;
+  contain: strict;
 }
 
 /* Preview sidebar always overlays — on desktop it sits over the right sidebar (z-index 75 vs rsb 70), on mobile with scrim */
