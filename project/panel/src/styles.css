@@ -1,0 +1,409 @@
+/* Minecraft Panel Styles */
+:root {
+  --bg: #1e2a38;
+  --surface: #2d3a4a;
+  --surface-2: #374558;
+  --surface-3: #283744;
+  --input: #2d3a4a;
+  --border: #4a5a70;
+  --border-strong: #64718f;
+
+  --text: #e4f0fb;
+  --text-dim: #b3c1d2;
+  --text-faint: #889bb6;
+  --text-on-primary: #ffffff;
+
+  --primary: #4a9eff;
+  --primary-hover: #6bb1ff;
+  --primary-active: #3a7bcc;
+  --primary-bg: #37527a;
+  --primary-ring: rgba(74,154,255,0.3);
+
+  --danger: #ff5555;
+  --danger-hover: #ff7777;
+  --radius: 8px;
+  --radius-sm: 6px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* Login Page */
+.login-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100%;
+}
+
+.login-card {
+  background: var(--surface);
+  padding: 32px;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  min-width: 320px;
+}
+
+.login-card h2 {
+  margin-bottom: 24px;
+  color: var(--text);
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--input);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-ring);
+}
+
+/* App Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  height: 64px;
+  padding: 0 20px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.logo span {
+  color: var(--text);
+}
+
+.header-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.app-sidebar {
+  width: 180px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.app-sidebar ul {
+  list-style: none;
+}
+
+.app-sidebar li {
+  margin-bottom: 12px;
+}
+
+.app-sidebar a {
+  display: block;
+  padding: 8px 12px;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.app-sidebar a:hover {
+  background: var(--surface-3);
+}
+
+.app-sidebar a.active {
+  background: var(--primary-bg);
+  color: var(--primary);
+}
+
+/* Main Content */
+main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.card h2 {
+  margin-bottom: 16px;
+  color: var(--text);
+  font-size: 18px;
+}
+
+/* Dashboard */
+.dashboard {
+  max-width: 1200px;
+}
+
+.status-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.status-indicator {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.status-indicator.online {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.status-indicator.offline {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+/* Buttons */
+.btn {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.btn:hover {
+  opacity: 0.8;
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--text-on-primary);
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.btn-secondary {
+  background: var(--surface-3);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-2);
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--text-on-primary);
+}
+
+.btn-danger:hover {
+  background: var(--danger-hover);
+  border-color: var(--danger-hover);
+}
+
+/* Console */
+.console-page {
+  max-width: 800px;
+}
+
+.console-controls {
+  margin-bottom: 16px;
+}
+
+.console-form {
+  display: flex;
+  gap: 8px;
+}
+
+.console-form input {
+  flex: 1;
+}
+
+.console-log {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  height: 400px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.log-line {
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+}
+
+/* File Manager */
+.file-manager {
+  max-width: 1000px;
+}
+
+.fm-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.fm-content {
+  display: flex;
+  gap: 16px;
+}
+
+.fm-path-bar {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.fm-grid {
+  flex: 1;
+}
+
+.fm-grid ul {
+  list-style: none;
+}
+
+.fm-grid li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fm-grid li:hover {
+  background: var(--surface-3);
+}
+
+.fm-editor {
+  width: 400px;
+}
+
+.fm-editor textarea {
+  width: 100%;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.fm-editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Players Page */
+.players-page {
+  max-width: 600px;
+}
+
+/* Properties Page */
+.properties-page {
+  max-width: 800px;
+}
+
+/* Upload Input */
+.btn >>> input[type="file"] {
+  display: none;
+}
+
+/* Error message */
+.error {
+  background: rgba(244, 67, 54, 0.2);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .app-main {
+    display: block;
+  }
+
+  .app-sidebar {
+    width: 100%;
+    height: auto;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .fm-editor {
+    width: 100%;
+  }
+
+  .console-log {
+    height: 300px;
+  }
+}
