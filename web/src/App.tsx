@@ -63,6 +63,10 @@ function KsAgent() {
   const skipLoadForRef = useRef<string | null>(null)
   const creatingChatRef = useRef(false)
   const sendingRef = useRef<Set<string>>(new Set())
+  const autoContinueAttemptsRef = useRef<Map<string, number>>(new Map())
+  const autoContinueTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const selectedModelIdRef = useRef<string | null>(null)
+  const manualStopRef = useRef<Set<string>>(new Set())
 
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null
   const activeChat = chats.find((c) => c.id === activeChatId) ?? null
@@ -74,6 +78,10 @@ function KsAgent() {
   useEffect(() => {
     activeProjectIdRef.current = activeProjectId
   }, [activeProjectId])
+
+  useEffect(() => {
+    selectedModelIdRef.current = selectedModelId
+  }, [selectedModelId])
 
   // ---- initial load ----
   useEffect(() => {
@@ -452,6 +460,58 @@ function KsAgent() {
               else delete next[chatId]
               return next
             })
+          } catch {}
+          // ---- auto-continue: if enabled and plan incomplete, automatically resume ----
+          try {
+            const settings: any = await api.getRetrySettings().catch(() => null)
+            if (settings?.autoContinueEnabled) {
+              if (manualStopRef.current.has(chatId)) {
+                manualStopRef.current.delete(chatId)
+                autoContinueAttemptsRef.current.delete(chatId)
+              } else {
+                const freshPlanForAuto: any = await api.getPlan(chatId).catch(() => null)
+                const isPlanIncomplete = !!(freshPlanForAuto && Array.isArray(freshPlanForAuto.steps) && freshPlanForAuto.steps.some((s: any) => s.status !== 'done'))
+                if (isPlanIncomplete) {
+                  const freshMsgsForAuto = await api.listMessages(chatId).catch(() => [] as Message[])
+                  const lastAssistantForAuto = [...freshMsgsForAuto].reverse().find((m: any) => m.role === 'assistant')
+                  const isInterrupted = !!lastAssistantForAuto && (/\n\n_\[stopped\]_\s*$/.test(lastAssistantForAuto.content) || /\n\n_\[stream interrupted:/.test(lastAssistantForAuto.content) || /\n\n_\[truncated/.test(lastAssistantForAuto.content) || !!(lastAssistantForAuto as any).error)
+                  const shouldOnInterrupted = isInterrupted && isPlanIncomplete
+                  const shouldOnPlanIncomplete = !isInterrupted && isPlanIncomplete && !!settings.autoContinueOnPlanIncomplete
+                  if (shouldOnInterrupted || shouldOnPlanIncomplete) {
+                    const maxAttempts = settings.autoContinueMaxAttempts ?? 5
+                    const cur = autoContinueAttemptsRef.current.get(chatId) ?? 0
+                    if (maxAttempts !== 0 && cur >= maxAttempts) {
+                      toast(`Auto-continue limit reached (${maxAttempts}) — tap Continue to resume`, 'error')
+                      autoContinueAttemptsRef.current.delete(chatId)
+                    } else {
+                      const delay = Math.max(300, Math.min(30000, Number(settings.autoContinueDelayMs ?? 1500)))
+                      autoContinueAttemptsRef.current.set(chatId, cur + 1)
+                      const reason = shouldOnInterrupted ? 'AI stopped & plan incomplete' : 'AI finished but steps not marked done — rechecking'
+                      toast(`Auto-continuing (${cur + 1}/${maxAttempts === 0 ? '∞' : maxAttempts}) — ${reason}`, 'success')
+                      const t = setTimeout(async () => {
+                        autoContinueTimersRef.current.delete(chatId)
+                        if (sendingRef.current.has(chatId) || subsRef.current.has(chatId)) return
+                        const modelId = selectedModelIdRef.current
+                        try {
+                          await api.continueChat(chatId, '', modelId ?? null as any)
+                          trackGeneration(chatId)
+                        } catch (e: any) {
+                          toast(e.message, 'error')
+                          autoContinueAttemptsRef.current.delete(chatId)
+                        }
+                      }, delay)
+                      autoContinueTimersRef.current.set(chatId, t)
+                    }
+                  } else {
+                    autoContinueAttemptsRef.current.delete(chatId)
+                  }
+                } else {
+                  autoContinueAttemptsRef.current.delete(chatId)
+                }
+              }
+            } else {
+              autoContinueAttemptsRef.current.delete(chatId)
+            }
           } catch {}
         })
     },
