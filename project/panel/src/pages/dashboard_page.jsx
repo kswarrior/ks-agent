@@ -16,7 +16,8 @@ export function DashboardPage() {
         const status = await apiFetch('/server/status')
         dispatch(setServerStatus(status))
         dispatch(setPlayers(await apiFetch('/players')))
-        dispatch(setFiles(await apiFetch('/files')))
+        const filesResult = await apiFetch('/files')
+        dispatch(setFiles(filesResult.items || []))
         dispatch(setLoadingFiles(false))
       } catch (e) {
         dispatch(setLoadingFiles(false))

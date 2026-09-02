@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { setFiles, setLoadingFiles, setSelectedFile, clearSelectedFile } from '../store/types'
+import { setFiles, setLoadingFiles, setSelectedFile, clearSelectedFile, logout } from '../store/types'
 import { apiFetch } from '../api'
 import { useWebSocket } from '../api'
 
