@@ -1734,6 +1734,48 @@ textarea {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative;
+}
+
+.rsb-resizer,
+.psb-resizer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s ease;
+  /* larger hit area */
+  margin-left: -3px;
+  padding-left: 3px;
+  background-clip: content-box;
+}
+
+.rsb-resizer:hover,
+.psb-resizer:hover,
+.rsb.resizing .rsb-resizer,
+.psb.resizing .psb-resizer {
+  background: var(--primary);
+  background-clip: content-box;
+  opacity: 0.35;
+}
+
+.rsb-resizer:active,
+.psb-resizer:active {
+  background: var(--primary);
+  opacity: 0.55;
+}
+
+.rsb.resizing,
+.psb.resizing {
+  user-select: none;
+}
+
+@media (max-width: 1199px) {
+  .rsb-resizer { display: none !important; }
 }
 
 .rsb-tabs {

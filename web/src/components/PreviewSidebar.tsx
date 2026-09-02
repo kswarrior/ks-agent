@@ -36,6 +36,53 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
   const psbResizingRef = useRef<{ startX: number; startW: number } | null>(null)
   const [isPsbResizing, setIsPsbResizing] = useState(false)
 
+  function handlePsbResizeStart(e: React.MouseEvent) {
+    if (isFullscreen) return
+    e.preventDefault()
+    psbResizingRef.current = { startX: e.clientX, startW: psbWidth }
+    setIsPsbResizing(true)
+  }
+
+  function handlePsbResizeDoubleClick() {
+    const def = 480
+    setPsbWidth(def)
+    try { localStorage.setItem('ks.psb.width', String(def)) } catch {}
+  }
+
+  useEffect(() => {
+    if (!isPsbResizing) return
+    function onMove(e: MouseEvent) {
+      const r = psbResizingRef.current
+      if (!r) return
+      const dx = r.startX - e.clientX
+      const next = Math.max(320, Math.min(900, r.startW + dx))
+      const maxVw = Math.floor(window.innerWidth * 0.7)
+      const clamped = Math.min(next, maxVw)
+      setPsbWidth(clamped)
+    }
+    function onUp() {
+      setIsPsbResizing(false)
+      psbResizingRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isPsbResizing])
+
+  useEffect(() => {
+    if (isPsbResizing) return
+    try { localStorage.setItem('ks.psb.width', String(psbWidth)) } catch {}
+  }, [psbWidth, isPsbResizing])
+
   const getDefaultProxiedUrl = useCallback(() => {
     if (chatPreview && activeChatId) return api.chatPreviewProxyUrl(activeChatId)
     if (activeProject) return api.previewProxyUrl(activeProject.id)
@@ -236,7 +283,8 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
 
   return (
     <>
-      <aside className={`psb open${isFullscreen ? ' fullscreen' : ''}`}>
+      <aside className={`psb open${isFullscreen ? ' fullscreen' : ''}${isPsbResizing ? ' resizing' : ''}`} style={!isFullscreen ? { width: psbWidth } as any : undefined}>
+        <div className="psb-resizer" onMouseDown={handlePsbResizeStart} onDoubleClick={handlePsbResizeDoubleClick} title="Drag to resize — double-click to reset" aria-hidden />
         <div className="psb-header">
           <div className="psb-title">
             {chatPreview && activeChatId ? `Preview :${chatPreview.port}${running === false ? ' — stopped' : running ? ' — running' : ''}` : `Preview${running === false ? ' — stopped' : running ? ' — running' : ''}`}
