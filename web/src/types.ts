@@ -91,6 +91,10 @@ export interface RetrySettings {
   retryOnStatusCodes: number[]
   stopOnStatusCodes: number[]
   alwaysRetry?: boolean
+  autoContinueEnabled?: boolean
+  autoContinueDelayMs?: number
+  autoContinueMaxAttempts?: number
+  autoContinueOnPlanIncomplete?: boolean
 }
 
 export interface ThemeSettings {
