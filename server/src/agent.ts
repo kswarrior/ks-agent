@@ -689,6 +689,23 @@ function isOutsideScopeCommand(command: string, projectPath: string, _chatId: st
   return null
 }
 
+function isLongRunningCommand(cmd: string): boolean {
+  const c = cmd.trim()
+  if (!c) return false
+  // Already explicitly backgrounded with trailing & — treat as long-running
+  if (/\s*&\s*$/.test(c)) return true
+  const lower = c.toLowerCase()
+  // Direct node execution of a file (not -v / --version)
+  if (/\bnode\s+(?!-v\b)(?!.*--version)(?:[^\n]*\.js\b|[^\n]*server\b|[^\n]*index\b)/i.test(c)) return true
+  if (/\bnodemon\b/i.test(c)) return true
+  if (/\b(ts-node|vite|next|nuxt|turbo)\b/i.test(lower) && /(dev|start|serve)/.test(lower)) return true
+  if (/\bnpm\s+run\s+(dev|start|serve|watch)\b/i.test(c)) return true
+  if (/\b(yarn|pnpm)\s+(dev|start|serve)\b/i.test(c)) return true
+  if (/\bpython[23]?\s+.*(app\.py|server\.py|main\.py|-m\s+http\.server)\b/i.test(c)) return true
+  if (/\b(uvicorn|gunicorn|php\s+-S|ruby\s+.*server|go\s+run|dotnet\s+run)\b/i.test(lower)) return true
+  return false
+}
+
 async function execShell(command: string, cwd: string): Promise<{ code: number; output: string }> {
   return await new Promise((resolve) => {
     exec(
@@ -1766,6 +1783,39 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         const outsideReason = isOutsideScopeCommand(command, ctx.projectPath, ctx.chatId)
         if (outsideReason) {
           return err(`Outside access blocked. ${outsideReason}. Your primary workspace is \${projectfolder} (\`${ctx.projectPath}\`) — inside is FULL permission (all subfolders/files under it), outside is ZERO permission and FORBIDDEN. Only inside \${projectfolder} is allowed.`)
+        }
+      }
+
+      // Background shell with .log for long-running servers like `node index.js` — run in background and give a .log file to check ok or not
+      if (isLongRunningCommand(command)) {
+        const cleanCmd = command.replace(/\s*&\s*$/, '').trim()
+        const ts = Date.now()
+        const logFileName = `.ks-shell-${ts}.log`
+        const logAbs = path.join(ctx.projectPath, logFileName)
+        const latestLogAbs = path.join(ctx.projectPath, '.ks-shell.log')
+        const escapedCmd = cleanCmd.replace(/'/g, `'\\''`)
+        const bgWrapper = `nohup sh -c '${escapedCmd}' > "${logAbs}" 2>&1 & pid=$!; echo "BACKGROUND_PID:$pid LOG:${logFileName}"; sleep 0.6; echo "---LOG-HEAD---"; head -n 80 "${logAbs}" 2>/dev/null || echo "(log empty / still starting)"; echo "---LOG-STATUS---"; if ps -p $pid > /dev/null 2>&1; then echo "RUNNING pid $pid"; else echo "EXITED pid $pid (check log)"; wait $pid 2>/dev/null; echo "exit:$?"; fi; ln -sf "${logFileName}" "${latestLogAbs}" 2>/dev/null || cp "${logAbs}" "${latestLogAbs}" 2>/dev/null || true`
+        try {
+          const bgRes = await execShell(bgWrapper, ctx.projectPath)
+          let extraTail = ''
+          try {
+            await new Promise(r => setTimeout(r, 700))
+            if (fs.existsSync(logAbs)) {
+              const st = fs.statSync(logAbs)
+              if (st.size > 0 && st.size < 64 * 1024) {
+                const full = fs.readFileSync(logAbs, 'utf8')
+                if (full.length > 1500) extraTail = `\n\n--- LOG TAIL (last 1000 chars) ---\n${full.slice(-1000)}`
+                else if (full.length > 500) extraTail = `\n\n--- LOG ---\n${full}`
+              }
+            }
+          } catch {}
+          const out = (bgRes.output || '') + extraTail
+          const isRunning = out.includes('RUNNING pid')
+          const statusLine = isRunning ? 'RUNNING (background)' : 'EXITED — check log for errors'
+          const logHint = `Log: ${logFileName} (also .ks-shell.log) — check via read_file "${logFileName}" or run_shell "tail -n 100 ${logFileName}" or "cat ${logFileName}"`
+          return ok(`Background shell started: \`${cleanCmd}\`\n${logHint}\n${out}\n\nStatus: ${statusLine}\nTip: use read_file to view full log, or run_shell "ps -p <pid>" to check process.`, `bg shell ${cleanCmd.slice(0, 50)} → ${logFileName} ${statusLine}`)
+        } catch (e: any) {
+          // fallback to normal exec below if background wrapper fails
         }
       }
 
