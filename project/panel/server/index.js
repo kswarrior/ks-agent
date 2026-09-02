@@ -222,7 +222,7 @@ app.post('/api/properties', authMiddleware, async (req, res) => {
 // --- Player list ---
 app.get('/api/players', authMiddleware, (req, res) => {
   res.json({ players: playerTracker.list() })
-}
+})
 
 // --- WebSocket for live logs + console ---
 wss.use((req, next) => {
