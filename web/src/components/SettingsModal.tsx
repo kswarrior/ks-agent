@@ -290,13 +290,22 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
     try {
       const settings = await api.updateRetrySettings(toSave)
-      setRetrySettings(settings)
-      setRetryDraft({ ...settings })
-      setMaxRetriesInput(String(settings.maxRetries))
-      setBaseDelayInput(String(settings.baseDelayMs))
-      setMaxDelayInput(String(settings.maxDelayMs))
-      setRetryOnInput(settings.retryOnStatusCodes.join(', '))
-      setStopOnInput(settings.stopOnStatusCodes.join(', '))
+      const merged: RetrySettings = {
+        autoContinueEnabled: false,
+        autoContinueDelayMs: 1500,
+        autoContinueMaxAttempts: 5,
+        autoContinueOnPlanIncomplete: true,
+        ...settings,
+      }
+      setRetrySettings(merged)
+      setRetryDraft({ ...merged })
+      setMaxRetriesInput(String(merged.maxRetries))
+      setBaseDelayInput(String(merged.baseDelayMs))
+      setMaxDelayInput(String(merged.maxDelayMs))
+      setRetryOnInput(merged.retryOnStatusCodes.join(', '))
+      setStopOnInput(merged.stopOnStatusCodes.join(', '))
+      setAutoDelayInput(String(merged.autoContinueDelayMs ?? 1500))
+      setAutoMaxInput(String(merged.autoContinueMaxAttempts ?? 5))
       toast('Retry settings saved', 'success')
     } catch (e: any) {
       setError(e.message)
@@ -311,7 +320,11 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       maxDelayMs: 30000,
       retryOnStatusCodes: [429, 500, 502, 503],
       stopOnStatusCodes: [400, 401, 403, 404],
-      alwaysRetry: false
+      alwaysRetry: false,
+      autoContinueEnabled: false,
+      autoContinueDelayMs: 1500,
+      autoContinueMaxAttempts: 5,
+      autoContinueOnPlanIncomplete: true
     }
     setRetryDraft(defaults)
     setMaxRetriesInput(String(defaults.maxRetries))
@@ -319,6 +332,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     setMaxDelayInput(String(defaults.maxDelayMs))
     setRetryOnInput(defaults.retryOnStatusCodes.join(', '))
     setStopOnInput(defaults.stopOnStatusCodes.join(', '))
+    setAutoDelayInput(String(defaults.autoContinueDelayMs ?? 1500))
+    setAutoMaxInput(String(defaults.autoContinueMaxAttempts ?? 5))
   }
 
   if (!open) return null
@@ -1057,6 +1072,88 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 </p>
               )}
 
+              <div style={{ borderTop: '1px solid var(--border)', margin: '18px 0 16px' }} />
+
+              <h4 style={{ marginBottom: 6 }}>Auto-continue</h4>
+              <p className="hint" style={{ marginBottom: 12 }}>
+                Automatically resume when AI stops but the plan is not complete, or when AI finishes without marking plan steps as done. After auto-start AI will recheck and call tools to complete remaining steps.
+              </p>
+
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={!!retryDraft.autoContinueEnabled}
+                  onChange={(e) => setRetryDraft({ ...retryDraft!, autoContinueEnabled: e.target.checked })}
+                />
+                Auto-start when AI stops &amp; plan not complete
+              </label>
+
+              <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, opacity: retryDraft.autoContinueEnabled ? 1 : 0.6 }}>
+                <input
+                  type="checkbox"
+                  disabled={!retryDraft.autoContinueEnabled}
+                  checked={retryDraft.autoContinueEnabled ? !!retryDraft.autoContinueOnPlanIncomplete : !!retryDraft.autoContinueOnPlanIncomplete}
+                  onChange={(e) => setRetryDraft({ ...retryDraft!, autoContinueOnPlanIncomplete: e.target.checked })}
+                />
+                Also auto-start when AI says done but didn't call tool for complete steps (recheck &amp; call complete_plan_step)
+              </label>
+
+              {retryDraft.autoContinueEnabled && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                  <div>
+                    <label className="field-label">Auto delay (ms)</label>
+                    <input
+                      className="input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="300-30000"
+                      value={autoDelayInput}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        setAutoDelayInput(raw)
+                        if (raw === '') {
+                        } else {
+                          const n = parseInt(raw, 10)
+                          if (!Number.isNaN(n)) setRetryDraft({ ...retryDraft!, autoContinueDelayMs: n })
+                        }
+                      }}
+                      onBlur={() => {
+                        const n = Math.max(300, Math.min(30000, parseInt(autoDelayInput, 10) || 1500))
+                        setAutoDelayInput(String(n))
+                        setRetryDraft({ ...retryDraft!, autoContinueDelayMs: n })
+                      }}
+                    />
+                    <p className="hint" style={{ marginTop: 4 }}>Wait before auto-resume. 1500ms recommended.</p>
+                  </div>
+                  <div>
+                    <label className="field-label">Max auto attempts</label>
+                    <input
+                      className="input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0-20"
+                      value={autoMaxInput}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        setAutoMaxInput(raw)
+                        if (raw === '') {
+                          setRetryDraft({ ...retryDraft!, autoContinueMaxAttempts: 0 })
+                        } else {
+                          const n = parseInt(raw, 10)
+                          if (!Number.isNaN(n)) setRetryDraft({ ...retryDraft!, autoContinueMaxAttempts: Math.max(0, Math.min(20, n)) })
+                        }
+                      }}
+                      onBlur={() => {
+                        const n = Math.max(0, Math.min(20, parseInt(autoMaxInput, 10) || 0))
+                        setAutoMaxInput(String(n))
+                        setRetryDraft({ ...retryDraft!, autoContinueMaxAttempts: n })
+                      }}
+                    />
+                    <p className="hint" style={{ marginTop: 4 }}>0 = unlimited until plan done (capped at 20). 5 recommended.</p>
+                  </div>
+                </div>
+              )}
+
               <div className="dialog-actions">
                 <button
                   className="btn btn-primary"
@@ -1065,6 +1162,10 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                     !retrySettings ||
                     (retryDraft.enabled === retrySettings.enabled &&
                     !!retryDraft.alwaysRetry === !!retrySettings.alwaysRetry &&
+                    !!retryDraft.autoContinueEnabled === !!retrySettings.autoContinueEnabled &&
+                    !!retryDraft.autoContinueOnPlanIncomplete === !!(retrySettings.autoContinueOnPlanIncomplete ?? true) &&
+                    (retryDraft.autoContinueDelayMs ?? 1500) === (retrySettings.autoContinueDelayMs ?? 1500) &&
+                    (retryDraft.autoContinueMaxAttempts ?? 5) === (retrySettings.autoContinueMaxAttempts ?? 5) &&
                     retryDraft.maxRetries === retrySettings.maxRetries &&
                     retryDraft.baseDelayMs === retrySettings.baseDelayMs &&
                     retryDraft.maxDelayMs === retrySettings.maxDelayMs &&
