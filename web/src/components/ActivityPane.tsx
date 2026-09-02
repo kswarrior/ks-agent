@@ -138,17 +138,33 @@ function isSkillReadActivity(a: Activity): boolean {
   if (a.ok === false) return false
   const raw = String((a.args as any)?.path ?? '').toLowerCase().trim()
   if (!raw) return false
-  // Normalize: strip skills/ prefix and handle various skill file names
   const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').replace(/^\.skills\//, '')
   const base = norm.split('/').pop() || norm
-  // Check known skill files and frontend sub-files
   const knownBases = new Set(['skill.md', 'frontend.md', 'react.md', 'ts.md', 'ejs.md', 'testing.md', 'debugging.md', 'refactoring.md', 'code-review.md'])
   if (knownBases.has(base)) return true
   if (norm.includes('skill') && norm.endsWith('.md')) return true
   if (norm.startsWith('frontend/') && norm.endsWith('.md')) return true
-  // also check original raw for skills prefix
   if (raw.includes('frontend/skill.md') || raw.includes('frontend/react.md') || raw.includes('frontend/ts.md') || raw.includes('frontend/ejs.md')) return true
   return false
+}
+
+function getSkillDisplayName(rawPath: string): string {
+  const raw = String(rawPath ?? '').trim()
+  const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').toLowerCase()
+  if (norm === 'frontend/skill.md') return 'Frontend'
+  if (norm === 'frontend/react.md') return 'Frontend React'
+  if (norm === 'frontend/ts.md') return 'Frontend TS'
+  if (norm === 'frontend/ejs.md') return 'Frontend EJS'
+  if (norm === 'testing.md') return 'Testing'
+  if (norm === 'debugging.md') return 'Debugging'
+  if (norm === 'refactoring.md') return 'Refactoring'
+  if (norm === 'code-review.md') return 'Code Review'
+  if (norm.endsWith('skill.md')) {
+    const base = norm.split('/').pop()?.replace('.md','') || norm
+    return base.charAt(0).toUpperCase() + base.slice(1)
+  }
+  // fallback: show normalized path
+  return raw.replace(/^skills\//,'').replace(/^\.\//,'')
 }
 
 export function ActivityPane({ activities }: { activities: Activity[] }) {
@@ -156,26 +172,49 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
   const [filter, setFilter] = useState<FilterKey>('all')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
+  const [skillOpen, setSkillOpen] = useState(false)
+  const skillRef = useRef<HTMLDivElement | null>(null)
 
-  const hasSkillRead = useMemo(() => activities.some(isSkillReadActivity), [activities])
+  // Derive skill activities and visible (non-skill) activities
+  const skillActivities = useMemo(() => activities.filter(isSkillReadActivity), [activities])
 
-  const sortedActivities = useMemo(
-    () => [...activities].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-    [activities]
-  )
+  const distinctSkills = useMemo(() => {
+    const map = new Map<string, { display: string; raw: string; count: number; lastTs: string }>()
+    for (const a of skillActivities) {
+      const raw = String((a.args as any)?.path ?? '').trim()
+      const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').toLowerCase()
+      const key = norm || raw.toLowerCase()
+      const display = getSkillDisplayName(raw)
+      const existing = map.get(key)
+      if (existing) {
+        existing.count += 1
+        if (new Date(a.timestamp).getTime() > new Date(existing.lastTs).getTime()) existing.lastTs = a.timestamp
+      } else {
+        map.set(key, { display, raw: raw.replace(/^skills\//,''), count: 1, lastTs: a.timestamp })
+      }
+    }
+    // sort by lastTs desc
+    return Array.from(map.values()).sort((a,b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime())
+  }, [skillActivities])
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: activities.length }
-    for (const a of activities) c[a.toolType] = (c[a.toolType] || 0) + 1
-    return c
+  const visibleActivities = useMemo(() => {
+    const sorted = [...activities].filter(a => !isSkillReadActivity(a)).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    return sorted
   }, [activities])
 
-  const filtered = useMemo(() => {
-    if (filter === 'all') return sortedActivities
-    return sortedActivities.filter((a) => a.toolType === filter)
-  }, [sortedActivities, filter])
+  const sortedVisible = visibleActivities
 
-  // Dropdown options: All, Write, Read, Edit, Shell, Preview — per latest request (write/read/shell etc) + List for explore
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: visibleActivities.length }
+    for (const a of visibleActivities) c[a.toolType] = (c[a.toolType] || 0) + 1
+    return c
+  }, [visibleActivities])
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return sortedVisible
+    return sortedVisible.filter((a) => a.toolType === filter)
+  }, [sortedVisible, filter])
+
   const dropdownFilters: Array<{ key: FilterKey; label: string; count: number }> = useMemo(() => {
     return [
       { key: 'all' as FilterKey, label: 'All', count: counts.all || 0 },
@@ -215,17 +254,74 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
     }
   }, [dropdownOpen])
 
+  useEffect(() => {
+    if (!skillOpen) return
+    function onClickOutside(e: MouseEvent) {
+      if (skillRef.current && !skillRef.current.contains(e.target as Node)) {
+        setSkillOpen(false)
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSkillOpen(false)
+    }
+    document.addEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [skillOpen])
+
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id))
   }
 
-  if (sortedActivities.length === 0) {
+  const skillButton = (
+    <div className="act-dropdown" ref={skillRef} style={{ position: 'relative' }}>
+      <button
+        className="btn btn-primary"
+        style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, lineHeight: 1 }}
+        aria-haspopup="menu"
+        aria-expanded={skillOpen}
+        onClick={() => setSkillOpen(v => !v)}
+      >
+        <span>Skills</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 18, height: 18, padding: '0 5px', background: 'rgba(255,255,255,0.22)', borderRadius: 99, fontSize: 11, fontWeight: 800 }}>{distinctSkills.length}</span>
+        <IconChevronDown size={12} style={{ transform: skillOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
+      </button>
+      {skillOpen && (
+        <div className="act-dropdown-menu" role="menu" aria-label="Skills used" style={{ minWidth: 220, right: 0 }}>
+          {distinctSkills.length === 0 ? (
+            <div style={{ padding: '12px 10px', fontSize: 13, color: 'var(--text-faint)', textAlign: 'center' }}>No skills used yet</div>
+          ) : (
+            distinctSkills.map((s) => (
+              <div key={s.raw} className="act-dropdown-item" style={{ cursor: 'default', justifyContent: 'space-between' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#86efac', flexShrink: 0, boxShadow: '0 0 6px rgba(134,239,172,0.6)' }} />
+                  <span className="act-dropdown-item-label" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.display}</span>
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }} title={s.raw}>{s.raw}</span>
+                  <span className="act-dropdown-item-count">{s.count}</span>
+                </span>
+              </div>
+            ))
+          )}
+          {distinctSkills.length > 0 && (
+            <div style={{ padding: '6px 10px 4px', fontSize: 11, color: 'var(--text-faint)', borderTop: '1px solid var(--border)', marginTop: 4 }}>
+              {skillActivities.length} skill read{skillActivities.length !== 1 ? 's' : ''} total — hidden from activity list
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
+  if (sortedVisible.length === 0) {
     return (
       <div className="activity-pane">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: hasSkillRead ? '#86efac14' : '#f8717114', border: `1px solid ${hasSkillRead ? '#86efac30' : '#f8717125'}`, borderRadius: 8, fontSize: 12, marginBottom: 10 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: hasSkillRead ? '#86efac' : '#f87171', flexShrink: 0, boxShadow: hasSkillRead ? '0 0 6px rgba(134,239,172,0.6)' : 'none' }} />
-          <span style={{ fontWeight: 700, color: hasSkillRead ? '#86efac' : '#f87171' }}>{hasSkillRead ? 'Skill Read' : 'Skill not Read'}</span>
-          <span style={{ color: 'var(--text-faint)', marginLeft: 'auto', fontSize: 11 }}>{hasSkillRead ? 'ready to edit' : 'read skill before edit'}</span>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+          {skillButton}
         </div>
         <div className="rsb-empty" style={{ flexDirection: 'column', gap: 10, padding: '24px 12px', textAlign: 'center' }}>
           <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -243,49 +339,47 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
 
   return (
     <div className="activity-pane">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: hasSkillRead ? '#86efac14' : '#f8717114', border: `1px solid ${hasSkillRead ? '#86efac30' : '#f8717125'}`, borderRadius: 8, fontSize: 12, marginBottom: 10 }}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: hasSkillRead ? '#86efac' : '#f87171', flexShrink: 0, boxShadow: hasSkillRead ? '0 0 6px rgba(134,239,172,0.6)' : 'none' }} />
-        <span style={{ fontWeight: 700, color: hasSkillRead ? '#86efac' : '#f87171' }}>{hasSkillRead ? 'Skill Read' : 'Skill not Read'}</span>
-        <span style={{ color: 'var(--text-faint)', marginLeft: 'auto', fontSize: 11 }}>{hasSkillRead ? 'ready to edit' : 'read skill before edit'}</span>
-      </div>
       <div className="activity-summary">
         <span className="activity-summary-count">
-          {activities.length} event{activities.length !== 1 ? 's' : ''}
+          {visibleActivities.length} event{visibleActivities.length !== 1 ? 's' : ''}
         </span>
 
-        <div className="act-dropdown" ref={dropdownRef}>
-          <button
-            className="act-dropdown-btn"
-            aria-haspopup="menu"
-            aria-expanded={dropdownOpen}
-            onClick={() => setDropdownOpen((v) => !v)}
-          >
-            <span className="act-dropdown-label">{activeFilterLabel}</span>
-            <span className="act-dropdown-count">{activeFilterCount}</span>
-            <IconChevronDown size={12} style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
-          </button>
-          {dropdownOpen && (
-            <div className="act-dropdown-menu" role="menu" aria-label="Filter activity">
-              {dropdownFilters.map((f) => {
-                const isActive = filter === f.key
-                return (
-                  <button
-                    key={f.key}
-                    role="menuitem"
-                    className={`act-dropdown-item${isActive ? ' active' : ''}`}
-                    onClick={() => {
-                      setFilter(f.key)
-                      setDropdownOpen(false)
-                    }}
-                  >
-                    <span className="act-dropdown-item-label">{f.label}</span>
-                    <span className="act-dropdown-item-count">{f.count}</span>
-                    {isActive && <IconCheck size={12} style={{ marginLeft: 4, flexShrink: 0 }} />}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          {skillButton}
+          <div className="act-dropdown" ref={dropdownRef}>
+            <button
+              className="act-dropdown-btn"
+              aria-haspopup="menu"
+              aria-expanded={dropdownOpen}
+              onClick={() => setDropdownOpen((v) => !v)}
+            >
+              <span className="act-dropdown-label">{activeFilterLabel}</span>
+              <span className="act-dropdown-count">{activeFilterCount}</span>
+              <IconChevronDown size={12} style={{ transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
+            </button>
+            {dropdownOpen && (
+              <div className="act-dropdown-menu" role="menu" aria-label="Filter activity">
+                {dropdownFilters.map((f) => {
+                  const isActive = filter === f.key
+                  return (
+                    <button
+                      key={f.key}
+                      role="menuitem"
+                      className={`act-dropdown-item${isActive ? ' active' : ''}`}
+                      onClick={() => {
+                        setFilter(f.key)
+                        setDropdownOpen(false)
+                      }}
+                    >
+                      <span className="act-dropdown-item-label">{f.label}</span>
+                      <span className="act-dropdown-item-count">{f.count}</span>
+                      {isActive && <IconCheck size={12} style={{ marginLeft: 4, flexShrink: 0 }} />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

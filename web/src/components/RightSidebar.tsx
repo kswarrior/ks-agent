@@ -26,11 +26,25 @@ const TABS: Array<{ id: RsTab; label: string }> = [
   { id: 'activity', label: 'Activity' }
 ]
 
+function isSkillRead(a: Activity): boolean {
+  if (a.toolType !== 'read_file') return false
+  if (a.ok === false) return false
+  const raw = String((a.args as any)?.path ?? '').toLowerCase().trim()
+  if (!raw) return false
+  const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').replace(/^\.skills\//, '')
+  const base = norm.split('/').pop() || norm
+  const knownBases = new Set(['skill.md', 'frontend.md', 'react.md', 'ts.md', 'ejs.md', 'testing.md', 'debugging.md', 'refactoring.md', 'code-review.md'])
+  if (knownBases.has(base)) return true
+  if (norm.includes('skill') && norm.endsWith('.md')) return true
+  if (norm.startsWith('frontend/') && norm.endsWith('.md')) return true
+  if (raw.includes('frontend/skill.md') || raw.includes('frontend/react.md') || raw.includes('frontend/ts.md') || raw.includes('frontend/ejs.md')) return true
+  return false
+}
+
 function PlanView({ plan, activities, streaming }: { plan: Plan | null; activities: Activity[]; streaming: boolean }) {
   // Derive flow stage from plan + activities
-  // Only treat explore as active when the agent has actually called an explore tool.
-  // Use any explore activity (not just those with summary) so the stage switches as soon as the tool is invoked.
-  const hasExplore = activities.some(a => ['list_files','read_file','run_shell'].includes(a.toolType))
+  // Only treat explore as active when the agent has actually called an explore tool (skill reads excluded).
+  const hasExplore = activities.some(a => !isSkillRead(a) && ['list_files','read_file','run_shell'].includes(a.toolType))
   const hasPlan = !!plan
   const workingStep = plan?.steps.find(s => s.status === 'working')
   const workingIdx = workingStep ? plan!.steps.indexOf(workingStep) : -1
@@ -425,11 +439,13 @@ function TerminalPane({ project }: { project: Project | null }) {
 
 export function RightSidebar({ open, activeProject, plan, activities, streaming, onClose }: RightSidebarProps) {
   const [tab, setTab] = useState<RsTab>('plan')
-  const activityCount = activities.length
-  const writeCount = activities.filter(a => a.toolType === 'write_file').length
-  const editCount = activities.filter(a => a.toolType === 'edit_file').length
-  const readCount = activities.filter(a => a.toolType === 'read_file').length
-  const hasRunning = activities.some(a => a.ok === undefined)
+  // Hide skill reads from activity counts/badge — they live only in Skills dropdown
+  const visibleActivities = activities.filter(a => !isSkillRead(a))
+  const activityCount = visibleActivities.length
+  const writeCount = visibleActivities.filter(a => a.toolType === 'write_file').length
+  const editCount = visibleActivities.filter(a => a.toolType === 'edit_file').length
+  const readCount = visibleActivities.filter(a => a.toolType === 'read_file').length
+  const hasRunning = visibleActivities.some(a => a.ok === undefined)
   const tabsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
   const dragMovedRef = useRef(false)
