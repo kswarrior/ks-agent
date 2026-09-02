@@ -79,6 +79,7 @@ export interface StreamHandlers {
   onMeta?: (meta: { assistantId: string; model: string }) => void
   onSnapshot?: (text: string) => void
   onDelta: (text: string) => void
+  onThinking?: (text: string) => void
   onTool?: (tool: { callId: string; name: string; args: string }) => void
   onToolResult?: (result: { callId: string; ok: boolean; summary: string; result?: string }) => void
   onPlan?: (plan: Plan) => void
@@ -149,6 +150,11 @@ export async function streamChatEvents(
             case 'delta':
               handlers.onDelta(parsed)
               break
+            case 'thinking': {
+              const t = typeof parsed === 'string' ? parsed : (parsed?.text ?? '')
+              if (t) handlers.onThinking?.(t)
+              break
+            }
             case 'tool':
               handlers.onTool?.(parsed)
               break

@@ -866,7 +866,7 @@ async function runGeneration(
         let roundText = ''
         const startLen = job.content.length
         try {
-          for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings, maxTokens)) {
+          for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings, maxTokens, (thinking) => emitTo(job, 'thinking', JSON.stringify({ text: thinking })))) {
             roundText += delta
             job.content += delta
             emitTo(job, 'delta', JSON.stringify(delta))

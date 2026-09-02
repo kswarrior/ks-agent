@@ -2065,7 +2065,10 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           },
           opts.signal,
           opts.retrySettings,
-          opts.maxTokens
+          opts.maxTokens,
+          (reasoning) => {
+            try { ctx.onEvent('thinking', JSON.stringify({ text: reasoning })) } catch {}
+          }
         )
         break
       } catch (e: any) {
