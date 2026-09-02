@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { loginStart, loginSuccess, loginFailure } from '../types.js'
 import { useDispatch } from 'react-redux'
-import { login } from '../api'
+import { login } from '../api.jsx'
 
 export function LoginPage({ navigate }) {
   const [username, setUsername] = useState('admin')
@@ -13,7 +13,7 @@ export function LoginPage({ navigate }) {
     e.preventDefault()
     dispatch(loginStart())
     try {
-      const { token } = await login('/login', { username, password })
+      const { token } = await login(username, password)
       dispatch(loginSuccess(token))
       navigate('/dashboard')
     } catch (err) {
