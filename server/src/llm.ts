@@ -302,6 +302,7 @@ function parseChunk(payload: string): RawChunk | null {
 
 /**
  * Streams an OpenAI-compatible chat completion and yields text deltas as they arrive.
+ * If onThinking is provided, reasoning/thinking deltas are forwarded there instead of being hidden.
  */
 export async function* streamChat(
   baseUrl: string,
@@ -310,7 +311,8 @@ export async function* streamChat(
   messages: LLMMessage[],
   signal?: AbortSignal,
   retrySettings?: RetrySettings,
-  maxTokens?: number
+  maxTokens?: number,
+  onThinking?: (text: string) => void
 ): AsyncGenerator<string> {
   const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true, ...(maxTokens ? { max_tokens: maxTokens } : {}) }, signal, retrySettings)
   const decoder = new TextDecoder()
@@ -339,16 +341,14 @@ export async function* streamChat(
       if (payload === '[DONE]') { sawDone = true; break }
       const chunk = parseChunk(payload)
       if (!chunk) continue
-      // Hide reasoning/thinking — only stream visible content to user
       const out = chunk.text ?? ''
       if (out) {
         yieldedThisRead = true
         lastContentAt = Date.now()
         yield out
       } else if (chunk.reasoning != null) {
-        // Reasoning deltas don't count as visible content but indicate
-        // the stream is still alive - refresh idle timer without yielding.
         lastContentAt = Date.now()
+        if (onThinking) onThinking(chunk.reasoning)
       }
     }
     if (sawDone) break
@@ -367,6 +367,7 @@ export async function* streamChat(
       if (chunk) {
         const out = chunk.text ?? ''
         if (out) yield out
+        else if (chunk.reasoning != null && onThinking) onThinking(chunk.reasoning)
       }
     }
   }
@@ -382,8 +383,8 @@ export interface AgentStreamResult {
 
 /**
  * Streams a chat completion with tools enabled. Text deltas are forwarded to
- * `onDelta` as they arrive; resolves with the round's full text, finish reason
- * and accumulated tool calls.
+ * `onDelta` as they arrive; reasoning/thinking deltas to `onThinking` if provided.
+ * Resolves with the round's full text, finish reason and accumulated tool calls.
  */
 export async function streamChatWithTools(
   baseUrl: string,
@@ -394,7 +395,8 @@ export async function streamChatWithTools(
   onDelta: (text: string) => void,
   signal?: AbortSignal,
   retrySettings?: RetrySettings,
-  maxTokens?: number
+  maxTokens?: number,
+  onThinking?: (text: string) => void
 ): Promise<AgentStreamResult> {
   const reader = await openStream(
     baseUrl,
@@ -432,7 +434,6 @@ export async function streamChatWithTools(
       if (payload === '[DONE]') { sawDone2 = true; break }
       const chunk = parseChunk(payload)
       if (!chunk) continue
-      // Hide reasoning/thinking — only forward visible content
       const deltaOut = chunk.text ?? ''
       if (deltaOut) {
         text += deltaOut
@@ -442,6 +443,7 @@ export async function streamChatWithTools(
       } else if (chunk.reasoning != null) {
         progressedThisRead = true
         lastProgressAt = Date.now()
+        if (onThinking) onThinking(chunk.reasoning)
       }
       if (chunk.finishReason) {
         finishReason = chunk.finishReason
@@ -475,7 +477,7 @@ export async function streamChatWithTools(
         if (deltaOut) {
           text += deltaOut
           onDelta(deltaOut)
-        }
+        } else if (chunk.reasoning != null && onThinking) onThinking(chunk.reasoning)
         if (chunk.finishReason) finishReason = chunk.finishReason
         for (const d of chunk.toolCallDeltas ?? []) {
           const cur = calls.get(d.index) ?? { id: '', name: '', args: '' }
