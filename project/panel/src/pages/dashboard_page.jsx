@@ -119,7 +119,7 @@ function FilesSection({ files, isLoading }) {
           {files.map((f) => (
             <li key={f.name}>
               <span>{f.name}</span>
-              {f.isDirectory ? '' : <span title={f.size} bytes</span>}
+              {f.isDirectory ? '' : <span title={String(f.size)}>bytes</span>}
             </li>
           ))}
         </ul>
