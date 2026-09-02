@@ -195,13 +195,15 @@ function CodeWithLineNumbers({ code, startLine = 1, variant = 'default', lang = 
   const maxShow = 5000
   const displayLines = lines.length > maxShow ? lines.slice(0, maxShow) : lines
   const truncated = lines.length > maxShow
-  const bg = variant === 'old' ? '#fef2f2' : variant === 'new' ? '#f0fdf4' : 'var(--input)'
-  const border = variant === 'old' ? '#fecaca' : variant === 'new' ? '#bbf7d0' : 'var(--border)'
-  const gutterBg = variant === 'default' ? 'var(--surface-2)' : variant === 'old' ? '#fee2e2' : '#dcfce7'
-  const gutterColor = variant === 'default' ? 'var(--text-faint)' : variant === 'old' ? '#b91c1c' : '#15803d'
+  // only numbers bar is colored for edit (old=red, new=green), code area stays like write (default)
+  const bg = 'var(--input)'
+  const border = 'var(--border)'
+  const gutterBg = variant === 'old' ? '#fee2e2' : variant === 'new' ? '#dcfce7' : 'var(--surface-2)'
+  const gutterColor = variant === 'old' ? '#b91c1c' : variant === 'new' ? '#15803d' : 'var(--text-faint)'
+  const gutterBorder = variant === 'old' ? '#fecaca' : variant === 'new' ? '#bbf7d0' : 'var(--border)'
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', border: `1px solid ${border}`, borderRadius: 6, overflow: 'auto', background: bg, maxHeight: 280, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 11.5, lineHeight: 1.55 }}>
-      <div style={{ background: gutterBg, borderRight: `1px solid ${border}`, padding: '6px 6px', textAlign: 'right', color: gutterColor, userSelect: 'none', fontSize: 11, lineHeight: 1.55, minWidth: 38, flexShrink: 0, position: 'sticky', left: 0 }}>
+      <div style={{ background: gutterBg, borderRight: `1px solid ${gutterBorder}`, padding: '6px 6px', textAlign: 'right', color: gutterColor, userSelect: 'none', fontSize: 11, lineHeight: 1.55, minWidth: 38, flexShrink: 0, position: 'sticky', left: 0 }}>
         {displayLines.map((_, i) => (
           <div key={i} style={{ lineHeight: 1.55, whiteSpace: 'pre' }}>{startLine + i}</div>
         ))}
