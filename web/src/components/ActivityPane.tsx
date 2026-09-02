@@ -528,20 +528,23 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
                           const isAddition = !oldStr.trim()
                           const filePath = String((activity.args as any)?.path ?? '')
                           const lang = getLangFromPath(filePath)
+                          const editStartLine = Number((activity.args as any)?.editStartLine ?? (activity.args as any)?.edit_start_line ?? 1) || 1
+                          const oldLineCount = oldStr ? oldStr.split('\n').length : 0
+                          const newLineCount = newStr ? newStr.split('\n').length : 0
                           return (
                             <>
                               <div className="activity-detail-section">
-                                <strong>Old {isReplaceAll ? '(replace all)' : ''}{isAddition ? ' — empty (addition)' : ''}</strong>
+                                <strong>Old {isReplaceAll ? '(replace all)' : ''}{isAddition ? ' — empty (addition)' : ` @ line ${editStartLine}${oldLineCount > 1 ? `–${editStartLine + oldLineCount - 1}` : ''}`}</strong>
                                 {oldStr ? (
-                                  <CodeWithLineNumbers code={oldStr} startLine={1} variant={isAddition ? 'default' : 'old'} lang={lang} />
+                                  <CodeWithLineNumbers code={oldStr} startLine={editStartLine} variant={isAddition ? 'default' : 'old'} lang={lang} />
                                 ) : (
                                   <div style={{ padding: '6px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>(empty — new addition)</div>
                                 )}
                               </div>
                               <div className="activity-detail-section">
-                                <strong>New</strong>
+                                <strong>New @ line {editStartLine}{newLineCount > 1 ? `–${editStartLine + newLineCount - 1}` : ''}</strong>
                                 {newStr ? (
-                                  <CodeWithLineNumbers code={newStr} startLine={1} variant="new" lang={lang} />
+                                  <CodeWithLineNumbers code={newStr} startLine={editStartLine} variant="new" lang={lang} />
                                 ) : (
                                   <div style={{ padding: '6px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-faint)', fontStyle: 'italic' }}>(empty)</div>
                                 )}
