@@ -1739,10 +1739,10 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         }
 
         // If denied, refuse execution. The AI sees this error and must not retry.
-        if (!options.includes(answer)) {
+        if (answer !== 'Yes, run it') {
           q.status = 'answered'
           q.answer = answer
-          q.selectedOption = null
+          q.selectedOption = options.includes(answer) ? answer : null
           q.answeredAt = new Date().toISOString()
           saveDb()
           ctx.onEvent('question', JSON.stringify(q))
@@ -1761,7 +1761,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       {
         const outsideReason = isOutsideScopeCommand(command, ctx.projectPath, ctx.chatId)
         if (outsideReason) {
-          return err(`Outside access blocked. ${outsideReason}. Your primary workspace is \${projectfolder} (\`${ctx.projectPath}\`) — inside is FULL permission (all subfolders/files under it), outside is ZERO permission and FORBIDDEN. Only inside ${projectfolder} is allowed.`)
+          return err(`Outside access blocked. ${outsideReason}. Your primary workspace is \${projectfolder} (\`${ctx.projectPath}\`) — inside is FULL permission (all subfolders/files under it), outside is ZERO permission and FORBIDDEN. Only inside \${projectfolder} is allowed.`)
         }
       }
 
