@@ -129,6 +129,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const highlightRef = useRef<HTMLPreElement>(null)
+  const gutterRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setDir('')
@@ -455,10 +456,18 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     return highlightCode(editContent, selectedLanguage)
   }, [editContent, selectedLanguage, selected, editLoading])
 
+  const lineCount = useMemo(() => {
+    if (!editContent) return 1
+    return editContent.split('\n').length
+  }, [editContent])
+
   function syncScroll() {
     if (textareaRef.current && highlightRef.current) {
       highlightRef.current.scrollTop = textareaRef.current.scrollTop
       highlightRef.current.scrollLeft = textareaRef.current.scrollLeft
+    }
+    if (textareaRef.current && gutterRef.current) {
+      gutterRef.current.scrollTop = textareaRef.current.scrollTop
     }
   }
 
@@ -579,18 +588,25 @@ export function FilesPane({ projectId }: FilesPaneProps) {
           </div>
           <div className="fp-editor-wrap" style={{ borderColor: selectedColor }}>
             <div className="fp-editor-container">
-              <pre ref={highlightRef} className="fp-highlight" aria-hidden="true"><code dangerouslySetInnerHTML={{ __html: highlightedHtml + '<br>' }} /></pre>
-              <textarea
-                ref={textareaRef}
-                className="fp-editor-textarea fp-edit-area fp-editor-textarea--highlighted"
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                onScroll={syncScroll}
-                disabled={editLoading}
-                placeholder={editLoading ? 'Loading…' : 'Start typing…'}
-                spellCheck={false}
-                autoFocus
-              />
+              <div ref={gutterRef} className="fp-gutter" aria-hidden="true">
+                {Array.from({ length: lineCount }, (_, i) => (
+                  <div key={i} className="fp-gutter-line">{i + 1}</div>
+                ))}
+              </div>
+              <div className="fp-editor-inner">
+                <pre ref={highlightRef} className="fp-highlight" aria-hidden="true"><code dangerouslySetInnerHTML={{ __html: highlightedHtml + '<br>' }} /></pre>
+                <textarea
+                  ref={textareaRef}
+                  className="fp-editor-textarea fp-edit-area fp-editor-textarea--highlighted"
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  onScroll={syncScroll}
+                  disabled={editLoading}
+                  placeholder={editLoading ? 'Loading…' : 'Start typing…'}
+                  spellCheck={false}
+                  autoFocus
+                />
+              </div>
             </div>
           </div>
           <div className="fp-editor-footer" style={{ borderLeft: `3px solid ${selectedColor}`, paddingLeft: 8 }}>
