@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ConsoleLog } from '../types';
+import type { ConsoleLog } from '../types';
 
 interface ConsoleProps {
   logs?: ConsoleLog[];
