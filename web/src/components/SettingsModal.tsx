@@ -64,6 +64,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [maxDelayInput, setMaxDelayInput] = useState('')
   const [retryOnInput, setRetryOnInput] = useState('')
   const [stopOnInput, setStopOnInput] = useState('')
+  const [autoDelayInput, setAutoDelayInput] = useState('')
+  const [autoMaxInput, setAutoMaxInput] = useState('')
   const [themeSettings, setThemeSettings] = useState<ThemeSettings | null>(null)
   const [themeDraft, setThemeDraft] = useState<ThemeSettings | null>(null)
   const [themePrimaryInput, setThemePrimaryInput] = useState('')
@@ -179,13 +181,23 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   async function loadRetrySettings() {
     try {
       const settings = await api.getRetrySettings()
-      setRetrySettings(settings)
-      setRetryDraft({ ...settings })
-      setMaxRetriesInput(String(settings.maxRetries))
-      setBaseDelayInput(String(settings.baseDelayMs))
-      setMaxDelayInput(String(settings.maxDelayMs))
-      setRetryOnInput(settings.retryOnStatusCodes.join(', '))
-      setStopOnInput(settings.stopOnStatusCodes.join(', '))
+      // migrate defaults for new fields (old DBs)
+      const merged: RetrySettings = {
+        autoContinueEnabled: false,
+        autoContinueDelayMs: 1500,
+        autoContinueMaxAttempts: 5,
+        autoContinueOnPlanIncomplete: true,
+        ...settings,
+      }
+      setRetrySettings(merged)
+      setRetryDraft({ ...merged })
+      setMaxRetriesInput(String(merged.maxRetries))
+      setBaseDelayInput(String(merged.baseDelayMs))
+      setMaxDelayInput(String(merged.maxDelayMs))
+      setRetryOnInput(merged.retryOnStatusCodes.join(', '))
+      setStopOnInput(merged.stopOnStatusCodes.join(', '))
+      setAutoDelayInput(String(merged.autoContinueDelayMs ?? 1500))
+      setAutoMaxInput(String(merged.autoContinueMaxAttempts ?? 5))
     } catch (e: any) {
       toast(e.message, 'error')
     }
@@ -262,6 +274,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     const parsedMaxRetries = Math.max(0, Math.min(1000, parseInt(maxRetriesInput, 10) || 0))
     const parsedBaseDelay = Math.max(100, Math.min(60000, parseInt(baseDelayInput, 10) || 100))
     const parsedMaxDelay = Math.max(1000, Math.min(300000, parseInt(maxDelayInput, 10) || 1000))
+    const parsedAutoDelay = Math.max(300, Math.min(30000, parseInt(autoDelayInput, 10) || 1500))
+    const parsedAutoMax = Math.max(0, Math.min(20, parseInt(autoMaxInput, 10) || 0))
     const parsedRetryOn = retryOnInput.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n >= 100 && n < 600)
     const parsedStopOn = stopOnInput.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n >= 100 && n < 600)
     const toSave: RetrySettings = {
@@ -269,6 +283,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       maxRetries: parsedMaxRetries,
       baseDelayMs: parsedBaseDelay,
       maxDelayMs: parsedMaxDelay,
+      autoContinueDelayMs: parsedAutoDelay,
+      autoContinueMaxAttempts: parsedAutoMax,
       retryOnStatusCodes: parsedRetryOn,
       stopOnStatusCodes: parsedStopOn
     }

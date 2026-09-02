@@ -1586,14 +1586,18 @@ app.get('/api/settings/retry', (c) => {
 
 app.patch('/api/settings/retry', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  const allowedKeys = ['enabled', 'maxRetries', 'baseDelayMs', 'maxDelayMs', 'retryOnStatusCodes', 'stopOnStatusCodes', 'alwaysRetry'] as const
+  const allowedKeys = ['enabled', 'maxRetries', 'baseDelayMs', 'maxDelayMs', 'retryOnStatusCodes', 'stopOnStatusCodes', 'alwaysRetry', 'autoContinueEnabled', 'autoContinueDelayMs', 'autoContinueMaxAttempts', 'autoContinueOnPlanIncomplete'] as const
   const patch: Partial<RetrySettings> = {}
   for (const key of allowedKeys) {
     if (body[key] !== undefined) {
       const val = body[key]
       if (key === 'enabled') patch.enabled = Boolean(val)
       else if (key === 'alwaysRetry') (patch as any).alwaysRetry = Boolean(val)
+      else if (key === 'autoContinueEnabled') (patch as any).autoContinueEnabled = Boolean(val)
+      else if (key === 'autoContinueOnPlanIncomplete') (patch as any).autoContinueOnPlanIncomplete = Boolean(val)
       else if (key === 'maxRetries') patch.maxRetries = Math.max(0, Math.min(1000, Number(val) || 0))
+      else if (key === 'autoContinueMaxAttempts') (patch as any).autoContinueMaxAttempts = Math.max(0, Math.min(20, Number(val) || 0))
+      else if (key === 'autoContinueDelayMs') (patch as any).autoContinueDelayMs = Math.max(300, Math.min(30000, Number(val) || 1500))
       else if (key === 'baseDelayMs') patch.baseDelayMs = Math.max(100, Math.min(60000, Number(val)))
       else if (key === 'maxDelayMs') patch.maxDelayMs = Math.max(1000, Math.min(300000, Number(val)))
       else if (key === 'retryOnStatusCodes' && Array.isArray(val)) {
