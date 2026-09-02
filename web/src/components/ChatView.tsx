@@ -88,6 +88,7 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
     startRef.current = Date.now()
     setRemaining(retryInfo.delay)
     if (intervalRef.current) clearInterval(intervalRef.current)
+    // tick every 200ms so 2s -> after 1s shows 1s -> after next 1s shows 0 (Retrying…)
     intervalRef.current = setInterval(() => {
       const elapsed = Date.now() - startRef.current
       const rem = Math.max(0, retryInfo.delay - elapsed)
@@ -96,7 +97,7 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
-    }, 250)
+    }, 200)
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
@@ -118,7 +119,7 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
           padding: '8px 10px',
           background: 'var(--surface-2)',
           border: '1px solid var(--border)',
-          borderRadius: 8,
+          borderRadius: 6,
           fontSize: 13,
         }}
       >
@@ -140,7 +141,7 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
                 padding: '3px 8px',
                 background: 'var(--danger-bg)',
                 border: '1px solid #58201f',
-                borderRadius: 6,
+                borderRadius: 4,
                 color: 'var(--danger)',
                 fontSize: 11.5,
                 fontWeight: 700,
@@ -160,7 +161,7 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
                 padding: '3px 6px',
                 background: 'var(--btn)',
                 border: '1px solid var(--border)',
-                borderRadius: 6,
+                borderRadius: 4,
                 color: 'var(--text-dim)',
                 fontSize: 11,
                 fontWeight: 600,
@@ -178,7 +179,7 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
             style={{
               background: 'var(--input)',
               border: '1px solid var(--border)',
-              borderRadius: 6,
+              borderRadius: 4,
               padding: '8px 10px',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
               fontSize: 11.5,
