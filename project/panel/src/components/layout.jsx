@@ -1,86 +1,70 @@
-import { Outlet, Navigate, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Outlet, Navigate, useLocation, Link } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { toggleSidebar, logout } from '../types.js'
-import { Link } from 'react-router-dom'
-
-import { useEffect } from 'react'
+import { logout as clearLocal } from '../api.jsx'
 
 export function Layout() {
   const dispatch = useDispatch()
   const location = useLocation()
   const isAuth = useSelector((s) => s.isAuthenticated)
+  const sidebarOpen = useSelector((s) => s.sidebarOpen)
+  const user = useSelector((s) => s.currentUser)
 
-  // Auto-logout if session expires or user goes to login while authenticated
+  // If we land on /login while authenticated, kick to dashboard
   useEffect(() => {
     if (location.pathname === '/login' && isAuth) {
-      dispatch(logout())
+      window.history.replaceState(null, '', '/dashboard')
     }
-  }, [location.pathname, isAuth, dispatch])
+  }, [location.pathname, isAuth])
 
-  // Redirect authenticated away from login
-  useEffect(() => {
-    if (!isAuth && location.pathname !== '/login') {
-      // Could redirect to login, but we'll let the app handle it
-    }
-  }, [isAuth, location.pathname])
+  const handleLogout = () => {
+    dispatch(logout())
+    clearLocal()
+    window.location.href = '/login'
+  }
+
+  const isActive = (p) => location.pathname.startsWith(p)
 
   return (
     <div className="app">
       <header className="app-header">
-        <nav>
+        <nav className="header-nav">
           <Link to="/dashboard" className="logo">
-            <span>MC</span>Panel
+            <span>⛏</span> MC Panel
           </Link>
-          <button
-            className="header-btn"
-            onClick={() => dispatch(toggleSidebar())}
-            aria-label="Toggle sidebar"
-          >
-            ☰
-          </button>
+          <div className="header-right">
+            {user?.sub && <span className="user-chip">{user.sub}</span>}
+            <button className="btn btn-ghost" onClick={handleLogout}>Logout</button>
+            <button
+              className="btn btn-ghost icon-btn"
+              onClick={() => dispatch(toggleSidebar())}
+              aria-label="Toggle sidebar"
+              title="Toggle sidebar"
+            >
+              ☰
+            </button>
+          </div>
         </nav>
       </header>
 
-      <main className="app-main">
-        <nav className="app-sidebar">
-          <ul>
-            <li>
-              <Link to="/dashboard" className={location.pathname === '/dashboard' || location.pathname === '' ? 'active' : ''}>
-                Dashboard
-              </Link>
-            </li>
-            <li>
-              <Link to="console" className={location.pathname === 'console' ? 'active' : ''}>
-                Console
-              </Link>
-            </li>
-            <li>
-              <Link to="file-manager" className={location.pathname === 'file-manager' ? 'active' : ''}>
-                Files
-              </Link>
-            </li>
-            <li>
-              <Link to="players" className={location.pathname === 'players' ? 'active' : ''}>
-                Players
-              </Link>
-            </li>
-            <li>
-              <Link to="properties" className={location.pathname === 'properties' ? 'active' : ''}>
-                Server Properties
-              </Link>
-            </li>
-          </ul>
-        </nav>
-
-        <Outlet />
-
-        {/* Auth redirect */}
-        {useSelector((s) => !s.isAuthenticated) && (
-          <nav className="auth-redirect">
-            <Link to="/login">Log in to access panel</Link>
+      <div className="app-body">
+        {sidebarOpen && (
+          <nav className="app-sidebar">
+            <ul>
+              <li><Link to="/dashboard" className={isActive('/dashboard') ? 'active' : ''}>📊 Dashboard</Link></li>
+              <li><Link to="/console" className={isActive('/console') ? 'active' : ''}>💻 Console</Link></li>
+              <li><Link to="/file-manager" className={isActive('/file-manager') ? 'active' : ''}>📁 Files</Link></li>
+              <li><Link to="/players" className={isActive('/players') ? 'active' : ''}>👥 Players</Link></li>
+              <li><Link to="/properties" className={isActive('/properties') ? 'active' : ''}>⚙️ Properties</Link></li>
+            </ul>
           </nav>
         )}
-      </main>
+
+        <main className="app-main">
+          {isAuth ? <Outlet /> : <Navigate to="/login" replace />}
+        </main>
+      </div>
     </div>
   )
 }
