@@ -244,6 +244,6 @@ export default app;
 // Start server if run directly
 if (import.meta.main) {
   serve(app, () => {
-    console.log('🎮 Minecraft Panel server running on http://localhost:3000');
+    console.log('🎮 Minecraft Panel server running on http://localhost:5174');
   });
 }
