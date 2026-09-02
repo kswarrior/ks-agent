@@ -2978,19 +2978,37 @@ app.patch('/api/projects/:id/files', async (c) => {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
-  const from = String(body.from ?? '')
-  const to = String(body.to ?? '')
+  const from = String(body.from ?? '').trim()
+  const toRaw = String(body.to ?? '').trim()
   const fromParts = from.split('/').filter(Boolean)
   if (fromParts.length === 0 || !fromParts.every(validSegment)) {
     return c.json({ error: 'Invalid source path' }, 400)
   }
-  if (!validSegment(to)) return c.json({ error: 'Invalid new name' }, 400)
+  if (!toRaw) return c.json({ error: 'Invalid new name' }, 400)
+  // Allow `to` to be either a single name (rename in same dir) or a path like `public/background.webp` (move)
+  const toTrimmed = toRaw.replace(/^\/+/, '')
+  const toParts = toTrimmed.split('/').filter(Boolean)
+  if (toParts.length === 0 || !toParts.every(validSegment)) {
+    return c.json({ error: 'Invalid new name' }, 400)
+  }
   const fromAbs = resolveInProject(project.path, from)
   if (!fromAbs) return c.json({ error: 'Invalid path' }, 400)
-  const toAbs = path.join(path.dirname(fromAbs), to)
+  let toAbs: string | null
+  if (toTrimmed.includes('/')) {
+    // Destination is a path — treat as project-relative (like mv public/background.webp)
+    toAbs = resolveInProject(project.path, toTrimmed)
+  } else {
+    toAbs = path.join(path.dirname(fromAbs), toTrimmed)
+    // Ensure it stays within project (in case dirname + to escapes via symlink)
+    const within = resolveInProject(project.path, path.relative(project.path, toAbs))
+    if (!within) return c.json({ error: 'Invalid destination' }, 400)
+    toAbs = within
+  }
+  if (!toAbs) return c.json({ error: 'Invalid destination' }, 400)
   if (!fs.existsSync(fromAbs)) return c.json({ error: `"${from}" not found` }, 400)
-  if (fs.existsSync(toAbs)) return c.json({ error: `"${to}" already exists` }, 400)
+  if (fs.existsSync(toAbs)) return c.json({ error: `"${toTrimmed}" already exists` }, 400)
   try {
+    fs.mkdirSync(path.dirname(toAbs), { recursive: true })
     fs.renameSync(fromAbs, toAbs)
   } catch (e: any) {
     return c.json({ error: e?.message || 'Rename failed' }, 400)
