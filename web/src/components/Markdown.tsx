@@ -51,13 +51,26 @@ export const Markdown = memo(function Markdown({ content }: { content: string })
               </>
             )
           },
+          h1: ({ children }) => <h1>{children}</h1>,
+          h2: ({ children }) => <h2>{children}</h2>,
+          h3: ({ children }) => <h3>{children}</h3>,
+          h4: ({ children }) => <h4>{children}</h4>,
+          table: ({ children }) => (
+            <div className="md-table-wrap">
+              <table>{children}</table>
+            </div>
+          ),
+          blockquote: ({ children }) => <blockquote>{children}</blockquote>,
+          hr: () => <hr />,
+          ul: ({ children }) => <ul>{children}</ul>,
+          ol: ({ children }) => <ol>{children}</ol>,
+          li: ({ children }) => <li>{children}</li>,
           a: ({ href, children }) => {
             const safeHref = (() => {
               if (!href) return '#'
               const h = String(href).trim()
               if (/^(https?:\/\/|mailto:|tel:|\/|#)/i.test(h)) return h
               if (/^javascript:/i.test(h) || /^data:/i.test(h) || /^vbscript:/i.test(h)) return '#'
-              // allow relative without protocol
               if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(h)) return h
               return '#'
             })()
