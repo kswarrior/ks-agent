@@ -1,4 +1,6 @@
-import {
+import { actionTypes } from './types'
+
+const {
   SET_CURRENT_USER,
   LOGIN_START,
   LOGIN_SUCCESS,
@@ -17,7 +19,7 @@ import {
   CLEAR_SELECTED_FILE,
   UPDATE_PROPERTIES,
   SET_PROP_LOADING,
-} from './types'
+} = actionTypes
 
 const initialState = {
   isAuthenticated: false,
