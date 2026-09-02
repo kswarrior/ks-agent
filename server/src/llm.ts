@@ -225,7 +225,6 @@ async function openStream(
         settings.baseDelayMs * Math.pow(2, attempt) + Math.random() * 800,
         settings.maxDelayMs
       )
-      console.warn(`[llm retry] Provider ${status} — retry ${attempt + 1}/${effectiveMaxRetries} in ${Math.round(delay)}ms: ${errorMsg.slice(0,120)}`)
       // Respect Retry-After header if present (seconds or http-date)
       const retryAfter = res.headers.get('retry-after')
       if (retryAfter) {
@@ -240,7 +239,9 @@ async function openStream(
           }
         }
       }
-
+      const reason = status === 429 ? 'rate_limit' : isResourceExhausted ? 'resource_exhausted' : 'provider_error'
+      console.warn(`[llm retry] Provider ${status} — retry ${attempt + 1}/${effectiveMaxRetries} in ${Math.round(delay)}ms: ${errorMsg.slice(0,120)}`)
+      try { onRetry?.({ attempt: attempt + 1, maxAttempts: effectiveMaxRetries, delay, reason, error: errorMsg.slice(0, 500) }) } catch {}
       await delayWithSignal(delay, signal).catch((err) => { throw Object.assign(err, { name: 'AbortError' }) })
       attempt++
       continue
@@ -314,9 +315,10 @@ export async function* streamChat(
   signal?: AbortSignal,
   retrySettings?: RetrySettings,
   maxTokens?: number,
-  onThinking?: (text: string) => void
+  onThinking?: (text: string) => void,
+  onRetry?: (info: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }) => void
 ): AsyncGenerator<string> {
-  const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true, ...(maxTokens ? { max_tokens: maxTokens } : {}) }, signal, retrySettings)
+  const reader = await openStream(baseUrl, apiKey, { model, messages, stream: true, ...(maxTokens ? { max_tokens: maxTokens } : {}) }, signal, retrySettings, onRetry)
   const decoder = new TextDecoder()
   let buf = ''
   let lastContentAt = Date.now()
@@ -398,14 +400,16 @@ export async function streamChatWithTools(
   signal?: AbortSignal,
   retrySettings?: RetrySettings,
   maxTokens?: number,
-  onThinking?: (text: string) => void
+  onThinking?: (text: string) => void,
+  onRetry?: (info: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }) => void
 ): Promise<AgentStreamResult> {
   const reader = await openStream(
     baseUrl,
     apiKey,
     { model, messages, stream: true, tools, tool_choice: 'auto', ...(maxTokens ? { max_tokens: maxTokens } : {}) },
     signal,
-    retrySettings
+    retrySettings,
+    onRetry
   )
   const decoder = new TextDecoder()
   let buf = ''
