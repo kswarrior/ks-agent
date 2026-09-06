@@ -61,6 +61,7 @@ import {
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
+import { getDockerImage, isDockerAvailableSync, isDockerJailEnabled } from './docker.js'
 import {
   connectMCPServer,
   disconnectMCPServer,
@@ -142,6 +143,51 @@ function getOrCreatePty(terminalId: string, projectPath: string, projectId: stri
   } catch {
     try { fs.mkdirSync(projectPath, { recursive: true }) } catch {}
     cwd = fs.existsSync(projectPath) ? projectPath : os.homedir()
+  }
+  // Optional Docker Jail for PTY: when KS_DOCKER_JAIL=1, spawn docker container with interactive PTY (defense in depth: project mount only, no network, no privileged)
+  if (isDockerJailEnabled() && isDockerAvailableSync()) {
+    try {
+      const abs = path.resolve(projectPath)
+      const image = getDockerImage()
+      const shellInside = '/bin/sh'
+      const dockerArgs = ['run', '--rm', '-i', '--network', 'none', '--memory=512m', '--cpus=1', '-v', `${abs}:/workspace:rw`, '-w', '/workspace', image, shellInside]
+      const hostEnv: Record<string, string> = {
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        LANG: process.env.LANG || 'en_US.UTF-8',
+        HOME: '/workspace',
+        PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+      }
+      const p = pty.spawn('docker', dockerArgs, {
+        name: 'xterm-color',
+        cols,
+        rows,
+        cwd,
+        env: hostEnv
+      })
+      const sess: PtySession = { pty: p, clients: new Set(), buffer: '', projectId, terminalId }
+      // Buffer up to 200KB for reconnection replay
+      p.onData((data) => {
+        sess.buffer += data
+        if (sess.buffer.length > 200 * 1024) sess.buffer = sess.buffer.slice(-200 * 1024)
+        for (const ws of sess.clients) {
+          if (ws.readyState === WebSocket.OPEN) {
+            try { ws.send(data) } catch {}
+          }
+        }
+      })
+      p.onExit(() => {
+        for (const ws of sess.clients) {
+          try { ws.close() } catch {}
+        }
+        ptySessions.delete(terminalId)
+      })
+      ptySessions.set(terminalId, sess)
+      console.log(`[docker] PTY ${terminalId} via docker jail ${image} @ ${abs}`)
+      return sess
+    } catch (e: any) {
+      console.warn(`[docker] PTY docker spawn failed (${e?.message || e}), falling back to native shell`)
+    }
   }
   const shell = resolveShell()
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', LANG: process.env.LANG || 'en_US.UTF-8' } as Record<string, string>

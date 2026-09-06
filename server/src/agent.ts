@@ -1970,6 +1970,30 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         }
       }
 
+      // Optional Docker Jail: when KS_DOCKER_JAIL=1, wrap through `docker run --rm --network none -v project:/workspace:rw` (defense in depth: isOutsideScopeCommand already checked)
+      if (isDockerJailEnabled()) {
+        try {
+          const available = await isDockerAvailable()
+          if (available) {
+            // Long-running dev servers (npm run dev) need host port/network; docker --network none would isolate port and background dies with container
+            // so fallback to native jail for those, otherwise docker for isolation
+            if (isLongRunningCommand(command)) {
+              console.warn(`[docker] long-running "${command.slice(0,80)}" — fallback to native jail to preserve background/preview (docker --network none would block port)`)
+            } else {
+              const dockerRes = await dockerExecShell(command, ctx.projectPath)
+              if (dockerRes) {
+                return ok(`exit ${dockerRes.code}\n${dockerRes.output || '(no output)'} [docker:${getDockerImage()}]`, `$ ${command.slice(0, 80)} → exit ${dockerRes.code} (docker)`)
+              }
+              console.warn('[docker] dockerExecShell returned null, falling back to native jail')
+            }
+          } else {
+            console.warn('[docker] docker not available, using native strict jail')
+          }
+        } catch (e: any) {
+          console.warn('[docker] docker jail error, fallback to native:', e?.message || e)
+        }
+      }
+
       // Background shell with .log for long-running servers like `node index.js` — run in background and give a .log file to check ok or not
       if (isLongRunningCommand(command)) {
         const cleanCmd = command.replace(/\s*&\s*$/, '').trim()
