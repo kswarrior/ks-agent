@@ -1,6 +1,6 @@
 # KS Agent vs Popular AI Coding Agents — Full Comparison (2026)
 
-> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0** · **IDE lift: C6 55→92 (>90) — ghost + ⌘K inline chat + VS Code extension · Reasoning lift: C2 82→96 (plan→large-edit hardening) · Onboarding lift: C11 78→94 (>Cursor) — wizard + Quick Setup in 60s · Offline lift: C10 85→92 — Ollama/LM Studio/vLLM, no key, air-gapped**
+> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0** · **IDE lift: C6 55→92 (>90) — ghost + ⌘K inline chat + VS Code extension · Reasoning lift: C2 82→96 (plan→large-edit hardening) · Onboarding lift: C11 78→94 (>Cursor) — wizard + Quick Setup in 60s · Offline lift: C10 85→92 — Ollama/LM Studio/vLLM, no key, air-gapped · Extensibility lift: C12 85→96 (>95) — Skills+MCP+LSP+Plugins hardening**
 > One file to decide which agent fits your workflow. No hype, just trade-offs.
 
 ---
@@ -36,7 +36,7 @@
 *   **Workflow:** Structured agent loop — Understand → Explore (inspect files) → Plan → Execute step-by-step → Verify (build/typecheck) → Finish. Plans, activities, and outcomes are persisted per chat so you can resume after a refresh or restart.
 *   **Persisted per chat:** Plans (with step status), Activities (timeline of every tool call: read, write, edit, shell, grep, etc.), Previews (one live port per chat), Questions (agent can ask you and block until you answer), and full message history.
 *   **Terminal:** Real Linux PTY per project (via xterm.js + WebSocket). `vim`, `htop`, `npm run dev` all work — not a fake shell.
-*   **Extensibility:** Skills (markdown instructions injected per task), MCP servers, LSP servers, and Plugins. Each can be global or scoped to a single project.
+*   **Extensibility:** Skills (markdown instructions injected per task, auto-discovered project-local `skills/*.md` + global `skills/` with read-before-edit guard), MCP (stdio/sse/http/websocket — tools auto-injected, secrets masked), LSP (stdio/tcp/socket/websocket/http/sse — per-language, capabilities surfaced), and Plugins (8-item marketplace + manual/local/url, install/enable per-project or global). Each layer is global or scoped to a single project, hot-reloaded without restart.
 
 ```bash
 npm install

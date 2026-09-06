@@ -55,7 +55,7 @@ import {
   getPlugins
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
-import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, resolvePendingQuestion, runAgentLoop } from './agent.js'
+import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 import {
   connectMCPServer,
