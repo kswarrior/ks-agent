@@ -2132,7 +2132,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
     // Prevent early stop: if model returns no tools on first round for a non-greeting task, force exploration
     if (outcome.toolCalls.length === 0) {
       const userContent = (opts.history[opts.history.length - 1]?.content ?? '').trim()
-      const isGreeting = /^\s*(hello|hi|hey|greetings|howdy|good\s*(morning|afternoon|evening)|thanks|thank you)\s*[.!?]*\s*$/i.test(userContent)
+      const isGreeting = /^\s*(hello|hi|hey|greetings|howdy|good\s*(morning|afternoon|evening|night)|thanks|thank\s*you|how\s+are\s+you(\s+doing)?|how[’']s\s+it\s+going|how\s+is\s+it\s+going|what[’']s\s+up|whats\s+up|what\s+up|who\s+are\s+you|bye|goodbye|good\s*bye)\s*[.!?]*\s*$/i.test(userContent)
       const hasShortContent = outcome.text.trim().length < 300
       // For task prompts, the agent MUST have explored. If no tools and no plan yet, inject a reminder and continue.
       const needsExplore = !isGreeting && round === 0 && hasShortContent && !findPlanForChat(ctx.chatId)

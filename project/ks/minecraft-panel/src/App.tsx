@@ -98,7 +98,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command }),
       });
-      const data = await response.json();
+      await response.json();
       loadConsoleLogs();
     } catch (error) {
       console.error('Failed to send command:', error);

@@ -3,9 +3,10 @@ import type { ConsoleLog } from '../types';
 
 interface ConsoleProps {
   logs?: ConsoleLog[];
+  onSendCommand?: (command: string) => void;
 }
 
-export function Console({ logs = [] }: ConsoleProps) {
+export function Console({ logs = [], onSendCommand }: ConsoleProps) {
   const [input, setInput] = useState('');
   const consoleRef = useRef<HTMLDivElement>(null);
 
@@ -18,8 +19,7 @@ export function Console({ logs = [] }: ConsoleProps) {
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim()) {
-      // In real implementation, this would send to server
-      console.log('Command:', input);
+      onSendCommand?.(input);
       setInput('');
     }
   };
