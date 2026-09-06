@@ -1103,6 +1103,8 @@ function KsAgent() {
             models={models}
             selectedModelId={selectedModelId}
             onSelectModel={setSelectedModelId}
+            selectedMode={selectedMode as any}
+            onSelectMode={setSelectedMode}
             onSend={send}
             onStop={stopStreaming}
             onRequestSettings={() => setSettingsOpen(true)}
