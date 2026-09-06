@@ -45,6 +45,8 @@ function KsAgent() {
   const previewBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [onboardingOpen, setOnboardingOpen] = useState(false)
   const [providers, setProviders] = useState<import('./types').Provider[]>([])
+  const [providersLoaded, setProvidersLoaded] = useState(false)
+  const [modelsLoaded, setModelsLoaded] = useState(false)
 
   // Keep the right workspace panel always open whenever the screen is wide
   // enough for it to fit next to the left sidebar and the composer input.
@@ -271,24 +273,40 @@ function KsAgent() {
       setProviders(list)
     } catch (e: any) {
       toast(e.message, 'error')
+    } finally {
+      setProvidersLoaded(true)
+    }
+ }, [toast])
+
+  const refreshModelsWrapped = useCallback(async () => {
+    try {
+      const list = await api.listModels()
+      setModels(list)
+      setSelectedModelId((prev) => (prev && list.some((m) => m.id === prev) ? prev : list[0]?.id ?? null))
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setModelsLoaded(true)
     }
   }, [toast])
 
   useEffect(() => {
-    refreshModels()
+    refreshModelsWrapped()
     refreshProviders()
-  }, [refreshModels, refreshProviders])
+  }, [refreshModelsWrapped, refreshProviders])
+
+  // for backward compat keep refreshModels alias
+  const refreshModels = refreshModelsWrapped
 
   // auto-show onboarding wizard when setup incomplete (install → first chat in 60s)
   useEffect(() => {
-    if (projects.length === 0 && models.length === 0 && providers.length === 0) return // still loading initial
-    // wait until initial load settled (projects or providers known)
+    if (!providersLoaded || !modelsLoaded) return // still loading
     const needs = shouldAutoShowOnboarding(projects, providers, models)
     if (needs) {
-      const t = setTimeout(() => setOnboardingOpen(true), 600)
+      const t = setTimeout(() => setOnboardingOpen(true), 700)
       return () => clearTimeout(t)
     }
-  }, [projects.length, providers.length, models.length])
+  }, [projects, providers, models, providersLoaded, modelsLoaded])
 
   // ---- background generation tracking ----
   const trackGeneration = useCallback(
@@ -1095,6 +1113,7 @@ function KsAgent() {
             onSend={send}
             onStop={stopStreaming}
             onRequestSettings={() => setSettingsOpen(true)}
+            onRequestOnboarding={() => setOnboardingOpen(true)}
             questions={activeChat ? questions[activeChat.id] ?? [] : []}
             onAnswerQuestion={handleAnswerQuestion}
             plan={activeChat ? plans[activeChat.id] ?? null : null}

@@ -12,7 +12,7 @@ interface Props {
   onDataChanged: () => void
 }
 
-type Tab = 'providers' | 'models' | 'prompt' | 'retry' | 'theme'
+type Tab = 'quick' | 'providers' | 'models' | 'prompt' | 'retry' | 'theme'
 
 const THEME_PRESETS: { name: string; primary: string; danger?: string; background?: string }[] = [
   { name: 'Blue', primary: '#2563eb' },
@@ -34,6 +34,17 @@ const PROVIDER_PRESETS = [
   { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1' },
   { name: 'NVIDIA', baseUrl: 'https://integrate.api.nvidia.com/v1' },
   { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1' }
+]
+
+const QUICK_PRESETS: { name: string; baseUrl: string; models: string[]; needsKey: boolean; hint: string }[] = [
+  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o-mini', 'gpt-4o'], needsKey: true, hint: 'platform.openai.com → API keys' },
+  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner'], needsKey: true, hint: 'Cheapest frontier ~$0.14/1M' },
+  { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'], needsKey: true, hint: 'One key → 100+ models' },
+  { name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'], needsKey: true, hint: 'Ultra-fast inference' },
+  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'qwen2.5', 'mistral'], needsKey: false, hint: 'Offline — no key, no cost' },
+  { name: 'Together', baseUrl: 'https://api.together.xyz/v1', models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo'], needsKey: true, hint: 'together.ai' },
+  { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', models: ['mistral-large-latest'], needsKey: true, hint: 'console.mistral.ai' },
+  { name: 'NVIDIA', baseUrl: 'https://integrate.api.nvidia.com/v1', models: ['meta/llama3-70b-instruct'], needsKey: true, hint: 'integrate.api.nvidia.com' },
 ]
 
 interface ProviderForm {

@@ -187,7 +187,7 @@ Different winners per scenario. This is the “for each case” board.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | **A. Self-host on VPS, phone + laptop** | **96** | 70 | 25 | 75 | 82 | 10 | 35 | 40 | 30 | 10 |
 | **B. Cheapest daily driver** | **95** | 90 | 40 | **98** | 50 | 60 | 93 | 92 | 88 | 78 |
-| **C. Big refactor, 200 files, plan first** | 82 | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
+| **C. Big refactor, 200 files, plan first** | **96** | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
 | **D. Live in VS Code, inline autocomplete** | **92** | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
 | **E. Untrusted code, must sandbox** | 75 | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
 | **F. Air-gapped / offline / local LLM** | 86 | 84 | 10 | **95** | 70 | 10 | 86 | **90** | 82 | 12 |
@@ -207,11 +207,11 @@ Equal weight is fair for a generalist ranking, but real teams weight differently
 | Persona | Weighting | #1 | #2 | #3 | Where KS Agent lands |
 |---|---|---|---|---|---|
 | **Self-Hoster** (privacy + mobile + offline) | C4×2, C5×1.5, C10×1.5, C3×1.5 | **KS Agent 90.1** | Aider 75.2 | OpenHands 74.8 | **#1** |
-| **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **KS Agent 81.5 (#2)** | Claude Code 80.4 | Cursor 79.6 | **was 76.3 (#5) before IDE lift — ghost + inline chat + VS Code extension closes the gap** |
-| **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 88.4** | Continue 78.2 | Opencode 77.0 | **#1** |
-| **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 77.5 (#4)** |
+| **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **KS Agent 86.8 (#1)** | Claude Code 80.4 | Cursor 79.6 | **was 76.3 (#5) before IDE — C6 55→92 + C2 82→96 lifts to #1** |
+| **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 89.1** | Continue 78.2 | Opencode 77.0 | **#1** |
+| **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 80.3 (#4)** |
 
-> **Honest conclusion:** KS Agent is the #1 *generalist* and the #1 *self-hoster / builder*, and now #2 (was #5) for the IC-Engineer persona after the IDE lift (C6 92) — only Claude Code slightly edges it on pure reasoning weight. It still trails at #4 for pure enterprise-search weight. Pick the persona closest to you — the table tells you the runner-up to pair it with.
+> **Honest conclusion:** KS Agent is the #1 *generalist*, #1 *self-hoster / builder*, and now **#1 IC-Engineer** (was #5 → #2 after IDE lift, now #1 after Reasoning lift C2 82→96). It still trails at #4 for pure enterprise-search weight (embeddings gap). Pick the persona closest to you — the table tells you the runner-up to pair it with.
 
 ---
 
