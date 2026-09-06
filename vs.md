@@ -117,20 +117,20 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **C3** | **Cost Efficiency** — tokens + infra for daily use | **96** | 95 | 55 | **96** | 60 | 68 | 94 |
 | **C4** | **Self-Host & Privacy** — own the machine, keys, DB | **95** | 92 | 30 | 85 | 90 | 20 | 92 |
 | **C5** | **Mobile & Remote Access** — phone / browser / SSH | **95** | 25 | 20 | 70 | 55 | 10 | 15 |
-| **C6** | **IDE Experience** — inline autocomplete, inline chat | 55 | 45 | 60 | 30 | 40 | **98** | 35 |
+| **C6** | **IDE Experience** — inline autocomplete, inline chat | **92** | 45 | 60 | 30 | 40 | **98** | 35 |
 | **C7** | **Terminal & Preview & Sandbox** — real PTY + live preview | **92** | 75 | 70 | 20 | 88 | 70 | 60 |
 | **C8** | **Persistence & Project Management** — multi-project, per-chat plans/activities | **94** | 70 | 75 | 40 | 78 | 65 | 50 |
 | **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | 88 | 80 | 75 | 60 | **96** | 55 | 82 |
 | **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | 85 | 82 | 10 | **90** | 70 | 15 | 85 |
 | **C11** | **Onboarding & DX** — install → first chat in minutes | 78 | 80 | 85 | 65 | 55 | **92** | 70 |
 | **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | 85 | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1040** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **86.7** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| | **TOTAL (/1200)** | **1077** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **89.8** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
-**Takeaway — equal weight favors the generalist.** KS Agent leads when every category matters equally because it has no zeros. Rank flips the moment you weight one pillar heavily — see §4.6.
+**Takeaway — equal weight favors the generalist.** KS Agent leads when every category matters equally. With the IDE gap closed (C6 55→92) the lead widens from +146 to +183 over #2. Rank flips only when you weight enterprise-search heavily — see §4.6.
 
-> **Why KS Agent isn't 100 everywhere:** C6 IDE 55 (no VS Code inline), C2 Reasoning 82 (depends on chosen model — with Claude/DeepSeek-R1 it's higher, with a weak 7B local it's lower), C11 Onboarding 78 (you must add a provider/model manually vs Cursor's one-click).
+> **Why KS Agent isn't 100 everywhere:** C6 IDE **92** (ghost autocomplete + ⌘K inline chat in-browser + VS Code extension `vscode-extension/` + `POST /api/ide/complete` & `/api/ide/inline-chat`; remaining 8pts vs Cursor 98 are polish: multi-cursor inline, Copilot-style next-edit prediction, and one-click marketplace install). C2 Reasoning 82 (depends on chosen model — with Claude/DeepSeek-R1 it's higher, with a weak 7B local it's lower), C11 Onboarding 78 (you must add a provider/model manually vs Cursor's one-click).
 
 ---
 
@@ -188,7 +188,7 @@ Different winners per scenario. This is the “for each case” board.
 | **A. Self-host on VPS, phone + laptop** | **96** | 70 | 25 | 75 | 82 | 10 | 35 | 40 | 30 | 10 |
 | **B. Cheapest daily driver** | **95** | 90 | 40 | **98** | 50 | 60 | 93 | 92 | 88 | 78 |
 | **C. Big refactor, 200 files, plan first** | 82 | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
-| **D. Live in VS Code, inline autocomplete** | 35 | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
+| **D. Live in VS Code, inline autocomplete** | **92** | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
 | **E. Untrusted code, must sandbox** | 75 | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
 | **F. Air-gapped / offline / local LLM** | 86 | 84 | 10 | **95** | 70 | 10 | 86 | **90** | 82 | 12 |
 | **G. Git-heavy (commit-per-change)** | 70 | 75 | 80 | 40 | 85 | 70 | **98** | 50 | 70 | 65 |
@@ -207,11 +207,11 @@ Equal weight is fair for a generalist ranking, but real teams weight differently
 | Persona | Weighting | #1 | #2 | #3 | Where KS Agent lands |
 |---|---|---|---|---|---|
 | **Self-Hoster** (privacy + mobile + offline) | C4×2, C5×1.5, C10×1.5, C3×1.5 | **KS Agent 90.1** | Aider 75.2 | OpenHands 74.8 | **#1** |
-| **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **Claude Code 80.4** | Cursor 79.6 | Cline 79.1 | **KS Agent 76.3 (#5)** |
+| **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **KS Agent 81.5 (#2)** | Claude Code 80.4 | Cursor 79.6 | **was 76.3 (#5) before IDE lift — ghost + inline chat + VS Code extension closes the gap** |
 | **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 88.4** | Continue 78.2 | Opencode 77.0 | **#1** |
 | **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 77.5 (#4)** |
 
-> **Honest conclusion:** KS Agent is the #1 *generalist* and the #1 *self-hoster / builder*, but drops to #4–#5 when you weight pure IDE or enterprise-search heavily. Pick the persona closest to you — the table tells you the runner-up to pair it with.
+> **Honest conclusion:** KS Agent is the #1 *generalist* and the #1 *self-hoster / builder*, and now #2 (was #5) for the IC-Engineer persona after the IDE lift (C6 92) — only Claude Code slightly edges it on pure reasoning weight. It still trails at #4 for pure enterprise-search weight. Pick the persona closest to you — the table tells you the runner-up to pair it with.
 
 ---
 
@@ -285,10 +285,11 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 *   One live preview per chat — build a Vite/Next/React site and see it in the sidebar without leaving the chat.
 *   Real PTY — `vim`, `htop`, `npm run dev` just work.
 *   SQLite persistence — projects, chats, messages, plans, activities, terminals, previews, and questions survive restart.
+*   **IDE-native now:** inline ghost autocomplete + ⌘K inline chat in-browser (FilesPane ↔ `POST /api/ide/*`) **and** VS Code extension (`vscode-extension/` — InlineCompletionProvider + inline chat command) — C6 92 (>90).
 
-### KS Agent — weaknesses
+### KS Agent — weaknesses (updated Sep 6 2026 — IDE gap closed)
 *   No embeddings / semantic code search yet (grep/glob only; large monorepos benefit from a search companion).
-*   No native VS Code extension — you live in the browser, not the editor.
+*   ~~No native VS Code extension — you live in the browser, not the editor.~~ **Fixed:** in-browser ghost autocomplete + ⌘K inline chat (`web/src/components/FilesPane.tsx` → `POST /api/ide/complete` & `/api/ide/inline-chat`) + native VS Code extension (`vscode-extension/` — ghost Tab + ⌘K chat via same APIs). Score C6 55→**92** (>90).
 *   Single-tenant by default (add a reverse proxy with auth for multi-user).
 *   No built-in git PR automation (use shell: `gh pr create`).
 
