@@ -5,6 +5,7 @@ import { findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId,
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
+import { dockerExecShell, getDockerImage, isDockerAvailable, isDockerJailEnabled } from './docker.js'
 
 /**
  * Built-in primary system prompt. Intentionally NOT exposed through any API,
