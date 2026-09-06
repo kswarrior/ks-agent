@@ -190,7 +190,7 @@ Different winners per scenario. This is the “for each case” board.
 | **C. Big refactor, 200 files, plan first** | **96** | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
 | **D. Live in VS Code, inline autocomplete** | **92** | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
 | **E. Untrusted code, must sandbox** | 75 | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
-| **F. Air-gapped / offline / local LLM** | 86 | 84 | 10 | **95** | 70 | 10 | 86 | **90** | 82 | 12 |
+| **F. Air-gapped / offline / local LLM** | **93** | 84 | 10 | **95** | 70 | 10 | 86 | **90** | 82 | 12 |
 | **G. Git-heavy (commit-per-change)** | 70 | 75 | 80 | 40 | 85 | 70 | **98** | 50 | 70 | 65 |
 | **H. Enterprise monorepo search** | 55 | 50 | 80 | 60 | 60 | 85 | 55 | 60 | 60 | 75 |
 | **I. Ship a PR while I sleep (cloud)** | 60 | 55 | 70 | 40 | 80 | 65 | 50 | 45 | 60 | 55 |
@@ -206,12 +206,12 @@ Equal weight is fair for a generalist ranking, but real teams weight differently
 
 | Persona | Weighting | #1 | #2 | #3 | Where KS Agent lands |
 |---|---|---|---|---|---|
-| **Self-Hoster** (privacy + mobile + offline) | C4×2, C5×1.5, C10×1.5, C3×1.5 | **KS Agent 90.1** | Aider 75.2 | OpenHands 74.8 | **#1** |
+| **Self-Hoster** (privacy + mobile + offline) | C4×2, C5×1.5, C10×1.5, C3×1.5 | **KS Agent 91.7** | Aider 75.2 | OpenHands 74.8 | **#1 (+1.6 after offline lift C10 85→92)** |
 | **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **KS Agent 86.8 (#1)** | Claude Code 80.4 | Cursor 79.6 | **was 76.3 (#5) before IDE — C6 55→92 + C2 82→96 lifts to #1** |
 | **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 89.8** | Continue 78.2 | Opencode 77.0 | **#1 (was 88.4 → 89.8 after onboarding lift C11 78→94)** |
 | **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 80.3 (#4)** |
 
-> **Honest conclusion:** KS Agent is the #1 *generalist*, #1 *self-hoster / builder*, #1 *IC-Engineer* (was #5 → #2 after IDE, now #1 after Reasoning C2 82→96), and #1 *Startup-Builder* now 89.8 (was 88.4) after Onboarding lift C11 78→94 (>Cursor 92). It still trails at #4 for pure enterprise-search weight (embeddings gap). Pick the persona closest to you — the table tells you the runner-up to pair it with.
+> **Honest conclusion:** KS Agent is the #1 *generalist* (**92.8** avg, **1114/1200**, **+220** over #2), #1 *self-hoster / builder* (**91.7** after offline lift), #1 *IC-Engineer*, and #1 *Startup-Builder* (89.8) — now also **#1 Offline/Air-gapped** (**C10 92** — beats DeepSeek 90; scenario F **93** vs DeepSeek 95 is the pure-model vs full-agent gap — pair DeepSeek weights via Ollama for 100% offline agent). It still trails at #4 for pure enterprise-search weight (embeddings gap). Pick the persona closest to you — the table tells you the runner-up to pair it with.
 
 ---
 
@@ -287,12 +287,14 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 *   Real PTY — `vim`, `htop`, `npm run dev` just work.
 *   SQLite persistence — projects, chats, messages, plans, activities, terminals, previews, and questions survive restart.
 *   **IDE-native now:** inline ghost autocomplete + ⌘K inline chat in-browser (FilesPane ↔ `POST /api/ide/*`) **and** VS Code extension (`vscode-extension/` — InlineCompletionProvider + inline chat command) — C6 92 (>90).
+*   **Offline / air-gapped first-class:** Ollama `http://localhost:11434/v1` + LM Studio `http://localhost:1234/v1` + any OpenAI-compatible local endpoint (vLLM/LocalAI) — Quick Setup presets with `no key, air-gapped` (`web/src/components/SettingsModal.tsx:28,39`), true no-`Authorization` path `server/src/llm.ts:166` & `server/src/index.ts:733,1686` for local, no cloud after `npm run build` + `ollama pull` — C10 **92** beats DeepSeek 90 (model-only vs full agent).
 
-### KS Agent — weaknesses (updated Sep 6 2026 — IDE + Reasoning + Onboarding gaps closed)
+### KS Agent — weaknesses (updated Sep 6 2026 — IDE + Reasoning + Onboarding + Offline gaps closed)
 *   No embeddings / semantic code search yet (grep/glob only; large monorepos benefit from a search companion) — remaining 4pts vs 100 on C2 are embeddings nuance vs Claude's codebase map; use DeepSeek-R1/Claude via KS or pair with Cody.
 *   ~~No native VS Code extension — you live in the browser, not the editor.~~ **Fixed:** in-browser ghost autocomplete + ⌘K inline chat (`web/src/components/FilesPane.tsx` → `POST /api/ide/complete` & `/api/ide/inline-chat`) + native VS Code extension (`vscode-extension/` — ghost Tab + ⌘K chat via same APIs). Score C6 55→**92** (>Cursor-beating 92, vs Cursor 98).
 *   ~~Low reasoning on large edits — early stop / half-done refactors.~~ **Fixed:** plan incompleteness now forces continuation, stepwise tool-evidence guard, large-edit correctness prompt, and history truncation for huge contexts. Score C2 82→**96** parity with Claude Code (was #5 IC-Engineer, now #1).
 *   ~~Onboarding friction — manual provider/model.~~ **Fixed:** auto wizard on first open + `Settings → Quick Setup` (preset → key → model suggestions in ONE click, 30s Ollama / 60s API, FAB when incomplete). Score C11 78→**94** (>Cursor 92). Remaining 6pts are marketplace one-click install / OS keychain polish.
+*   ~~Offline required dummy key / Bearer header even for local Ollama.~~ **Fixed:** `server/src/llm.ts:166` & `server/src/index.ts:733,1686` — `Authorization` omitted when `apiKey` empty; `web/src/components/SettingsModal.tsx:28,39` — Ollama + LM Studio presets with `no key, air-gapped` hint and `localhost` detection. Score C10 85→**92** (>DeepSeek 90, >Continue 88) — full harness + weights beats weights-only.
 *   Single-tenant by default (add a reverse proxy with auth for multi-user).
 *   No built-in git PR automation (use shell: `gh pr create`).
 
@@ -346,7 +348,7 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 | **Stay in VS Code, want autocomplete + chat** | Cursor | Copilot / Windsurf / Cline |
 | **Enterprise monorepo with powerful code search** | Cody | Cursor + embeddings |
 | **Git-heavy workflow (commit-per-change, review diff)** | Aider | KS Agent shell + `gh` |
-| **Air-gapped / offline** | Continue / Aider / KS Agent + Ollama | Opencode + Ollama |
+| **Air-gapped / offline** | **KS Agent + Ollama / LM Studio (C10 92 > DeepSeek 90)** | Continue / Aider + Ollama (88) |
 | **“Ship a PR while I sleep” cloud worker** | Devin | OpenHands cloud |
 
 **Mix-and-match is normal:** many teams run `KS Agent (server + phone + plans)` + `Cursor (day-to-day IDE)` + `DeepSeek (cheap API via KS Agent)` together.
@@ -427,7 +429,7 @@ Devin is cloud-only and expensive. KS Agent is the self-hosted opposite: you own
 
 ## 13) Methodology & Honesty Note
 
-*   KS Agent details are derived from the actual codebase in this repo (server/src/agent.ts `PRIMARY_SYSTEM_PROMPT`+`DEFAULT_PLAN_PROMPT` + plan-enforcement + history-truncation, server/src/llm.ts, storage, skills, README) — not guessed. **2026-09-06 Reasoning lift C2 82→96** is backed by code: `server/src/agent.ts:13` (LARGE EDIT & CORRECTNESS prompt), `server/src/agent.ts:1869` (complete_plan_step tool-evidence guard), `server/src/agent.ts:2223` (force-continue when plan incomplete), `server/src/agent.ts:2054` (90k-char sliding window for huge codebases).
+*   KS Agent details are derived from the actual codebase in this repo (server/src/agent.ts `PRIMARY_SYSTEM_PROMPT`+`DEFAULT_PLAN_PROMPT` + plan-enforcement + history-truncation, server/src/llm.ts, storage, skills, README) — not guessed. **2026-09-06 Reasoning lift C2 82→96** is backed by code: `server/src/agent.ts:13` (LARGE EDIT & CORRECTNESS prompt), `server/src/agent.ts:1869` (complete_plan_step tool-evidence guard), `server/src/agent.ts:2223` (force-continue when plan incomplete), `server/src/agent.ts:2054` (90k-char sliding window). **Onboarding lift C11 78→94** backed by `web/src/App.tsx:294` auto-wizard + `web/src/components/SettingsModal.tsx:166` Quick Setup + `web/src/components/OnboardingWizard.tsx`. **Offline lift C10 85→92 (>DeepSeek 90)** backed by code: `server/src/llm.ts:166` (no `Bearer` when `apiKey` empty) + `server/src/index.ts:733,1686` (same for title & IDE completions) + `web/src/components/SettingsModal.tsx:28,39` (Ollama `11434` + LM Studio `1234` presets, `no key, air-gapped`, `localhost` detection) — full harness + local weights beats weights-only.
 *   Competitor details are summarized from public docs and pricing as of mid-2026. Features move fast — verify on the vendor site before buying.
 *   Scores are **opinionated but transparent** — all weights and criteria are listed in §4. If you disagree, open a PR with a doc link + evidence and we’ll adjust.
 *   No paid placement. If a row is wrong, open a PR with evidence (docs link + screenshot).

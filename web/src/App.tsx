@@ -11,6 +11,8 @@ import { ChatView } from './components/ChatView'
 import { SettingsModal } from './components/SettingsModal'
 import { ExtensionsModal } from './components/ExtensionsModal'
 import { AddProjectModal } from './components/AddProjectModal'
+import { OnboardingWizard, shouldAutoShowOnboarding } from './components/OnboardingWizard'
+import { IconSparkles } from './icons'
 import { applyTheme } from './theme'
 
 const LS_PROJECT = 'ks.activeProject'
@@ -41,6 +43,10 @@ function KsAgent() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showPreviewBanner, setShowPreviewBanner] = useState(false)
   const previewBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [providers, setProviders] = useState<import('./types').Provider[]>([])
+  const [providersLoaded, setProvidersLoaded] = useState(false)
+  const [modelsLoaded, setModelsLoaded] = useState(false)
 
   // Keep the right workspace panel always open whenever the screen is wide
   // enough for it to fit next to the left sidebar and the composer input.
