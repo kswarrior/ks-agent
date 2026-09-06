@@ -991,9 +991,9 @@ export function FilesPane({ projectId }: FilesPaneProps) {
                   autoFocus
                 />
                 {ghostText && (
-                  <div className="fp-ghost" aria-hidden="true" onMouseDown={(e) => { e.preventDefault(); acceptGhost() }} title="Tab to accept, Esc to dismiss">
+                  <div className="fp-ghost fp-ghost--multiline" aria-hidden="true" onMouseDown={(e) => { e.preventDefault(); acceptGhost() }} title="Tab to accept, Shift+Tab/Esc to dismiss">
                     <span className="fp-ghost-label">✦ Tab</span>
-                    <span className="fp-ghost-text">{ghostText.slice(0, 120).split('\n')[0]}{ghostText.length > 120 ? '…' : ''}</span>
+                    <pre className="fp-ghost-text fp-ghost-text--multi">{ghostText.split('\n').slice(0, 5).join('\n').slice(0, 500)}{ghostText.split('\n').length > 5 || ghostText.length > 500 ? '…' : ''}</pre>
                   </div>
                 )}
               </div>
@@ -1001,9 +1001,9 @@ export function FilesPane({ projectId }: FilesPaneProps) {
           </div>
           {ghostText && (
             <div className="fp-ghost-bar" style={{ borderLeft: `3px solid ${selectedColor}` }}>
-              <span className="fp-ghost-bar-text" title={ghostText}>{ghostText.length > 80 ? ghostText.slice(0, 80) + '…' : ghostText}</span>
+              <span className="fp-ghost-bar-text" title={ghostText}>{ghostText.split('\n').length > 1 ? `${ghostText.split('\n').length} lines • ${ghostText.split('\n')[0].slice(0, 60)}${ghostText.split('\n')[0].length > 60 ? '…' : ''} ↵` : (ghostText.length > 80 ? ghostText.slice(0, 80) + '…' : ghostText)}</span>
               <button className="btn btn-primary fp-ghost-accept" onClick={acceptGhost}>Tab Accept</button>
-              <button className="btn fp-ghost-dismiss" onClick={clearGhost}>Esc Dismiss</button>
+              <button className="btn fp-ghost-dismiss" onClick={clearGhost}>Shift+Tab / Esc Dismiss</button>
               {ghostLoading && <span className="fp-ghost-loading">…</span>}
             </div>
           )}
