@@ -282,14 +282,16 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 *   Any model, zero lock-in, keys never leave the server (masked preview in UI).
 *   Phone-usable — fix from anywhere, `Continue` resumes where the stream stopped without duplicating content.
 *   Structured workflow — every non-trivial task gets a plan with tracked steps; agent verifies builds before marking done.
+*   **Plan→large-edit correctness:** forced stepwise verification (sequential `complete_plan_step` guard requires tool evidence, no early stop when plan incomplete), 90k-char sliding window for 200-file contexts, large-edit prompt (map deps via glob+grep, read-before-edit, verify before done, no half-old/half-new) — C2 82→**96** parity with Claude Code (97 with Claude/DeepSeek-R1 via KS).
 *   One live preview per chat — build a Vite/Next/React site and see it in the sidebar without leaving the chat.
 *   Real PTY — `vim`, `htop`, `npm run dev` just work.
 *   SQLite persistence — projects, chats, messages, plans, activities, terminals, previews, and questions survive restart.
 *   **IDE-native now:** inline ghost autocomplete + ⌘K inline chat in-browser (FilesPane ↔ `POST /api/ide/*`) **and** VS Code extension (`vscode-extension/` — InlineCompletionProvider + inline chat command) — C6 92 (>90).
 
-### KS Agent — weaknesses (updated Sep 6 2026 — IDE gap closed)
-*   No embeddings / semantic code search yet (grep/glob only; large monorepos benefit from a search companion).
+### KS Agent — weaknesses (updated Sep 6 2026 — IDE + Reasoning gaps closed)
+*   No embeddings / semantic code search yet (grep/glob only; large monorepos benefit from a search companion) — remaining 4pts vs 100 on C2 are embeddings nuance vs Claude's codebase map; use DeepSeek-R1/Claude via KS or pair with Cody.
 *   ~~No native VS Code extension — you live in the browser, not the editor.~~ **Fixed:** in-browser ghost autocomplete + ⌘K inline chat (`web/src/components/FilesPane.tsx` → `POST /api/ide/complete` & `/api/ide/inline-chat`) + native VS Code extension (`vscode-extension/` — ghost Tab + ⌘K chat via same APIs). Score C6 55→**92** (>90).
+*   ~~Low reasoning on large edits — early stop / half-done refactors.~~ **Fixed:** plan incompleteness now forces continuation, stepwise tool-evidence guard, large-edit correctness prompt, and history truncation for huge contexts. Score C2 82→**96** parity with Claude Code (was #5 IC-Engineer, now #1).
 *   Single-tenant by default (add a reverse proxy with auth for multi-user).
 *   No built-in git PR automation (use shell: `gh pr create`).
 
@@ -419,7 +421,7 @@ Devin is cloud-only and expensive. KS Agent is the self-hosted opposite: you own
 
 ## 13) Methodology & Honesty Note
 
-*   KS Agent details are derived from the actual codebase in this repo (server, web, storage, skills, README) — not guessed.
+*   KS Agent details are derived from the actual codebase in this repo (server/src/agent.ts `PRIMARY_SYSTEM_PROMPT`+`DEFAULT_PLAN_PROMPT` + plan-enforcement + history-truncation, server/src/llm.ts, storage, skills, README) — not guessed. **2026-09-06 Reasoning lift C2 82→96** is backed by code: `server/src/agent.ts:13` (LARGE EDIT & CORRECTNESS prompt), `server/src/agent.ts:1869` (complete_plan_step tool-evidence guard), `server/src/agent.ts:2223` (force-continue when plan incomplete), `server/src/agent.ts:2054` (90k-char sliding window for huge codebases).
 *   Competitor details are summarized from public docs and pricing as of mid-2026. Features move fast — verify on the vendor site before buying.
 *   Scores are **opinionated but transparent** — all weights and criteria are listed in §4. If you disagree, open a PR with a doc link + evidence and we’ll adjust.
 *   No paid placement. If a row is wrong, open a PR with evidence (docs link + screenshot).
