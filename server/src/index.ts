@@ -3620,6 +3620,13 @@ app.post('/api/terminals/:id/exec', async (c) => {
   const command = String(body.command ?? '').trim()
   if (!command) return c.json({ error: 'Command is required' }, 400)
   if (command.length > 4000) return c.json({ error: 'Command too long' }, 400)
+  // Enforce same workspace jail & dangerous guards as agent tools (prevent escape via terminal API)
+  {
+    const outside = isOutsideScopeCommand(command, project.path, '')
+    if (outside) return c.json({ error: `Blocked: ${outside}` }, 403)
+    const danger = isDangerousCommand(command)
+    if (danger) return c.json({ error: `Dangerous command blocked: ${danger} — confirm via PTY if needed` }, 403)
+  }
   const { code, output } = await new Promise<{ code: number; output: string }>((resolve) => {
     exec(
       command,
