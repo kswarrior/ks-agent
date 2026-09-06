@@ -1756,9 +1756,9 @@ app.post('/api/ide/complete', async (c) => {
   if ('error' in resolved) return c.json({ error: resolved.error }, 400)
   const { provider, model } = resolved
 
-  // Build a tiny completion prompt — keep it fast and deterministic for ghost text
-  const system = 'You are an inline code completion engine for an IDE. Given the file prefix (code before cursor) and suffix (code after cursor), output ONLY the completion that should be inserted at CURSOR — no explanation, no markdown, no quotes, no preamble. Keep it to 1-3 lines or <=120 chars. If nothing to complete, output empty string. Complete naturally for the language.'
-  const user = `Language: ${language || 'plaintext'}\nFile: ${filePath || '(unsaved)'}\nPrefix:\n${prefix.slice(-4000)}\n---CURSOR---\nSuffix:\n${suffix.slice(0, 2000)}`
+  // Build a tiny completion prompt — keep it fast and deterministic for ghost text. Use few-shot to prevent thinking output on reasoning models.
+  const system = 'You are an inline code completion engine for an IDE. Given the file prefix (code before cursor) and suffix (code after cursor), output ONLY the raw code that should be inserted at CURSOR — no explanation, no markdown, no quotes, no preamble, no thinking, no analysis. Keep it to 1-3 lines or <=120 chars. If nothing to complete, output empty string. Complete naturally for the language. Example: prefix="function hello(){" suffix="}" language="javascript" → completion="\\n  console.log(\\"hello\\");\\n"'
+  const user = `Language: ${language || 'plaintext'}\nFile: ${filePath || '(unsaved)'}\nPrefix:\n${prefix.slice(-4000)}\n---CURSOR---\nSuffix:\n${suffix.slice(0, 2000)}\n\nRespond with ONLY the completion code, no thinking.`
   try {
     const raw = await callIdeChatCompletion(provider.baseUrl, provider.apiKey, model, [
       { role: 'system', content: system },
@@ -1768,6 +1768,20 @@ app.post('/api/ide/complete', async (c) => {
     // Strip markdown fences if model wraps
     if (completion.startsWith('```')) {
       completion = completion.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/,'').trim()
+    }
+    // Filter reasoning-model thinking leakage (e.g. "Here\'s a thinking process" or "Analyze User Input")
+    const lower = completion.toLowerCase()
+    if (lower.includes('thinking process') || lower.includes('analyze user input') || lower.startsWith("here's a thinking") || lower.startsWith('here is a thinking')) {
+      // Try to extract code after thinking if present, else empty
+      const codeMatch = completion.match(/```[a-z]*\n?([\s\S]*?)```/)
+      if (codeMatch) completion = codeMatch[1].trim()
+      else {
+        // Look for code-like lines after thinking header
+        const lines = completion.split('\n')
+        const codeLines = lines.filter(l => /^\s*(function|const|let|var|if|for|while|return|import|export|class|async|await|console\.|=>|{|\})/.test(l))
+        if (codeLines.length) completion = codeLines.join('\n').trim()
+        else completion = ''
+      }
     }
     if (completion.length > 500) completion = completion.slice(0, 500)
     // Don't return prefix echo
