@@ -101,6 +101,18 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **Concurrent-safe persistence** | ✅ SQLite WAL + tx + busy_timeout | ✅ | — | — | — | — | — | — | — | — | — |
 | **Build verification before done** | ✅ typecheck + build via prompt guard | 🔶 manual | 🔶 manual | — | 🔶 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
+### 3.1 Modes — 5 Levels of Parallelism (KS Agent Roadmap — executing)
+
+| Mode | Name | How it works | Status |
+|---|---|---|---|
+| **M1** | **Solo** | Single session, one agent per chat (`index.ts:641` Map, `index.ts:1042` 409 guard) — current default, simple tasks | ✅ **live** |
+| **M2** | **Swarm** | Main agent creates 2-5 parallel sub-agents via `delegate_task` (`agent.ts:341` new tool) — `research`/`explore`/`fix`/`write` each with own worktree (`git worktree add`) or Docker jail (`docker.ts:10`) | 🔶 **executing now** — tool + store + API scaffold |
+| **M3** | **Hive** | Fractal: Main → Agent → 5 sub-agents. E.g. `research-agent → 5 topic sub-agents` different things, depth 2, `parentSubAgentId` in `store.ts` | 📋 next |
+| **M4** | **Squad** | Team + Head: Main creates `Team` + `Head`; Head assigns tasks to members; members can spawn sub-agents (tree depth 3). Tables `teams {id, headId}`, `members {teamId, role}` | 📋 next |
+| **M5** | **Infinity** | Unlimited agents/teams (like M4) + **Preview Team** watches all `write_file` diffs in iframe, if `build` fail auto-calls Head + fix + **per-role multi-model** (`store.ts:40` `ModelEntry` per delegate — research=`DeepSeek-R1`, explore=`Claude`, write=`OpenAI`) | 📋 next — unseen level |
+
+> **Execution order:** M1 done → M2 now → M3 → M4 → M5. Each mode fully customizable: `maxParallel 1-10`, `worktree on/off`, `per-role model` (`SettingsModal.tsx:40`), `previewGate on/off`, `docker jail` (`KS_DOCKER_JAIL=1`). After M5, `vs.md:96` flips to `✅ Swarm/Hive/Squad/Infinity (68→95)` and `vs.md:218` K 68→95.
+
 ---
 
 ## 4) Honest Score Board — Out of 100 Per Category + Totals

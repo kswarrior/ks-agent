@@ -189,7 +189,40 @@ export interface Preview {
   updatedAt: string
 }
 
-export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'semantic_search' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | 'get_file_info' | 'delete_file' | 'move_file' | 'append_file' | 'apply_patch'
+// ---------------- Sub-agents / Teams — 5 Modes: Solo/Swarm/Hive/Squad/Infinity (vs.md:96, vs.md:3.1) ----------------
+export type SubAgentMode = 'research' | 'explore' | 'fix' | 'write' | 'general'
+export type SubAgentStatus = 'pending' | 'working' | 'done' | 'error'
+export interface SubAgent {
+  id: string
+  parentChatId: string
+  parentSubAgentId?: string | null // for Hive nested (M3): agent → 5 sub-agents
+  teamId?: string | null // for Squad/Infinity M4/M5
+  task: string
+  mode: SubAgentMode
+  status: SubAgentStatus
+  worktreePath?: string | null
+  modelId?: string | null // per-role multi-model for Infinity M5
+  result?: string | null
+  createdAt: string
+  updatedAt: string
+}
+export interface Team {
+  id: string
+  name: string
+  chatId: string // parent chat that created team
+  headId?: string | null // head member id
+  createdAt: string
+  updatedAt: string
+}
+export interface TeamMember {
+  id: string
+  teamId: string
+  role: string // research/explore/fix/write/preview
+  subAgentId?: string | null
+  createdAt: string
+}
+
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'semantic_search' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | 'get_file_info' | 'delete_file' | 'move_file' | 'append_file' | 'apply_patch' | 'delegate_task'
 
 export interface Activity {
   id: string
@@ -277,6 +310,9 @@ interface DB {
   mcpServers: MCPServer[]
   lspServers: LSPServer[]
   plugins: Plugin[]
+  subAgents: SubAgent[]
+  teams: Team[]
+  teamMembers: TeamMember[]
 }
 
 // Backwards compat alias
