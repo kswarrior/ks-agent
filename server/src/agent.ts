@@ -614,6 +614,25 @@ const AGENT_TOOLS: ToolDef[] = [
         required: []
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delegate_task',
+      description: 'Delegate a sub-task to a parallel sub-agent — 5 Modes: Solo/Swarm/Hive/Squad/Infinity (vs.md:3.1). Modes: research (deep grep+semantic + read), explore (read-only grep/glob/read), fix (edit + test), write (write/edit + verify), general (full tools). Main agent can fan-out 2-5 delegate_task in one round for Swarm/M2. Hive M3: sub-agent can itself delegate (depth 2 via parentSubAgentId). Squad M4: add teamId to group under Team+Head. Infinity M5: set modelId per role for multi-model (research=DeepSeek, explore=Claude, write=OpenAI via ModelEntry) + Preview Team watches writes. Worktree true creates isolated git worktree (git worktree add <tmp>/wt-<id> -b wt/<id>) or uses Docker jail KS_DOCKER_JAIL=1. Use for parallel research/explorer/fix/write.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task: { type: 'string', description: 'Sub-task description (5-500 chars), e.g., "research auth flow in src/auth", "explore payment handling", "fix bug in api.ts:42"' },
+          mode: { type: 'string', description: 'Sub-agent mode: research|explore|fix|write|general (default general)', enum: ['research','explore','fix','write','general'] },
+          worktree: { type: 'boolean', description: 'If true, create isolated git worktree for sub-agent (default false — same project dir, but isolated via worktree when true)' },
+          modelId: { type: 'string', description: 'Optional ModelEntry id for per-role multi-model (Infinity M5) — e.g. DeepSeek for research, Claude for explore. If omitted uses parent model.' },
+          teamId: { type: 'string', description: 'Optional Team id for Squad/Infinity M4/M5 — group sub-agents under team' },
+          parentSubAgentId: { type: 'string', description: 'For Hive M3 nested: parent sub-agent id that is delegating further (depth 2)' }
+        },
+        required: ['task']
+      }
+    }
   }
 ]
 

@@ -696,6 +696,90 @@ export function effectiveIntervalMs(settings: GithubPollSettings, remaining?: nu
   return Math.max(settings.minIntervalMs, Math.min(settings.maxIntervalMs, eff))
 }
 
+// ---------------- Sub-agents / Teams helpers — 5 Modes Solo/Swarm/Hive/Squad/Infinity (vs.md:3.1) ----------------
+export function createSubAgent(opts: { parentChatId: string; task: string; mode?: SubAgentMode; parentSubAgentId?: string | null; teamId?: string | null; worktreePath?: string | null; modelId?: string | null }): SubAgent {
+  const parentChatId = String(opts.parentChatId ?? '').trim()
+  if (!parentChatId) throw new Error('parentChatId required')
+  const task = String(opts.task ?? '').trim()
+  if (!task) throw new Error('task required')
+  if (task.length > 5000) throw new Error('task too long (max 5000)')
+  const mode = (String(opts.mode ?? 'general').trim().toLowerCase() as SubAgentMode) || 'general'
+  const allowed: SubAgentMode[] = ['research','explore','fix','write','general']
+  if (!allowed.includes(mode)) throw new Error('Invalid mode: ' + mode)
+  const id = randomUUID()
+  const now = new Date().toISOString()
+  const sa: SubAgent = { id, parentChatId, parentSubAgentId: opts.parentSubAgentId ?? null, teamId: opts.teamId ?? null, task, mode, status: 'pending', worktreePath: opts.worktreePath ?? null, modelId: opts.modelId ?? null, result: null, createdAt: now, updatedAt: now }
+  try {
+    const s = ensureDb()
+    s.prepare('INSERT INTO subAgents (id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(id, parentChatId, sa.parentSubAgentId, sa.teamId, task, mode, 'pending', sa.worktreePath, sa.modelId, sa.result, now, now)
+  } catch {}
+  // also keep in-memory for persist bulk
+  try { db.subAgents.push(sa) } catch {}
+  return sa
+}
+export function subAgentsOf(parentChatId: string): SubAgent[] {
+  const pid = String(parentChatId ?? '').trim()
+  if (!pid) return []
+  try {
+    const s = ensureDb()
+    const rows = s.prepare('SELECT id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt FROM subAgents WHERE parentChatId=? ORDER BY createdAt').all(pid) as any[]
+    if (rows.length) return rows.map((r: any) => ({ id: r.id, parentChatId: r.parentChatId, parentSubAgentId: r.parentSubAgentId ?? null, teamId: r.teamId ?? null, task: r.task, mode: r.mode as SubAgentMode, status: r.status as SubAgentStatus, worktreePath: r.worktreePath ?? null, modelId: r.modelId ?? null, result: r.result ?? null, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+  } catch {}
+  return (db.subAgents || []).filter((a) => a.parentChatId === pid)
+}
+export function findSubAgent(id: string): SubAgent | null {
+  const sid = String(id ?? '').trim()
+  if (!sid) return null
+  try {
+    const s = ensureDb()
+    const r = s.prepare('SELECT id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt FROM subAgents WHERE id=?').get(sid) as any
+    if (r) return { id: r.id, parentChatId: r.parentChatId, parentSubAgentId: r.parentSubAgentId ?? null, teamId: r.teamId ?? null, task: r.task, mode: r.mode, status: r.status, worktreePath: r.worktreePath ?? null, modelId: r.modelId ?? null, result: r.result ?? null, createdAt: r.createdAt, updatedAt: r.updatedAt }
+  } catch {}
+  return (db.subAgents || []).find((a) => a.id === sid) ?? null
+}
+export function updateSubAgent(id: string, patch: Partial<Pick<SubAgent,'status'|'result'|'worktreePath'|'modelId'>>): SubAgent | null {
+  const sa = findSubAgent(id)
+  if (!sa) return null
+  if (patch.status) sa.status = patch.status
+  if (patch.result !== undefined) sa.result = patch.result ?? null
+  if (patch.worktreePath !== undefined) sa.worktreePath = patch.worktreePath ?? null
+  if (patch.modelId !== undefined) sa.modelId = patch.modelId ?? null
+  sa.updatedAt = new Date().toISOString()
+  try {
+    const s = ensureDb()
+    s.prepare('UPDATE subAgents SET status=?, result=?, worktreePath=?, modelId=?, updatedAt=? WHERE id=?').run(sa.status, sa.result, sa.worktreePath, sa.modelId, sa.updatedAt, id)
+  } catch {}
+  try {
+    const idx = (db.subAgents || []).findIndex((a) => a.id === id)
+    if (idx !== -1) db.subAgents[idx] = { ...sa }
+  } catch {}
+  return sa
+}
+export function createTeam(chatId: string, name: string, headId?: string | null): Team {
+  const cid = String(chatId ?? '').trim()
+  if (!cid) throw new Error('chatId required')
+  const n = String(name ?? '').trim().slice(0,80) || 'Team'
+  const id = randomUUID()
+  const now = new Date().toISOString()
+  const t: Team = { id, name: n, chatId: cid, headId: headId ?? null, createdAt: now, updatedAt: now }
+  try {
+    const s = ensureDb()
+    s.prepare('INSERT INTO teams (id, name, chatId, headId, createdAt, updatedAt) VALUES (?,?,?,?,?,?)').run(id, n, cid, t.headId, now, now)
+  } catch {}
+  try { db.teams.push(t) } catch {}
+  return t
+}
+export function teamsOf(chatId: string): Team[] {
+  const cid = String(chatId ?? '').trim()
+  if (!cid) return []
+  try {
+    const s = ensureDb()
+    const rows = s.prepare('SELECT id, name, chatId, headId, createdAt, updatedAt FROM teams WHERE chatId=? ORDER BY createdAt').all(cid) as any[]
+    if (rows.length) return rows as Team[]
+  } catch {}
+  return (db.teams || []).filter((t) => t.chatId === cid)
+}
+
 export function closeDb(): void {
   if (!sqlite) return
   try { sqlite.pragma('wal_checkpoint(TRUNCATE)') } catch {}
