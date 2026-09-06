@@ -1830,6 +1830,406 @@ app.patch('/api/settings/theme', async (c) => {
 })
 
 
+// ---------------- Settings: GitHub Token (PAT) + Poll Settings — store.ts:214 kv "githubToken" + github_tokens {id,projectId,token,createdAt}. Helpers get/set/masked ••••xxxx, regex ^(gh[opsr]_|github_pat_) 20-120 chars. ----------------
+import { getGithubToken as getGithubTokenStore, setGithubToken as setGithubTokenStore, maskGithubToken, isValidGithubToken, getRawGithubToken, getGithubPollSettings as getGithubPollSettingsStore, updateGithubPollSettings as updateGithubPollSettingsStore, effectiveIntervalMs as effectiveIntervalMsStore, validateGithubCronExpr, DEFAULT_GITHUB_POLL_SETTINGS } from './store.js'
+
+function maskSecretForLog(s: string): string {
+  if (!s) return ''
+  if (s.length <= 4) return '••••'
+  return `••••${s.slice(-4)}`
+}
+
+app.get('/api/settings/github', (c) => {
+  try {
+    const projectId = c.req.query('projectId') ? String(c.req.query('projectId')).trim() : undefined
+    if (projectId && !findProject(projectId)) return c.json({ error: 'Project not found' }, 404)
+    const envOverride = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '').trim()
+    const raw = getRawGithubToken(projectId)
+    const effective = getGithubTokenStore(projectId)
+    const masked = effective ? maskGithubToken(effective) : (raw ? maskGithubToken(raw) : '')
+    // token never returned, only masked preview
+    return c.json({
+      hasToken: !!effective,
+      masked: masked,
+      keyPreview: masked,
+      source: envOverride ? 'env' : raw ? (projectId ? 'project' : 'global') : 'none',
+      projectId: projectId || null
+    })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,400) }, 500) }
+})
+
+app.post('/api/settings/github', async (c) => {
+  let body:any={}
+  try { body = await c.req.json() } catch {}
+  const token = String(body.token ?? body.githubToken ?? '').trim()
+  const projectId = body.projectId != null ? String(body.projectId).trim() : undefined
+  if (projectId && !findProject(projectId)) return c.json({ error: 'Project not found' }, 404)
+  if (!token) return c.json({ error: 'Token is required' }, 400)
+  if (token.length < 20 || token.length > 120) return c.json({ error: 'Token must be 20-120 chars' }, 400)
+  if (!isValidGithubToken(token)) return c.json({ error: 'Invalid GitHub token: must start with ghp_/gho_/ghs_/ghr_/github_pat_ and be 20-120 chars' }, 400)
+  try {
+    const masked = setGithubTokenStore(token, projectId)
+    // restart scheduler if project-specific
+    try { updateScheduler(projectId) } catch {}
+    return c.json({ ok: true, masked, keyPreview: masked, hasToken: true })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,400) }, 400) }
+})
+
+app.delete('/api/settings/github', async (c) => {
+  const projectId = c.req.query('projectId') ? String(c.req.query('projectId')).trim() : undefined
+  if (projectId && !findProject(projectId)) return c.json({ error: 'Project not found' }, 404)
+  try {
+    setGithubTokenStore('', projectId)
+    try { updateScheduler(projectId) } catch {}
+    return c.json({ ok: true })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,400) }, 500) }
+})
+
+app.post('/api/settings/github/test', async (c) => {
+  let body:any={}
+  try { body = await c.req.json() } catch {}
+  const tokenRaw = body.token != null ? String(body.token).trim() : null
+  const projectId = body.projectId != null ? String(body.projectId).trim() : undefined
+  if (projectId && !findProject(projectId)) return c.json({ error: 'Project not found' }, 404)
+  const token = tokenRaw ?? getGithubTokenStore(projectId) ?? (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '').trim()
+  if (!token) return c.json({ error: 'No token configured' }, 400)
+  if (tokenRaw && !isValidGithubToken(tokenRaw)) return c.json({ error: 'Invalid token format' }, 400)
+  // api.github.com/user Bearer 60s timeout (llm.ts:125 pattern)
+  try {
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), 60000)
+    const res = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'ks-agent' },
+      signal: controller.signal
+    } as any)
+    clearTimeout(t)
+    const remaining = res.headers.get('x-ratelimit-remaining') || res.headers.get('X-RateLimit-Remaining') || null
+    const reset = res.headers.get('x-ratelimit-reset') || res.headers.get('X-RateLimit-Reset') || null
+    if (res.ok) {
+      let data:any=null
+      try { data = await res.json() } catch {}
+      return c.json({ ok: true, user: data?.login || null, remaining: remaining ? Number(remaining) : null, reset: reset ? Number(reset) : null })
+    } else {
+      let detail=''
+      try { detail = (await res.text()).slice(0,400) } catch {}
+      return c.json({ ok: false, error: `GitHub responded ${res.status}${detail ? `: ${detail}`:''}`, status: res.status, remaining: remaining ? Number(remaining) : null }, res.status===401||res.status===403 ? 401 : 502)
+    }
+  } catch (e:any) {
+    if (String(e?.name||'').includes('AbortError')) return c.json({ ok:false, error: 'GitHub test timeout (60s)' }, 504)
+    return c.json({ ok:false, error: String(e?.message||'Failed to test token').slice(0,400) }, 502)
+  }
+})
+
+// Poll settings — GET/PUT /api/settings/github/poll + per-project override
+app.get('/api/settings/github/poll', (c) => {
+  const projectId = c.req.query('projectId') ? String(c.req.query('projectId')).trim() : undefined
+  if (projectId && !findProject(projectId)) return c.json({ error: 'Project not found' }, 404)
+  const settings = getGithubPollSettingsStore(projectId)
+  const rate = projectId ? getProjectRateLimitState(projectId) : getRateLimitState()
+  const eff = effectiveIntervalMsStore(settings, rate.remaining)
+  return c.json({
+    ...settings,
+    effectiveIntervalMs: eff,
+    minIntervalMs: settings.minIntervalMs,
+    maxIntervalMs: settings.maxIntervalMs,
+    rateLimit: { remaining: rate.remaining, resetAt: rate.resetAt, effectiveIntervalMs: eff, nextPollAt: rate.nextPollAt, etagHitRate: rate.etagHitRate }
+  })
+})
+
+app.put('/api/settings/github/poll', async (c) => {
+  let body:any={}
+  try { body = await c.req.json() } catch {}
+  const projectId = body.projectId != null ? String(body.projectId).trim() : (c.req.query('projectId') ? String(c.req.query('projectId')).trim() : undefined)
+  if (projectId && !findProject(projectId)) return c.json({ error: 'Project not found' }, 404)
+  // Build patch with validation: intervalMs 5000-300000 any custom value, cronExpr validated via cron parser if mode=cron, jitter 0-5000
+  const patch: any = {}
+  if (body.enabled !== undefined) patch.enabled = Boolean(body.enabled)
+  if (body.mode !== undefined) {
+    const m = String(body.mode).trim()
+    if (!['interval','cron','event','manual'].includes(m)) return c.json({ error: 'mode must be interval|cron|event|manual' }, 400)
+    patch.mode = m
+  }
+  if (body.intervalMs !== undefined) {
+    const v = Number(body.intervalMs)
+    if (!Number.isFinite(v) || !Number.isInteger(Math.round(v))) return c.json({ error: 'intervalMs must be integer' }, 400)
+    const iv = Math.round(v)
+    if (iv < 5000 || iv > 300000) return c.json({ error: 'intervalMs must be 5000-300000 (5s-5min)' }, 400)
+    patch.intervalMs = iv
+  }
+  if (body.cronExpr !== undefined) {
+    if (body.cronExpr === null) patch.cronExpr = null
+    else {
+      const expr = String(body.cronExpr).trim()
+      if (expr && !validateGithubCronExpr(expr)) return c.json({ error: 'Invalid cronExpr: expected "*/25 * * * * *" or "every 25s"' }, 400)
+      patch.cronExpr = expr || null
+    }
+  }
+  if (body.endpoints !== undefined && typeof body.endpoints === 'object') patch.endpoints = body.endpoints
+  if (body.perEndpointInterval !== undefined && typeof body.perEndpointInterval === 'object') {
+    // validate each perEndpointInterval value 5000-300000
+    for (const k of ['diffMs','prMs','commitsMs','actionsMs']) {
+      const v = (body.perEndpointInterval as any)[k]
+      if (v !== undefined) {
+        const n = Number(v)
+        if (!Number.isFinite(n) || Math.round(n) < 5000 || Math.round(n) > 300000) return c.json({ error: `perEndpointInterval.${k} must be 5000-300000` }, 400)
+      }
+    }
+    patch.perEndpointInterval = body.perEndpointInterval
+  }
+  if (body.pollOnFocusOnly !== undefined) patch.pollOnFocusOnly = Boolean(body.pollOnFocusOnly)
+  if (body.pauseOnWindowBlur !== undefined) patch.pauseOnWindowBlur = Boolean(body.pauseOnWindowBlur)
+  if (body.useEtag !== undefined) patch.useEtag = Boolean(body.useEtag)
+  if (body.respectRateLimit !== undefined) patch.respectRateLimit = Boolean(body.respectRateLimit)
+  if (body.smartEventOnly !== undefined) patch.smartEventOnly = Boolean(body.smartEventOnly)
+  if (body.jitterMs !== undefined) {
+    const j = Number(body.jitterMs)
+    if (!Number.isFinite(j) || Math.round(j) < 0 || Math.round(j) > 5000) return c.json({ error: 'jitterMs must be 0-5000' }, 400)
+    patch.jitterMs = Math.round(j)
+  }
+  if (body.maxRetries !== undefined) {
+    const mr = Number(body.maxRetries)
+    if (!Number.isFinite(mr) || Math.round(mr) < 0 || Math.round(mr) > 10) return c.json({ error: 'maxRetries must be 0-10' }, 400)
+    patch.maxRetries = Math.round(mr)
+  }
+  if (body.webhookUrl !== undefined) {
+    if (body.webhookUrl === null || String(body.webhookUrl).trim() === '') patch.webhookUrl = null
+    else {
+      const u = String(body.webhookUrl).trim()
+      if (u.length > 500) return c.json({ error: 'webhookUrl too long' }, 400)
+      try { const parsed = new URL(u); if (!['http:','https:'].includes(parsed.protocol)) throw new Error('invalid') } catch { return c.json({ error: 'Invalid webhookUrl' }, 400) }
+      patch.webhookUrl = u
+    }
+  }
+  try {
+    const updated = updateGithubPollSettingsStore(patch, projectId)
+    try { updateScheduler(projectId) } catch {}
+    const rate = projectId ? getProjectRateLimitState(projectId) : getRateLimitState()
+    const eff = effectiveIntervalMsStore(updated, rate.remaining)
+    return c.json({ ...updated, effectiveIntervalMs: eff })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,400) }, 400) }
+})
+
+// Webhook alternative: input webhookUrl → disables polling, shows setup curl, verifies X-Hub-Signature-256.
+app.post('/api/settings/github/webhook', async (c) => {
+  let body:any={}
+  try { body = await c.req.json() } catch {}
+  const projectId = body.projectId != null ? String(body.projectId).trim() : undefined
+  if (projectId && !findProject(projectId)) return c.json({ error: 'Project not found' }, 404)
+  const url = body.webhookUrl != null ? String(body.webhookUrl).trim() : ''
+  if (url && url.length > 500) return c.json({ error: 'webhookUrl too long' }, 400)
+  if (url) {
+    try { const u = new URL(url); if (!['http:','https:'].includes(u.protocol)) throw new Error('invalid') } catch { return c.json({ error: 'Invalid webhookUrl' }, 400) }
+  }
+  try {
+    const updated = updateGithubPollSettingsStore({ webhookUrl: url || null, enabled: url ? false : undefined } as any, projectId)
+    try { updateScheduler(projectId) } catch {}
+    const setupCurl = url ? `curl -X POST ${url} -H "X-Hub-Signature-256: sha256=$(echo -n '{}' | openssl dgst -sha256 -hmac "$GITHUB_TOKEN")"` : null
+    return c.json({ ok: true, settings: updated, setupCurl, verify: 'POST /api/github/webhook/:projectId with X-Hub-Signature-256' })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,400) }, 400) }
+})
+
+// Legacy alias per spec task: PUT /api/settings/github/poll (already) and POST variants — support POST also for convenience
+app.post('/api/settings/github/poll', async (c) => {
+  return c.json({ error: 'Use PUT /api/settings/github/poll' }, 405)
+})
+
+// ---------------- GitHub per-project endpoints — server/src/github.ts (new, like mcp.ts:314) ----------------
+// Endpoints: GET /api/projects/:id/github/diff?pr=, /pr, /commits — conditional; GET /rate-limit; POST /poll-now (debounced); PUT /api/settings/github/poll {intervalMs,cronExpr,mode,perEndpointInterval,...} validate 5000-300000, cron valid, projectId scoped.
+// Webhook alternative: input webhookUrl → disables polling, shows setup curl, verifies X-Hub-Signature-256.
+
+app.get('/api/projects/:id/github/rate-limit', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const settings = getGithubPollSettingsStore(project.id)
+  const rate = getProjectRateLimitState(project.id)
+  const eff = effectiveIntervalMsStore(settings, rate.remaining)
+  // respectRateLimit throttling display
+  const throttled = settings.respectRateLimit && rate.remaining < 100
+  return c.json({
+    projectId: project.id,
+    remaining: rate.remaining,
+    limit: rate.limit,
+    resetAt: rate.resetAt ? new Date(rate.resetAt).toISOString() : null,
+    resetAtMs: rate.resetAt,
+    effectiveIntervalMs: eff,
+    intervalMs: settings.intervalMs,
+    nextPollAt: rate.nextPollAt ? new Date(rate.nextPollAt).toISOString() : null,
+    nextPollAtMs: rate.nextPollAt,
+    etagHitRate: rate.etagHitRate,
+    throttled,
+    throttledMsg: throttled ? 'throttled to 60s' : null,
+    useEtag: settings.useEtag,
+    respectRateLimit: settings.respectRateLimit,
+    mode: settings.mode
+  })
+})
+
+app.post('/api/projects/:id/github/poll-now', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  try {
+    const result = await pollNow(project.id)
+    if ((result as any).debounced) return c.json({ error: 'Poll debounced (5s)', debounced: true }, 429)
+    return c.json({ ok: true, ...result })
+  } catch (e:any) {
+    const msg = String(e?.message||'poll failed')
+    if (msg.includes('Rate limited') || msg.includes('No GitHub token')) {
+      return c.json({ error: msg.slice(0,500) }, msg.includes('No GitHub token') ? 400 : 429)
+    }
+    return c.json({ error: msg.slice(0,500) }, 502)
+  }
+})
+
+app.post('/api/projects/:id/github/focus', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  let body:any={}
+  try { body = await c.req.json() } catch {}
+  const focused = body.focused !== undefined ? Boolean(body.focused) : true
+  const windowFocused = body.windowFocused !== undefined ? Boolean(body.windowFocused) : focused
+  // also support blur via pauseOnWindowBlur semantics
+  setFocusState(project.id, focused, windowFocused)
+  return c.json({ ok: true, focused, windowFocused })
+})
+
+app.get('/api/projects/:id/github/diff', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const pr = c.req.query('pr') ? String(c.req.query('pr')).trim().slice(0,100) : null
+  const settings = getGithubPollSettingsStore(project.id)
+  if (!settings.endpoints.diff) return c.json({ error: 'Diff polling disabled' }, 404)
+  const token = getGithubTokenStore(project.id)
+  if (!token) return c.json({ error: 'No GitHub token configured' }, 401)
+  // Try to resolve repo from git remote if project has .git
+  let repo = c.req.query('repo') ? String(c.req.query('repo')).trim().slice(0,200) : null
+  if (!repo) {
+    try {
+      const gitConfig = path.join(project.path, '.git', 'config')
+      if (fs.existsSync(gitConfig)) {
+        const cfg = fs.readFileSync(gitConfig, 'utf8')
+        const m = cfg.match(/url\s*=\s*.*github\.com[:\/]([^\s]+)\.git/)
+        if (m) repo = m[1].replace(/\.git$/, '').trim()
+        else {
+          const m2 = cfg.match(/github\.com[:\/]([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/)
+          if (m2) repo = m2[1].replace(/\.git$/, '').trim()
+        }
+      }
+    } catch {}
+  }
+  if (!repo) return c.json({ error: 'Repo not found (pass ?repo=owner/repo or init git remote)' }, 400)
+  const etag = c.req.header('if-none-match') || undefined
+  try {
+    const useEtag = settings.useEtag
+    const url = pr ? `https://api.github.com/repos/${repo}/pulls/${encodeURIComponent(pr)}/files` : `https://api.github.com/repos/${repo}/pulls`
+    const result = await fetchGitHub(url, project.id, { etag, useEtag })
+    if (result.status === 304) return c.json({ cached: true, data: result.data, etag: result.etag }, 304 as any)
+    // For Hono, 304 with json still sends body — we return header instead
+    if (result.fromCache) {
+      c.header('X-Cache', 'HIT')
+      c.header('ETag', result.etag || '')
+      return c.json({ cached: true, data: result.data, etag: result.etag })
+    }
+    if (result.etag) c.header('ETag', result.etag)
+    // Respect perEndpointInterval.diffMs for next poll display? Just return data
+    return c.json({ data: result.data, etag: result.etag, fromCache: result.fromCache })
+  } catch (e:any) {
+    const msg = String(e?.message||'fetch failed')
+    if (msg.includes('rate limited')) return c.json({ error: msg.slice(0,500) }, 429)
+    return c.json({ error: msg.slice(0,500) }, 502)
+  }
+})
+
+app.get('/api/projects/:id/github/pr', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const settings = getGithubPollSettingsStore(project.id)
+  if (!settings.endpoints.pr) return c.json({ error: 'PR polling disabled' }, 404)
+  const token = getGithubTokenStore(project.id)
+  if (!token) return c.json({ error: 'No GitHub token configured' }, 401)
+  let repo = c.req.query('repo') ? String(c.req.query('repo')).trim().slice(0,200) : null
+  if (!repo) {
+    try {
+      const gitConfig = path.join(project.path, '.git', 'config')
+      if (fs.existsSync(gitConfig)) {
+        const cfg = fs.readFileSync(gitConfig, 'utf8')
+        const m = cfg.match(/url\s*=\s*.*github\.com[:\/]([^\s]+)\.git/)
+        if (m) repo = m[1].replace(/\.git$/, '').trim()
+        else {
+          const m2 = cfg.match(/github\.com[:\/]([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/)
+          if (m2) repo = m2[1].replace(/\.git$/, '').trim()
+        }
+      }
+    } catch {}
+  }
+  if (!repo) return c.json({ error: 'Repo not found (pass ?repo=owner/repo)' }, 400)
+  try {
+    const result = await fetchGitHub(`https://api.github.com/repos/${repo}/pulls`, project.id, { useEtag: settings.useEtag })
+    if (result.etag) c.header('ETag', result.etag)
+    return c.json({ data: result.data, etag: result.etag, fromCache: result.fromCache })
+  } catch (e:any) {
+    return c.json({ error: String(e?.message||'fetch failed').slice(0,500) }, 502)
+  }
+})
+
+app.get('/api/projects/:id/github/commits', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const settings = getGithubPollSettingsStore(project.id)
+  if (!settings.endpoints.commits) return c.json({ error: 'Commits polling disabled' }, 404)
+  const token = getGithubTokenStore(project.id)
+  if (!token) return c.json({ error: 'No GitHub token configured' }, 401)
+  let repo = c.req.query('repo') ? String(c.req.query('repo')).trim().slice(0,200) : null
+  if (!repo) {
+    try {
+      const gitConfig = path.join(project.path, '.git', 'config')
+      if (fs.existsSync(gitConfig)) {
+        const cfg = fs.readFileSync(gitConfig, 'utf8')
+        const m = cfg.match(/url\s*=\s*.*github\.com[:\/]([^\s]+)\.git/)
+        if (m) repo = m[1].replace(/\.git$/, '').trim()
+      }
+    } catch {}
+  }
+  if (!repo) return c.json({ error: 'Repo not found' }, 400)
+  try {
+    const result = await fetchGitHub(`https://api.github.com/repos/${repo}/commits`, project.id, { useEtag: settings.useEtag })
+    if (result.etag) c.header('ETag', result.etag)
+    return c.json({ data: result.data, etag: result.etag, fromCache: result.fromCache })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,500) }, 502) }
+})
+
+app.get('/api/projects/:id/github/actions', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const settings = getGithubPollSettingsStore(project.id)
+  if (!settings.endpoints.actions) return c.json({ error: 'Actions polling disabled' }, 404)
+  const token = getGithubTokenStore(project.id)
+  if (!token) return c.json({ error: 'No GitHub token configured' }, 401)
+  let repo = c.req.query('repo') ? String(c.req.query('repo')).trim().slice(0,200) : null
+  if (!repo) return c.json({ error: 'Repo not found' }, 400)
+  try {
+    const result = await fetchGitHub(`https://api.github.com/repos/${repo}/actions/runs`, project.id, { useEtag: settings.useEtag })
+    if (result.etag) c.header('ETag', result.etag)
+    return c.json({ data: result.data, etag: result.etag })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,500) }, 502) }
+})
+
+// Webhook receiver — verifies X-Hub-Signature-256 using token as secret
+app.post('/api/github/webhook/:projectId', async (c) => {
+  const project = findProject(c.req.param('projectId'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const signature = c.req.header('x-hub-signature-256') || c.req.header('X-Hub-Signature-256') || ''
+  let rawBody = ''
+  try { rawBody = await c.req.text() } catch { rawBody = '' }
+  const token = getRawGithubToken(project.id) || getGithubTokenStore(project.id) || ''
+  if (!signature) return c.json({ error: 'Missing X-Hub-Signature-256' }, 400)
+  if (!token) return c.json({ error: 'No token configured for webhook verification' }, 400)
+  const ok = verifyWebhookSignature(rawBody, signature, token)
+  if (!ok) return c.json({ error: 'Invalid signature' }, 401)
+  // webhook disables polling but triggers immediate pollNow (event)
+  try { await pollNow(project.id, true) } catch {}
+  return c.json({ ok: true, received: true })
+})
+
 // ---------------- Settings: embeddings (vector provider) — OpenAI-compatible + Ollama + local MiniLM fallback ----------------
 app.get('/api/settings/embeddings', (c) => {
   try {
