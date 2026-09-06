@@ -585,6 +585,195 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     if (textareaRef.current && gutterRef.current) {
       gutterRef.current.scrollTop = textareaRef.current.scrollTop
     }
+    // also sync ghost overlay if present
+    const ghost = document.querySelector('.fp-ghost') as HTMLElement | null
+    if (ghost && textareaRef.current) {
+      ghost.scrollTop = textareaRef.current.scrollTop
+      ghost.scrollLeft = textareaRef.current.scrollLeft
+    }
+  }
+
+  // ---- IDE: inline autocomplete ghost ----
+  function clearGhost() {
+    ghostRequestIdRef.current++
+    setGhostText('')
+    setGhostLoading(false)
+    if (ghostTimerRef.current) { clearTimeout(ghostTimerRef.current); ghostTimerRef.current = null }
+  }
+
+  function requestGhost(prefix: string, suffix: string) {
+    if (!projectId || !selected || editLoading) { clearGhost(); return }
+    // Don't ghost for very short prefix or when already has ghost that matches
+    if (prefix.length < 3 && suffix.length < 3) { clearGhost(); return }
+    // debounce 350ms
+    if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current)
+    const reqId = ++ghostRequestIdRef.current
+    ghostTimerRef.current = setTimeout(async () => {
+      // skip if content is empty or cursor at empty line with only whitespace prefix
+      const lastLine = prefix.split('\n').pop() ?? ''
+      if (lastLine.trim() === '' && prefix.trim() === '') { return }
+      setGhostLoading(true)
+      try {
+        const res = await api.ideComplete({ projectId: projectId!, filePath: selected ?? undefined, prefix, suffix, language: selectedLanguage })
+        if (ghostRequestIdRef.current !== reqId) return
+        const comp = (res.completion || '').trimEnd()
+        // avoid echoing prefix tail or huge completions
+        if (!comp || comp.length > 400 || prefix.endsWith(comp)) {
+          setGhostText('')
+        } else {
+          setGhostText(comp)
+        }
+      } catch {
+        if (ghostRequestIdRef.current === reqId) setGhostText('')
+      } finally {
+        if (ghostRequestIdRef.current === reqId) setGhostLoading(false)
+      }
+    }, 350)
+  }
+
+  function handleEditorChange(next: string) {
+    handleContentChange(next)
+    // ghost: compute prefix/suffix around cursor
+    const el = textareaRef.current
+    if (!el) { clearGhost(); return }
+    // Use next value and cursor pos after this change (async). Use setTimeout 0 to get updated selection
+    setTimeout(() => {
+      const pos = el.selectionStart ?? next.length
+      const prefix = next.slice(0, pos)
+      const suffix = next.slice(pos)
+      // Don't trigger ghost if user just accepted ghost or is deleting
+      if (next.length < editContent.length) { clearGhost(); return }
+      requestGhost(prefix, suffix)
+    }, 0)
+  }
+
+  function acceptGhost() {
+    if (!ghostText || !textareaRef.current) return false
+    const el = textareaRef.current
+    const pos = el.selectionStart ?? editContent.length
+    const before = editContent.slice(0, pos)
+    const after = editContent.slice(pos)
+    const inserted = ghostText.startsWith('\n') ? ghostText : ghostText
+    const next = before + inserted + after
+    handleContentChange(next)
+    setGhostText('')
+    // move cursor after inserted ghost
+    setTimeout(() => {
+      const newPos = pos + inserted.length
+      el.selectionStart = el.selectionEnd = newPos
+      el.focus()
+      syncScroll()
+    }, 0)
+    return true
+  }
+
+  function onEditorKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Tab to accept ghost
+    if (e.key === 'Tab' && ghostText) {
+      e.preventDefault()
+      acceptGhost()
+      return
+    }
+    if (e.key === 'Escape' && ghostText) {
+      clearGhost()
+      return
+    }
+    // Cmd/Ctrl+K opens inline chat
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault()
+      const el = textareaRef.current
+      const start = el?.selectionStart ?? 0
+      const end = el?.selectionEnd ?? 0
+      // if no selection, use current line
+      if (start === end) {
+        const lineStart = editContent.lastIndexOf('\n', start - 1) + 1
+        const lineEnd = editContent.indexOf('\n', start)
+        const s = lineStart
+        const ee = lineEnd === -1 ? editContent.length : lineEnd
+        // open inline chat with line as selection context
+        setInlineChat({ open: true, instruction: '', loading: false, error: null })
+        // store selection for later replacement
+        ;(el as any)._ksInlineS = s
+        ;(el as any)._ksInlineE = ee
+      } else {
+        ;(el as any)._ksInlineS = start
+        ;(el as any)._ksInlineE = end
+        setInlineChat({ open: true, instruction: '', loading: false, error: null })
+      }
+      return
+    }
+    // standard undo/redo
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      doUndo()
+      clearGhost()
+      return
+    }
+    if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+      e.preventDefault()
+      doRedo()
+      clearGhost()
+      return
+    }
+  }
+
+  function onEditorSelect() {
+    // clear ghost when user moves cursor/selection manually
+    if (ghostText) {
+      const el = textareaRef.current
+      if (!el) return
+      const pos = el.selectionStart ?? 0
+      const end = el.selectionEnd ?? 0
+      if (pos !== end) clearGhost()
+    }
+  }
+
+  // Clear ghost when file changes or editLoading toggles
+  useEffect(() => { clearGhost() }, [selected, editLoading])
+
+  // ---- IDE: inline chat handlers ----
+  async function submitInlineChat() {
+    const el = textareaRef.current
+    if (!el || !projectId || !selected) return
+    const s = (el as any)._ksInlineS as number | undefined
+    const ee = (el as any)._ksInlineE as number | undefined
+    const start = typeof s === 'number' ? s : (el.selectionStart ?? 0)
+    const end = typeof ee === 'number' ? ee : (el.selectionEnd ?? 0)
+    const selection = editContent.slice(start, end)
+    const instr = inlineChat.instruction.trim()
+    if (!instr) { setInlineChat((p) => ({ ...p, error: 'Instruction required' })); return }
+    if (!selection.trim()) { setInlineChat((p) => ({ ...p, error: 'Select code first (or place cursor on a line and press ⌘K)' })); return }
+    setInlineChat((p) => ({ ...p, loading: true, error: null }))
+    try {
+      const surrounding = editContent.slice(Math.max(0, start - 800), Math.min(editContent.length, end + 800))
+      const res = await api.ideInlineChat({ projectId, filePath: selected, selection, instruction: instr, surroundingContext: surrounding })
+      const result = res.result ?? ''
+      if (!result.trim()) throw new Error('Empty result from model')
+      const next = editContent.slice(0, start) + result + editContent.slice(end)
+      handleContentChange(next)
+      setInlineChat({ open: false, instruction: '', loading: false, error: null })
+      toast('Inline chat applied', 'success')
+      setTimeout(() => {
+        el.focus()
+        const newPos = start + result.length
+        el.selectionStart = el.selectionEnd = newPos
+        syncScroll()
+      }, 0)
+    } catch (e: any) {
+      setInlineChat((p) => ({ ...p, loading: false, error: e.message || 'Inline chat failed' }))
+    }
+  }
+
+  function explainSelection() {
+    const el = textareaRef.current
+    if (!el) return
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? 0
+    const sel = editContent.slice(start, end).trim()
+    if (!sel) { toast('Select code to explain', 'error'); return }
+    ;(el as any)._ksInlineS = start
+    ;(el as any)._ksInlineE = end
+    setInlineChat({ open: true, instruction: 'Explain this code concisely', loading: false, error: null })
   }
 
   if (!projectId) {
@@ -690,13 +879,35 @@ export function FilesPane({ projectId }: FilesPaneProps) {
       {!subPage && selected && (
         <div className="fp-edit">
           <div className="fp-subhead fp-edit-head" style={{ borderLeft: `3px solid ${selectedColor}`, paddingLeft: 8, borderRadius: 6 }}>
-            <button className="icon-btn" aria-label="Back to files" onClick={() => { setSelected(null); setEditContent(''); }}>
+            <button className="icon-btn" aria-label="Back to files" onClick={() => { clearGhost(); setSelected(null); setEditContent(''); }}>
               <IconChevronLeft size={17} />
             </button>
             <span style={{ display: 'inline-flex', alignItems: 'center', color: selectedColor }}><SelectedIcon size={15} /></span>
             <span className="fp-edit-title" title={selected}>{selected}</span>
             <span className="fp-lang-badge" style={{ background: selectedColor, color: selectedColor === '#f7df1e' || selectedColor === '#ecd53f' ? '#000' : '#fff', borderColor: selectedColor }}>{selectedMeta?.label ?? 'FILE'}</span>
             <div className="fp-editor-actions" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <button className="icon-btn" aria-label="Inline chat" title="Inline chat (⌘K / Ctrl+K) — select code then ask AI to edit" onClick={() => {
+                const el = textareaRef.current
+                if (!el) return
+                const s = el.selectionStart ?? 0
+                const e = el.selectionEnd ?? 0
+                if (s === e) {
+                  const lineStart = editContent.lastIndexOf('\n', s - 1) + 1
+                  const lineEnd = editContent.indexOf('\n', s)
+                  const ee = lineEnd === -1 ? editContent.length : lineEnd
+                  ;(el as any)._ksInlineS = lineStart
+                  ;(el as any)._ksInlineE = ee
+                } else {
+                  ;(el as any)._ksInlineS = s
+                  ;(el as any)._ksInlineE = e
+                }
+                setInlineChat({ open: true, instruction: '', loading: false, error: null })
+              }} style={{ width: 28, height: 28, borderColor: inlineChat.open ? 'var(--primary)' : undefined, color: inlineChat.open ? 'var(--primary)' : undefined }}>
+                <span style={{ fontSize: 13, lineHeight: 1, fontWeight: 700 }}>⌘K</span>
+              </button>
+              <button className="icon-btn" aria-label="Explain selection" title="Explain selected code" onClick={explainSelection} style={{ width: 28, height: 28 }}>
+                <IconSearch size={14} />
+              </button>
               <button className="icon-btn" aria-label="Previous file" title="Previous file (<)" disabled={!hasPrev || editLoading} onClick={goPrevFile} style={{ width: 28, height: 28 }}>
                 <IconChevronLeft size={14} />
               </button>
@@ -708,6 +919,38 @@ export function FilesPane({ projectId }: FilesPaneProps) {
               </button>
             </div>
           </div>
+          {inlineChat.open && (
+            <div className="fp-inline-chat" style={{ borderLeft: `3px solid ${selectedColor}`, marginBottom: 6 }}>
+              <div className="fp-inline-chat-head">
+                <span className="fp-inline-chat-title">Inline Chat</span>
+                <span className="fp-inline-chat-hint">⌘K — selection → instruction → Apply</span>
+                <button className="icon-btn" aria-label="Close inline chat" onClick={() => setInlineChat({ open: false, instruction: '', loading: false, error: null })} style={{ width: 24, height: 24, marginLeft: 'auto' }}>✕</button>
+              </div>
+              <div className="fp-inline-chat-body">
+                <input
+                  className="input fp-inline-input"
+                  placeholder="Describe edit… e.g. 'fix types', 'add error handling', 'explain this code'"
+                  value={inlineChat.instruction}
+                  onChange={(e) => setInlineChat((p) => ({ ...p, instruction: e.target.value, error: null }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitInlineChat() } if (e.key === 'Escape') setInlineChat({ open: false, instruction: '', loading: false, error: null }) }}
+                  autoFocus
+                  disabled={inlineChat.loading}
+                />
+                <div className="fp-inline-actions">
+                  <button className="btn btn-primary" disabled={inlineChat.loading || !inlineChat.instruction.trim()} onClick={submitInlineChat}>{inlineChat.loading ? 'Applying…' : 'Apply'}</button>
+                  <button className="btn" disabled={inlineChat.loading} onClick={() => setInlineChat({ open: false, instruction: '', loading: false, error: null })}>Cancel</button>
+                  <span className="fp-inline-hint">{editContent.slice((textareaRef.current as any)?._ksInlineS ?? textareaRef.current?.selectionStart ?? 0, (textareaRef.current as any)?._ksInlineE ?? textareaRef.current?.selectionEnd ?? 0).length ? `${editContent.slice((textareaRef.current as any)?._ksInlineS ?? textareaRef.current?.selectionStart ?? 0, (textareaRef.current as any)?._ksInlineE ?? textareaRef.current?.selectionEnd ?? 0).length} chars selected` : 'no selection'}</span>
+                </div>
+                {inlineChat.error && <div className="fp-inline-error">{inlineChat.error}</div>}
+                <div className="fp-inline-opts">
+                  <button className="fp-inline-opt" onClick={() => setInlineChat((p) => ({ ...p, instruction: 'Fix any bugs and add type safety' }))}>Fix</button>
+                  <button className="fp-inline-opt" onClick={() => setInlineChat((p) => ({ ...p, instruction: 'Explain this code concisely with bullets' }))}>Explain</button>
+                  <button className="fp-inline-opt" onClick={() => setInlineChat((p) => ({ ...p, instruction: 'Refactor for readability without changing behavior' }))}>Refactor</button>
+                  <button className="fp-inline-opt" onClick={() => setInlineChat((p) => ({ ...p, instruction: 'Add tests for this code' }))}>Tests</button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="fp-editor-wrap" style={{ borderColor: selectedColor }}>
             <div className="fp-editor-container">
               <div ref={gutterRef} className="fp-gutter" aria-hidden="true">
@@ -721,19 +964,42 @@ export function FilesPane({ projectId }: FilesPaneProps) {
                   ref={textareaRef}
                   className="fp-editor-textarea fp-edit-area fp-editor-textarea--highlighted"
                   value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
+                  onChange={(e) => handleEditorChange(e.target.value)}
                   onScroll={syncScroll}
+                  onKeyDown={onEditorKeyDown}
+                  onSelect={onEditorSelect}
+                  onClick={onEditorSelect}
+                  onBlur={() => { /* keep ghost until next focus */ }}
                   disabled={editLoading}
-                  placeholder={editLoading ? 'Loading…' : 'Start typing…'}
+                  placeholder={editLoading ? 'Loading…' : 'Start typing…  (Tab to accept ghost, ⌘K for inline chat)'}
                   spellCheck={false}
                   autoFocus
                 />
+                {ghostText && (
+                  <div className="fp-ghost" aria-hidden="true" onMouseDown={(e) => { e.preventDefault(); acceptGhost() }} title="Tab to accept, Esc to dismiss">
+                    <span className="fp-ghost-label">✦ Tab</span>
+                    <span className="fp-ghost-text">{ghostText.slice(0, 120).split('\n')[0]}{ghostText.length > 120 ? '…' : ''}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
+          {ghostText && (
+            <div className="fp-ghost-bar" style={{ borderLeft: `3px solid ${selectedColor}` }}>
+              <span className="fp-ghost-bar-text" title={ghostText}>{ghostText.length > 80 ? ghostText.slice(0, 80) + '…' : ghostText}</span>
+              <button className="btn btn-primary fp-ghost-accept" onClick={acceptGhost}>Tab Accept</button>
+              <button className="btn fp-ghost-dismiss" onClick={clearGhost}>Esc Dismiss</button>
+              {ghostLoading && <span className="fp-ghost-loading">…</span>}
+            </div>
+          )}
           <div className="fp-editor-footer" style={{ borderLeft: `3px solid ${selectedColor}`, paddingLeft: 8 }}>
             <span className="fp-editor-lang" style={{ color: selectedColor }}>{selectedLanguage}</span>
-            <span className="fp-editor-hint">{editLoading ? 'Loading…' : `${editContent.split('\n').length} lines • ${editContent.length} chars`}</span>
+            <span className="fp-editor-hint">{editLoading ? 'Loading…' : `${editContent.split('\n').length} lines • ${editContent.length} chars`}{ghostText ? ' • ghost: Tab to accept' : ''}{inlineChat.open ? ' • inline chat: ⌘K' : ''}</span>
+            <span className="fp-editor-ide" style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--text-faint)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: ghostText ? 'var(--primary)' : '#22c55e', display: 'inline-block' }} />{ghostText ? 'ghost' : 'autocomplete ready'}</span>
+              <span>·</span>
+              <span>⌘K inline chat</span>
+            </span>
           </div>
         </div>
       )}
