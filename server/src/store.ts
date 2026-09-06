@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import Database from 'better-sqlite3'
 
 export interface Project {
@@ -189,7 +189,7 @@ export interface Preview {
   updatedAt: string
 }
 
-export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | 'get_file_info' | 'delete_file' | 'move_file' | 'append_file' | 'apply_patch'
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'semantic_search' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | 'get_file_info' | 'delete_file' | 'move_file' | 'append_file' | 'apply_patch'
 
 export interface Activity {
   id: string
@@ -470,6 +470,17 @@ function initSchema(s: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_plugins_projectId ON plugins(projectId);
     CREATE INDEX IF NOT EXISTS idx_plugins_enabled ON plugins(enabled);
+    CREATE TABLE IF NOT EXISTS embeddings (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      contentHash TEXT NOT NULL,
+      tokens TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_embeddings_projectId ON embeddings(projectId);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_embeddings_project_path ON embeddings(projectId, filePath);
     CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
