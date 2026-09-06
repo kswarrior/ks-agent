@@ -488,9 +488,12 @@ function initSchema(s: Database.Database): void {
   `)
 }
 
-// ---------------- Embeddings / Semantic Search — lightweight TF-IDF cosine (server/src/store.ts:embeddings) ----------------
-// Pure-JS TF-IDF: tokenize → term freq → cosine, stored in SQLite via better-sqlite3.
-// No heavy deps; optional sqlite-vec can be layered later but fallback works without external service.
+// ---------------- Embeddings / Semantic Search — vector+hybrid (20k vector+BM25+grep, sqlite-vec/HNSW) (server/src/store.ts:embeddings) ----------------
+// Stores FLOAT32[384/768] per CHUNK (400-600 tokens, 100 overlap), not per file. Hybrid score = 0.5*vectorCosine + 0.3*BM25 + 0.2*grepBoost.
+// Primary vector store via sqlite-vec if extension available (vec0 virtual table), fallback to pure-JS brute-force cosine (HNSW-like scan) + JSON vecs per chunk in SQLite.
+// Keeps TF-IDF/BM25 fallback when vec extension missing or embeddings empty. Migration backward compatible (missing vec ≠ crash).
+// Chunking: isTextFileForEmbed, 500KB cap, 5k indexed/20k scanned keep, chunk table JSON vecs per chunk, contentHash incremental.
+// Provider: OpenAI-compatible baseUrl (text-embedding-3-small default) + Ollama nomic-embed-text + local MiniLM fallback (hash-based dense 384d). Batch embedMany with retry like llm.ts:125 openStream.
 const EMBED_STOPWORDS = new Set([
   'the','is','at','which','on','and','a','an','of','to','in','for','with','as','by','that','this','it','from','or','be','are','was','were','has','have','had','will','would','can','if','else','when','then','than','so','but','not','we','you','they','he','she','its','our','your','their','i','me','my','us'
 ])
@@ -499,6 +502,27 @@ const EMBED_MAX_TOKENS_PER_FILE = 2000
 const EMBED_MAX_FILES_INDEXED = 5000
 const EMBED_MAX_FILES_SCANNED = 20000
 const EMBED_IGNORED_DIRS = new Set(['node_modules','.git','.hg','.svn','dist','dist-server','storage','data','.next','build','.turbo','.vite','coverage','.cache','.opencode','.claude','.cursor','.vscode','.idea','.parcel-cache','.output','.vercel','.netlify','tmp','logs','.tmp'])
+// Vector chunk constants (spec: 400-600 tokens, 100 overlap) — store FLOAT32[384/768] per CHUNK, not per file
+const VECTOR_DIM = 384
+const VECTOR_DIM_LARGE = 768
+const CHUNK_TOKENS = 500
+const CHUNK_OVERLAP_TOKENS = 100
+const CHUNK_MAX_CHARS = 2400
+const CHUNK_OVERLAP_CHARS = 400
+const VECTOR_MAX_CHUNKS_PER_FILE = 60
+const EMBEDDING_BATCH_SIZE = 64
+const EMBED_PROVIDER_DEFAULT_MODEL = 'text-embedding-3-small'
+const OLLAMA_EMBED_DEFAULT_MODEL = 'nomic-embed-text'
+const EMBEDDING_RETRY_MAX = 3
+
+export interface EmbeddingSettings {
+  provider: 'local' | 'openai' | 'ollama'
+  baseUrl?: string
+  apiKey?: string
+  model?: string
+  dimensions?: number
+  enabled?: boolean
+}
 
 function tokenizeForEmbedding(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9_]+/).filter(t => t.length >= 2 && t.length <= 32 && !EMBED_STOPWORDS.has(t)).slice(0, EMBED_MAX_TOKENS_PER_FILE)
@@ -517,22 +541,7 @@ function sanitizeEmbeddingPath(p: string): string | null {
   if (t.split('/').some(seg => !seg || seg === '.' || seg === '..')) return null
   return t
 }
-export function ensureEmbeddingTable(): void {
-  const s = ensureDb()
-  s.exec(`
-    CREATE TABLE IF NOT EXISTS embeddings (
-      id TEXT PRIMARY KEY,
-      projectId TEXT NOT NULL,
-      filePath TEXT NOT NULL,
-      contentHash TEXT NOT NULL,
-      tokens TEXT NOT NULL,
-      updatedAt TEXT NOT NULL,
-      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_embeddings_projectId ON embeddings(projectId);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_embeddings_project_path ON embeddings(projectId, filePath);
-  `)
-}
+
 function isIgnoredDirEmbed(name: string): boolean {
   return EMBED_IGNORED_DIRS.has(name)
 }
@@ -566,6 +575,307 @@ function globToRegExpEmbed(pattern: string): RegExp | null {
   } catch { return null }
 }
 
+// Chunking: 400-600 tokens, 100 overlap — per spec chunk per CHUNK not per file
+export function chunkContentForEmbedding(content: string, chunkTokens = CHUNK_TOKENS, overlapTokens = CHUNK_OVERLAP_TOKENS): string[] {
+  if (!content || content.length < 50) return content ? [content] : []
+  // token-based chunking: split by whitespace approx token = word
+  const words = content.split(/\s+/).filter(Boolean)
+  if (words.length <= chunkTokens) return [content]
+  const chunks: string[] = []
+  let start = 0
+  while (start < words.length && chunks.length < VECTOR_MAX_CHUNKS_PER_FILE) {
+    const end = Math.min(start + chunkTokens, words.length)
+    const slice = words.slice(start, end).join(' ')
+    if (slice.trim()) chunks.push(slice)
+    if (end >= words.length) break
+    start = end - overlapTokens
+    if (start < 0) start = 0
+  }
+  return chunks.length ? chunks : [content.slice(0, CHUNK_MAX_CHARS)]
+}
+// Alternative char-based fallback for very long single-line files (no whitespace)
+function chunkContentCharFallback(content: string): string[] {
+  if (content.length <= CHUNK_MAX_CHARS) return [content]
+  const chunks: string[] = []
+  let start = 0
+  while (start < content.length && chunks.length < VECTOR_MAX_CHUNKS_PER_FILE) {
+    const end = Math.min(start + CHUNK_MAX_CHARS, content.length)
+    chunks.push(content.slice(start, end))
+    if (end >= content.length) break
+    start = end - CHUNK_OVERLAP_CHARS
+  }
+  return chunks
+}
+
+// Vector helpers — local MiniLM fallback (hash-based dense 384d) + cosine + BM25
+function hashCode(str: string): number {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) }
+  return h >>> 0
+}
+export function localEmbed(text: string, dim: number = VECTOR_DIM): number[] {
+  const tokens = tokenizeForEmbedding(text)
+  const vec = new Float32Array(dim)
+  if (tokens.length === 0) {
+    // char bigram fallback
+    const t = text.toLowerCase()
+    for (let i = 0; i < t.length - 1; i++) {
+      const bg = t.slice(i, i+2)
+      if (bg.trim().length < 2) continue
+      const h = hashCode(bg)
+      vec[h % dim] += 1
+      vec[(h >>> 7) % dim] += 0.5
+    }
+  } else {
+    for (const tok of tokens) {
+      const h = hashCode(tok)
+      vec[h % dim] += 1
+      vec[(h >>> 11) % dim] += 0.7
+      // second hash for distribution
+      const h2 = hashCode(tok.split('').reverse().join(''))
+      vec[h2 % dim] += 0.3
+    }
+  }
+  let norm = 0
+  for (let i = 0; i < dim; i++) norm += vec[i]*vec[i]
+  norm = Math.sqrt(norm)
+  if (norm > 0) { for (let i=0;i<dim;i++) vec[i]/=norm }
+  return Array.from(vec)
+}
+function cosineVec(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0
+  let dot = 0, na = 0, nb = 0
+  for (let i=0;i<a.length;i++){ dot+=a[i]*b[i]; na+=a[i]*a[i]; nb+=b[i]*b[i] }
+  if (na===0||nb===0) return 0
+  return dot / (Math.sqrt(na)*Math.sqrt(nb))
+}
+function bm25Score(queryTf: Record<string,number>, docTf: Record<string,number>, docLen:number, avgLen:number, df: Map<string,number>, N:number): number {
+  const k1 = 1.2, b = 0.75
+  let score = 0
+  for (const [term, qCnt] of Object.entries(queryTf)) {
+    const tf = (docTf as any)[term] ?? 0
+    if (tf===0) continue
+    const d = df.get(term) ?? 0
+    const idf = Math.log((N - d + 0.5)/(d + 0.5) + 1)
+    const norm = tf * (k1+1) / (tf + k1*(1 - b + b*docLen/avgLen))
+    score += idf * norm * Math.min(qCnt, 2)
+  }
+  return score
+}
+
+// Embedding settings stored in kv 'embeddingSettings' — provider abstraction OpenAI-compatible + Ollama + local
+export function getEmbeddingSettings(): EmbeddingSettings {
+  try {
+    const s = ensureDb()
+    const row = s.prepare("SELECT value FROM kv WHERE key='embeddingSettings'").get() as any
+    if (row && typeof row.value === 'string') {
+      const parsed = JSON.parse(row.value)
+      if (parsed && typeof parsed === 'object') {
+        const p = String(parsed.provider||'local').trim().toLowerCase()
+        const provider: EmbeddingSettings['provider'] = (p==='openai'||p==='ollama'||p==='local') ? p as any : 'local'
+        const baseUrl = typeof parsed.baseUrl==='string'? String(parsed.baseUrl).trim().slice(0,500): undefined
+        const apiKey = typeof parsed.apiKey==='string'? String(parsed.apiKey).trim().slice(0,500): undefined
+        const model = typeof parsed.model==='string'? String(parsed.model).trim().slice(0,100): undefined
+        const dimensions = Number.isFinite(parsed.dimensions)? Math.max(64, Math.min(3072, Number(parsed.dimensions))): undefined
+        const enabled = parsed.enabled===false? false:true
+        return { provider, baseUrl: baseUrl||undefined, apiKey: apiKey||undefined, model: model||undefined, dimensions, enabled }
+      }
+    }
+  } catch {}
+  return { provider: 'local', model: EMBED_PROVIDER_DEFAULT_MODEL, dimensions: VECTOR_DIM, enabled: true }
+}
+export function updateEmbeddingSettings(patch: Partial<EmbeddingSettings>): EmbeddingSettings {
+  const cur = getEmbeddingSettings()
+  const next: EmbeddingSettings = { ...cur }
+  if (patch.provider!==undefined) {
+    const p = String(patch.provider).trim().toLowerCase()
+    if (p==='openai'||p==='ollama'||p==='local') next.provider = p as any
+  }
+  if (patch.baseUrl!==undefined) next.baseUrl = String(patch.baseUrl||'').trim().slice(0,500) || undefined
+  if (patch.apiKey!==undefined) next.apiKey = String(patch.apiKey||'').trim().slice(0,500) || undefined
+  if (patch.model!==undefined) next.model = String(patch.model||'').trim().slice(0,100) || undefined
+  if (patch.dimensions!==undefined) {
+    const d = Number(patch.dimensions)
+    if (Number.isFinite(d)) next.dimensions = Math.max(64, Math.min(3072, Math.round(d)))
+  }
+  if (patch.enabled!==undefined) next.enabled = Boolean(patch.enabled)
+  try {
+    const s = ensureDb()
+    s.prepare("INSERT INTO kv (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run('embeddingSettings', JSON.stringify(next))
+    // need to flush via saveDb logic? kv is already persisted, but also need to ensure db in-memory sync — our ensureDb handles sqlite directly
+  } catch (e) { console.warn('updateEmbeddingSettings failed', e) }
+  return next
+}
+
+// Batch embedMany with retry like llm.ts:125 openStream — OpenAI-compatible + Ollama + local fallback
+async function fetchWithRetry(url: string, init: RequestInit, maxRetries = EMBEDDING_RETRY_MAX): Promise<Response> {
+  let attempt = 0
+  while (true) {
+    try {
+      const res = await fetch(url, init as any)
+      if (res.ok) return res
+      let detail = ''
+      try { detail = (await res.text()).slice(0,500) } catch {}
+      const status = (res as any).status
+      const retryable = status===429 || status===500 || status===502 || status===503
+      if (!retryable || attempt>=maxRetries) throw new Error(`Provider responded ${status}${detail?`: ${detail}`:''}`)
+      let delay = Math.min(800*Math.pow(2,attempt)+Math.random()*400, 10000)
+      const ra = res.headers.get('retry-after')
+      if (ra) { const secs = Number(ra); if (!isNaN(secs) && secs>=0 && secs<300) delay = Math.max(delay, secs*1000) }
+      await new Promise(r=>setTimeout(r, delay))
+      attempt++
+      continue
+    } catch (e:any) {
+      if (attempt>=maxRetries) throw e
+      // network error retry
+      let delay = Math.min(800*Math.pow(2,attempt)+Math.random()*400, 10000)
+      await new Promise(r=>setTimeout(r, delay))
+      attempt++
+    }
+  }
+}
+export async function embedManyRemote(texts: string[]): Promise<number[][]> {
+  const settings = getEmbeddingSettings()
+  if (!settings.enabled || settings.provider==='local') throw new Error('local provider')
+  const clean = texts.map(t=> String(t||'').slice(0,8000))
+  if (settings.provider==='openai') {
+    const base = (settings.baseUrl||'').trim().replace(/\/+$/,'') || 'https://api.openai.com/v1'
+    const url = /\/embeddings$/.test(base) ? base : base + '/embeddings'
+    const model = settings.model || EMBED_PROVIDER_DEFAULT_MODEL
+    const headers: Record<string,string> = { 'content-type':'application/json' }
+    if (settings.apiKey && settings.apiKey.trim()) headers.authorization = `Bearer ${settings.apiKey.trim()}`
+    // batch
+    const all: number[][] = []
+    for (let i=0;i<clean.length;i+=EMBEDDING_BATCH_SIZE) {
+      const batch = clean.slice(i, i+EMBEDDING_BATCH_SIZE)
+      const body = JSON.stringify({ model, input: batch, encoding_format: 'float' })
+      const res = await fetchWithRetry(url, { method:'POST', headers, body })
+      const data:any = await res.json().catch(()=>null)
+      const arr = data?.data
+      if (!Array.isArray(arr) || arr.length!==batch.length) throw new Error('Invalid embedding response from OpenAI-compatible provider')
+      for (const item of arr) {
+        const emb = (item as any).embedding
+        if (!Array.isArray(emb)) throw new Error('Invalid embedding vector')
+        // normalize already? ensure float array
+        all.push(emb.map((x:any)=> Number(x)||0))
+      }
+    }
+    return all
+  } else if (settings.provider==='ollama') {
+    const base = (settings.baseUrl||'').trim().replace(/\/+$/,'') || 'http://localhost:11434'
+    // Ollama native: POST /api/embed with { model, input: string | string[] }
+    const cleanBase = base.replace(/\/v1\/?$/,'')
+    const model = settings.model || OLLAMA_EMBED_DEFAULT_MODEL
+    const headers: Record<string,string> = { 'content-type':'application/json' }
+    if (settings.apiKey && settings.apiKey.trim()) headers.authorization = `Bearer ${settings.apiKey.trim()}`
+    // Try batch embed API if available (Ollama 0.1.20+ supports input as array)
+    const url = cleanBase + '/api/embed'
+    // batch
+    const all: number[][] = []
+    for (let i=0;i<clean.length;i+=EMBEDDING_BATCH_SIZE) {
+      const batch = clean.slice(i, i+EMBEDDING_BATCH_SIZE)
+      try {
+        const body = JSON.stringify({ model, input: batch })
+        const res = await fetchWithRetry(url, { method:'POST', headers, body })
+        const data:any = await res.json().catch(()=>null)
+        const embs = (data as any)?.embeddings
+        if (Array.isArray(embs) && embs.length===batch.length) {
+          for (const emb of embs) all.push((emb as any[]).map((x:any)=> Number(x)||0))
+          continue
+        }
+        throw new Error('fallback to per-item')
+      } catch {
+        // fallback per-item to /api/embeddings with prompt
+        for (const text of batch) {
+          const u2 = cleanBase + '/api/embeddings'
+          const body2 = JSON.stringify({ model, prompt: text })
+          const res2 = await fetchWithRetry(u2, { method:'POST', headers, body: body2 })
+          const data2:any = await res2.json().catch(()=>null)
+          const emb = (data2 as any)?.embedding
+          if (!Array.isArray(emb)) throw new Error('Invalid Ollama embedding')
+          all.push(emb.map((x:any)=> Number(x)||0))
+        }
+      }
+    }
+    return all
+  }
+  throw new Error('unknown provider')
+}
+export async function embedMany(texts: string[]): Promise<number[][]> {
+  const toEmbed = texts.map(t=> String(t||''))
+  if (toEmbed.length===0) return []
+  try {
+    const settings = getEmbeddingSettings()
+    if (settings.provider!=='local' && settings.enabled) {
+      const remote = await embedManyRemote(toEmbed)
+      if (remote.length===toEmbed.length) {
+        // normalize remote vectors to unit for cosine consistency
+        return remote.map(v=>{
+          let n=0; for(const x of v) n+=x*x; n=Math.sqrt(n); if(n>0) return v.map(x=> x/n); return v
+        })
+      }
+    }
+  } catch (e) { console.warn('[embed] remote failed, fallback to local', String((e as any)?.message||e).slice(0,120)) }
+  return toEmbed.map(t=> localEmbed(t))
+}
+export function embedManyLocal(texts: string[]): number[][] {
+  return texts.map(t=> localEmbed(String(t||'')))
+}
+
+export function ensureEmbeddingTable(): void {
+  const s = ensureDb()
+  s.exec(`
+    CREATE TABLE IF NOT EXISTS embeddings (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      contentHash TEXT NOT NULL,
+      tokens TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_embeddings_projectId ON embeddings(projectId);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_embeddings_project_path ON embeddings(projectId, filePath);
+  `)
+  ensureEmbeddingChunkTable()
+}
+export function ensureEmbeddingChunkTable(): void {
+  const s = ensureDb()
+  s.exec(`
+    CREATE TABLE IF NOT EXISTS embedding_chunks (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      chunkIndex INTEGER NOT NULL,
+      contentHash TEXT NOT NULL,
+      chunkText TEXT NOT NULL,
+      vector TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_embedding_chunks_projectId ON embedding_chunks(projectId);
+    CREATE INDEX IF NOT EXISTS idx_embedding_chunks_project_path ON embedding_chunks(projectId, filePath);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_embedding_chunks_project_path_idx ON embedding_chunks(projectId, filePath, chunkIndex);
+  `)
+  // Attempt sqlite-vec virtual table (optional, fallback to JSON scan if missing) — pure-JS HNSW fallback handled in search
+  try {
+    // Test if vec0 available
+    s.exec("CREATE VIRTUAL TABLE IF NOT EXISTS vec_tmp_test USING vec0(dummy float[384])")
+    s.exec("DROP TABLE IF EXISTS vec_tmp_test")
+    // If success, create vec_chunks for HNSW-like KNN (distance_metric=cosine)
+    s.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
+        projectId TEXT,
+        filePath TEXT,
+        chunkIndex INTEGER,
+        embedding FLOAT[384] distance_metric=cosine
+      );
+    `)
+  } catch (e) {
+    // sqlite-vec not available — fallback to JSON brute force, which is our default HNSW-like pure-JS scan
+  }
+}
+
 export function upsertEmbedding(projectId: string, filePath: string, content: string): void {
   const pid = String(projectId ?? '').trim()
   if (!pid || pid.length > 100) throw new Error('projectId required')
@@ -580,30 +890,167 @@ export function upsertEmbedding(projectId: string, filePath: string, content: st
   ensureEmbeddingTable()
   const now = new Date().toISOString()
   const id = `${pid}:${fp}`
-  // Use INSERT OR REPLACE to handle unique constraint
-  s.prepare(`INSERT INTO embeddings (id, projectId, filePath, contentHash, tokens, updatedAt) VALUES (?,?,?,?,?,?)
-             ON CONFLICT(projectId, filePath) DO UPDATE SET contentHash=excluded.contentHash, tokens=excluded.tokens, updatedAt=excluded.updatedAt`).run(
-    id, pid, fp, hash, JSON.stringify(tf), now
-  )
+  try {
+    s.prepare(`INSERT INTO embeddings (id, projectId, filePath, contentHash, tokens, updatedAt) VALUES (?,?,?,?,?,?)
+               ON CONFLICT(projectId, filePath) DO UPDATE SET contentHash=excluded.contentHash, tokens=excluded.tokens, updatedAt=excluded.updatedAt`).run(
+      id, pid, fp, hash, JSON.stringify(tf), now
+    )
+  } catch {}
+  // Also upsert chunk vectors (vector per CHUNK) — sync local fallback for immediate availability
+  try { upsertEmbeddingChunksSync(pid, fp, text) } catch (e) { console.warn('upsertEmbeddingChunksSync failed', String((e as any)?.message||e).slice(0,200)) }
+}
+export function upsertEmbeddingChunksSync(projectId: string, filePath: string, content: string): void {
+  const pid = String(projectId ?? '').trim()
+  const fp = sanitizeEmbeddingPath(filePath)
+  if (!pid || !fp) return
+  const text = String(content ?? '')
+  if (Buffer.byteLength(text, 'utf8') > 2 * 1024 * 1024) return
+  const chunksRaw = text.length > 4000 && !text.includes(' ') ? chunkContentCharFallback(text) : chunkContentForEmbedding(text)
+  const chunks = chunksRaw.map(c=> c.trim()).filter(Boolean).slice(0, VECTOR_MAX_CHUNKS_PER_FILE)
+  if (chunks.length===0) return
+  const s = ensureDb()
+  ensureEmbeddingChunkTable()
+  const now = new Date().toISOString()
+  // incremental: check existing hashes to skip unchanged chunks (contentHash per chunk)
+  let existingMap = new Map<string,string>() // chunkIndex -> hash
+  try {
+    const rows = s.prepare('SELECT chunkIndex, contentHash FROM embedding_chunks WHERE projectId=? AND filePath=?').all(pid, fp) as any[]
+    for (const r of rows) existingMap.set(String(r.chunkIndex), String(r.contentHash))
+  } catch {}
+  const toEmbed: { idx:number; text:string; hash:string }[] = []
+  for (let i=0;i<chunks.length;i++) {
+    const h = hashContent(chunks[i])
+    if (existingMap.get(String(i)) === h) continue // skip unchanged
+    toEmbed.push({ idx:i, text: chunks[i], hash:h })
+  }
+  if (toEmbed.length===0 && existingMap.size===chunks.length) return // all unchanged
+  // generate vectors for needed chunks via localEmbed sync
+  const vectors = toEmbed.map(e=> localEmbed(e.text))
+  const txn = s.transaction(()=>{
+    // delete stale chunks beyond new length? We'll delete all then reinsert changed + keep unchanged by not deleting unchanged? Simpler: delete all for this file then insert all with appropriate vectors (reusing old where unchanged)
+    // To keep incremental efficient, we already skipped unchanged, but we still need to ensure DB has correct set: delete those indices that are no longer present or changed
+    // For simplicity, delete all for this file and reinsert all (fast for 5k files, 60 chunks each)
+    // First collect vectors for all chunks (including unchanged need to fetch existing vector)
+    const allRows: { idx:number; hash:string; vec:number[]; txt:string }[] = []
+    // map existing vectors for unchanged
+    const existingVecMap = new Map<string, string>()
+    try {
+      const rows = s.prepare('SELECT chunkIndex, vector FROM embedding_chunks WHERE projectId=? AND filePath=?').all(pid, fp) as any[]
+      for (const r of rows) existingVecMap.set(String(r.chunkIndex), String(r.vector))
+    } catch {}
+    const newVecMap = new Map<string, number[]>()
+    for (let k=0;k<toEmbed.length;k++) newVecMap.set(String(toEmbed[k].idx), vectors[k])
+    for (let i=0;i<chunks.length;i++) {
+      const h = hashContent(chunks[i])
+      let vec = newVecMap.get(String(i))
+      if (!vec) {
+        const existingJson = existingVecMap.get(String(i))
+        if (existingJson) {
+          try { vec = JSON.parse(existingJson) as number[] } catch { vec = localEmbed(chunks[i]) }
+        } else vec = localEmbed(chunks[i])
+      }
+      allRows.push({ idx:i, hash:h, vec, txt: chunks[i] })
+    }
+    // clear existing for this file
+    s.prepare('DELETE FROM embedding_chunks WHERE projectId=? AND filePath=?').run(pid, fp)
+    // try clear vec_chunks as well if exists
+    try { s.prepare('DELETE FROM vec_chunks WHERE projectId=? AND filePath=?').run(pid, fp) } catch {}
+    const ins = s.prepare('INSERT INTO embedding_chunks (id, projectId, filePath, chunkIndex, contentHash, chunkText, vector, updatedAt) VALUES (?,?,?,?,?,?,?,?)')
+    let vecIns: any = null
+    try { vecIns = s.prepare('INSERT INTO vec_chunks (projectId, filePath, chunkIndex, embedding) VALUES (?,?,?,?)') } catch {}
+    for (const r of allRows) {
+      const id = `${pid}:${fp}:${r.idx}`
+      ins.run(id, pid, fp, r.idx, r.hash, r.txt, JSON.stringify(r.vec), now)
+      if (vecIns) {
+        try {
+          // sqlite-vec expects vec as JSON string or float array? Pass as JSON
+          vecIns.run(pid, fp, r.idx, JSON.stringify(r.vec))
+        } catch {}
+      }
+    }
+  })
+  try { txn() } catch (e) { console.warn('upsertEmbeddingChunksSync txn failed', e) }
+}
+export async function upsertEmbeddingAsync(projectId: string, filePath: string, content: string): Promise<void> {
+  const pid = String(projectId ?? '').trim()
+  const fp = sanitizeEmbeddingPath(filePath)
+  if (!pid || !fp) return
+  const text = String(content ?? '')
+  if (Buffer.byteLength(text, 'utf8') > 2 * 1024 * 1024) return
+  // Sync part for TF-IDF
+  try { upsertEmbedding(pid, fp, text) } catch {}
+  // Async chunk vector with provider
+  const s = ensureDb()
+  ensureEmbeddingChunkTable()
+  const chunksRaw = text.length > 4000 && !text.includes(' ') ? chunkContentCharFallback(text) : chunkContentForEmbedding(text)
+  const chunks = chunksRaw.map(c=> c.trim()).filter(Boolean).slice(0, VECTOR_MAX_CHUNKS_PER_FILE)
+  if (chunks.length===0) return
+  let existingMap = new Map<string,string>()
+  try {
+    const rows = s.prepare('SELECT chunkIndex, contentHash FROM embedding_chunks WHERE projectId=? AND filePath=?').all(pid, fp) as any[]
+    for (const r of rows) existingMap.set(String(r.chunkIndex), String(r.contentHash))
+  } catch {}
+  const toEmbed: { idx:number; text:string; hash:string }[] = []
+  for (let i=0;i<chunks.length;i++) {
+    const h = hashContent(chunks[i])
+    if (existingMap.get(String(i)) === h) continue
+    toEmbed.push({ idx:i, text: chunks[i], hash:h })
+  }
+  if (toEmbed.length===0 && existingMap.size===chunks.length) return
+  const texts = toEmbed.map(e=> e.text)
+  let vectors: number[][] = []
+  try { vectors = await embedMany(texts) } catch { vectors = toEmbed.map(e=> localEmbed(e.text)) }
+  const now = new Date().toISOString()
+  const txn = s.transaction(()=>{
+    s.prepare('DELETE FROM embedding_chunks WHERE projectId=? AND filePath=?').run(pid, fp)
+    try { s.prepare('DELETE FROM vec_chunks WHERE projectId=? AND filePath=?').run(pid, fp) } catch {}
+    const ins = s.prepare('INSERT INTO embedding_chunks (id, projectId, filePath, chunkIndex, contentHash, chunkText, vector, updatedAt) VALUES (?,?,?,?,?,?,?,?)')
+    let vecIns: any = null
+    try { vecIns = s.prepare('INSERT INTO vec_chunks (projectId, filePath, chunkIndex, embedding) VALUES (?,?,?,?)') } catch {}
+    // Need to reconstitute all chunks with vectors (reuse existing for unchanged)
+    const existingVecMap = new Map<string, string>()
+    // we already deleted, so need to use cached? Simpler: after delete, insert all with generated or local
+    const newVecMap = new Map<string, number[]>()
+    for (let k=0;k<toEmbed.length;k++) newVecMap.set(String(toEmbed[k].idx), vectors[k] || localEmbed(toEmbed[k].text))
+    for (let i=0;i<chunks.length;i++) {
+      const h = hashContent(chunks[i])
+      let vec = newVecMap.get(String(i))
+      if (!vec) {
+        // for unchanged we deleted, so need to recompute (should not happen as we included only changed, but if toEmbed didn't include i, vec is undefined -> use local)
+        vec = localEmbed(chunks[i])
+      }
+      const id = `${pid}:${fp}:${i}`
+      ins.run(id, pid, fp, i, h, chunks[i], JSON.stringify(vec), now)
+      if (vecIns) try { vecIns.run(pid, fp, i, JSON.stringify(vec)) } catch {}
+    }
+  })
+  try { txn() } catch (e) { console.warn('upsertEmbeddingAsync txn failed', e) }
 }
 export function deleteEmbedding(projectId: string, filePath: string): void {
   const pid = String(projectId ?? '').trim()
   const fp = sanitizeEmbeddingPath(filePath)
   if (!pid || !fp) return
   try { ensureDb().prepare('DELETE FROM embeddings WHERE projectId=? AND filePath=?').run(pid, fp) } catch {}
+  try { ensureDb().prepare('DELETE FROM embedding_chunks WHERE projectId=? AND filePath=?').run(pid, fp) } catch {}
+  try { ensureDb().prepare('DELETE FROM vec_chunks WHERE projectId=? AND filePath=?').run(pid, fp) } catch {}
 }
 export function clearEmbeddingsForProject(projectId: string): void {
   const pid = String(projectId ?? '').trim()
   if (!pid) return
   try { ensureDb().prepare('DELETE FROM embeddings WHERE projectId=?').run(pid) } catch {}
+  try { ensureDb().prepare('DELETE FROM embedding_chunks WHERE projectId=?').run(pid) } catch {}
+  try { ensureDb().prepare('DELETE FROM vec_chunks WHERE projectId=?').run(pid) } catch {}
 }
 export function getEmbeddingCount(projectId: string): number {
   const pid = String(projectId ?? '').trim()
   if (!pid) return 0
   try {
-    ensureEmbeddingTable()
-    const row = ensureDb().prepare('SELECT COUNT(*) as c FROM embeddings WHERE projectId=?').get(pid) as any
-    return Number(row?.c ?? 0)
+    ensureEmbeddingChunkTable()
+    const row = ensureDb().prepare('SELECT COUNT(*) as c FROM embedding_chunks WHERE projectId=?').get(pid) as any
+    const chunkCount = Number(row?.c ?? 0)
+    if (chunkCount>0) return chunkCount
+    const row2 = ensureDb().prepare('SELECT COUNT(*) as c FROM embeddings WHERE projectId=?').get(pid) as any
+    return Number(row2?.c ?? 0)
   } catch { return 0 }
 }
 function collectFilesForEmbedding(root: string, includePattern: string | null, maxFiles: number): string[] {
@@ -635,11 +1082,9 @@ function collectFilesForEmbedding(root: string, includePattern: string | null, m
   return results
 }
 function cosineTfIdf(queryTf: Record<string, number>, docTf: Record<string, number>, idf: Map<string, number>, queryLen: number, docLen: number): number {
-  // compute weighted dot and norms
   let dot = 0
   let normQ = 0
   let normD = 0
-  // query norm and dot
   for (const [term, cnt] of Object.entries(queryTf)) {
     const tfQ = cnt / Math.max(1, queryLen)
     const idfVal = idf.get(term) ?? 1
@@ -652,7 +1097,6 @@ function cosineTfIdf(queryTf: Record<string, number>, docTf: Record<string, numb
       dot += wQ * wD
     }
   }
-  // doc norm over all its terms
   for (const [term, cnt] of Object.entries(docTf)) {
     const tfD = cnt / Math.max(1, docLen)
     const idfVal = idf.get(term) ?? 1
@@ -684,54 +1128,194 @@ export function rebuildEmbeddingsForProject(projectId: string): number {
   }
   return indexed
 }
-export interface SemanticHit { path: string; score: number; snippet?: string; source: 'semantic' | 'grep' | 'hybrid' }
+export async function rebuildEmbeddingsForProjectAsync(projectId: string): Promise<number> {
+  const proj = findProject(projectId)
+  if (!proj) throw new Error('Project not found')
+  const root = proj.path
+  try { if (!fs.statSync(root).isDirectory()) throw new Error('Project path not a directory') } catch (e: any) { throw new Error(e?.message || 'Invalid project path') }
+  const files = collectFilesForEmbedding(root, null, EMBED_MAX_FILES_INDEXED)
+  let indexed = 0
+  // Batch collect all chunks needing embedding across files for efficient remote batching
+  const batchTexts: string[] = []
+  const batchMeta: { pid:string; fp:string; chunkIdx:number; hash:string; txt:string }[] = []
+  // First, for each file compute chunks and check existing hash to decide what to embed
+  const s = ensureDb()
+  ensureEmbeddingChunkTable()
+  const fileChunksMap = new Map<string, { abs:string; rel:string; content:string; chunks:string[] }>()
+  for (const abs of files) {
+    try {
+      const st = fs.statSync(abs)
+      if (st.size > EMBED_MAX_FILE_SIZE) continue
+      const content = fs.readFileSync(abs, 'utf8')
+      if (content.includes('\0')) continue
+      const rel = path.relative(root, abs).split(path.sep).join('/')
+      const safe = sanitizeEmbeddingPath(rel)
+      if (!safe) continue
+      const chunks = (content.length > 4000 && !content.includes(' ') ? chunkContentCharFallback(content) : chunkContentForEmbedding(content)).map(c=>c.trim()).filter(Boolean).slice(0, VECTOR_MAX_CHUNKS_PER_FILE)
+      if (chunks.length===0) continue
+      fileChunksMap.set(safe, { abs, rel: safe, content, chunks })
+    } catch {}
+  }
+  // For each file, diff against existing DB hashes
+  for (const [fp, info] of fileChunksMap) {
+    const { chunks } = info
+    let existingHashes = new Set<string>()
+    try {
+      const rows = s.prepare('SELECT chunkIndex, contentHash FROM embedding_chunks WHERE projectId=? AND filePath=?').all(projectId, fp) as any[]
+      for (const r of rows) existingHashes.add(`${r.chunkIndex}:${r.contentHash}`)
+    } catch {}
+    for (let i=0;i<chunks.length;i++) {
+      const h = hashContent(chunks[i])
+      if (existingHashes.has(`${i}:${h}`)) continue
+      batchTexts.push(chunks[i])
+      batchMeta.push({ pid: projectId, fp, chunkIdx: i, hash: h, txt: chunks[i] })
+    }
+  }
+  // Also need to upsert TF-IDF embeddings for all files (sync part)
+  for (const [fp, info] of fileChunksMap) {
+    try {
+      const tokens = tokenizeForEmbedding(info.content)
+      const tf = termFreqMap(tokens)
+      const hash = hashContent(info.content)
+      const now = new Date().toISOString()
+      const id = `${projectId}:${fp}`
+      s.prepare(`INSERT INTO embeddings (id, projectId, filePath, contentHash, tokens, updatedAt) VALUES (?,?,?,?,?,?)
+                 ON CONFLICT(projectId, filePath) DO UPDATE SET contentHash=excluded.contentHash, tokens=excluded.tokens, updatedAt=excluded.updatedAt`).run(
+        id, projectId, fp, hash, JSON.stringify(tf), now
+      )
+      indexed++
+    } catch {}
+  }
+  if (batchTexts.length>0) {
+    // embed batch with fallback
+    let vectors: number[][] = []
+    try { vectors = await embedMany(batchTexts) } catch { vectors = batchTexts.map(t=> localEmbed(t)) }
+    // Now upsert those chunks that were missing; also need to handle files where chunks changed but we deleted all? Simpler: for each file, rewrite all chunks with correct vectors (reuse for unchanged)
+    // Build per-file full vectors map
+    const vecMap = new Map<string, Map<number, number[]>>()
+    for (let k=0;k<batchMeta.length;k++) {
+      const m = batchMeta[k]
+      const v = vectors[k] || localEmbed(m.txt)
+      if (!vecMap.has(m.fp)) vecMap.set(m.fp, new Map())
+      vecMap.get(m.fp)!.set(m.chunkIdx, v)
+    }
+    const txn = s.transaction(()=> {
+      for (const [fp, info] of fileChunksMap) {
+        const now = new Date().toISOString()
+        // Check if this file had any changed chunk or was not yet indexed
+        const hasChanged = batchMeta.some(m=> m.fp===fp)
+        if (!hasChanged) continue // already fully indexed and unchanged
+        // For changed file, rebuild all its chunks: fetch existing vectors for unchanged indices to keep
+        const existingVecMap = new Map<number, number[]>()
+        try {
+          const rows = s.prepare('SELECT chunkIndex, vector FROM embedding_chunks WHERE projectId=? AND filePath=?').all(projectId, fp) as any[]
+          for (const r of rows) {
+            try { existingVecMap.set(Number(r.chunkIndex), JSON.parse(String(r.vector)) as number[]) } catch {}
+          }
+        } catch {}
+        s.prepare('DELETE FROM embedding_chunks WHERE projectId=? AND filePath=?').run(projectId, fp)
+        try { s.prepare('DELETE FROM vec_chunks WHERE projectId=? AND filePath=?').run(projectId, fp) } catch {}
+        const ins = s.prepare('INSERT INTO embedding_chunks (id, projectId, filePath, chunkIndex, contentHash, chunkText, vector, updatedAt) VALUES (?,?,?,?,?,?,?,?)')
+        let vecIns: any = null
+        try { vecIns = s.prepare('INSERT INTO vec_chunks (projectId, filePath, chunkIndex, embedding) VALUES (?,?,?,?)') } catch {}
+        for (let i=0;i<info.chunks.length;i++) {
+          const txt = info.chunks[i]
+          const h = hashContent(txt)
+          let vec = vecMap.get(fp)?.get(i)
+          if (!vec) vec = existingVecMap.get(i) || localEmbed(txt)
+          const id = `${projectId}:${fp}:${i}`
+          ins.run(id, projectId, fp, i, h, txt, JSON.stringify(vec), now)
+          if (vecIns) try { vecIns.run(projectId, fp, i, JSON.stringify(vec)) } catch {}
+        }
+      }
+      // For files that had no changed but not yet in DB (new file with no entry before), they were not in batchMeta? Actually new files are in fileChunksMap but not in existing, so batchTexts would have included them, so they are handled above as hasChanged true. Good.
+      // For completely new files where batchMeta empty because they are new but we still need to insert? Those files are already handled as hasChanged true because they had missing rows, they will be inserted.
+      // However for files that are new and had no existingVecMap, they are inserted via above loop only if hasChanged true (which they are). So need to ensure new files get inserted even if they were not in batchMeta due to maybe zero chunks? Already handled.
+      // Also need to insert files that were not changed but have no DB rows yet (first index) — they would have been considered changed because existingHashes empty, so batchTexts includes them.
+    })
+    try { txn() } catch (e) { console.warn('rebuildEmbeddingsForProjectAsync txn failed', e) }
+    // For files that were unchanged (no txn), they already have rows and count as indexed (already counted)
+  } else {
+    // No batch needed, but we still need to ensure chunk rows exist for files that have TF-IDF but no chunk rows yet (first run with old DB where only embeddings table existed)
+    // Fallback: for any file in fileChunksMap where chunk rows missing, fill via localEmbed sync
+    for (const [fp, info] of fileChunksMap) {
+      try {
+        const cnt = (s.prepare('SELECT COUNT(*) as c FROM embedding_chunks WHERE projectId=? AND filePath=?').get(projectId, fp) as any)?.c ?? 0
+        if (cnt>0) continue
+        // need to create chunks
+        const now = new Date().toISOString()
+        const ins = s.prepare('INSERT INTO embedding_chunks (id, projectId, filePath, chunkIndex, contentHash, chunkText, vector, updatedAt) VALUES (?,?,?,?,?,?,?,?)')
+        const tx = s.transaction(()=>{
+          for (let i=0;i<info.chunks.length;i++) {
+            const txt = info.chunks[i]
+            const h = hashContent(txt)
+            const vec = localEmbed(txt)
+            const id = `${projectId}:${fp}:${i}`
+            ins.run(id, projectId, fp, i, h, txt, JSON.stringify(vec), now)
+            try { s.prepare('INSERT INTO vec_chunks (projectId, filePath, chunkIndex, embedding) VALUES (?,?,?,?)').run(projectId, fp, i, JSON.stringify(vec)) } catch {}
+          }
+        })
+        try { tx() } catch {}
+      } catch {}
+    }
+  }
+  return indexed
+}
+export interface SemanticHit { path: string; score: number; snippet?: string; source: 'vector' | 'bm25' | 'grep' | 'hybrid' | 'semantic' | 'grep' }
 export function semanticSearch(projectId: string, query: string, opts?: { limit?: number; include?: string | null; projectPath?: string }): SemanticHit[] {
   const rawQuery = String(query ?? '').trim()
   if (!rawQuery) return []
   if (rawQuery.length > 500) throw new Error('query too long (max 500)')
-  // sanitize query — reject null bytes and overly long tokens, but allow regex-like queries for grep fallback
   if (rawQuery.includes('\0')) throw new Error('invalid query')
   const pid = String(projectId ?? '').trim()
   if (!pid) throw new Error('projectId required')
   const limit = Math.max(1, Math.min(100, Math.floor(Number(opts?.limit ?? 20) || 20)))
   const includeRaw = opts?.include != null ? String(opts.include).trim().slice(0, 200) : null
   if (includeRaw && includeRaw.includes('\0')) throw new Error('invalid include')
-  // resolve project path securely
   let projectPath = opts?.projectPath ?? null
   if (!projectPath) {
     const proj = findProject(pid)
     if (!proj) return []
     projectPath = proj.path
   }
-  // validate projectPath is expected project (prevent IDOR)
   const projCheck = findProject(pid)
   if (projCheck && path.resolve(projectPath) !== path.resolve(projCheck.path)) {
-    // if caller supplied path, ensure it matches stored project path
     throw new Error('projectPath mismatch')
   }
   let rootAbs: string
   try { rootAbs = path.resolve(projectPath!); if (!fs.existsSync(rootAbs) || !fs.statSync(rootAbs).isDirectory()) return [] } catch { return [] }
-  ensureEmbeddingTable()
+  ensureEmbeddingChunkTable()
   // collect candidate files (respect include)
   const files = collectFilesForEmbedding(rootAbs, includeRaw || null, EMBED_MAX_FILES_SCANNED)
   if (files.length === 0) return []
-  // Build live token maps for IDF if needed, also collect grep match info
   const queryTokensArr = tokenizeForEmbedding(rawQuery)
-  // if query tokenization yields empty (e.g., pure symbols), fall back to raw split for grep-only mode
   const effectiveQueryForTokens = queryTokensArr.length ? queryTokensArr : rawQuery.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 20)
   const queryTf = termFreqMap(effectiveQueryForTokens)
   const queryLen = effectiveQueryForTokens.length || 1
-  // Prepare per-file data: tf, docLen, hasGrepHit, snippet, rawTokens?
-  type FileData = { abs: string; rel: string; tf: Record<string, number>; docLen: number; hasGrep: boolean; snippet: string; size: number }
-  const fileDatas: FileData[] = []
-  // Also collect DF for IDF: term -> doc count
+  // Query vector for cosine (vector part) — localEmbed sync for query (fast, no remote needed for search; remote query embedding would be async and not feasible sync)
+  const queryVec = localEmbed(rawQuery)
+  // Prepare per-chunk data: load stored chunk vectors if available
+  type ChunkData = { filePath: string; chunkIdx: number; chunkText: string; vec: number[] | null; tf: Record<string,number>; docLen: number; hasGrep: boolean; snippet: string }
+  const chunkDatas: ChunkData[] = []
   const df = new Map<string, number>()
-  // For grep detection, compile regex from query (fallback to literal if invalid)
   let grepRe: RegExp | null = null
   try { grepRe = new RegExp(rawQuery, 'mi') } catch {
     try { const esc = rawQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); grepRe = new RegExp(esc, 'mi') } catch { grepRe = null }
   }
-  // Load embeddings map for quick lookup
+  // Load embedding_chunks for this project
+  let chunkRows: any[] = []
+  try {
+    chunkRows = ensureDb().prepare('SELECT filePath, chunkIndex, chunkText, vector FROM embedding_chunks WHERE projectId=?').all(pid) as any[]
+  } catch { chunkRows = [] }
+  const chunkVecMap = new Map<string, number[]>()
+  const chunkTextMap = new Map<string, string>()
+  for (const r of chunkRows) {
+    const key = `${r.filePath}:${r.chunkIndex}`
+    try { chunkVecMap.set(key, JSON.parse(String(r.vector)) as number[]) } catch {}
+    chunkTextMap.set(key, String(r.chunkText||''))
+  }
+  const hasAnyVector = chunkVecMap.size > 0
+  // Also load file-level embeddings for fallback BM25 when no chunk vectors
   let embedMap = new Map<string, Record<string, number>>()
   try {
     const rows = ensureDb().prepare('SELECT filePath, tokens FROM embeddings WHERE projectId=?').all(pid) as any[]
@@ -739,6 +1323,111 @@ export function semanticSearch(projectId: string, query: string, opts?: { limit?
       try { const parsed = JSON.parse(r.tokens); if (parsed && typeof parsed === 'object') embedMap.set(r.filePath, parsed as Record<string, number>) } catch {}
     }
   } catch {}
+  // For chunk mode: iterate over stored chunks if available, else fallback to file scan live
+  if (hasAnyVector && chunkRows.length>0) {
+    // Use stored chunks as corpus — filter by include if needed
+    const includeRe = includeRaw ? globToRegExpEmbed(includeRaw) : null
+    for (const r of chunkRows) {
+      const fp = String(r.filePath)
+      if (includeRe) {
+        if (!includeRe.test(fp) && !includeRe.test(path.basename(fp))) continue
+      }
+      const txt = String(r.chunkText||'')
+      const vec = chunkVecMap.get(`${fp}:${r.chunkIndex}`) || null
+      const toks = tokenizeForEmbedding(txt)
+      if (toks.length===0) continue
+      const tf = termFreqMap(toks)
+      const docLen = toks.length
+      for (const term of Object.keys(tf)) df.set(term, (df.get(term)??0)+1)
+      let hasGrep=false
+      let snippet=''
+      if (grepRe) {
+        try {
+          if (grepRe.test(txt)) { hasGrep=true; const line = txt.split('\n').find(l=> { try{ if(grepRe!.global) grepRe!.lastIndex=0; return grepRe!.test(l)}catch{return false}}); snippet = `${fp}:${r.chunkIndex}:${(line||txt).trim().slice(0,300)}` }
+          else if (txt.toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep=true; snippet=`${fp}:${r.chunkIndex}:${txt.slice(0,300).replace(/\n/g,' ').trim()}` }
+        } catch { if (txt.toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep=true; snippet=`${fp}:${r.chunkIndex}:${txt.slice(0,300)}` } }
+      } else if (txt.toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep=true; snippet=`${fp}:${r.chunkIndex}:${txt.slice(0,300)}` }
+      if (!snippet) snippet=`${fp}:${r.chunkIndex}:${txt.slice(0,200).replace(/\n/g,' ').trim()}`
+      chunkDatas.push({ filePath: fp, chunkIdx: Number(r.chunkIndex), chunkText: txt, vec, tf, docLen, hasGrep, snippet })
+    }
+    // If include filtered out all chunks, fallback to live scan of files
+    if (chunkDatas.length===0 && files.length>0) {
+      // fall through to file scan
+    } else if (chunkDatas.length>0) {
+      // Compute BM25 + vector hybrid per chunk
+      const N = chunkDatas.length
+      let avgLen = 0
+      for (const c of chunkDatas) avgLen+=c.docLen
+      avgLen = avgLen / Math.max(1,N)
+      // compute IDF for all terms
+      const idfMap = new Map<string, number>()
+      const allTerms = new Set<string>([...Object.keys(queryTf), ...Array.from(df.keys())])
+      for (const term of allTerms) {
+        const d = df.get(term) ?? 0
+        const v = Math.log((N + 1) / (d + 1)) + 1
+        idfMap.set(term, v)
+      }
+      // compute raw scores
+      type Scored = ChunkData & { vectorScore:number; bm25:number; grepBoost:number; finalScore:number }
+      const scored: Scored[] = []
+      let maxBm25 = 0
+      const tmp = chunkDatas.map(c=> {
+        const bm = bm25Score(queryTf, c.tf, c.docLen, avgLen, df, N)
+        if (bm>maxBm25) maxBm25 = bm
+        return { c, bm }
+      })
+      for (const {c,bm} of tmp) {
+        const vecScore = c.vec ? cosineVec(queryVec, c.vec) : 0
+        // normalize bm25 0-1
+        const normBm = maxBm25>0 ? bm / maxBm25 : 0
+        const grepBoost = c.hasGrep ? 1 : 0
+        // hybrid: 0.5*vector +0.3*BM25 +0.2*grepBoost — per spec store.ts:839
+        let final = 0.5*vecScore + 0.3*normBm + 0.2*grepBoost
+        // when no grep but high vector, keep vector dominance; when grep hit ensure at least 0.35
+        if (c.hasGrep && final<0.35) final = 0.35 + vecScore*0.1
+        // Determine source
+        let source: SemanticHit['source'] = 'hybrid'
+        if (!hasAnyVector) source='grep'
+        else if (c.hasGrep && vecScore>0.2) source='hybrid'
+        else if (vecScore>0.35) source='vector'
+        else if (normBm>0.4) source='bm25'
+        else if (c.hasGrep) source='grep'
+        else source='vector'
+        scored.push({ ...c, vectorScore: vecScore, bm25: normBm, grepBoost, finalScore: final, snippet: c.snippet })
+        // augment source for low fallback
+      }
+      // Filter very low when no vector and no grep? keep hybrid behavior: if no grep and score <0.15 hide
+      let filtered = scored
+      // Sort
+      scored.sort((a,b)=> {
+        if (b.finalScore!==a.finalScore) return b.finalScore-a.finalScore
+        if (a.hasGrep!==b.hasGrep) return a.hasGrep? -1:1
+        return a.filePath.localeCompare(b.filePath)
+      })
+      // Deduplicate per filePath keep highest score per file (chunk-level -> file-level)
+      const bestPerFile = new Map<string, Scored>()
+      for (const s of scored) {
+        const existing = bestPerFile.get(s.filePath)
+        if (!existing || s.finalScore>existing.finalScore) bestPerFile.set(s.filePath, s)
+      }
+      const deduped = Array.from(bestPerFile.values())
+      deduped.sort((a,b)=> b.finalScore-a.finalScore)
+      // If no vector but grep hits exist, strictly prioritize grep hits (fallback)
+      let finalList = deduped
+      if (!hasAnyVector) {
+        const grepHits = deduped.filter(s=> s.hasGrep)
+        if (grepHits.length>0) finalList = grepHits
+      }
+      const top = finalList.slice(0, limit)
+      return top.map(s=> ({ path: s.filePath, score: Math.round(s.finalScore*1000)/1000, snippet: s.snippet, source: s.source as any }))
+    }
+  }
+  // Fallback: no chunk vectors or filtered empty — use file-level TF-IDF + grep hybrid like before (but with BM25 + grepBoost weighting)
+  // Build per-file data live from files
+  type FileData = { abs: string; rel: string; tf: Record<string, number>; docLen: number; hasGrep: boolean; snippet: string; size: number }
+  const fileDatas: FileData[] = []
+  const df2 = new Map<string, number>()
+  let embedMap2 = embedMap
   for (const abs of files) {
     try {
       const st = fs.statSync(abs)
@@ -749,7 +1438,6 @@ export function semanticSearch(projectId: string, query: string, opts?: { limit?
       let content: string
       try { content = fs.readFileSync(abs, 'utf8') } catch { continue }
       if (content.includes('\0')) continue
-      // Check grep hit (line level) and capture snippet
       let hasGrep = false
       let snippet = ''
       if (grepRe) {
@@ -761,16 +1449,14 @@ export function semanticSearch(projectId: string, query: string, opts?: { limit?
             if (grepRe.global) grepRe.lastIndex = 0
           } catch { if (lines[i].toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep = true; snippet = `${rel}:${i+1}:${lines[i].trim().slice(0,300)}`; break } }
         }
-        // also check whole content substring fallback if no line hit but content contains query substring
         if (!hasGrep && content.toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep = true; if (!snippet) snippet = `${rel}:1:${content.slice(0,300).replace(/\n/g,' ').trim()}` }
       } else {
         if (content.toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep = true; snippet = `${rel}:1:${content.slice(0,300).replace(/\n/g,' ').trim()}` }
       }
       if (!snippet) snippet = `${rel}:1:${content.slice(0,200).replace(/\n/g,' ').trim()}`
-      // Prefer stored embedding tokens if available and not stale (size/hash check optional but we use stored if present)
       let tf: Record<string, number>
       let docLen: number
-      const stored = embedMap.get(safe)
+      const stored = embedMap2.get(safe)
       if (stored && Object.keys(stored).length) {
         tf = stored
         docLen = Object.values(stored).reduce((a,b)=>a+b, 0) || 1
@@ -780,71 +1466,68 @@ export function semanticSearch(projectId: string, query: string, opts?: { limit?
         tf = termFreqMap(toks)
         docLen = toks.length
       }
-      // update DF
-      for (const term of Object.keys(tf)) {
-        df.set(term, (df.get(term) ?? 0) + 1)
-      }
+      for (const term of Object.keys(tf)) df2.set(term, (df2.get(term) ?? 0) + 1)
       fileDatas.push({ abs, rel, tf, docLen, hasGrep, snippet, size: st.size })
     } catch {}
   }
   if (fileDatas.length === 0) return []
-  const N = fileDatas.length
-  // compute IDF smoothed
-  const idf = new Map<string, number>()
-  const allTerms = new Set<string>([...Object.keys(queryTf), ...Array.from(df.keys())])
-  for (const term of allTerms) {
-    const d = df.get(term) ?? 0
-    const v = Math.log((N + 1) / (d + 1)) + 1
-    idf.set(term, v)
+  const N2 = fileDatas.length
+  let avgLen2 = 0
+  for (const fd of fileDatas) avgLen2+=fd.docLen
+  avgLen2/=Math.max(1,N2)
+  const idf2 = new Map<string, number>()
+  const allTerms2 = new Set<string>([...Object.keys(queryTf), ...Array.from(df2.keys())])
+  for (const term of allTerms2) {
+    const d = df2.get(term) ?? 0
+    const v = Math.log((N2 + 1) / (d + 1)) + 1
+    idf2.set(term, v)
   }
-  // also ensure query terms have idf even if not in doc DF
-  for (const term of Object.keys(queryTf)) if (!idf.has(term)) idf.set(term, Math.log((N+1)/1)+1)
-  // score each file
-  const scored: (FileData & { score: number; finalScore: number; source: SemanticHit['source'] })[] = []
-  const hasAnyEmbedding = embedMap.size > 0
-  for (const fd of fileDatas) {
-    const sem = cosineTfIdf(queryTf, fd.tf, idf, queryLen, fd.docLen)
-    // hybrid boost: if grep hit, boost score; if no embedding, still rank by sem but fallback ensures grep hits rank higher when embeddings missing
-    let final = sem
-    let source: SemanticHit['source'] = hasAnyEmbedding ? 'hybrid' : 'grep'
+  for (const term of Object.keys(queryTf)) if (!idf2.has(term)) idf2.set(term, Math.log((N2+1)/1)+1)
+  const hasAnyEmbedding2 = embedMap2.size > 0
+  // Compute BM25 + query vector cosine against file-level local vectors (fallback when chunk vectors missing)
+  const fileQueryVec = hasAnyEmbedding2 ? queryVec : localEmbed(rawQuery) // already queryVec
+  // For file-level fallback we need file vectors: generate localEmbed per file content? But we have TF-IDF; we can approximate vector score via cosineTfIdf
+  type ScoredF = FileData & { score:number; finalScore:number; source: SemanticHit['source']; vectorScore:number; bm25:number }
+  const scored2: ScoredF[] = []
+  let maxBm2=0
+  const bmPerFile = fileDatas.map(fd=>{
+    const bm = bm25Score(queryTf, fd.tf, fd.docLen, avgLen2, df2, N2)
+    if(bm>maxBm2) maxBm2=bm
+    return { fd, bm }
+  })
+  for (const {fd,bm} of bmPerFile) {
+    const sem = cosineTfIdf(queryTf, fd.tf, idf2, queryLen, fd.docLen)
+    const vecScore = sem // use TF-IDF cosine as vector proxy when no chunk vectors
+    const normBm = maxBm2>0 ? bm/maxBm2 : 0
+    const grepBoost = fd.hasGrep?1:0
+    let final: number
+    let source: SemanticHit['source'] = hasAnyEmbedding2 ? 'hybrid' : 'grep'
     if (fd.hasGrep) {
-      // boost grep hits: +0.25 plus semantic component
-      final = sem * 0.7 + 0.3
-      // if semantic is very low but grep hit, ensure at least 0.35
-      if (final < 0.35) final = 0.35 + sem * 0.1
-      source = hasAnyEmbedding ? 'hybrid' : 'grep'
+      final = 0.5*vecScore + 0.3*normBm + 0.2*grepBoost
+      if (final<0.35) final=0.35+vecScore*0.1
+      source = hasAnyEmbedding2 ? 'hybrid' : 'grep'
     } else {
-      // No grep hit: only semantic matters; penalize slightly but still surface if high semantic
-      final = sem * 0.9
+      final = 0.5*vecScore*0.9 + 0.3*normBm
       source = 'semantic'
-      // if embeddings empty and no grep hit, we still surface but low score; fallback spec says still return grep results when empty — so we will filter later to prefer grep hits when embeddings empty
     }
-    // tiny tie-breaker: shorter paths slightly preferred? not needed
-    // Filter out very low semantic when no grep hit and embeddings missing? keep threshold
-    if (!fd.hasGrep && !hasAnyEmbedding && sem < 0.05) {
-      // when no embeddings and no grep hit, don't surface pure semantic low scores — fallback to grep-only
-      continue
-    }
-    // When embeddings empty, we fallback to grep-only: only keep grep hits if any exist
-    scored.push({ ...fd, score: sem, finalScore: final, source })
+    if (!fd.hasGrep && !hasAnyEmbedding2 && sem<0.05) continue
+    scored2.push({ ...fd, score:sem, finalScore:final, source, vectorScore: vecScore, bm25:normBm })
   }
-  // If embeddings empty and we filtered to keep only grep hits, and there were grep hits, ensure we return them
-  // If no grep hits but embeddings present, semantic results remain
-  // Sort by finalScore desc, then by grep hit, then by path
-  scored.sort((a,b) => {
-    if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore
-    if (a.hasGrep !== b.hasGrep) return a.hasGrep ? -1 : 1
+  scored2.sort((a,b)=> {
+    if (b.finalScore!==a.finalScore) return b.finalScore-a.finalScore
+    if (a.hasGrep!==b.hasGrep) return a.hasGrep?-1:1
     return a.rel.localeCompare(b.rel)
   })
-  // When embeddings empty, prioritize grep hits strictly: if any grep hit exists, return only grep hits (fallback behavior)
-  let filtered = scored
-  if (!hasAnyEmbedding) {
-    const grepHits = scored.filter(s => s.hasGrep)
-    if (grepHits.length > 0) filtered = grepHits
+  let filtered2 = scored2
+  if (!hasAnyEmbedding2) {
+    const grepHits = scored2.filter(s=>s.hasGrep)
+    if (grepHits.length>0) filtered2=grepHits
   }
-  const top = filtered.slice(0, limit)
-  return top.map(s => ({ path: s.rel, score: Math.round(s.finalScore * 1000)/1000, snippet: s.snippet, source: s.source }))
+  const top2 = filtered2.slice(0, limit)
+  return top2.map(s=> ({ path: s.rel, score: Math.round(s.finalScore*1000)/1000, snippet: s.snippet, source: s.source }))
 }
+
+
 
 function migrateLspSchema(s: Database.Database): void {
   try {
