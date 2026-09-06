@@ -263,15 +263,21 @@ function ensureDb(): Database.Database {
   sqlite = new Database(dbFile)
   // WAL for concurrency, foreign_keys for integrity, busy timeout to avoid SQLITE_BUSY on concurrent access
   try { sqlite.pragma('journal_mode = WAL') } catch {}
-  try { sqlite.pragma('busy_timeout = 5000') } catch {}
+  try { sqlite.pragma('busy_timeout = 10000') } catch {}
   try { sqlite.pragma('synchronous = NORMAL') } catch {}
   try { sqlite.pragma('wal_autocheckpoint = 1000') } catch {}
+  try { sqlite.pragma('journal_size_limit = 67108864') } catch {}
   try { sqlite.pragma('foreign_keys = ON') } catch {}
+  try { sqlite.pragma('cache_size = -2000') } catch {}
   initSchema(sqlite)
   migrateLspSchema(sqlite)
   migrateActivityIndex(sqlite)
   // Re-ensure FK enabled after init (initSchema may have been run on existing DB)
   try { sqlite.pragma('foreign_keys = ON') } catch {}
+  // Harden DB file permissions — secrets at rest (apiKeys) must be 600
+  try { fs.chmodSync(dbFile, 0o600) } catch {}
+  try { fs.chmodSync(dbFile + '-wal', 0o600) } catch {}
+  try { fs.chmodSync(dbFile + '-shm', 0o600) } catch {}
   return sqlite
 }
 
@@ -1327,13 +1333,31 @@ export function loadDb(): void {
   }
 }
 
+let saveLock = false
+let pendingSave = false
 export function saveDb(): void {
+  if (saveLock) {
+    pendingSave = true
+    return
+  }
+  saveLock = true
   try {
     // Ensure directory exists
     fs.mkdirSync(path.dirname(dbFile), { recursive: true })
     persistToSqlite()
+    // Harden perms on every save (secrets at rest)
+    try { fs.chmodSync(dbFile, 0o600) } catch {}
+    try { fs.chmodSync(dbFile + '-wal', 0o600) } catch {}
+    try { fs.chmodSync(dbFile + '-shm', 0o600) } catch {}
   } catch (e) {
     console.error('saveDb failed:', e)
+  } finally {
+    saveLock = false
+    if (pendingSave) {
+      pendingSave = false
+      // Coalesce pending saves into one
+      setImmediate(() => saveDb())
+    }
   }
 }
 
