@@ -503,3 +503,11 @@ export const IconSparkles = ({ size, className, style }: IconProps) => (
     <path d="M5 14l1 1.5 1.5 1-1.5 1L5 19l-1-1.5L2.5 16.5 4 15.5Z" />
   </svg>
 )
+
+export const IconLock = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <rect x="5" y="11" width="14" height="9" rx="2" />
+    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    <circle cx="12" cy="15.5" r="1.2" fill="currentColor" stroke="none" />
+  </svg>
+)

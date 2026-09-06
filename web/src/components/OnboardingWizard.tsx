@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react'
 import * as api from '../api'
 import type { Project, Provider, ModelEntry } from '../types'
-import { IconX, IconChevronRight, IconChevronLeft, IconCheck, IconSparkles, IconPlus } from '../icons'
+import { IconX, IconChevronRight, IconChevronLeft, IconCheck, IconSparkles, IconPlus, IconCopy, IconExternalLink, IconLock } from '../icons'
 import { useToast } from '../toast'
+
+const EXT_INSTALL_CMD = 'code --install-extension ks-warrior.ks-agent-vscode'
+const OLLAMA_TAGS_URL = 'http://localhost:11434/api/tags'
+const OLLAMA_TIMEOUT_MS = 1500
 
 interface Props {
   open: boolean
@@ -55,6 +59,9 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
   const [apiKey, setApiKey] = useState('')
   const [modelId, setModelId] = useState(PRESETS[1].models[0])
   const [displayName, setDisplayName] = useState('')
+  const [ollamaStatus, setOllamaStatus] = useState<'idle' | 'checking' | 'running' | 'offline'>('idle')
+  const [ollamaModels, setOllamaModels] = useState<string[]>([])
+  const [extCopied, setExtCopied] = useState(false)
   const preset = PRESETS[presetIdx]
 
   useEffect(() => {
@@ -73,6 +80,49 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
   useEffect(() => {
     setModelId(PRESETS[presetIdx].models[0])
   }, [presetIdx])
+
+  // Auto-detect Ollama running via http://localhost:11434/api/tags with timeout, fail gracefully
+  useEffect(() => {
+    if (!open) return
+    setOllamaStatus('checking')
+    setOllamaModels([])
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS)
+    fetch(OLLAMA_TAGS_URL, { signal: controller.signal })
+      .then(async (res) => {
+        clearTimeout(t)
+        if (!res.ok) throw new Error('not ok')
+        const data: any = await res.json().catch(() => null)
+        const models: string[] = []
+        if (data && Array.isArray(data.models)) {
+          for (const m of data.models) {
+            const raw = typeof m.name === 'string' ? m.name : typeof m.model === 'string' ? m.model : ''
+            if (raw) {
+              const base = raw.split(':')[0].trim()
+              if (base) models.push(base)
+            }
+          }
+        }
+        const uniq = Array.from(new Set(models))
+        if (uniq.length) {
+          setOllamaModels(uniq)
+          setOllamaStatus('running')
+          setPresetIdx(6)
+          setModelId(uniq[0])
+        } else {
+          setOllamaStatus('running')
+          setPresetIdx(6)
+        }
+      })
+      .catch(() => {
+        clearTimeout(t)
+        setOllamaStatus('offline')
+      })
+    return () => {
+      clearTimeout(t)
+      controller.abort()
+    }
+  }, [open])
 
   if (!open) return null
 
