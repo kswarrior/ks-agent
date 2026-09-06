@@ -66,6 +66,17 @@ import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, cle
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 import { getDockerImage, isDockerAvailableSync, isDockerJailEnabled } from './docker.js'
 import {
+  fetchGitHub,
+  getRateLimitState,
+  getProjectRateLimitState,
+  pollNow,
+  setFocusState,
+  updateScheduler,
+  ensureSchedulers,
+  restartScheduler,
+  verifyWebhookSignature
+} from './github.js'
+import {
   connectMCPServer,
   disconnectMCPServer,
   getAllMCPStates,
@@ -90,6 +101,8 @@ loadDb()
 // Fire-and-forget: connect enabled MCP/LSP servers in background
 void ensureMCPConnections().catch((e) => console.warn('[mcp] startup connect failed', e))
 void ensureLspConnections().catch((e) => console.warn('[lsp] startup connect failed', e))
+// GitHub polling schedulers — ensure per-project timers after DB load
+void ensureSchedulers().catch((e) => console.warn('[github] scheduler startup failed', e))
 // On startup, any plan step left as "working" but with no active generation is
 // stale (previous process crashed or retry left it hanging). Revert to pending
 // so UI doesn't stay stuck on "Executing 3/7" after restart.
