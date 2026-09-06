@@ -276,7 +276,7 @@ export function Sidebar(props: SidebarProps) {
           <div className="sidebar-section semantic-section" style={{ paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 12 }}>
             <div className="section-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 6 }}>
               <span>Code Search</span>
-              <label className="semantic-toggle" title="Hybrid semantic search (TF-IDF cosine rerank via SQLite embeddings, fallback to grep)">
+              <label className="semantic-toggle" title="Vector+hybrid search (20k vector+BM25+grep sqlite-vec/HNSW, FLOAT32[384/768] per CHUNK 400-600 tokens 100 overlap, OpenAI text-embedding-3-small / Ollama nomic-embed-text / local fallback, 0.5*vector+0.3*BM25+0.2*grep)">
                 <input type="checkbox" checked={semanticEnabled} onChange={(e) => setSemanticEnabled(e.target.checked)} disabled={!props.activeProject} />
                 <span>Semantic</span>
               </label>
@@ -300,7 +300,7 @@ export function Sidebar(props: SidebarProps) {
                 {semanticHits && semanticHits.length > 0 && (
                   <>
                     <div className="semantic-meta">
-                      {semanticMeta?.fallback ? 'grep fallback (no embeddings yet)' : `hybrid rerank — ${semanticMeta?.embeddingCount ?? 0} embeddings`}
+                      {semanticMeta?.fallback ? 'grep fallback (no embeddings yet — vector+BM25 pending)' : `vector+hybrid — ${semanticMeta?.embeddingCount ?? 0} chunks (vector 0.5 + BM25 0.3 + grep 0.2)`}
                       <button
                         className="btn btn-xs"
                         title="Rebuild semantic index for this project (stores TF-IDF vectors in SQLite)"
@@ -324,11 +324,15 @@ export function Sidebar(props: SidebarProps) {
                     <div className="semantic-list">
                       {semanticHits.map((hit, idx) => (
                         <div key={idx} className="semantic-hit" title={hit.snippet ?? hit.path}>
-                          <div className="semantic-hit-path">
-                            <span className="semantic-hit-score">{hit.score.toFixed(2)}</span>
-                            <span className="semantic-hit-source">{hit.source}</span> {hit.path}
+                          <div className="semantic-hit-path" style={{ display:'flex', alignItems:'center', gap:6 }}>
+                            <span className="semantic-hit-score" style={{ minWidth:36, fontWeight:600 }}>{hit.score.toFixed(2)}</span>
+                            <span className={`semantic-hit-source badge-${hit.source}`} style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background: hit.source==='vector' ? '#2563eb' : hit.source==='hybrid' ? '#0ea5e9' : hit.source==='bm25' ? '#8b5cf6' : hit.source==='grep' ? '#64748b' : '#475569', color:'#fff', textTransform:'uppercase' }}>{hit.source==='vector' ? 'VECTOR' : hit.source==='hybrid' ? 'HYBRID' : hit.source.toUpperCase()}</span>
+                            <span style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{hit.path}</span>
                           </div>
-                          {hit.snippet && <div className="semantic-hit-snippet">{hit.snippet.slice(0, 120)}</div>}
+                          <div className="semantic-score-bar" style={{ height:4, background:'var(--border)', borderRadius:2, overflow:'hidden', margin:'4px 0' }}>
+                            <div style={{ width: `${Math.max(5, Math.min(100, hit.score*100))}%`, height:'100%', background: hit.source==='vector' ? '#2563eb' : hit.source==='hybrid' ? 'linear-gradient(90deg,#2563eb,#0ea5e9)' : hit.source==='bm25' ? '#8b5cf6' : '#64748b', backgroundColor: hit.source==='vector' ? '#2563eb' : undefined }} />
+                          </div>
+                          {hit.snippet && <div className="semantic-hit-snippet" style={{ fontSize:12, color:'var(--text-dim)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{hit.snippet.slice(0, 140)}</div>}
                         </div>
                       ))}
                     </div>
@@ -336,7 +340,7 @@ export function Sidebar(props: SidebarProps) {
                 )}
                 {semanticEnabled && !semanticQuery.trim() && (
                   <div className="dd-empty" style={{ fontSize: 12 }}>
-                    Enable Semantic and type query to search codebase (200 files, TF-IDF + grep rerank)
+                    Vector+hybrid search — 20k vector+BM25+grep via sqlite-vec/HNSW, 384-d per CHUNK (500 tokens, 100 overlap), OpenAI/Ollama/local fallback, 5k indexed/20k scanned
                   </div>
                 )}
               </div>
