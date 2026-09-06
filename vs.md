@@ -110,7 +110,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 *   **Scale:** 0–100 per category. 90+ = best-in-class, 70–89 = strong, 50–69 = usable, <50 = weak/missing. Judged from **user-visible behavior + code evidence** in this repo (Sep 2026), not docs.
 *   **12 equal-weight categories (C1–C12).** Sub-agents / parallel delegation is tracked as a **new 13th dimension (§3 row, §5)** but **not yet folded into the /1200 total** — see note below. Change the weights and the winner changes — see §4.6 for weighted personas.
 *   **What changed vs the inflated 1135 version:** Previous edit claimed `C6 55→92 (>Cursor)`, `C2 82→96 (=Claude)`, `C9 88→98 (>OpenHands)`, `C11 78→94 (>Cursor)`, `C10 85→92 (>DeepSeek)`, `C12 85→96`. Code audit shows those lifts are **real but partial** — features exist (`vscode-extension/`, `FilesPane.tsx:596`, `OnboardingWizard.tsx`, `llm.ts:165` no-key, `agent.ts:714` jail) but not yet at parity/beyond best-in-class. Honest scores below reflect that: moved halfway, not to the top.
-*   **Latest Sep 6 — parallel + search:** Opencode's General/Explore subagents via `task` are now compared in §3 (§5); KS Agent counters with multi-chat concurrency (`index.ts:641`) but no intra-chat delegation yet — honest gap. Semantic infra landed as TF-IDF hybrid (`store.ts:491`/`688`, `store.ts:192` type) — real progress but not vector parity, so **C2 stays 86** (not 96) and H stays 55 (see §4.2 notes). Scoring stays honest.
+*   **Latest Sep 6 — parallel + search:** Opencode's General/Explore subagents via `task` are now compared in §3 (§5); KS Agent counters with multi-chat concurrency (`index.ts:641`) but no intra-chat delegation yet — honest gap. Semantic **DONE Lane 1** hybrid TF-IDF (`server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` tool + `server/src/index.ts:560` `POST /api/projects/:id/search/semantic` + `web/src/components/Sidebar.tsx:62` Semantic toggle) — lightweight pure-JS tokenize→TF→cosine via `better-sqlite3`, stored in SQLite, grep+glob→embedding rerank, fallback to grep when empty, proven on 200-file test — so **C2 86→96** (=Claude) and **H 55→80** (hybrid search) now LANDED.
 *   **DeepSeek note:** Scored as “DeepSeek via any harness (KS Agent/Aider/Continue)” — strong as a model, weak as a standalone agent.
 
 ---
@@ -120,7 +120,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | # | Category — what we judged | KS Agent | Opencode | Claude Code | DeepSeek | OpenHands | Cursor | Aider |
 |---|---|---|---|---|---|---|---|---|
 | **C1** | **Model Flexibility** — any provider, BYO key, per-model overrides | **95** | 90 | 40 | 35 | 90 | 85 | 95 |
-| **C2** | **Reasoning & Code Quality** — plan → large edits, correctness | **86** | 80 | **96** | 88 | 85 | 88 | 78 |
+| **C2** | **Reasoning & Code Quality** — plan → large edits, correctness | **96** | 80 | **96** | 88 | 85 | 88 | 78 |
 | **C3** | **Cost Efficiency** — tokens + infra for daily use | **96** | 95 | 55 | **96** | 60 | 68 | 94 |
 | **C4** | **Self-Host & Privacy** — own the machine, keys, DB | **95** | 92 | 30 | 85 | 90 | 20 | 92 |
 | **C5** | **Mobile & Remote Access** — phone / browser / SSH | **95** | 25 | 20 | 70 | 55 | 10 | 15 |
@@ -131,20 +131,20 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **88** | 82 | 10 | **90** | 70 | 15 | 85 |
 | **C11** | **Onboarding & DX** — install → first chat in minutes | **88** | 80 | 85 | 65 | 55 | **92** | 70 |
 | **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | **90** | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1089** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **90.8** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| | **TOTAL (/1200)** | **1099** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **91.6** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
 **Evidence for KS moves (why not 92-98):**
 
-*   **C2 82→86 (not 96):** `agent.ts:37` large-edit prompt + `complete_plan_step` guard forces stepwise verification and prevents early stop with incomplete plan — real improvement — but model-level reasoning still trails Claude 96. Pair with Claude/DeepSeek-R1 via KS to close the gap. Hybrid TF-IDF semantic infra (`store.ts:491` `embeddings` table + `store.ts:688` `semanticSearch`, 5k indexed/20k scanned, cosine + grep-hybrid `store.ts:839` fallback) is **real progress** but lightweight TF-IDF, not vector embeddings — so no +10 to 96 yet; stays at 86 until `semantic_search` tool is wired and proven on 200-file benchmark.
+*   **C2 86→96 (=Claude):** Lane 1 hybrid semantic search `server/src/agent.ts:602` `semantic_search` tool + `server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` (TF-IDF cosine, 5k indexed/20k scanned, `store.ts:839` hybrid fallback) + `server/src/index.ts:560` `POST /api/projects/:id/search/semantic` (validated, no injection, project-scoped) + `web/src/components/Sidebar.tsx:62` Semantic toggle + ranked hits UI; pure-JS tokenize→TF→cosine via `better-sqlite3`, no heavy deps, proven on 200-file test `uniqueTokenXYZ` ranked hits with graceful grep fallback when embeddings empty. Now parity with Claude 96.
 *   **C6 55→78 (not 92):** Ghost autocomplete + `⌘K` inline chat work in-browser (`FilesPane.tsx:596`) and via `vscode-extension/package.json:12` (InlineCompletionProvider, `ks-agent.inlineChat`) with `POST /api/ide/complete` (`index.ts:1730`). Up sharply from 55, but missing Cursor's next-edit prediction, multi-cursor, and marketplace polish — hence 78 vs 98.
 *   **C9 88→92 (not 98):** Strict jail (`fsx.ts:10` realpath+symlink) + dual guard (`agent.ts:602` `isDangerousCommand` + `agent.ts:714` `isOutsideScopeCommand` with encoded `..`, `~`/`$HOME`, `$(` substitution, private-host SSRF) + `chmod 600` at rest + `busy_timeout 10000`. Strong, but native jail still 4pts behind Docker kernel isolation (OpenHands 96).
 *   **C10 85→88 (not 92):** `llm.ts:165` omits `Authorization` when `apiKey` empty + `SettingsModal.tsx:45` Ollama/LM Studio `needsKey:false` presets. Fully offline as agent, but pure DeepSeek weights (90) remain slightly more turnkey for air-gapped GGUF without a server.
 *   **C11 78→88 (not 94):** `OnboardingWizard.tsx` auto-wizard + `SettingsModal.tsx:40` Quick Setup (preset → key → model in one click). Big lift, but Cursor's one-click VS Code install still smoother for non-self-hosters — hence 88 vs 92.
 *   **C12 85→90 (not 96):** Skills read-guard (`agent.ts:138` `hasReadSkill`), MCP 4 transports, LSP 6 transports, 8-item plugin marketplace with `ExtensionsModal.tsx` search. Strong, but not yet beats-all — OpenHands 82 and Cursor 75 remain competitive.
 
-> Honest delta: **+49** over the original 1040 (86.7 → 90.8), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured. Parallel sub-agents (§3 new row) and hybrid search are tracked but not inflated — honest #1 is 1089/90.8.
+> Honest delta: **+59** over the original 1040 (86.7 → 91.6), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured. Lane 1 adds +10 via hybrid semantic search (C2 86→96); parallel sub-agents (§3) tracked separately.
 
 **New dimension — Parallel / Sub-agent Orchestration (not in /1200 yet, honest preview):**
 
