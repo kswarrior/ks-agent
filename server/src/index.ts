@@ -2070,7 +2070,7 @@ app.post('/api/projects/:id/github/poll-now', async (c) => {
   try {
     const result = await pollNow(project.id)
     if ((result as any).debounced) return c.json({ error: 'Poll debounced (5s)', debounced: true }, 429)
-    return c.json({ ok: true, ...result })
+    return c.json({ ok: true })
   } catch (e:any) {
     const msg = String(e?.message||'poll failed')
     if (msg.includes('Rate limited') || msg.includes('No GitHub token')) {
