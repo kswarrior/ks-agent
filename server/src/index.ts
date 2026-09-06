@@ -727,12 +727,11 @@ async function generateChatTitleViaLLM(
     stream: false
   }
   try {
+    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    if (provider.apiKey && provider.apiKey.trim()) headers.authorization = `Bearer ${provider.apiKey.trim()}`
     const res = await fetch(chatTitleEndpoint(provider.baseUrl), {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${provider.apiKey}`
-      },
+      headers,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30000)
     })
@@ -1683,9 +1682,11 @@ async function callIdeChatCompletion(
     max_tokens: opts?.maxTokens ?? 256,
     stream: false
   }
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  if (apiKey && apiKey.trim()) headers.authorization = `Bearer ${apiKey.trim()}`
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    headers,
     body: JSON.stringify(body),
     signal: opts?.signal ?? AbortSignal.timeout(20000)
   })

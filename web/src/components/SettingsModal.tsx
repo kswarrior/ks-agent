@@ -33,7 +33,8 @@ const PROVIDER_PRESETS = [
   { name: 'Together', baseUrl: 'https://api.together.xyz/v1' },
   { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1' },
   { name: 'NVIDIA', baseUrl: 'https://integrate.api.nvidia.com/v1' },
-  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1' }
+  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1' },
+  { name: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1' }
 ]
 
 const QUICK_PRESETS: { name: string; baseUrl: string; models: string[]; needsKey: boolean; hint: string }[] = [

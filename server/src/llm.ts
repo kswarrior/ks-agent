@@ -161,13 +161,12 @@ async function openStream(
             reject(Object.assign(new Error('Provider connect timeout (60s)'), { name: 'TimeoutError' }))
           }, timeoutMs)
         })
+        const headers: Record<string, string> = { 'content-type': 'application/json' }
+        if (apiKey && apiKey.trim()) headers.authorization = `Bearer ${apiKey.trim()}`
         const fetchPromise = fetch(endpoint(baseUrl), {
           method: 'POST',
           signal: fetchController.signal,
-          headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${apiKey}`
-          },
+          headers,
           body: JSON.stringify(body)
         })
         try {
