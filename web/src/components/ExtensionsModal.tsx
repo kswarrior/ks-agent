@@ -152,6 +152,14 @@ export function ExtensionsModal({ open, onClose }: Props) {
       setSkillEdit(null)
       setSkillPickerDir('')
       setSkillPickerEntries([])
+      setSkillCreateOpen(false)
+      setSkillCreateFolder('')
+      setSkillCreateFileName('')
+      setSkillCreateContent('')
+      setSkillEditCreateOpen(false)
+      setSkillEditCreateFolder('')
+      setSkillEditCreateFileName('')
+      setSkillEditCreateContent('')
       setShowMcpForm(false)
       setMcpEdit(null)
       setMcpExpanded({})
@@ -1919,7 +1927,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
               {skillEdit && (
                 <>
                   <div className="fp-subhead">
-                    <button className="icon-btn" aria-label="Back to skills" onClick={() => { setSkillEdit(null); setSkillFileBrowserOpen(false); setError(null) }}>
+                    <button className="icon-btn" aria-label="Back to skills" onClick={() => { setSkillEdit(null); setSkillFileBrowserOpen(false); setSkillEditCreateOpen(false); setSkillEditCreateFolder(''); setSkillEditCreateFileName(''); setSkillEditCreateContent(''); setError(null) }}>
                       <IconChevronLeft size={17} />
                     </button>
                     <span>Edit skill</span>
@@ -1950,10 +1958,35 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <label className="field-label" style={{ margin: 0 }}>Files</label>
-                      <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{skillEditForm.files.length}/20</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{skillEditForm.files.length}/20</span>
+                        <button className="btn" style={{ padding: '2px 8px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => openSkillCreate(true)}><IconPlus size={12} /> Create</button>
+                      </div>
                     </div>
+                    {skillEditCreateOpen && (
+                      <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 10, background: 'var(--surface-2)' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Create new file</div>
+                        <p className="hint" style={{ marginBottom: 8 }}>Folder is the directory part of <code>mainFile</code> (e.g. <code>frontend</code> for <code>frontend/skill.md</code>). File is the basename (<code>skill.md</code>).</p>
+                        <label className="field-label">Folder <span style={{ fontWeight: 400 }}>(e.g., frontend)</span></label>
+                        <input className="input" placeholder="folder name (derived from main file)" value={skillEditCreateFolder} onChange={e=>setSkillEditCreateFolder(e.target.value)} />
+                        <label className="field-label">File name <span style={{ fontWeight: 400 }}>(e.g., skill.md or guide.md)</span></label>
+                        <input className="input" placeholder="file.md" value={skillEditCreateFileName} onChange={e=>setSkillEditCreateFileName(e.target.value)} />
+                        {skillEditCreateFolder && skillEditCreateFileName && (
+                          <p className="hint" style={{ marginTop: 4 }}>Will create: <code>{buildSkillTargetPath(skillEditCreateFolder, skillEditCreateFileName)}</code></p>
+                        )}
+                        {!skillEditCreateFolder && skillEditCreateFileName && (
+                          <p className="hint" style={{ marginTop: 4 }}>Will create: <code>{skillEditCreateFileName.trim()}</code></p>
+                        )}
+                        <label className="field-label">Content <span style={{ fontWeight: 400 }}>(file context)</span></label>
+                        <textarea className="input" placeholder="File content..." value={skillEditCreateContent} onChange={e=>setSkillEditCreateContent(e.target.value)} rows={6} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 13 }} />
+                        <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+                          <button className="btn" onClick={()=>{setSkillEditCreateOpen(false); setSkillEditCreateFolder(''); setSkillEditCreateFileName(''); setSkillEditCreateContent('')}} disabled={skillEditCreateLoading}>Cancel</button>
+                          <button className="btn btn-primary" onClick={()=>handleCreateSkillFile(true)} disabled={skillEditCreateLoading || !skillEditCreateFileName.trim()}>{skillEditCreateLoading ? 'Creating…' : 'Create'}</button>
+                        </div>
+                      </div>
+                    )}
                     {skillEditForm.files.length === 0 ? (
-                      <p className="hint">No files added yet. Use file browser below to pick files.</p>
+                      <p className="hint">No files added yet. Use file browser below to pick files or “Create” to make a new file.</p>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {skillEditForm.files.map((f, idx) => (
@@ -2018,7 +2051,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     </div>
                   )}
                   <div className="dialog-actions" style={{ marginTop: 16 }}>
-                    <button className="btn" onClick={() => { setSkillEdit(null); setSkillFileBrowserOpen(false); setError(null) }}>Cancel</button>
+                    <button className="btn" onClick={() => { setSkillEdit(null); setSkillFileBrowserOpen(false); setSkillEditCreateOpen(false); setSkillEditCreateFolder(''); setSkillEditCreateFileName(''); setSkillEditCreateContent(''); setError(null) }}>Cancel</button>
                     <button className="btn btn-primary" onClick={submitEditSkill}>Save</button>
                   </div>
                 </div>
@@ -2028,7 +2061,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
               {showSkillForm && !skillEdit && (
                 <>
                   <div className="fp-subhead">
-                    <button className="icon-btn" aria-label="Back to skills" onClick={() => { setShowSkillForm(false); setSkillFileBrowserOpen(false); setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '' }); setSkillPickerDir(''); setError(null) }}>
+                    <button className="icon-btn" aria-label="Back to skills" onClick={() => { setShowSkillForm(false); setSkillFileBrowserOpen(false); setSkillCreateOpen(false); setSkillCreateFolder(''); setSkillCreateFileName(''); setSkillCreateContent(''); setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '' }); setSkillPickerDir(''); setError(null) }}>
                       <IconChevronLeft size={17} />
                     </button>
                     <span>Add skill</span>
@@ -2062,11 +2095,36 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                   <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <label className="field-label" style={{ margin: 0 }}>Files</label>
-                      <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{skillForm.files.length}/20</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{skillForm.files.length}/20</span>
+                        <button className="btn" style={{ padding: '2px 8px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => openSkillCreate(false)}><IconPlus size={12} /> Create</button>
+                      </div>
                     </div>
+                    {skillCreateOpen && (
+                      <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 10, background: 'var(--surface-2)' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>Create new file</div>
+                        <p className="hint" style={{ marginBottom: 8 }}>Folder is the directory part of <code>mainFile</code> (e.g. <code>frontend</code> for <code>frontend/skill.md</code>). File is the basename (<code>skill.md</code>).</p>
+                        <label className="field-label">Folder <span style={{ fontWeight: 400 }}>(e.g., frontend)</span></label>
+                        <input className="input" placeholder="folder name (derived from skill name or main file)" value={skillCreateFolder} onChange={e=>setSkillCreateFolder(e.target.value)} />
+                        <label className="field-label">File name <span style={{ fontWeight: 400 }}>(e.g., skill.md or guide.md)</span></label>
+                        <input className="input" placeholder="file.md" value={skillCreateFileName} onChange={e=>setSkillCreateFileName(e.target.value)} />
+                        {skillCreateFolder && skillCreateFileName && (
+                          <p className="hint" style={{ marginTop: 4 }}>Will create: <code>{buildSkillTargetPath(skillCreateFolder, skillCreateFileName)}</code></p>
+                        )}
+                        {!skillCreateFolder && skillCreateFileName && (
+                          <p className="hint" style={{ marginTop: 4 }}>Will create: <code>{skillCreateFileName.trim()}</code></p>
+                        )}
+                        <label className="field-label">Content <span style={{ fontWeight: 400 }}>(file context)</span></label>
+                        <textarea className="input" placeholder="File content..." value={skillCreateContent} onChange={e=>setSkillCreateContent(e.target.value)} rows={6} style={{ resize: 'vertical', fontFamily: 'ui-monospace, monospace', fontSize: 13 }} />
+                        <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+                          <button className="btn" onClick={()=>{setSkillCreateOpen(false); setSkillCreateFolder(''); setSkillCreateFileName(''); setSkillCreateContent('')}} disabled={skillCreateLoading}>Cancel</button>
+                          <button className="btn btn-primary" onClick={()=>handleCreateSkillFile(false)} disabled={skillCreateLoading || !skillCreateFileName.trim()}>{skillCreateLoading ? 'Creating…' : 'Create'}</button>
+                        </div>
+                      </div>
+                    )}
 
                     {skillForm.files.length === 0 ? (
-                      <p className="hint">No files added yet. Use “Browse” above to pick files from the selected project.</p>
+                      <p className="hint">No files added yet. Use “Browse” above to pick files from the selected project or “Create” to make a new file.</p>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {skillForm.files.map((f, idx) => (
