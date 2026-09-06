@@ -2870,6 +2870,33 @@ textarea {
   white-space: nowrap;
   max-width: 260px;
 }
+.fp-ghost--multiline {
+  max-width: 78%;
+  align-items: flex-start;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.fp-ghost-text--multi {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  text-overflow: clip;
+  max-width: 420px;
+  max-height: calc(5 * 1.5em + 4px);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  font-style: italic;
+  color: var(--text-faint);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+}
 .fp-ghost-bar {
   display: flex;
   align-items: center;

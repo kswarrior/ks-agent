@@ -764,8 +764,11 @@ export function FilesPane({ projectId }: FilesPaneProps) {
       const res = await api.ideInlineChat({ projectId, filePath: selected, selection, instruction: instr, surroundingContext: surrounding })
       const result = res.result ?? ''
       if (!result.trim()) throw new Error('Empty result from model')
+      // inline chat apply: correctly replaces selection without breaking undo
+      // handleContentChange pushes a new history entry so Ctrl+Z restores previous selection in one undo step
       const next = editContent.slice(0, start) + result + editContent.slice(end)
       handleContentChange(next)
+      clearGhost()
       setInlineChat({ open: false, instruction: '', loading: false, error: null })
       toast('Inline chat applied', 'success')
       setTimeout(() => {
