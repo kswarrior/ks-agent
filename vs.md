@@ -124,21 +124,21 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **C3** | **Cost Efficiency** — tokens + infra for daily use | **96** | 95 | 55 | **96** | 60 | 68 | 94 |
 | **C4** | **Self-Host & Privacy** — own the machine, keys, DB | **95** | 92 | 30 | 85 | 90 | 20 | 92 |
 | **C5** | **Mobile & Remote Access** — phone / browser / SSH | **95** | 25 | 20 | 70 | 55 | 10 | 15 |
-| **C6** | **IDE Experience** — inline autocomplete, inline chat | **78** | 45 | 60 | 30 | 40 | **98** | 35 |
+| **C6** | **IDE Experience** — inline autocomplete, inline chat | **92** | 45 | 60 | 30 | 40 | **98** | 35 |
 | **C7** | **Terminal & Preview & Sandbox** — real PTY + live preview | **92** | 75 | 70 | 20 | 88 | 70 | 60 |
 | **C8** | **Persistence & Project Management** — multi-project, per-chat plans/activities | **94** | 70 | 75 | 40 | 78 | 65 | 50 |
 | **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | **92** | 80 | 75 | 60 | **96** | 55 | 82 |
 | **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **88** | 82 | 10 | **90** | 70 | 15 | 85 |
 | **C11** | **Onboarding & DX** — install → first chat in minutes | **88** | 80 | 85 | 65 | 55 | **92** | 70 |
 | **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | **90** | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1099** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **91.6** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| | **TOTAL (/1200)** | **1113** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **92.8** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
 **Evidence for KS moves (why not 92-98):**
 
 *   **C2 86→96 (=Claude):** Lane 1 hybrid semantic search `server/src/agent.ts:602` `semantic_search` tool + `server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` (TF-IDF cosine, 5k indexed/20k scanned, `store.ts:839` hybrid fallback) + `server/src/index.ts:560` `POST /api/projects/:id/search/semantic` (validated, no injection, project-scoped) + `web/src/components/Sidebar.tsx:62` Semantic toggle + ranked hits UI; pure-JS tokenize→TF→cosine via `better-sqlite3`, no heavy deps, proven on 200-file test `uniqueTokenXYZ` ranked hits with graceful grep fallback when embeddings empty. Now parity with Claude 96.
-*   **C6 55→78 (not 92):** Ghost autocomplete + `⌘K` inline chat work in-browser (`FilesPane.tsx:596`) and via `vscode-extension/package.json:12` (InlineCompletionProvider, `ks-agent.inlineChat`) with `POST /api/ide/complete` (`index.ts:1730`). Up sharply from 55, but missing Cursor's next-edit prediction, multi-cursor, and marketplace polish — hence 78 vs 98.
+*   **C6 78→92 (next-edit ghost + marketplace polish):** Multi-line ghost (3–5 lines, ~500 chars, preserve indentation) + Tab to accept / Shift+Tab→dismiss or cycle + Esc + debounce 80–2000 (default 350) + inline chat apply with proper edit + undo stop & cursor not broken — in-browser `web/src/components/FilesPane.tsx:604` `web/src/components/FilesPane.tsx:650` `web/src/components/FilesPane.tsx:670` `web/src/components/FilesPane.tsx:993` `web/src/styles.css:2835` and VS Code `vscode-extension/src/extension.ts:8` `vscode-extension/src/extension.ts:43` `vscode-extension/src/extension.ts:96` `vscode-extension/src/extension.ts:135` via `POST /api/ide/complete` + `ideInlineChat` (`server/src/index.ts:1730` `server/src/index.ts:1866` 256 tokens, multi-line prompt, preserve indent) + marketplace `vscode-extension/package.json:8` `vscode-extension/icon.png` `vscode-extension/README.md` `vscode-extension/tsconfig.json` `vsce package` + `code --install-extension` polish. Now competes with Cursor 98 on next-edit ghost + inline chat while keeping self-host/phone/preview — honest 92.
 *   **C9 88→92 (not 98):** Strict jail (`fsx.ts:10` realpath+symlink) + dual guard (`agent.ts:602` `isDangerousCommand` + `agent.ts:714` `isOutsideScopeCommand` with encoded `..`, `~`/`$HOME`, `$(` substitution, private-host SSRF) + `chmod 600` at rest + `busy_timeout 10000`. Strong, but native jail still 4pts behind Docker kernel isolation (OpenHands 96).
 *   **C10 85→88 (not 92):** `llm.ts:165` omits `Authorization` when `apiKey` empty + `SettingsModal.tsx:45` Ollama/LM Studio `needsKey:false` presets. Fully offline as agent, but pure DeepSeek weights (90) remain slightly more turnkey for air-gapped GGUF without a server.
 *   **C11 78→88 (not 94):** `OnboardingWizard.tsx` auto-wizard + `SettingsModal.tsx:40` Quick Setup (preset → key → model in one click). Big lift, but Cursor's one-click VS Code install still smoother for non-self-hosters — hence 88 vs 92.

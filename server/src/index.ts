@@ -1862,18 +1862,19 @@ app.post('/api/ide/complete', async (c) => {
   if ('error' in resolved) return c.json({ error: resolved.error }, 400)
   const { provider, model } = resolved
 
-  // Build a tiny completion prompt — keep it fast and deterministic for ghost text. Use few-shot to prevent thinking output on reasoning models.
-  const system = 'You are an inline code completion engine for an IDE. Given the file prefix (code before cursor) and suffix (code after cursor), output ONLY the raw code that should be inserted at CURSOR — no explanation, no markdown, no quotes, no preamble, no thinking, no analysis. Keep it to 1-3 lines or <=120 chars. If nothing to complete, output empty string. Complete naturally for the language. Example: prefix="function hello(){" suffix="}" language="javascript" → completion="\\n  console.log(\\"hello\\");\\n"'
-  const user = `Language: ${language || 'plaintext'}\nFile: ${filePath || '(unsaved)'}\nPrefix:\n${prefix.slice(-4000)}\n---CURSOR---\nSuffix:\n${suffix.slice(0, 2000)}\n\nRespond with ONLY the completion code, no thinking.`
+  // Build completion prompt — multi-line ghost (up to 3–5 lines / ~500 chars, preserve indentation). Deterministic, no thinking output.
+  const system = 'You are an inline code completion engine for an IDE. Given the file prefix (code before cursor) and suffix (code after cursor), output ONLY the raw code that should be inserted at CURSOR — no explanation, no markdown, no quotes, no preamble, no thinking, no analysis. Keep it to 1–5 lines or <=500 chars (3–5 lines when completing a block, preserve indentation). If nothing to complete, output empty string. Complete naturally for the language. Example single: prefix="function hello(){" suffix="}" language="javascript" → completion="\\n  console.log(\\"hello\\");\\n"  Example multi: prefix="function foo() {\\n  const x = 1;" suffix="\\n}" language="javascript" → completion="\\n  const y = 2;\\n  return x + y;\\n"'
+  const user = `Language: ${language || 'plaintext'}\nFile: ${filePath || '(unsaved)'}\nPrefix:\n${prefix.slice(-4000)}\n---CURSOR---\nSuffix:\n${suffix.slice(0, 2000)}\n\nRespond with ONLY the completion code, no thinking. Preserve indentation exactly.`
   try {
     const raw = await callIdeChatCompletion(provider.baseUrl, provider.apiKey, model, [
       { role: 'system', content: system },
       { role: 'user', content: user }
-    ], { maxTokens: 128, temperature: 0.2 })
-    let completion = raw.trim()
-    // Strip markdown fences if model wraps
-    if (completion.startsWith('```')) {
-      completion = completion.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/,'').trim()
+    ], { maxTokens: 256, temperature: 0.2 })
+    let completion = raw.trimEnd()
+    // Strip markdown fences if model wraps — preserve indentation inside
+    const trimmedStart = completion.trimStart()
+    if (trimmedStart.startsWith('```')) {
+      completion = trimmedStart.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/,'').trimEnd()
     }
     // Filter reasoning-model thinking leakage (e.g. "Here\'s a thinking process" or "Analyze User Input")
     const lower = completion.toLowerCase()
