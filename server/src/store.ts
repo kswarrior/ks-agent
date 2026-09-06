@@ -211,6 +211,53 @@ export const DEFAULT_THEME: ThemeSettings = {
   radius: 10
 }
 
+// ---------------- GitHub Token (PAT) + Poll Settings — vs.md:98 "🔶 via shell gh pr create" only run_shell (server/src/agent.ts:341). Need GITHUB_TOKEN stored like Provider.apiKey (store.ts:40, index.ts:236 ••••, store.ts:277 chmod 600, WAL busy_timeout 10000) + user-set interval, fully customizable. ----------------
+export interface GithubToken {
+  id: string
+  projectId?: string
+  token: string
+  createdAt: string
+}
+
+export interface GithubPollSettings {
+  enabled: boolean
+  mode: 'interval' | 'cron' | 'event' | 'manual'
+  intervalMs: number
+  cronExpr: string | null
+  endpoints: { diff: boolean; pr: boolean; commits: boolean; actions: boolean }
+  perEndpointInterval: { diffMs: number; prMs: number; commitsMs?: number; actionsMs?: number }
+  pollOnFocusOnly: boolean
+  pauseOnWindowBlur: boolean
+  useEtag: boolean
+  respectRateLimit: boolean
+  smartEventOnly: boolean
+  jitterMs: number
+  maxRetries: number
+  minIntervalMs: number
+  maxIntervalMs: number
+  webhookUrl?: string | null
+}
+
+export const GITHUB_TOKEN_REGEX = /^(gh[opsr]_|github_pat_)[A-Za-z0-9_]+$/
+export const DEFAULT_GITHUB_POLL_SETTINGS: GithubPollSettings = {
+  enabled: false,
+  mode: 'interval',
+  intervalMs: 25000,
+  cronExpr: null,
+  endpoints: { diff: true, pr: true, commits: true, actions: false },
+  perEndpointInterval: { diffMs: 25000, prMs: 60000, commitsMs: 30000, actionsMs: 60000 },
+  pollOnFocusOnly: false,
+  pauseOnWindowBlur: false,
+  useEtag: true,
+  respectRateLimit: true,
+  smartEventOnly: false,
+  jitterMs: 0,
+  maxRetries: 3,
+  minIntervalMs: 5000,
+  maxIntervalMs: 300000,
+  webhookUrl: null
+}
+
 interface DB {
   projects: Project[]
   chats: Chat[]
@@ -514,6 +561,27 @@ function initSchema(s: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_embedding_chunks_projectId ON embedding_chunks(projectId);
     CREATE INDEX IF NOT EXISTS idx_embedding_chunks_project_path ON embedding_chunks(projectId, filePath);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_embedding_chunks_project_path_idx ON embedding_chunks(projectId, filePath, chunkIndex);
+    CREATE TABLE IF NOT EXISTS github_tokens (
+      id TEXT PRIMARY KEY,
+      projectId TEXT,
+      token TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_github_tokens_projectId ON github_tokens(projectId);
+    CREATE TABLE IF NOT EXISTS github_poll_settings (
+      projectId TEXT PRIMARY KEY,
+      settings TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS github_cache (
+      key TEXT PRIMARY KEY,
+      etag TEXT,
+      data TEXT NOT NULL,
+      headers TEXT,
+      fetchedAt TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
