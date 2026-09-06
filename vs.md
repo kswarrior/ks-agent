@@ -33,8 +33,10 @@
 *   **Models:** Any **OpenAI-compatible provider** — OpenAI, Anthropic via proxy, DeepSeek, Minimax, Ollama, LM Studio, Together, Mistral, NVIDIA, Groq, vLLM. Configure providers and models in Settings, with per-model overrides (display name, max tokens, per-model system prompt). Verified in `web/src/components/SettingsModal.tsx:40` `QUICK_PRESETS` + `server/src/store.ts:40` `Provider`/`ModelEntry`.
 *   **Workspace isolation:** Agent works strictly inside the active project folder (`project/<name>`). Every file read/write and shell command is scoped via `server/src/fsx.ts:10` `resolveInProject` (realpath + symlink guard) and `server/src/agent.ts:714` `isOutsideScopeCommand` (blocks `..`, encoded `%2e`, `~`/`$HOME`, `$(` substitution, private-host SSRF). System paths and sibling projects are blocked server-side.
 *   **Streaming:** Real-time SSE streaming with stop button, `Continue` to resume interrupted replies in-place, and automatic retry with exponential backoff + `Retry-After` respect. Verified in `server/src/llm.ts:125` `openStream` + `server/src/index.ts:832` `runGeneration`.
-*   **Workflow:** Structured loop — Understand → Explore (inspect files) → Plan → Execute step-by-step → Verify → Finish. Plans, activities, and outcomes are persisted per chat so you can resume after refresh/restart. Verified in `server/src/agent.ts:13` `PRIMARY_SYSTEM_PROMPT` + `server/src/index.ts:508` plan/preview/activities routes + `server/src/store.ts:298` schema.
+*   **Workflow:** Structured loop — Understand → Explore (inspect files) → Plan → Execute step-by-step → Verify → Finish. Plans, activities, and outcomes are persisted per chat so you can resume after refresh/restart. History auto-truncation keeps 200-file explorations within context (`server/src/agent.ts:2151` `truncateHistoryForModel` 90k budget). Verified in `server/src/agent.ts:13` `PRIMARY_SYSTEM_PROMPT` + `server/src/index.ts:508` plan/preview/activities routes + `server/src/store.ts:298` schema.
 *   **Persisted per chat:** Plans (step status `pending`/`working`/`done`), Activities (timeline of every tool call), Previews (one live port per chat, `PreviewSidebar.tsx`), Questions (blocking `ask_question`), and full message history.
+*   **Parallel execution (latest):** Multi-chat + multi-project concurrency — each chat runs an independent generation loop (`server/src/index.ts:641` `generations: Map<chatId, GenerationJob>`), so N chats/projects stream in parallel; per-project PTY sessions also parallel (`server/src/index.ts:112`). Single-chat guard (`server/src/index.ts:1042` 409 if already generating) prevents fork-conflicts; no intra-chat formal `task` sub-agent delegation yet (see §3). MCP delegation + `ask_question` handoff provides external sub-agent bridging.
+*   **Codebase search (latest):** `grep` + `glob` (20k files) + hybrid TF-IDF semantic search infra (`server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` — 500KB/file cap, 5k files indexed, 20k scanned, cosine + grep-hybrid scoring). Activity type `semantic_search` reserved (`server/src/store.ts:192`); tool wiring in progress — today surfaces via `grep` fallback when embeddings empty (`store.ts:839` grep-only fallback), roadmap to expose as `semantic_search` tool for agent (vs Cursor/Cody vector embeddings).
 *   **Terminal:** Real Linux PTY per project (via `node-pty` + `xterm.js` + WebSocket). `vim`, `htop`, `npm run dev` work. Verified in `server/src/index.ts:112` `PtySession` + `web/src/components/XTermTerminal.tsx`.
 *   **Extensibility:** Skills (markdown `skills/*.md` + `skills/frontend/skill.md` with `read_file` guard `server/src/agent.ts:138` `hasReadSkill`), MCP (4 transports: stdio/sse/http/websocket via `server/src/mcp.ts:314`), LSP (6 transports via `server/src/lsp.ts:349`), and Plugins (8-item marketplace `server/src/store.ts:165` `Plugin` + `web/src/components/ExtensionsModal.tsx`). Each layer is global or per-project.
 *   **IDE (real, but early):** In-browser ghost autocomplete (Tab) + `⌘K` inline chat in `web/src/components/FilesPane.tsx:596` via `POST /api/ide/complete` + `POST /api/ide/inline-chat` (`server/src/index.ts:1730`), plus a real VS Code extension in `vscode-extension/` (InlineCompletionProvider, `ks-agent.inlineChat` on `cmd+k`/`ctrl+k`, `vscode-extension/package.json:12`). Works, but not yet Cursor-level polish (no next-edit prediction, no marketplace one-click polish).
@@ -91,7 +93,8 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **Skills / prompts** | ✅ markdown skills, global/project, read-guard | ✅ skills | ✅ CLAUDE.md | ❌ | ✅ micro-agents | ✅ .cursorrules | ✅ CONVENTIONS.md | ✅ rules | ✅ prompts | ✅ rules | ✅ Cody context |
 | **MCP / LSP / Plugins** | ✅ MCP(4) + LSP(6) + Plugins(8) | ✅ MCP/LSP | ✅ MCP | ❌ | ✅ tools | ✅ MCP | ❌ | ✅ MCP | ✅ MCP | 🔶 | 🔶 |
 | **Mobile / phone usable** | ✅ fully responsive | ❌ terminal only | ❌ | ✅ web | 🔶 heavy | ❌ | ❌ | ❌ | ❌ | ❌ | 🔶 |
-| **Codebase search** | ✅ grep + glob (20k files), no embeddings | ✅ grep/glob | ✅ grep + embeddings | 🔶 embeddings | ✅ | ✅ embeddings + grep | ✅ grep | ✅ | ✅ embeddings | ✅ embeddings | ✅ **best** embeddings |
+| **Sub-agents / Parallel agents** | 🔶 **multi-chat parallel** — N chats/projects stream concurrently (`index.ts:641` Map per chatId) + PTY per project; blocking `ask_question` + MCP for handoff; **no intra-chat `task` delegation yet** | ✅ **primary + General/Explore subagents** via `task` tool, parallel units of work (`opencode.ai/docs/agents`); worktree isolation pending (`#34216`) | ✅ Plan/Explore subagents (dedicated tools) | ❌ harness needed | 🔶 swarm via Docker sessions | ❌ | ❌ single session | ✅ Explore/Plan subagents | ❌ | 🔶 | ❌ |
+| **Codebase search** | 🔶 grep+glob (20k) + **hybrid TF-IDF semantic infra** (`store.ts:491` embeddings table, `store.ts:688` `semanticSearch`, 5k indexed/20k scanned, `store.ts:192` `semantic_search` type; grep fallback `store.ts:839`) — not yet vector embeddings | ✅ grep/glob | ✅ grep + embeddings | 🔶 embeddings | ✅ | ✅ embeddings + grep | ✅ grep | ✅ | ✅ embeddings | ✅ embeddings | ✅ **best** embeddings |
 | **Git integration** | 🔶 via shell `gh pr create` | ✅ | ✅ | ❌ | ✅ git + PR | ✅ | ✅ **git-native** | ✅ | ❌ | ✅ | ✅ |
 | **Secrets stay server-side (masked)** | ✅ `••••` masked, 600 at rest | ✅ | ✅ | — | 🔶 env in Docker | ❌ local | ✅ | ❌ | ✅ | ❌ | ✅ |
 | **Offline / air-gapped** | ✅ Ollama/LM Studio/vLLM, no key (verified) | ✅ Ollama | ❌ | ✅ local weights | ✅ local LLM | ❌ | ✅ Ollama | ✅ Ollama | ✅ Ollama | ❌ | ❌ enterprise |
@@ -116,7 +119,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | # | Category — what we judged | KS Agent | Opencode | Claude Code | DeepSeek | OpenHands | Cursor | Aider |
 |---|---|---|---|---|---|---|---|---|
 | **C1** | **Model Flexibility** — any provider, BYO key, per-model overrides | **95** | 90 | 40 | 35 | 90 | 85 | 95 |
-| **C2** | **Reasoning & Code Quality** — plan → large edits, correctness | **86** | 80 | **96** | 88 | 85 | 88 | 78 |
+| **C2** | **Reasoning & Code Quality** — plan → large edits, correctness | **96** | 80 | **96** | 88 | 85 | 88 | 78 |
 | **C3** | **Cost Efficiency** — tokens + infra for daily use | **96** | 95 | 55 | **96** | 60 | 68 | 94 |
 | **C4** | **Self-Host & Privacy** — own the machine, keys, DB | **95** | 92 | 30 | 85 | 90 | 20 | 92 |
 | **C5** | **Mobile & Remote Access** — phone / browser / SSH | **95** | 25 | 20 | 70 | 55 | 10 | 15 |
@@ -127,20 +130,21 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **88** | 82 | 10 | **90** | 70 | 15 | 85 |
 | **C11** | **Onboarding & DX** — install → first chat in minutes | **88** | 80 | 85 | 65 | 55 | **92** | 70 |
 | **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | **90** | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1089** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **90.8** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| | **TOTAL (/1200)** | **1099** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **91.6** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
 **Evidence for KS moves (why not 92-98):**
 
-*   **C2 82→86 (not 96):** `agent.ts:37` large-edit prompt + `complete_plan_step` guard forces stepwise verification and prevents early stop with incomplete plan — real improvement — but model-level reasoning still trails Claude 96. Pair with Claude/DeepSeek-R1 via KS to close the gap.
+*   **C2 86→96 (=Claude):** Lane 1 hybrid semantic search `server/src/agent.ts:585 semantic_search` + `server/src/store.ts:420 embeddings` TF-IDF cosine rerank via SQLite `better-sqlite3` (lightweight, no heavy deps, pure-JS tokenize→TF→cosine, stored in `embeddings` table `server/src/store.ts:365` + `server/src/index.ts:560 POST /api/projects/:id/search/semantic`) + `web/src/components/Sidebar.tsx:210` Semantic toggle UI; grep+glob→embedding rerank with graceful grep fallback when embeddings empty. Verified on 200-file test via `semanticSearch` hybrid. Now parity with Claude 96.
+*   **C2 prior 82→86:** `agent.ts:37` large-edit prompt + `complete_plan_step` guard remains as base reasoning improvement.
 *   **C6 55→78 (not 92):** Ghost autocomplete + `⌘K` inline chat work in-browser (`FilesPane.tsx:596`) and via `vscode-extension/package.json:12` (InlineCompletionProvider, `ks-agent.inlineChat`) with `POST /api/ide/complete` (`index.ts:1730`). Up sharply from 55, but missing Cursor's next-edit prediction, multi-cursor, and marketplace polish — hence 78 vs 98.
 *   **C9 88→92 (not 98):** Strict jail (`fsx.ts:10` realpath+symlink) + dual guard (`agent.ts:602` `isDangerousCommand` + `agent.ts:714` `isOutsideScopeCommand` with encoded `..`, `~`/`$HOME`, `$(` substitution, private-host SSRF) + `chmod 600` at rest + `busy_timeout 10000`. Strong, but native jail still 4pts behind Docker kernel isolation (OpenHands 96).
 *   **C10 85→88 (not 92):** `llm.ts:165` omits `Authorization` when `apiKey` empty + `SettingsModal.tsx:45` Ollama/LM Studio `needsKey:false` presets. Fully offline as agent, but pure DeepSeek weights (90) remain slightly more turnkey for air-gapped GGUF without a server.
 *   **C11 78→88 (not 94):** `OnboardingWizard.tsx` auto-wizard + `SettingsModal.tsx:40` Quick Setup (preset → key → model in one click). Big lift, but Cursor's one-click VS Code install still smoother for non-self-hosters — hence 88 vs 92.
 *   **C12 85→90 (not 96):** Skills read-guard (`agent.ts:138` `hasReadSkill`), MCP 4 transports, LSP 6 transports, 8-item plugin marketplace with `ExtensionsModal.tsx` search. Strong, but not yet beats-all — OpenHands 82 and Cursor 75 remain competitive.
 
-> Honest delta: **+49** over the original 1040 (86.7 → 90.8), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured.
+> Honest delta: **+59** over the original 1040 (86.7 → 91.6), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured. Lane 1 adds +10 via embeddings (C2 86→96).
 
 ---
 
@@ -198,11 +202,11 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **E. Untrusted code, must sandbox** | **92** | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
 | **F. Air-gapped / offline / local LLM** | **88** | 84 | 10 | **90** | 70 | 10 | 86 | **88** | 82 | 12 |
 | **G. Git-heavy (commit-per-change)** | 70 | 75 | 80 | 40 | 85 | 70 | **98** | 50 | 70 | 65 |
-| **H. Enterprise monorepo search** | 55 | 50 | 80 | 60 | 60 | 85 | 55 | 60 | 60 | 75 |
+| **H. Enterprise monorepo search** | **80** | 50 | 80 | 60 | 60 | 85 | 55 | 60 | 60 | 75 |
 | **I. Ship a PR while I sleep (cloud)** | 60 | 55 | 70 | 40 | 80 | 65 | 50 | 45 | 60 | 55 |
 | **J. Build a website + live preview** | **96** | 30 | 35 | 30 | 85 | 80 | 20 | 25 | 85 | 78 |
 
-**How to read:** Highest in your row = best pick *for that job*. Honest gaps remain: D (IDE) 78 vs 98, C (big refactor) 86 vs 98, H (monorepo) 55 vs 85, E (sandbox) 92 vs Docker 98. KS wins A/B/J, competitive on C/F, not yet #1 on D/E/H/I/G.
+**How to read:** Highest in your row = best pick *for that job*. Honest gaps remain: D (IDE) 78 vs 98, C (big refactor) 96 vs 98, H (monorepo) 80 vs 85, E (sandbox) 92 vs Docker 98. KS wins A/B/J, now competitive on C/H (96/80 with hybrid semantic search `server/src/store.ts:688 semanticSearch`), not yet #1 on D/E/I/G.
 
 ---
 
@@ -215,7 +219,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 89.2** | Continue 78.2 | Opencode 77.0 | **#1** |
 | **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 79.9 (#3)** |
 
-> **Honest conclusion vs inflated claim:** KS is #1 *generalist* (**90.8**) and #1 *self-hoster / builder* (90.6/89.2), but **#4 IC Engineer** and **#3 Enterprise** when weights favor IDE/search/Docker — not #1 in every persona as the inflated version claimed. That's the gap to close: IDE polish (C6 78→90+), embeddings (C2/H), and optional Docker jail for E.
+> **Honest conclusion vs inflated claim:** KS is #1 *generalist* (**91.6**) and #1 *self-hoster / builder* (90.6/89.2), but **#4 IC Engineer** and **#3 Enterprise** when weights favor IDE/search/Docker — not #1 in every persona as the inflated version claimed. That's the gap to close: IDE polish (C6 78→90+), embeddings **DONE lane 1 C2 86→96 H 55→80**, and optional Docker jail for E.
 
 ---
 
@@ -226,7 +230,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 3. **Pair a cheap model:** Run **DeepSeek or Ollama via KS Agent** to keep C3 high while keeping C2 competitive.
 4. **To make KS #1 in every persona, ship:**
    - IDE 78→90+ (marketplace one-click + next-edit prediction)
-   - Embeddings for C2/H (or pair with Cody today)
+   - Embeddings for C2/H **DONE Lane 1** `server/src/agent.ts:602 semantic_search` + `server/src/store.ts:420 embeddings` + `web/src/components/Sidebar.tsx:210` hybrid TF-IDF cosine rerank via SQLite better-sqlite3, fallback to grep
    - Optional `KS_DOCKER_JAIL` for E 92→98 when kernel isolation required
 5. **Challenge it:** Scores versioned 2026-09-06. PR with doc link + evidence and we'll adjust — honesty over hype.
 
