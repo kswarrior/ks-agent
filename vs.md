@@ -151,8 +151,8 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | # | Category — what we judged | KS Agent | Opencode | Claude Code | DeepSeek | OpenHands | Cursor | Aider |
 |---|---|---|---|---|---|---|---|---|
 | **C13** | **Parallel / Sub-agents** — intra-chat `task` delegation + multi-chat concurrency | **68** 🔶 multi-chat parallel (`index.ts:641` Map per chatId, `index.ts:1042` 409 guard, PTY per project) but **no intra-chat `task` sub-agent**; MCP handoff via `ask_question` | **88** ✅ General/Explore subagents via `task` (`opencode.ai/docs/agents`), parallel units, worktree isolation pending `#34216` | **92** ✅ Plan/Explore subagents, best orchestration | 20 ❌ harness needed | 80 🔶 Docker swarm | 40 ❌ | 30 ❌ single session |
-| | **TOTAL if C13 folded (/1300)** | **1157** | **982** | **778** | **739** | **969** | **781** | **846** |
-| | **AVERAGE if /1300** | **89.0** | **75.5** | **59.8** | **56.8** | **74.5** | **60.1** | **65.1** |
+| | **TOTAL if C13 folded (/1300)** | **1167** | **982** | **778** | **739** | **969** | **781** | **846** |
+| | **AVERAGE if /1300** | **89.8** | **75.5** | **59.8** | **56.8** | **74.5** | **60.1** | **65.1** |
 
 > If C13 is added, KS stays #1 (1157 vs Opencode 982) but lead narrows to **+175**; honest gap on intra-chat delegation is **KS 68 vs Opencode 88 / Claude 92** — the next feature to close is a `task`/`delegate` tool with worktree isolation.
 
@@ -197,7 +197,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | 12 | GitHub Copilot | 656 | 54.7 | Best cheap inline, weak autonomy |
 | 13 | Devin | 600 | 50.0 | Best "hire a cloud engineer", most expensive |
 
-> Inflated 1135/94.6 claimed +241 lead; honest 1089/90.8 is **+195** over #2 — still #1 generalist, but without claiming parity/beyond best-in-class on IDE/reasoning/security.
+> Inflated 1135/94.6 claimed +241 lead; honest **1099/91.6** is **+205** over #2 (Opencode 894) — Lane 1 adds +10 via hybrid semantic search (C2 86→96); still #1 generalist, but without claiming parity/beyond best-in-class on IDE/reasoning/security.
 
 ---
 
@@ -212,12 +212,12 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **E. Untrusted code, must sandbox** | **92** | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
 | **F. Air-gapped / offline / local LLM** | **88** | 84 | 10 | **90** | 70 | 10 | 86 | **88** | 82 | 12 |
 | **G. Git-heavy (commit-per-change)** | 70 | 75 | 80 | 40 | 85 | 70 | **98** | 50 | 70 | 65 |
-| **H. Enterprise monorepo search** | 55 | 50 | 80 | 60 | 60 | 85 | 55 | 60 | 60 | 75 |
+| **H. Enterprise monorepo search** | **80** | 50 | 80 | 60 | 60 | 85 | 55 | 60 | 60 | 75 |
 | **I. Ship a PR while I sleep (cloud)** | 60 | 55 | 70 | 40 | 80 | 65 | 50 | 45 | 60 | 55 |
 | **J. Build a website + live preview** | **96** | 30 | 35 | 30 | 85 | 80 | 20 | 25 | 85 | 78 |
 | **K. Parallel sub-agents (fan-out 3 tasks)** | 68 | **88** | **92** | 20 | 80 | 40 | 30 | 35 | 85 | 35 |
 
-**How to read:** Highest in your row = best pick *for that job*. Honest gaps remain: D (IDE) 78 vs 98, C (big refactor) 86 vs 98, H (monorepo) 55 vs 85, E (sandbox) 92 vs Docker 98, K (parallel sub-agents) 68 vs 92. KS wins A/B/J, competitive on C/F/K via multi-chat concurrency (`index.ts:641`) + hybrid TF-IDF (`store.ts:491`) but not yet #1 on C/D/E/H/K — next to close is intra-chat `task` delegation.
+**How to read:** Highest in your row = best pick *for that job*. Honest gaps remain: D (IDE) 78 vs 98, C (big refactor) 86 vs 98, H (monorepo) 80 vs 85, E (sandbox) 92 vs Docker 98, K (parallel sub-agents) 68 vs 92. KS wins A/B/J, now competitive on H (80 hybrid `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` + `web/src/components/Sidebar.tsx:62`) and C/F, not yet #1 on D/E/K — next to close is intra-chat `task` delegation.
 
 ---
 
@@ -230,7 +230,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 89.2** | Continue 78.2 | Opencode 77.0 | **#1** |
 | **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 79.9 (#3)** |
 
-> **Honest conclusion vs inflated claim:** KS is #1 *generalist* (**90.8**) and #1 *self-hoster / builder* (90.6/89.2), but **#4 IC Engineer** and **#3 Enterprise** when weights favor IDE/search/Docker — not #1 in every persona as the inflated version claimed. That's the gap to close: IDE polish (C6 78→90+), hybrid search H 55→65+ (vector when `semantic_search` wired), Docker jail for E 92→98, and **intra-chat sub-agent `task` for K 68→88**.
+> **Honest conclusion vs inflated claim:** KS is #1 *generalist* (**91.6**) and #1 *self-hoster / builder* (90.6/89.2), but **#4 IC Engineer** and **#3 Enterprise** when weights favor IDE/search/Docker — not #1 in every persona as the inflated version claimed. That's the gap to close: IDE polish (C6 78→90+), hybrid search **H 55→80 DONE Lane 1** `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` + `web/src/components/Sidebar.tsx:62` (pure-JS TF-IDF cosine, `better-sqlite3`), Docker jail for E 92→98, and **intra-chat sub-agent `task` for K 68→88**.
 
 ---
 
@@ -241,7 +241,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 3. **Pair a cheap model:** Run **DeepSeek or Ollama via KS Agent** to keep C3 high while keeping C2 competitive.
 4. **To make KS #1 in every persona, ship:**
    - IDE 78→90+ (marketplace one-click + next-edit prediction)
-   - Embeddings for C2/H — hybrid TF-IDF infra done (`store.ts:491` `embeddings` table + `store.ts:688` `semanticSearch` 5k indexed/20k scanned, cosine+grep hybrid `store.ts:839` fallback, `store.ts:192` `semantic_search` type reserved); next: wire as `semantic_search` tool + optional vector sidecar for H 55→65→85
+   - Embeddings for C2/H **DONE Lane 1** `server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` (TF-IDF cosine, 5k indexed/20k scanned, `server/src/store.ts:839` hybrid fallback) + `server/src/agent.ts:602` `semantic_search` tool + `server/src/index.ts:560` `POST /api/projects/:id/search/semantic` + `web/src/components/Sidebar.tsx:62` Semantic toggle with ranked hits — pure-JS, no heavy deps, proven 200-file, fallback to grep
    - Optional `KS_DOCKER_JAIL` for E 92→98 when kernel isolation required
    - **Sub-agents for K 68→88** — add intra-chat `task`/`delegate` tool with `index.ts:641` Map reuse + worktree isolation (like Opencode `#34216`) so 3 tasks fan-out without 409 guard
 5. **Challenge it:** Scores versioned 2026-09-06. PR with doc link + evidence and we'll adjust — honesty over hype.
