@@ -340,11 +340,281 @@ function ensureDb(): Database.Database {
   try { sqlite.exec("CREATE VIRTUAL TABLE IF NOT EXISTS vec_tmp_test USING vec0(dummy float[384])"); sqlite.exec("DROP TABLE IF EXISTS vec_tmp_test"); sqlite.exec("CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(projectId TEXT, filePath TEXT, chunkIndex INTEGER, embedding FLOAT[384] distance_metric=cosine)") } catch {}
   // Re-ensure FK enabled after init (initSchema may have been run on existing DB)
   try { sqlite.pragma('foreign_keys = ON') } catch {}
+  // GitHub tables — ensure exist even on old DBs
+  try { sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS github_tokens (
+      id TEXT PRIMARY KEY,
+      projectId TEXT,
+      token TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_github_tokens_projectId ON github_tokens(projectId);
+    CREATE TABLE IF NOT EXISTS github_poll_settings (
+      projectId TEXT PRIMARY KEY,
+      settings TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS github_cache (
+      key TEXT PRIMARY KEY,
+      etag TEXT,
+      data TEXT NOT NULL,
+      headers TEXT,
+      fetchedAt TEXT NOT NULL
+    );
+  `) } catch {}
   // Harden DB file permissions — secrets at rest (apiKeys) must be 600
   try { fs.chmodSync(dbFile, 0o600) } catch {}
   try { fs.chmodSync(dbFile + '-wal', 0o600) } catch {}
   try { fs.chmodSync(dbFile + '-shm', 0o600) } catch {}
   return sqlite
+}
+
+// ---------------- GitHub Token + Poll Settings helpers — store.ts:214 kv "githubToken" + github_tokens {id,projectId,token,createdAt}. Helpers get/set/masked ••••xxxx, regex ^(gh[opsr]_|github_pat_) 20-120 chars. ----------------
+export function isValidGithubToken(token: string): boolean {
+  const t = String(token ?? '').trim()
+  if (!t) return false
+  if (t.length < 20 || t.length > 120) return false
+  if (!GITHUB_TOKEN_REGEX.test(t)) return false
+  return true
+}
+export function maskGithubToken(token: string): string {
+  const t = String(token ?? '').trim()
+  if (!t) return ''
+  if (t.length <= 4) return '••••'
+  return `••••${t.slice(-4)}`
+}
+export function getGithubToken(projectId?: string): string | null {
+  // env override — GITHUB_TOKEN || GH_TOKEN like store.ts:277
+  const envTok = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '').trim()
+  if (envTok) return envTok
+  try {
+    const s = ensureDb()
+    if (projectId) {
+      const row = s.prepare('SELECT token FROM github_tokens WHERE projectId=? ORDER BY createdAt DESC LIMIT 1').get(projectId) as any
+      if (row && typeof row.token === 'string' && row.token.trim()) return String(row.token).trim()
+    }
+    const kv = s.prepare("SELECT value FROM kv WHERE key='githubToken'").get() as any
+    if (kv && typeof kv.value === 'string') {
+      const v = String(kv.value).trim()
+      if (v) return v
+    }
+  } catch {}
+  return null
+}
+export function getGithubTokenMasked(projectId?: string): string {
+  const tok = getGithubToken(projectId)
+  return tok ? maskGithubToken(tok) : ''
+}
+export function hasGithubToken(projectId?: string): boolean {
+  return !!getGithubToken(projectId)
+}
+export function setGithubToken(token: string, projectId?: string): string {
+  const t = String(token ?? '').trim()
+  if (!t) {
+    // clear
+    try {
+      const s = ensureDb()
+      if (projectId) s.prepare('DELETE FROM github_tokens WHERE projectId=?').run(projectId)
+      else s.prepare("DELETE FROM kv WHERE key='githubToken'").run()
+    } catch {}
+    return ''
+  }
+  if (!isValidGithubToken(t)) throw new Error('Invalid GitHub token: must start with ghp_/gho_/ghs_/ghr_/github_pat_ and be 20-120 chars')
+  try {
+    const s = ensureDb()
+    if (projectId) {
+      if (!findProject(projectId)) throw new Error('Project not found')
+      s.prepare('DELETE FROM github_tokens WHERE projectId=?').run(projectId)
+      s.prepare('INSERT INTO github_tokens (id, projectId, token, createdAt) VALUES (?,?,?,?)').run(randomUUID(), projectId, t, new Date().toISOString())
+      // also ensure perms
+      try { fs.chmodSync(dbFile, 0o600) } catch {}
+    } else {
+      s.prepare("INSERT INTO kv (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run('githubToken', t)
+      try { fs.chmodSync(dbFile, 0o600) } catch {}
+    }
+  } catch (e:any) {
+    if (String(e?.message||'').includes('Project not found')) throw e
+    throw new Error(String(e?.message||'Failed to save GitHub token').slice(0,300))
+  }
+  return maskGithubToken(t)
+}
+export function getRawGithubToken(projectId?: string): string | null {
+  // without env override — for API masked display check
+  try {
+    const s = ensureDb()
+    if (projectId) {
+      const row = s.prepare('SELECT token FROM github_tokens WHERE projectId=? ORDER BY createdAt DESC LIMIT 1').get(projectId) as any
+      if (row && typeof row.token === 'string') return String(row.token).trim() || null
+    }
+    const kv = s.prepare("SELECT value FROM kv WHERE key='githubToken'").get() as any
+    if (kv && typeof kv.value === 'string') return String(kv.value).trim() || null
+  } catch {}
+  return null
+}
+
+// Poll settings — githubPollSettings {enabled, mode, intervalMs, cronExpr, endpoints, perEndpointInterval, pollOnFocusOnly, pauseOnWindowBlur, useEtag, respectRateLimit, smartEventOnly, jitterMs, maxRetries, minIntervalMs, maxIntervalMs} persisted kv "githubPollSettings" + per-project override (like mcpServers projectId). Validation: intervalMs 5000-300000 (5s-5min) any custom value, cronExpr validated via cron parser if mode=cron (e.g. "*/25 * * * * *" or "every 25s"), jitter 0-5000.
+function isValidCronExpr(expr: string): boolean {
+  const t = String(expr ?? '').trim()
+  if (!t) return false
+  // helper "every 25s" or "every 25s" -> valid
+  if (/^every\s+\d+\s*s(ec)?(ond)?s?$/i.test(t)) return true
+  // standard 5 or 6 field cron: "*/25 * * * * *" | "*/25 * * * *" | "0 * * * *" etc - allow *, numbers, */, -, ,  for each field
+  const parts = t.split(/\s+/).filter(Boolean)
+  if (parts.length === 5 || parts.length === 6) {
+    const fieldRe = /^(\*|\*\/\d+|\d+(-\d+)?(,\d+(-\d+)?)*)$/
+    // seconds field (if 6 parts) same, but first field must be valid
+    for (const p of parts) {
+      if (!fieldRe.test(p)) {
+        // allow "*/25" already covered; also allow lists like "0,15,30"
+        // but also need to handle "*/" already; if not matched, invalid
+        // try numeric
+        if (!/^(\*|\d+)$/.test(p) && !/^\*\/\d+$/.test(p)) return false
+      }
+    }
+    return true
+  }
+  return false
+}
+function clampPollSettings(s: any): GithubPollSettings {
+  const def = DEFAULT_GITHUB_POLL_SETTINGS
+  const out: GithubPollSettings = { ...def }
+  if (typeof s.enabled === 'boolean') out.enabled = s.enabled
+  if (typeof s.mode === 'string' && ['interval','cron','event','manual'].includes(s.mode)) out.mode = s.mode as any
+  let intervalMs = Number(s.intervalMs)
+  if (Number.isFinite(intervalMs)) {
+    intervalMs = Math.round(intervalMs)
+    // clamp 5000-300000 (5s-5min) any custom value — spec requires reject outside range via API, but here clamp for safety
+    if (intervalMs < def.minIntervalMs) intervalMs = def.minIntervalMs
+    if (intervalMs > def.maxIntervalMs) intervalMs = def.maxIntervalMs
+    out.intervalMs = intervalMs
+  }
+  if (s.cronExpr === null || s.cronExpr === undefined) out.cronExpr = null
+  else if (typeof s.cronExpr === 'string') {
+    const v = String(s.cronExpr).trim().slice(0, 200) || null
+    out.cronExpr = v
+  }
+  if (s.endpoints && typeof s.endpoints === 'object') {
+    out.endpoints = {
+      diff: s.endpoints.diff !== false,
+      pr: s.endpoints.pr !== false,
+      commits: s.endpoints.commits !== false,
+      actions: !!s.endpoints.actions
+    }
+  }
+  if (s.perEndpointInterval && typeof s.perEndpointInterval === 'object') {
+    const pe: any = {}
+    for (const k of ['diffMs','prMs','commitsMs','actionsMs'] as const) {
+      let v = Number((s.perEndpointInterval as any)[k])
+      if (Number.isFinite(v)) {
+        v = Math.round(v)
+        v = Math.max(def.minIntervalMs, Math.min(def.maxIntervalMs, v))
+        pe[k] = v
+      }
+    }
+    out.perEndpointInterval = { ...def.perEndpointInterval, ...pe }
+  }
+  if (typeof s.pollOnFocusOnly === 'boolean') out.pollOnFocusOnly = s.pollOnFocusOnly
+  if (typeof s.pauseOnWindowBlur === 'boolean') out.pauseOnWindowBlur = s.pauseOnWindowBlur
+  if (typeof s.useEtag === 'boolean') out.useEtag = s.useEtag
+  if (typeof s.respectRateLimit === 'boolean') out.respectRateLimit = s.respectRateLimit
+  if (typeof s.smartEventOnly === 'boolean') out.smartEventOnly = s.smartEventOnly
+  let jitter = Number(s.jitterMs)
+  if (Number.isFinite(jitter)) out.jitterMs = Math.max(0, Math.min(5000, Math.round(jitter)))
+  let mr = Number(s.maxRetries)
+  if (Number.isFinite(mr)) out.maxRetries = Math.max(0, Math.min(10, Math.round(mr)))
+  if (s.webhookUrl !== undefined) out.webhookUrl = s.webhookUrl ? String(s.webhookUrl).trim().slice(0,500) || null : null
+  return out
+}
+export function getGithubPollSettings(projectId?: string): GithubPollSettings {
+  try {
+    const s = ensureDb()
+    let base: any = null
+    const row = s.prepare("SELECT value FROM kv WHERE key='githubPollSettings'").get() as any
+    if (row && typeof row.value === 'string') {
+      try { base = JSON.parse(row.value) } catch { base = null }
+    }
+    let merged = base ? clampPollSettings(base) : { ...DEFAULT_GITHUB_POLL_SETTINGS }
+    if (projectId) {
+      const prow = s.prepare('SELECT settings FROM github_poll_settings WHERE projectId=?').get(projectId) as any
+      if (prow && typeof prow.settings === 'string') {
+        try {
+          const parsed = JSON.parse(prow.settings)
+          const projClamped = clampPollSettings({ ...merged, ...parsed })
+          // deep merge endpoints
+          if (parsed.endpoints) projClamped.endpoints = { ...merged.endpoints, ...parsed.endpoints }
+          if (parsed.perEndpointInterval) projClamped.perEndpointInterval = { ...merged.perEndpointInterval, ...parsed.perEndpointInterval }
+          merged = projClamped
+        } catch {}
+      }
+    }
+    return merged
+  } catch { return { ...DEFAULT_GITHUB_POLL_SETTINGS } }
+}
+export function updateGithubPollSettings(patch: Partial<GithubPollSettings>, projectId?: string): GithubPollSettings {
+  // Validation per spec: intervalMs 5000-300000 any custom value, cronExpr validated via cron parser if mode=cron (e.g. "*/25 * * * * *" or "every 25s"), jitter 0-5000.
+  if (patch.intervalMs !== undefined) {
+    const v = Number(patch.intervalMs)
+    if (!Number.isFinite(v) || !Number.isInteger(Math.round(v))) throw new Error('intervalMs must be an integer')
+    const rounded = Math.round(v)
+    if (rounded < 5000 || rounded > 300000) throw new Error('intervalMs must be 5000-300000 (5s-5min), got ' + rounded)
+  }
+  if (patch.perEndpointInterval) {
+    for (const k of ['diffMs','prMs','commitsMs','actionsMs'] as const) {
+      const v = (patch.perEndpointInterval as any)[k]
+      if (v !== undefined) {
+        const n = Number(v)
+        if (!Number.isFinite(n) || Math.round(n) < 5000 || Math.round(n) > 300000) throw new Error(`perEndpointInterval.${k} must be 5000-300000`)
+      }
+    }
+  }
+  if (patch.jitterMs !== undefined) {
+    const j = Number(patch.jitterMs)
+    if (!Number.isFinite(j) || Math.round(j) < 0 || Math.round(j) > 5000) throw new Error('jitterMs must be 0-5000')
+  }
+  if (patch.mode === 'cron' && patch.cronExpr != null) {
+    const expr = String(patch.cronExpr).trim()
+    if (expr && !isValidCronExpr(expr)) throw new Error('Invalid cronExpr: expected "*/25 * * * * *" or "every 25s"')
+  }
+  if (patch.minIntervalMs !== undefined || patch.maxIntervalMs !== undefined) {
+    // these are constants, not patchable beyond clamp display — ignore or validate clamp
+  }
+  if (patch.webhookUrl !== undefined && patch.webhookUrl !== null) {
+    const u = String(patch.webhookUrl).trim()
+    if (u) {
+      if (u.length > 500) throw new Error('webhookUrl too long')
+      try { const url = new URL(u); if (!['http:','https:'].includes(url.protocol)) throw new Error('webhookUrl must be http(s)') } catch { throw new Error('Invalid webhookUrl') }
+    }
+  }
+  const cur = getGithubPollSettings(projectId)
+  const next = clampPollSettings({ ...cur, ...patch, perEndpointInterval: patch.perEndpointInterval ? { ...cur.perEndpointInterval, ...patch.perEndpointInterval } : cur.perEndpointInterval, endpoints: patch.endpoints ? { ...cur.endpoints, ...patch.endpoints } : cur.endpoints })
+  // ensure cron validation when mode becomes cron
+  if (next.mode === 'cron' && next.cronExpr) {
+    if (!isValidCronExpr(next.cronExpr)) throw new Error('Invalid cronExpr')
+  }
+  try {
+    const s = ensureDb()
+    if (projectId) {
+      if (!findProject(projectId)) throw new Error('Project not found')
+      s.prepare('INSERT INTO github_poll_settings (projectId, settings, updatedAt) VALUES (?,?,?) ON CONFLICT(projectId) DO UPDATE SET settings=excluded.settings, updatedAt=excluded.updatedAt').run(projectId, JSON.stringify(next), new Date().toISOString())
+    } else {
+      s.prepare("INSERT INTO kv (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run('githubPollSettings', JSON.stringify(next))
+    }
+  } catch (e:any) {
+    if (String(e?.message||'').includes('Project not found') || String(e?.message||'').includes('intervalMs') || String(e?.message||'').includes('jitter') || String(e?.message||'').includes('cron')) throw e
+    throw new Error(String(e?.message||'Failed to save poll settings').slice(0,400))
+  }
+  return next
+}
+export function validateGithubCronExpr(expr: string): boolean { return isValidCronExpr(expr) }
+export function effectiveIntervalMs(settings: GithubPollSettings, remaining?: number): number {
+  let eff = settings.intervalMs
+  // per spec: If Remaining<100 auto stretch to 60s regardless of custom (with toast "throttled to 60s").
+  if (settings.respectRateLimit && typeof remaining === 'number' && remaining < 100) {
+    eff = Math.max(eff, 60000)
+  }
+  return Math.max(settings.minIntervalMs, Math.min(settings.maxIntervalMs, eff))
 }
 
 export function closeDb(): void {
@@ -1834,6 +2104,12 @@ function persistToSqlite(): void {
   }
   // Embeddings are managed independently in SQLite (not via db JSON). Preserve them across bulk replace:
   // temporarily disable FK so DELETE FROM projects does not cascade-delete embeddings for projects that are immediately re-inserted.
+  // Preserve GitHub kv keys across bulk replace (token + poll settings) — otherwise global token would be wiped
+  let preservedGithubKv: { key: string; value: string }[] = []
+  try {
+    preservedGithubKv = s.prepare("SELECT key, value FROM kv WHERE key IN ('githubToken','githubPollSettings') OR key LIKE 'githubPollSettings:%' OR key LIKE 'github:%'").all() as any
+  } catch {}
+  // Also preserve github_cache? not needed (ephemeral)
   try { s.pragma('foreign_keys = OFF') } catch {}
   const txn = s.transaction(() => {
     s.prepare('DELETE FROM activities').run()
@@ -1899,6 +2175,11 @@ function persistToSqlite(): void {
     insKv.run('planPrompt', db.planPrompt)
     insKv.run('retrySettings', JSON.stringify(db.retrySettings))
     insKv.run('themeSettings', JSON.stringify(db.themeSettings ?? DEFAULT_THEME))
+    // restore preserved GitHub kv entries (token + poll settings) after bulk delete
+    for (const kv of preservedGithubKv) {
+      try { insKv.run(kv.key, kv.value) } catch {}
+    }
+    // also ensure github_tokens and github_poll_settings tables are not truncated — they are managed independently and preserved via FK OFF trick
   })
   try {
     txn()
@@ -1917,6 +2198,8 @@ function persistToSqlite(): void {
   try { s.prepare('DELETE FROM embeddings WHERE projectId NOT IN (SELECT id FROM projects)').run() } catch {}
   try { s.prepare('DELETE FROM embedding_chunks WHERE projectId NOT IN (SELECT id FROM projects)').run() } catch {}
   try { s.prepare('DELETE FROM vec_chunks WHERE projectId NOT IN (SELECT id FROM projects)').run() } catch {}
+  try { s.prepare('DELETE FROM github_tokens WHERE projectId IS NOT NULL AND projectId NOT IN (SELECT id FROM projects)').run() } catch {}
+  try { s.prepare('DELETE FROM github_poll_settings WHERE projectId NOT IN (SELECT id FROM projects)').run() } catch {}
 }
 
 function loadFromSqlite(s: Database.Database): DB | null {
