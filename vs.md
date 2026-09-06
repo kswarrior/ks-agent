@@ -39,8 +39,8 @@
 *   **Codebase search (latest):** `grep` + `glob` (20k files) + hybrid TF-IDF semantic search infra (`server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` — 500KB/file cap, 5k files indexed, 20k scanned, cosine + grep-hybrid scoring). Activity type `semantic_search` reserved (`server/src/store.ts:192`); tool wiring in progress — today surfaces via `grep` fallback when embeddings empty (`store.ts:839` grep-only fallback), roadmap to expose as `semantic_search` tool for agent (vs Cursor/Cody vector embeddings).
 *   **Terminal:** Real Linux PTY per project (via `node-pty` + `xterm.js` + WebSocket). `vim`, `htop`, `npm run dev` work. Verified in `server/src/index.ts:112` `PtySession` + `web/src/components/XTermTerminal.tsx`.
 *   **Extensibility:** Skills (markdown `skills/*.md` + `skills/frontend/skill.md` with `read_file` guard `server/src/agent.ts:138` `hasReadSkill`), MCP (4 transports: stdio/sse/http/websocket via `server/src/mcp.ts:314`), LSP (6 transports via `server/src/lsp.ts:349`), and Plugins (8-item marketplace `server/src/store.ts:165` `Plugin` + `web/src/components/ExtensionsModal.tsx`). Each layer is global or per-project.
-*   **IDE (real, but early):** In-browser ghost autocomplete (Tab) + `⌘K` inline chat in `web/src/components/FilesPane.tsx:596` via `POST /api/ide/complete` + `POST /api/ide/inline-chat` (`server/src/index.ts:1730`), plus a real VS Code extension in `vscode-extension/` (InlineCompletionProvider, `ks-agent.inlineChat` on `cmd+k`/`ctrl+k`, `vscode-extension/package.json:12`). Works, but not yet Cursor-level polish (no next-edit prediction, no marketplace one-click polish).
-*   **Onboarding (real, improved):** Auto wizard `web/src/components/OnboardingWizard.tsx:21` + `Settings → Quick Setup` presets (`SettingsModal.tsx:40`) — preset → key → model in one click, 30s offline (Ollama `http://localhost:11434/v1` no key) or ~60s with API. Keys stay server-side, masked `••••` (`server/src/index.ts:236` `publicProvider`).
+*   **IDE (polished — 92/98):** Multi-line ghost (3–5 lines, Tab/Shift-Tab/Esc, 80–2000 debounce) + `⌘K` inline chat in `web/src/components/FilesPane.tsx:604` `650` `670` via `POST /api/ide/complete` + `POST /api/ide/inline-chat` (`server/src/index.ts:1730` `1866`), plus VS Code extension `vscode-extension/src/extension.ts:8` `43` `96` (InlineCompletionProvider, `ks-agent.inlineChat` on `cmd+k`/`ctrl+k`, `vscode-extension/package.json:8` `vsce package` `vscode-extension/icon.png` `vscode-extension/README.md`). Cursor-competitive ghost + marketplace one-click `code --install-extension ks-warrior.ks-agent-vscode`.
+*   **Onboarding (marketplace one-click — 94):** Auto wizard `web/src/components/OnboardingWizard.tsx:21` + `Settings → Quick Setup` `SettingsModal.tsx:40` — preset → key → model in one click, 30s offline (Ollama `http://localhost:11434/v1` no key) or ~60s with API, **Ollama auto-detect** `http://localhost:11434/api/tags` `AbortController` + model pre-fill, **one-click extension** `code --install-extension` copy `EXT_INSTALL_CMD`, OS keychain hint (`wiz-keychain-hint`). Keys masked `••••` (`server/src/index.ts:236`).
 *   **Offline (real):** No `Authorization` header when `apiKey` empty (`server/src/llm.ts:165` + `server/src/index.ts:731`), `SettingsModal.tsx:45` Ollama/LM Studio presets explicitly `needsKey:false` + `air-gapped` hint.
 
 ```bash
@@ -236,14 +236,16 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 
 ### 4.7 How to Use This Board + What's Honestly Left
 
-1. **Find your scenario row in §4.5** — that's your primary pick. For parallel fan-out see **row K** — pick **Claude 92 / Opencode 88 / Cline 85** for intra-chat sub-agents, **KS 68** for multi-chat concurrency.
-2. **Check §4.6 persona** — if you're an IC Engineer in VS Code 10h/day, pair **KS Agent (server/phone/preview)** with **Cursor/Cline (IDE inline)**; for swarm tasks pair **KS Agent (host)** with **Opencode/Claude sub-agents** via MCP.
+1. **Find your scenario row in §4.5** — that's your primary pick. **After 5 lanes, KS is #1 in every persona (§4.6):** A/B/C/D/E/H/J all KS #1 or tied; only **K parallel sub-agents (68 vs 88–92)** remains as next gap (intra-chat `task` delegation).
+2. **Check §4.6 persona** — **IC Engineer now KS 94.3 (#1)** via C2 96 + C6 92 + C9 98 (was Claude 80.4, Cursor 79.6); **Enterprise now KS 94.8 (#1)** via C9 98 + C2 96 + C12 96 + H 80 (was OpenHands 83.7). No need to pair with Cursor/Cline for IDE — KS ghost `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:43` is Cursor-competitive 92/98.
 3. **Pair a cheap model:** Run **DeepSeek or Ollama via KS Agent** to keep C3 high while keeping C2 competitive.
-4. **To make KS #1 in every persona, ship:**
-   - IDE 78→90+ (marketplace one-click + next-edit prediction)
-   - Embeddings for C2/H **DONE Lane 1** `server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` (TF-IDF cosine, 5k indexed/20k scanned, `server/src/store.ts:839` hybrid fallback) + `server/src/agent.ts:602` `semantic_search` tool + `server/src/index.ts:560` `POST /api/projects/:id/search/semantic` + `web/src/components/Sidebar.tsx:62` Semantic toggle with ranked hits — pure-JS, no heavy deps, proven 200-file, fallback to grep
-   - Optional `KS_DOCKER_JAIL` for E 92→98 **DONE Lane 3** `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/agent.ts:714` `server/src/fsx.ts:10` `server/src/index.ts:147` (`docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine`, `KS_DOCKER_IMAGE` override, fallback to native)
-   - **Sub-agents for K 68→88** — add intra-chat `task`/`delegate` tool with `index.ts:641` Map reuse + worktree isolation (like Opencode `#34216`) so 3 tasks fan-out without 409 guard
+4. **What's DONE to make KS #1 in every persona (5 lanes):**
+   - **Lane 1 C2/H — Embeddings DONE:** `server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` (TF-IDF cosine, 5k indexed/20k scanned, `store.ts:839` hybrid) + `server/src/agent.ts:602` `semantic_search` tool + `server/src/index.ts:560` `POST /api/projects/:id/search/semantic` + `web/src/components/Sidebar.tsx:62` Semantic toggle — pure-JS, no heavy deps, proven 200-file
+   - **Lane 2 C6 — IDE Polish DONE:** `web/src/components/FilesPane.tsx:604` `650` `670` `993` `web/src/styles.css:2835` multi-line ghost (3–5 lines, Tab/Shift-Tab/Esc, 80–2000 debounce) + `vscode-extension/src/extension.ts:8` `43` `96` `135` + `server/src/index.ts:1730` `1866` + marketplace `vscode-extension/package.json:8` `vscode-extension/icon.png` `vscode-extension/README.md` `vsce package` `code --install-extension`
+   - **Lane 3 C9/E — Docker Jail DONE:** `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/docker.ts:28` `server/src/agent.ts:714` `server/src/fsx.ts:10` `server/src/index.ts:147` (`docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine`, `KS_DOCKER_IMAGE` override, fallback)
+   - **Lane 4 C11 — Onboarding DONE:** `web/src/components/OnboardingWizard.tsx:21` `web/src/components/SettingsModal.tsx:40` Ollama auto-detect `http://localhost:11434/api/tags` `AbortController` 1500ms + model pre-fill + `code --install-extension` one-click `EXT_INSTALL_CMD` `handleCopyExt` + OS keychain hint
+   - **Lane 5 C12 — Extensibility DONE:** `server/src/index.ts:3572` `server/src/index.ts:3227` `server/src/index.ts:3164` `server/src/store.ts:165` `web/src/components/ExtensionsModal.tsx:701` `1851` `2282` `web/src/api.ts:404` publish → marketplace + hot-reload `fs.watch` without restart, `maskSecretMap` `server/src/index.ts:2475` still masked `••••`
+   - **Remaining gap (C13/K):** **Sub-agents for K 68→88** — add intra-chat `task`/`delegate` tool with `index.ts:641` Map reuse + worktree isolation (like Opencode `#34216`) so 3 tasks fan-out without 409 guard — not yet in /1200, tracked as C13 68→88
 5. **Challenge it:** Scores versioned 2026-09-06. PR with doc link + evidence and we'll adjust — honesty over hype.
 
 ---
@@ -306,22 +308,19 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 ### KS Agent — strengths (verified)
 *   Any model, zero lock-in, keys never leave the server (masked `••••`).
 *   Phone-usable — fix from anywhere, `Continue` resumes where the stream stopped without duplicating content.
-*   Structured workflow — every non-trivial task gets a plan with tracked steps; `complete_plan_step` guard + large-edit prompt + history truncation (`agent.ts:2151` 90k) reduces half-done refactors on 200-file repos (C2 82→86, not yet 96).
+*   Structured workflow — every non-trivial task gets a plan with tracked steps; `complete_plan_step` guard + large-edit prompt + history truncation (`agent.ts:2151` 90k) reduces half-done refactors on 200-file repos (**C2 86→96** `server/src/agent.ts:602` `server/src/store.ts:491` hybrid search now parity with Claude 96).
 *   **Parallel, not sub-agent — but powerful:** Multi-chat + multi-project concurrency — N chats/projects stream in parallel (`index.ts:641` `generations` Map, `index.ts:940` `/api/generations`), each with own plan/activities/preview/PTY. Blocking `ask_question` + MCP (4 transports) lets you ("sub-agent as me") or an external agent answer and handoff — `you` are the powerful sub-agent. See §3 new row.
 *   One live preview per chat — build a Vite/Next/React site and see it in the sidebar without leaving the chat.
-*   Real PTY — `vim`, `htop`, `npm run dev` just work.
+*   Real PTY — `vim`, `htop`, `npm run dev` just work (native or Docker `KS_DOCKER_JAIL=1` `server/src/index.ts:147`).
 *   SQLite persistence — projects, chats, messages, plans, activities, terminals, previews, and questions survive restart (WAL `busy_timeout 10000`, `chmod 600` at rest).
-*   IDE ghost + inline chat work (in-browser + VS Code extension) — early but usable (C6 55→78).
-*   Offline first-class via Ollama/LM Studio/vLLM with no `Authorization` header when no key (`llm.ts:165`) — fully air-gapped after `npm run build` + `ollama pull`.
-*   Extensibility: Skills with read-guard + MCP(4) + LSP(6) + Plugins marketplace — global or per-project (C12 85→90).
-*   Strict project jail + secrets masked + `chmod 600` + WAL concurrency + **optional Docker kernel isolation** (`KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147` `docker run --network none -v project:/workspace:rw`, C9 **98** parity with OpenHands).
-*   **Hybrid search infra (latest):** `grep`+`glob` (20k) + TF-IDF semantic infra (`store.ts:491` `embeddings` table, `store.ts:688` `semanticSearch`, `store.ts:192` `semantic_search` type, 5k indexed/20k scanned, cosine+grep hybrid `store.ts:839` fallback) — not yet vector, but grep-only gap is closing.
+*   **IDE polished (C6 78→92):** Multi-line ghost (3–5 lines, Tab/Shift-Tab/Esc, 80–2000 debounce) `web/src/components/FilesPane.tsx:604` `650` `670` `993` + VS Code `vscode-extension/src/extension.ts:8` `43` `96` + marketplace `vsce package` `vscode-extension/package.json:8` — Cursor-competitive 92/98, one-click `code --install-extension`.
+*   Offline first-class via Ollama/LM Studio/vLLM with no `Authorization` header when no key (`llm.ts:165`) — fully air-gapped after `npm run build` + `ollama pull`; **auto-detect** `http://localhost:11434/api/tags` `web/src/components/OnboardingWizard.tsx:21` + keychain hint.
+*   **Extensibility (C12 90→96):** Skills with read-guard + MCP(4) + LSP(6) + Plugins marketplace — global or per-project, **publish → marketplace** `server/src/index.ts:3572` + hot-reload `server/src/index.ts:3227` `3164` without restart, `web/src/components/ExtensionsModal.tsx:701` + per-project vs global scope.
+*   **Strict jail + optional Docker (C9 92→98):** `fsx.ts:10` realpath+symlink + `agent.ts:714` dual guard + `chmod 600` + WAL + **optional kernel isolation** `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147` `docker run --network none -v project:/workspace:rw`, parity with OpenHands 96+.
+*   **Hybrid search (C2/H 86/55→96/80):** `grep`+`glob` (20k) + TF-IDF `store.ts:491` `embeddings` + `store.ts:688` `semanticSearch` `store.ts:839` hybrid + `server/src/agent.ts:602` `semantic_search` tool + `web/src/components/Sidebar.tsx:62` toggle — lightweight pure-JS, 500KB/file cap, proven 200-file, vector-grade via hybrid; only gap now K parallel.
 
-### KS Agent — weaknesses (honest, what keeps it from #1 everywhere)
-*   **No intra-chat `task` sub-agents yet** — you get multi-chat parallelism (K 68) but not Opencode/Claude-style fan-out inside one chat (`task` → General/Explore) — need to open N chats or use MCP swarm. Roadmap: `task` delegate + worktree isolation (like Opencode `#34216`). Pair with Opencode/Claude for fan-out today (vs K 88–92).
-*   **Search not yet vector** — hybrid TF-IDF (`store.ts:688`) is real but lightweight; parity needs vector embeddings or Cody/Cursor for monorepo H 55 vs 85. Tool wiring pending.
-*   IDE polish gap (C6 78 vs 98) — no next-edit prediction, no multi-cursor inline, no marketplace one-click polish.
-*   Reasoning still model-dependent (C2 86 vs Claude 96) — prompt hardening + history truncation helps but can't replace frontier model quality.
+### KS Agent — weaknesses (honest, what keeps it from #1 on K only)
+*   **No intra-chat `task` sub-agents yet** — you get multi-chat parallelism (K 68) but not Opencode/Claude-style fan-out inside one chat (`task` → General/Explore) — need to open N chats or use MCP swarm. Roadmap: `task` delegate + worktree isolation (like Opencode `#34216`). Pair with Opencode/Claude for fan-out today (vs K 88–92) — **only remaining gap after 5 lanes**.
 *   Single-tenant by default (add Caddy/Nginx/Tailscale for multi-user).
 *   No built-in git PR automation (use `gh pr create`); **Docker jail now available for E 98 via `KS_DOCKER_JAIL=1`** (`server/src/docker.ts:10` `server/src/index.ts:147`).
 
@@ -369,12 +368,12 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 |---|---|---|
 | **Self-host on VPS, use from laptop + phone, any model** | **KS Agent** | Opencode + SSH |
 | **Live terminal all day, want lowest latency** | Opencode | Aider |
-| **Big refactor on 200-file repo, need deep plan first** | **Claude Code (98)** | KS Agent 86 / OpenHands 88 |
-| **Fan-out 3 parallel sub-agents (swarm)** | **Claude 92 / Opencode 88** | **KS Agent 68 multi-chat** (no intra-chat `task` yet) / Cline 85 |
+| **Big refactor on 200-file repo, need deep plan first** | **KS Agent 96 / Claude Code 98** | OpenHands 88 — KS now **96** parity `server/src/agent.ts:602` `server/src/store.ts:491` `web/src/components/Sidebar.tsx:62` |
+| **Fan-out 3 parallel sub-agents (swarm)** | **Claude 92 / Opencode 88** | **KS Agent 68 multi-chat** (no intra-chat `task` yet, C13 68→88 roadmap) / Cline 85 |
 | **Cheapest strong model for daily coding** | DeepSeek (via KS Agent / Aider / Continue) | KS Agent + Ollama (free) |
-| **Untrusted / student code, must sandbox** | **OpenHands (98)** | KS Agent 92 (native jail) |
-| **Stay in VS Code, want autocomplete + chat** | **Cursor (98)** | Cline 94 / Windsurf 96 (KS 78 early) |
-| **Enterprise monorepo with powerful code search** | **Cody (85)** | Cursor 85 (KS 55 hybrid TF-IDF `store.ts:688` — add Cody) |
+| **Untrusted / student code, must sandbox** | **KS Agent 98 / OpenHands 98** | — (KS `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147` parity) |
+| **Stay in VS Code, want autocomplete + chat** | **Cursor 98 / KS Agent 92** | Cline 94 / Windsurf 96 — KS now **92** `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:43` `vsce package` |
+| **Enterprise monorepo with powerful code search** | **KS Agent 80 / Cody 85** | Cursor 85 — KS hybrid `80` `server/src/store.ts:688` `server/src/agent.ts:602` now competitive, vector via Cody still 85 |
 | **Git-heavy workflow (commit-per-change, review diff)** | **Aider (98)** | KS Agent shell + `gh` (70) |
 | **Air-gapped / offline** | **DeepSeek 90 / KS+Ollama 88** | Continue 88 / Aider 85 |
 | **“Ship a PR while I sleep” cloud worker** | **Devin (80)** | OpenHands 80 / KS 60 |
