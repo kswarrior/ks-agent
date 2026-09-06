@@ -2,11 +2,13 @@ import * as vscode from 'vscode'
 
 function getConfig() {
   const cfg = vscode.workspace.getConfiguration('ksAgent')
+  const rawDebounce = Number(cfg.get<number>('debounceMs') ?? 350)
+  const debounceMs = Math.max(80, Math.min(2000, Number.isFinite(rawDebounce) ? rawDebounce : 350))
   return {
     baseUrl: (cfg.get<string>('baseUrl') || 'http://localhost:8787').replace(/\/+$/, ''),
     modelId: (cfg.get<string>('modelId') || '').trim(),
     enableCompletion: cfg.get<boolean>('enableInlineCompletion') !== false,
-    debounceMs: Math.max(80, Math.min(2000, Number(cfg.get<number>('debounceMs') || 350)))
+    debounceMs
   }
 }
 
@@ -54,11 +56,11 @@ class KsInlineCompletionProvider implements vscode.InlineCompletionItemProvider 
     if (!enableCompletion) return null
     if (token.isCancellationRequested) return null
 
-    // quick local guard: don't trigger on empty line start with < 3 chars prefix
+    // quick local guard: don't trigger on empty line start with < 2 chars prefix
     const line = document.lineAt(position.line).text.slice(0, position.character)
     if (line.trim().length < 2) return null
 
-    // debounce via promise gate
+    // debounce gate: wait debounceMs (clamped 80–2000, default 350) then fetch
     const requestId = ++this.lastRequestId
     await new Promise<void>((resolve) => {
       if (this.debounceTimer) clearTimeout(this.debounceTimer)
@@ -82,10 +84,21 @@ class KsInlineCompletionProvider implements vscode.InlineCompletionItemProvider 
         modelId: modelId || undefined
       })
       if (token.isCancellationRequested || requestId !== this.lastRequestId) return null
-      const clean = completion.trimEnd()
-      if (!clean || clean.length > 500) return null
+      // Multi-line ghost: allow up to ~500 chars, preserve indentation, show 3–5 lines
+      // VS Code handles Tab to accept natively; Shift+Tab/Esc dismisses (inlineSuggest hide)
+      let clean = completion.replace(/\r\n/g, '\n').trimEnd()
+      if (!clean) return null
+      // Truncate to 500 chars rather than discard; keep multi-line up to 5 lines
+      if (clean.length > 500) clean = clean.slice(0, 500).trimEnd()
+      if (!clean) return null
       // avoid echoing what is already typed
       if (prefix.endsWith(clean)) return null
+      const lines = clean.split('\n')
+      if (lines.length > 5) {
+        clean = lines.slice(0, 5).join('\n').trimEnd()
+        if (!clean) return null
+      }
+      // Return as InlineCompletionItem at cursor; VS Code renders ghost with preserved indentation
       return [new vscode.InlineCompletionItem(clean, new vscode.Range(position, position))]
     } catch {
       return null
@@ -125,10 +138,27 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'KS Agent inline chat…', cancellable: false }, async () => {
         try {
           const result = await callIdeChat(baseUrl, { selection, instruction, filePath, surroundingContext: surrounding, modelId: modelId || undefined })
-          await editor.edit((eb) => {
-            const range = sel.isEmpty ? new vscode.Range(sel.start.line, 0, sel.start.line, editor.document.lineAt(sel.start.line).text.length) : sel
+          // inline chat apply with proper edit + undo stop. Ensure cursor not broken after accept.
+          const isEmptySel = sel.isEmpty
+          const range = isEmptySel
+            ? new vscode.Range(sel.start.line, 0, sel.start.line, editor.document.lineAt(sel.start.line).text.length)
+            : sel
+          const startPos = range.start
+          const startOffset = editor.document.offsetAt(startPos)
+          const success = await editor.edit((eb) => {
             eb.replace(range, result)
-          })
+          }, { undoStopBefore: true, undoStopAfter: true })
+          if (!success) throw new Error('Edit failed')
+          // cursor not broken: place cursor after inserted text, collapse selection, reveal
+          try {
+            const doc = editor.document
+            const newOffset = startOffset + result.length
+            // clamp to doc length (in case result truncated or doc changed)
+            const clampedOffset = Math.max(0, Math.min(newOffset, doc.getText().length))
+            const newPos = doc.positionAt(clampedOffset)
+            editor.selection = new vscode.Selection(newPos, newPos)
+            editor.revealRange(new vscode.Range(newPos, newPos))
+          } catch {}
           vscode.window.showInformationMessage('KS Agent inline chat applied')
         } catch (e: any) {
           vscode.window.showErrorMessage(`Inline chat failed: ${String(e.message || e).slice(0, 300)}`)
@@ -161,7 +191,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   )
 
-  vscode.window.showInformationMessage('KS Agent inline autocomplete & chat active (Tab to accept ghost, ⌘K/ Ctrl+K for chat)')
+  vscode.window.showInformationMessage('KS Agent inline autocomplete & chat active (Tab to accept ghost, Shift+Tab/Esc to dismiss, ⌘K/ Ctrl+K for chat)')
 }
 
 export function deactivate() {}
