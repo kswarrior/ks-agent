@@ -224,7 +224,17 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   }, [open, githubPollProjectId])
 
   useEffect(() => { if (open) loadGithubSettings(githubProjectId || undefined) }, [githubProjectId])
-  useEffect(() => { if (open) loadGithubSettings(githubPollProjectId || undefined) }, [githubPollProjectId])
+  useEffect(() => {
+    if (!open) return
+    const pid = githubPollProjectId || undefined
+    api.getGithubPollSettings(pid).then(p=>{
+      setGithubPoll(p)
+      setGithubPollDraft({ ...p })
+      setGithubCustomMs(String(p.intervalMs))
+      setGithubCronInput(p.cronExpr || '')
+    }).catch(()=>{})
+    if (pid) api.getGithubRateLimit(pid).then(setGithubRate).catch(()=>{})
+  }, [githubPollProjectId])
 
   // Auto-detect Ollama running via http://localhost:11434/api/tags with timeout, fail gracefully
   useEffect(() => {
@@ -852,6 +862,19 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
             }}
           >
             Theme
+          </button>
+          <button
+            className={`tab${tab === 'github' ? ' active' : ''}`}
+            onClick={(e) => {
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
+              setTab('github')
+              setError(null)
+              loadGithubSettings(githubProjectId || undefined)
+              loadGithubProjects()
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }}
+          >
+            GitHub
           </button>        </div>
 
         <div className="tab-body">
@@ -1801,6 +1824,163 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   Save theme
                 </button>
               </div>
+            </div>
+          )}
+
+          {tab === 'github' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* GitHub Token section — password input + Test/Save + masked display */}
+              <div style={{ padding: '12px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>GitHub Token (PAT)</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.5, marginBottom: 10 }}>
+                  Stored like Provider.apiKey — server-side only, masked <code>••••xxxx</code>, chmod 600, WAL busy_timeout 10000. Env <code>GITHUB_TOKEN||GH_TOKEN</code> overrides. Format <code>ghp_</code>/<code>gho_</code>/<code>ghs_</code>/<code>ghr_</code>/<code>github_pat_</code> 20-120 chars.
+                </div>
+                <label className="field-label">Project override (optional)</label>
+                <select className="input" value={githubProjectId} onChange={(e)=>setGithubProjectId(e.target.value)}>
+                  <option value="">Global (all projects)</option>
+                  {githubProjects.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <p className="hint">Per-project token overrides global, like mcpServers projectId. Leave blank for global.</p>
+                <label className="field-label">GitHub PAT</label>
+                <input className="input" type="password" placeholder="ghp_... or github_pat_..." value={githubTokenInput} onChange={(e)=>setGithubTokenInput(e.target.value)} />
+                <p className="hint">Regex ^(gh[opsr]_|github_pat_) 20-120 chars. Never logged.</p>
+                <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                  <button className="btn" onClick={testGithubToken} disabled={githubBusy}>{githubBusy ? 'Testing…' : 'Test'}</button>
+                  <button className="btn btn-primary" onClick={submitGithubToken} disabled={githubBusy || !githubTokenInput.trim()}>{githubBusy ? 'Saving…' : 'Save'}</button>
+                  {githubHasToken && <span style={{ fontSize:12.5, color:'var(--text-dim)', alignSelf:'center' }}>Saved: {githubMasked || '••••'}</span>}
+                </div>
+                {githubTestResult && <p className="hint" style={{ marginTop:6, color: githubTestResult.startsWith('OK') ? '#16a34a' : 'var(--danger)' }}>{githubTestResult}</p>}
+                {githubHasToken && <p className="hint" style={{ marginTop:6 }}>Masked display: {githubMasked} — token never returned to client.</p>}
+                <p className="hint" style={{ marginTop:6 }}>Test uses <code>api.github.com/user</code> Bearer 60s timeout (llm.ts:125 pattern).</p>
+              </div>
+
+              {/* Fully customizable polling card */}
+              {githubPollDraft && (
+                <div style={{ padding:'12px 14px', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10 }}>
+                  <div style={{ fontWeight:700, fontSize:14, marginBottom:8 }}>Polling — fully customizable, rate-limit safe</div>
+                  <div style={{ fontSize:12, color:'var(--text-faint)', marginBottom:10 }}>GitHub 5000/hr auth, 60/hr unauth, 900 points/min. ETag 304 saves quota. Respect X-RateLimit-Reset/Retry-After. Jitter 0-5s. Throttle to 60s when Remaining&lt;100.</div>
+
+                  <label className="field-label">Project for polling override</label>
+                  <select className="input" value={githubPollProjectId} onChange={(e)=>setGithubPollProjectId(e.target.value)}>
+                    <option value="">Global</option>
+                    {githubProjects.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <p className="hint">Per-project override like mcpServers. Global min/max clamp 5s-300s.</p>
+
+                  <label className="field-label">Mode</label>
+                  <select className="input" value={githubPollDraft.mode} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, mode: e.target.value as any })}>
+                    <option value="interval">Interval</option>
+                    <option value="cron">Cron</option>
+                    <option value="event">Event-driven</option>
+                    <option value="manual">Manual only</option>
+                  </select>
+
+                  {githubPollDraft.mode === 'interval' && (
+                    <>
+                      <label className="field-label">Interval (ms) — any custom value 5000-300000</label>
+                      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                        <input className="input" style={{ flex:1 }} type="number" min={5000} max={300000} value={githubCustomMs} onChange={(e)=>{
+                          const v = e.target.value
+                          setGithubCustomMs(v)
+                          const n = Number(v)
+                          if (Number.isFinite(n) && Math.round(n)>=5000 && Math.round(n)<=300000) setGithubPollDraft({ ...githubPollDraft, intervalMs: Math.round(n) })
+                        }} placeholder="25000" />
+                        <span style={{ fontSize:12, color:'var(--text-faint)' }}>ms</span>
+                      </div>
+                      <input type="range" min={5000} max={300000} step={1000} value={githubPollDraft.intervalMs} onChange={(e)=>{
+                        const n = Number(e.target.value)
+                        setGithubPollDraft({ ...githubPollDraft, intervalMs: n })
+                        setGithubCustomMs(String(n))
+                      }} style={{ width:'100%', marginTop:8 }} />
+                      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:8 }}>
+                        {[5000,15000,25000,60000,120000,300000].map(v=> (
+                          <button key={v} type="button" className="btn" style={{ padding:'4px 8px', fontSize:12, background: githubPollDraft.intervalMs===v ? 'var(--primary-bg)' : undefined, borderColor: githubPollDraft.intervalMs===v ? 'var(--primary-border)' : undefined, color: githubPollDraft.intervalMs===v ? 'var(--primary)' : undefined }} onClick={()=>{ setGithubPollDraft({ ...githubPollDraft, intervalMs: v }); setGithubCustomMs(String(v)) }}>{v/1000}s</button>
+                        ))}
+                      </div>
+                      <p className="hint" style={{ marginTop:6 }}>Presets [5s,15s,25s,60s,120s,300s] + custom any ms (type 25000). Effective: {(githubPollDraft.intervalMs/1000).toFixed(1)}s (clamped 5s-300s)</p>
+                    </>
+                  )}
+
+                  {githubPollDraft.mode === 'cron' && (
+                    <>
+                      <label className="field-label">Cron expression</label>
+                      <input className="input" placeholder="*/25 * * * * *  (every 25s)" value={githubCronInput} onChange={(e)=>{
+                        const v = e.target.value
+                        setGithubCronInput(v)
+                        setGithubPollDraft({ ...githubPollDraft, cronExpr: v || null })
+                      }} />
+                      <p className="hint">Helper "every 25s" or "*/25 * * * * *". Validated via cron parser if mode=cron.</p>
+                    </>
+                  )}
+
+                  <div style={{ marginTop:12, padding:'10px', background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8 }}>
+                    <div style={{ fontWeight:600, fontSize:12.5, marginBottom:6 }}>Per-endpoint overrides</div>
+                    <label style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                      <input type="checkbox" checked={githubPollDraft.endpoints.diff} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, endpoints:{ ...githubPollDraft.endpoints, diff:e.target.checked } })} /> Diff every{' '}
+                      <input className="input" style={{ width:90, padding:'4px 6px' }} type="number" value={githubPollDraft.perEndpointInterval.diffMs} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, perEndpointInterval:{ ...githubPollDraft.perEndpointInterval, diffMs: Math.max(5000, Math.min(300000, Number(e.target.value)||5000)) } })} />ms
+                    </label>
+                    <label style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                      <input type="checkbox" checked={githubPollDraft.endpoints.pr} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, endpoints:{ ...githubPollDraft.endpoints, pr:e.target.checked } })} /> PR every{' '}
+                      <input className="input" style={{ width:90, padding:'4px 6px' }} type="number" value={githubPollDraft.perEndpointInterval.prMs} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, perEndpointInterval:{ ...githubPollDraft.perEndpointInterval, prMs: Math.max(5000, Math.min(300000, Number(e.target.value)||60000)) } })} />ms
+                    </label>
+                    <label style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                      <input type="checkbox" checked={githubPollDraft.endpoints.commits} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, endpoints:{ ...githubPollDraft.endpoints, commits:e.target.checked } })} /> Commits every{' '}
+                      <input className="input" style={{ width:90, padding:'4px 6px' }} type="number" value={(githubPollDraft.perEndpointInterval as any).commitsMs || 30000} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, perEndpointInterval:{ ...githubPollDraft.perEndpointInterval, commitsMs: Math.max(5000, Math.min(300000, Number(e.target.value)||30000)) } as any })} />ms
+                    </label>
+                    <label style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <input type="checkbox" checked={githubPollDraft.endpoints.actions} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, endpoints:{ ...githubPollDraft.endpoints, actions:e.target.checked } })} /> Actions (900 points/min)
+                    </label>
+                  </div>
+
+                  <div style={{ marginTop:12, display:'flex', flexDirection:'column', gap:6 }}>
+                    <label style={{ display:'flex', alignItems:'center', gap:8 }}><input type="checkbox" checked={githubPollDraft.enabled} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, enabled:e.target.checked })} /> Auto poll</label>
+                    <label style={{ display:'flex', alignItems:'center', gap:8 }}><input type="checkbox" checked={githubPollDraft.pollOnFocusOnly} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, pollOnFocusOnly:e.target.checked })} /> Only when tab focused</label>
+                    <label style={{ display:'flex', alignItems:'center', gap:8 }}><input type="checkbox" checked={githubPollDraft.pauseOnWindowBlur} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, pauseOnWindowBlur:e.target.checked })} /> Pause when window blurred</label>
+                    <label style={{ display:'flex', alignItems:'center', gap:8 }}><input type="checkbox" checked={githubPollDraft.useEtag} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, useEtag:e.target.checked })} /> Use ETag (ON) — 304 saves quota counts ~1</label>
+                    <label style={{ display:'flex', alignItems:'center', gap:8 }}><input type="checkbox" checked={githubPollDraft.respectRateLimit} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, respectRateLimit:e.target.checked })} /> Respect X-RateLimit-Reset/Retry-After (ON)</label>
+                    <label style={{ display:'flex', alignItems:'center', gap:8 }}><input type="checkbox" checked={githubPollDraft.smartEventOnly} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, smartEventOnly:e.target.checked })} /> Smart event-only (poll only after git push/plan step)</label>
+                    <label style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <input type="checkbox" checked={githubPollDraft.jitterMs>0} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, jitterMs: e.target.checked ? 1000 : 0 })} /> Add jitter 0-5s{' '}
+                      <input type="range" min={0} max={5000} step={100} value={githubPollDraft.jitterMs} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, jitterMs: Number(e.target.value) })} style={{ flex:1 }} />
+                      <span style={{ fontSize:12, color:'var(--text-faint)', minWidth:40 }}>{githubPollDraft.jitterMs}ms</span>
+                    </label>
+                  </div>
+
+                  <p className="hint" style={{ marginTop:8 }}>Global min/max clamp display: "Effective: {(githubPollDraft.intervalMs/1000)}s (clamped 5s-300s)" — effectiveIntervalMs = max(5000, min(300000, intervalMs + jitter)) throttled to 60s when Remaining&lt;100.</p>
+
+                  <label className="field-label">Webhook URL (alternative to polling)</label>
+                  <input className="input" placeholder="https://example.com/webhook" value={(githubPollDraft as any).webhookUrl || ''} onChange={(e)=> setGithubPollDraft({ ...githubPollDraft, webhookUrl: e.target.value || null } as any)} />
+                  <p className="hint">Input webhookUrl → disables polling, shows setup curl, verifies X-Hub-Signature-256. When set, polling paused.</p>
+                  {(githubPollDraft as any).webhookUrl && <p className="hint" style={{ color:'var(--primary)' }}>Polling disabled — webhook mode. Setup: <code>curl -X POST {(githubPollDraft as any).webhookUrl} -H "X-Hub-Signature-256: sha256=..."</code></p>}
+
+                  <div className="dialog-actions">
+                    <button className="btn btn-primary" onClick={submitGithubPoll} disabled={githubPollBusy}>{githubPollBusy ? 'Saving…' : 'Save polling'}</button>
+                  </div>
+
+                  {/* Live panel: GET /api/projects/:id/github/rate-limit → {remaining, resetAt, effectiveIntervalMs, nextPollAt, etagHitRate} polled every 10s, [Pause] [Poll now] (debounced 5s) */}
+                  <div style={{ marginTop:12, padding:'10px', background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8 }}>
+                    <div style={{ fontWeight:600, fontSize:12.5, marginBottom:6 }}>Live panel — rate limit (polled every 10s)</div>
+                    <label className="field-label">Select project for live data</label>
+                    <select className="input" value={githubPollProjectId} onChange={(e)=>setGithubPollProjectId(e.target.value)}>
+                      <option value="">— select project —</option>
+                      {githubProjects.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    {githubPollProjectId && githubRate ? (
+                      <div style={{ fontSize:12.5, lineHeight:1.6, marginTop:8 }}>
+                        <div>Remaining: <strong>{githubRate.remaining}</strong> / {githubRate.limit} — resetAt: {githubRate.resetAt ? new Date(githubRate.resetAt).toLocaleTimeString() : '—'}</div>
+                        <div>Effective: {(githubRate.effectiveIntervalMs/1000).toFixed(1)}s — Next poll: {githubRate.nextPollAt ? new Date(githubRate.nextPollAt).toLocaleTimeString() : 'paused/manual'}</div>
+                        <div>ETag hit rate: {(githubRate.etagHitRate*100).toFixed(1)}% — Mode: {githubRate.mode} {githubRate.throttled && <span style={{ color:'var(--danger)', fontWeight:700 }}>(throttled to 60s)</span>}</div>
+                        <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                          <button className="btn" onClick={pauseGithubPolling}>{githubPollDraft.enabled ? 'Pause' : 'Resume'}</button>
+                          <button className="btn btn-primary" onClick={pollNowGithub}>Poll now</button>
+                          <span className="hint" style={{ alignSelf:'center' }}>debounced 5s</span>
+                        </div>
+                        {githubRate.throttled && <p className="hint" style={{ color:'var(--danger)' }}>throttled to 60s — Remaining&lt;100</p>}
+                      </div>
+                    ) : githubPollProjectId ? <p className="hint">Loading rate limit…</p> : <p className="hint">Select project to see live rate-limit panel ( Remaining, resetAt, effectiveIntervalMs, nextPollAt, etagHitRate ).</p>}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
