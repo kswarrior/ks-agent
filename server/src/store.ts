@@ -272,6 +272,25 @@ function ensureDb(): Database.Database {
   initSchema(sqlite)
   migrateLspSchema(sqlite)
   migrateActivityIndex(sqlite)
+  // vector+hybrid chunk table migration — backward compatible, missing vec ≠ crash
+  try { sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS embedding_chunks (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      chunkIndex INTEGER NOT NULL,
+      contentHash TEXT NOT NULL,
+      chunkText TEXT NOT NULL,
+      vector TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_embedding_chunks_projectId ON embedding_chunks(projectId);
+    CREATE INDEX IF NOT EXISTS idx_embedding_chunks_project_path ON embedding_chunks(projectId, filePath);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_embedding_chunks_project_path_idx ON embedding_chunks(projectId, filePath, chunkIndex);
+  `) } catch {}
+  // try sqlite-vec virtual table for HNSW (optional)
+  try { sqlite.exec("CREATE VIRTUAL TABLE IF NOT EXISTS vec_tmp_test USING vec0(dummy float[384])"); sqlite.exec("DROP TABLE IF EXISTS vec_tmp_test"); sqlite.exec("CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(projectId TEXT, filePath TEXT, chunkIndex INTEGER, embedding FLOAT[384] distance_metric=cosine)") } catch {}
   // Re-ensure FK enabled after init (initSchema may have been run on existing DB)
   try { sqlite.pragma('foreign_keys = ON') } catch {}
   // Harden DB file permissions — secrets at rest (apiKeys) must be 600
@@ -481,6 +500,20 @@ function initSchema(s: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_embeddings_projectId ON embeddings(projectId);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_embeddings_project_path ON embeddings(projectId, filePath);
+    CREATE TABLE IF NOT EXISTS embedding_chunks (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      chunkIndex INTEGER NOT NULL,
+      contentHash TEXT NOT NULL,
+      chunkText TEXT NOT NULL,
+      vector TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_embedding_chunks_projectId ON embedding_chunks(projectId);
+    CREATE INDEX IF NOT EXISTS idx_embedding_chunks_project_path ON embedding_chunks(projectId, filePath);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_embedding_chunks_project_path_idx ON embedding_chunks(projectId, filePath, chunkIndex);
     CREATE TABLE IF NOT EXISTS kv (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -1814,6 +1847,8 @@ function persistToSqlite(): void {
   } catch {}
   // Clean orphaned embeddings for projects that were truly deleted (not re-inserted)
   try { s.prepare('DELETE FROM embeddings WHERE projectId NOT IN (SELECT id FROM projects)').run() } catch {}
+  try { s.prepare('DELETE FROM embedding_chunks WHERE projectId NOT IN (SELECT id FROM projects)').run() } catch {}
+  try { s.prepare('DELETE FROM vec_chunks WHERE projectId NOT IN (SELECT id FROM projects)').run() } catch {}
 }
 
 function loadFromSqlite(s: Database.Database): DB | null {
