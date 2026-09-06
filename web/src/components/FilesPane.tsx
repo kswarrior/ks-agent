@@ -127,6 +127,17 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   const [editContent, setEditContent] = useState('')
   const [editLoading, setEditLoading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
+  // IDE — inline autocomplete ghost + inline chat
+  const [ghostText, setGhostText] = useState('')
+  const [ghostLoading, setGhostLoading] = useState(false)
+  const ghostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ghostRequestIdRef = useRef(0)
+  const [inlineChat, setInlineChat] = useState<{ open: boolean; instruction: string; loading: boolean; error: string | null }>({
+    open: false,
+    instruction: '',
+    loading: false,
+    error: null
+  })
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const highlightRef = useRef<HTMLPreElement>(null)

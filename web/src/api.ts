@@ -367,6 +367,13 @@ export const getLspCapabilities = (id: string) => req<{ capabilities: Record<str
 export const refreshLspServer = (id: string) => req<{ ok: true; capabilities?: Record<string, unknown> }>(`/api/settings/lsp/${id}/refresh`, json('POST', {}))
 export const getLspStatusAll = () => req<LSPServer[]>('/api/settings/lsp/status/all')
 
+// IDE — inline autocomplete & inline chat
+export const getIdeStatus = () => req<{ ready: boolean; hasProvider: boolean; hasModel: boolean; providerCount: number; modelCount: number; features: { autocomplete: boolean; inlineChat: boolean; vsCodeExtension: boolean }; vscodeExtension: { name: string; publisher: string; localPath: string; install: string; commands: string[] } }>('/api/ide/status')
+export const ideComplete = (p: { projectId?: string; filePath?: string; prefix: string; suffix?: string; language?: string; modelId?: string }) =>
+  req<{ completion: string; model: string; language?: string; filePath: string | null }>('/api/ide/complete', json('POST', p))
+export const ideInlineChat = (p: { projectId?: string; filePath?: string; selection: string; instruction: string; surroundingContext?: string; modelId?: string }) =>
+  req<{ result: string; model: string; filePath: string | null }>('/api/ide/inline-chat', json('POST', p))
+
 // Plugins
 export const listPlugins = () => req<Plugin[]>('/api/settings/plugins')
 export const listMarketplacePlugins = () => req<MarketplacePlugin[]>('/api/settings/plugins/marketplace')
