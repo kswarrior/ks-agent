@@ -599,7 +599,7 @@ const AGENT_TOOLS: ToolDef[] = [
  * user approval before execution. Returns null if safe, or a description of
  * why it's dangerous.
  */
-function isDangerousCommand(command: string): string | null {
+export function isDangerousCommand(command: string): string | null {
   const c = command.trim()
 
   // Full wildcard rm
@@ -650,6 +650,59 @@ function isDangerousCommand(command: string): string | null {
   if (/\b(apt|apt-get|yum|dnf|pacman|apk)\s+(install|remove|purge|upgrade|dist-upgrade)\b/.test(c)) {
     return 'Modifies system packages'
   }
+  // Network tunneling / exfiltration
+  if (/\b(nc|ncat|socat|netcat)\b/.test(c) && /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/.test(c)) {
+    return 'Network tunneling tool with IP (possible exfiltration)'
+  }
+  if (/\b(ssh|scp|rsync)\s+.*@/.test(c)) {
+    return 'Remote shell/copy (ssh/scp) — possible data exfiltration'
+  }
+  // Privilege / container escape
+  if (/\b(chroot|unshare|nsenter|mount|umount)\b/.test(c)) {
+    return 'Container escape / mount manipulation'
+  }
+  if (/\b(iptables|firewall-cmd|ufw)\b/.test(c)) {
+    return 'Firewall manipulation'
+  }
+  // Fork bomb or resource exhaustion
+  if (/: *\{ *\: *\| *\: *& *\} *; *:/.test(c) || /\b(fork\s*bomb)\b/i.test(c)) {
+    return 'Fork bomb / resource exhaustion'
+  }
+  return null
+}
+
+function isPrivateHostForShell(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, '').replace(/^\[/, '').replace(/\]$/, '')
+  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true
+  if (h === '::1' || h === '::') return true
+  if (h.includes(':')) {
+    if (h.startsWith('fe80:') || h.startsWith('fec0:') || h.startsWith('ff')) return true
+    if (/^f[cd][0-9a-f]*:/.test(h)) return true
+  }
+  if (h.startsWith('::ffff:')) {
+    const v4 = h.slice(7)
+    if (v4) return isPrivateHostForShell(v4)
+  }
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!m) return false
+  const a = Number(m[1])
+  const b = Number(m[2])
+  if (a === 127 || a === 10 || a === 0) return true
+  if (a === 169 && b === 254) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  return false
+}
+
+function containsPrivateUrl(command: string): string | null {
+  const urlRe = /https?:\/\/[^\s"'`]+/gi
+  let m: RegExpExecArray | null
+  while ((m = urlRe.exec(command)) !== null) {
+    try {
+      const u = new URL(m[0])
+      if (isPrivateHostForShell(u.hostname)) return m[0]
+    } catch {}
+  }
   return null
 }
 
@@ -658,11 +711,53 @@ function isDangerousCommand(command: string): string | null {
  * Primary workspace is ${projectfolder} ONLY (e.g. project/ks) — inside is FULL permission, outside is ZERO permission and FORBIDDEN (no /tmp, no agent codebase, no absolute paths).
  * Returns null if allowed, or a reason string if it should be blocked / asked first.
  */
-function isOutsideScopeCommand(command: string, projectPath: string, _chatId: string): string | null {
+export function isOutsideScopeCommand(command: string, projectPath: string, _chatId: string): string | null {
   const c = command.trim()
   // STRICT: any ".." traversal is forbidden — outside is FORBIDDEN
   if (/(?:^|[\s\"'\/])\.\.(?:\/|[\s\"']|$)/.test(c)) {
     return 'Traverses outside ${projectfolder} via ".." — outside is FORBIDDEN. Stay strictly inside ${projectfolder}'
+  }
+  // Also detect URL-encoded traversal (%2e%2e) — decode and re-check
+  if (/%2e/i.test(c)) {
+    try {
+      const decoded = decodeURIComponent(c)
+      if (decoded !== c && /(?:^|[\s\"'\/])\.\.(?:\/|[\s\"']|$)/.test(decoded)) {
+        return 'Traverses outside ${projectfolder} via encoded ".." — outside is FORBIDDEN. Stay strictly inside ${projectfolder}'
+      }
+    } catch {}
+  }
+  // Block tilde / home expansion (~/ , ~user/ , $HOME , ${HOME})
+  if (/(?:^|[\s;|&])~\//.test(c) || /(?:^|[\s;|&])~[a-zA-Z0-9_.-]*\//.test(c) || /\$(?:HOME|USER|home|user)\b/.test(c) || /\$\{[^}]*HOME[^}]*\}/.test(c)) {
+    return 'Accesses outside ${projectfolder} via home expansion (~ / $HOME) — outside is FORBIDDEN. Stay strictly inside ${projectfolder}'
+  }
+  // Block env var expansions that could escape (e.g. $HOME, $TMPDIR) when used as path argument to cat/ls etc
+  if (/\$(?:[A-Z_][A-Z0-9_]*|\{[^}]+\})/.test(c) && /(?:cat|ls|find|grep|glob|read|list|open|code|vim|nano|less|head|tail|tree|du|df|stat|cp|mv|rm|chmod|chown)\b/i.test(c)) {
+    // Allow $PORT, $NODE_ENV etc when not used as path — but block if value looks like path
+    if (/\$\{?HOME\}?|\$\{?TMPDIR\}?|\$\{?TMP\}?|\$HOME|\$TMPDIR|\$TMP/.test(c)) {
+      return 'Accesses outside ${projectfolder} via env var path ($HOME/$TMP) — outside is FORBIDDEN'
+    }
+  }
+  // Block command substitution that could read outside files: $(cat /etc/passwd) , `cat /etc/passwd`
+  if (/\$\(/.test(c) || /`[^`]*\//.test(c)) {
+    // If substitution contains absolute path outside project, block
+    const subRe = /\$\([^)]*(\/(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+)[^)]*\)/g
+    let sm: RegExpExecArray | null
+    const projRoot2 = path.resolve(projectPath)
+    while ((sm = subRe.exec(c)) !== null) {
+      const p = sm[1]
+      if (p !== projRoot2 && !p.startsWith(projRoot2 + path.sep)) {
+        return `Accesses outside \${projectfolder} via command substitution: ${p} — outside is FORBIDDEN`
+      }
+    }
+    // Generic backtick with slash also suspicious
+    if (/`[^`]*\/[^`]*`/.test(c)) {
+      return 'Command substitution with path — possible outside access, blocked. Stay strictly inside ${projectfolder}'
+    }
+  }
+  // SSRF via curl/wget to private hosts
+  if (/\b(curl|wget|httpie|aria2c|fetch)\b/i.test(c)) {
+    const priv = containsPrivateUrl(c)
+    if (priv) return `SSRF blocked — curl/wget to private host ${priv} is FORBIDDEN`
   }
   // Extract absolute paths from command (like /home/... /etc/... /tmp/...)
   const absRe = /(?:^|[\s\"'`])(\/(?:[a-zA-Z0-9._-]+\/)*[a-zA-Z0-9._-]+)/g
