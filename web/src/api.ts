@@ -408,3 +408,38 @@ export const deletePlugin = (id: string) => req<{ ok: true }>(`/api/settings/plu
 export const publishPlugin = (id: string) => req<{ ok: true; bundle: { manifest: Record<string, unknown>; files: Record<string, string>; exportedAt: string; pluginId: string }; marketplace: MarketplacePlugin }>(`/api/settings/plugins/${id}/publish`, json('POST', {}))
 export const exportPlugin = (id: string) => req<{ manifest: Record<string, unknown>; files: Record<string, string>; exportedAt: string; pluginId: string }>(`/api/settings/plugins/${id}/export`)
 export const publishSkill = (id: string) => req<{ ok: true; bundle: { manifest: Record<string, unknown>; files: Record<string, string>; exportedAt: string; skillId: string }; marketplace: MarketplacePlugin }>(`/api/settings/skills/${id}/publish`, json('POST', {}))
+
+// GitHub PAT + Polling — vs.md:98 "🔶 via shell gh pr create" only run_shell (server/src/agent.ts:341). Need GITHUB_TOKEN stored like Provider.apiKey (store.ts:40, index.ts:236 ••••, store.ts:277 chmod 600, WAL busy_timeout 10000) + user-set interval, fully customizable.
+export const getGithubSettings = (projectId?: string) => {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
+  return req<import('./types').GithubTokenInfo>(`/api/settings/github${qs}`)
+}
+export const saveGithubToken = (token: string, projectId?: string) => req<{ ok: true; masked: string; keyPreview: string; hasToken: boolean }>(`/api/settings/github`, json('POST', { token, projectId: projectId || undefined }))
+export const deleteGithubToken = (projectId?: string) => {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
+  return req<{ ok: true }>(`/api/settings/github${qs}`, { method: 'DELETE' } as any)
+}
+export const testGithubToken = (token?: string, projectId?: string) => req<{ ok: boolean; user?: string | null; remaining?: number | null; error?: string }>(`/api/settings/github/test`, json('POST', { token: token ?? undefined, projectId: projectId || undefined }))
+export const getGithubPollSettings = (projectId?: string) => {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''
+  return req<import('./types').GithubPollSettings>(`/api/settings/github/poll${qs}`)
+}
+export const updateGithubPollSettings = (patch: Partial<import('./types').GithubPollSettings> & { projectId?: string }) => req<import('./types').GithubPollSettings>(`/api/settings/github/poll`, json('PUT', patch))
+export const getGithubRateLimit = (projectId: string) => req<import('./types').GithubRateLimit>(`/api/projects/${projectId}/github/rate-limit`)
+export const pollGithubNow = (projectId: string) => req<{ ok: true }>(`/api/projects/${projectId}/github/poll-now`, json('POST', {}))
+export const setGithubFocus = (projectId: string, focused: boolean, windowFocused?: boolean) => req<{ ok: true }>(`/api/projects/${projectId}/github/focus`, json('POST', { focused, windowFocused }))
+export const getGithubDiff = (projectId: string, opts?: { pr?: string; repo?: string }) => {
+  const qs = new URLSearchParams()
+  if (opts?.pr) qs.set('pr', opts.pr)
+  if (opts?.repo) qs.set('repo', opts.repo)
+  const q = qs.toString() ? `?${qs.toString()}` : ''
+  return req<{ data: any; etag?: string; fromCache?: boolean }>(`/api/projects/${projectId}/github/diff${q}`)
+}
+export const getGithubPr = (projectId: string, repo?: string) => {
+  const qs = repo ? `?repo=${encodeURIComponent(repo)}` : ''
+  return req<{ data: any }>(`/api/projects/${projectId}/github/pr${qs}`)
+}
+export const getGithubCommits = (projectId: string, repo?: string) => {
+  const qs = repo ? `?repo=${encodeURIComponent(repo)}` : ''
+  return req<{ data: any }>(`/api/projects/${projectId}/github/commits${qs}`)
+}

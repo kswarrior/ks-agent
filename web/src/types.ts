@@ -241,3 +241,50 @@ export interface Activity {
   timestamp: string
   expanded?: boolean
 }
+
+export interface GithubTokenInfo {
+  hasToken: boolean
+  masked: string
+  keyPreview: string
+  source: string
+  projectId: string | null
+}
+
+export interface GithubPollSettings {
+  enabled: boolean
+  mode: 'interval' | 'cron' | 'event' | 'manual'
+  intervalMs: number
+  cronExpr: string | null
+  endpoints: { diff: boolean; pr: boolean; commits: boolean; actions: boolean }
+  perEndpointInterval: { diffMs: number; prMs: number; commitsMs?: number; actionsMs?: number }
+  pollOnFocusOnly: boolean
+  pauseOnWindowBlur: boolean
+  useEtag: boolean
+  respectRateLimit: boolean
+  smartEventOnly: boolean
+  jitterMs: number
+  maxRetries: number
+  minIntervalMs: number
+  maxIntervalMs: number
+  webhookUrl?: string | null
+  effectiveIntervalMs?: number
+  rateLimit?: { remaining: number; resetAt: string | null; effectiveIntervalMs: number; nextPollAt: string | null; etagHitRate: number }
+}
+
+export interface GithubRateLimit {
+  projectId: string
+  remaining: number
+  limit: number
+  resetAt: string | null
+  resetAtMs: number
+  effectiveIntervalMs: number
+  intervalMs: number
+  nextPollAt: string | null
+  nextPollAtMs: number | null
+  etagHitRate: number
+  throttled: boolean
+  throttledMsg: string | null
+  useEtag: boolean
+  respectRateLimit: boolean
+  mode: string
+}

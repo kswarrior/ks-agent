@@ -16,7 +16,7 @@ interface Props {
   onDataChanged: () => void
 }
 
-type Tab = 'quick' | 'providers' | 'models' | 'prompt' | 'retry' | 'theme'
+type Tab = 'quick' | 'providers' | 'models' | 'prompt' | 'retry' | 'theme' | 'github'
 
 const THEME_PRESETS: { name: string; primary: string; danger?: string; background?: string }[] = [
   { name: 'Blue', primary: '#2563eb' },
@@ -89,6 +89,21 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [themeDangerInput, setThemeDangerInput] = useState('')
   const [themeBgInput, setThemeBgInput] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // GitHub PAT + polling state — store.ts:214 kv "githubToken" + github_tokens, index.ts:236 masked, store.ts:277 chmod 600
+  const [githubTokenInput, setGithubTokenInput] = useState('')
+  const [githubMasked, setGithubMasked] = useState('')
+  const [githubHasToken, setGithubHasToken] = useState(false)
+  const [githubProjectId, setGithubProjectId] = useState('')
+  const [githubBusy, setGithubBusy] = useState(false)
+  const [githubTestResult, setGithubTestResult] = useState<string | null>(null)
+  const [githubPoll, setGithubPoll] = useState<import('../types').GithubPollSettings | null>(null)
+  const [githubPollDraft, setGithubPollDraft] = useState<import('../types').GithubPollSettings | null>(null)
+  const [githubPollProjectId, setGithubPollProjectId] = useState('')
+  const [githubRate, setGithubRate] = useState<import('../types').GithubRateLimit | null>(null)
+  const [githubPollBusy, setGithubPollBusy] = useState(false)
+  const [githubCustomMs, setGithubCustomMs] = useState('')
+  const [githubCronInput, setGithubCronInput] = useState('')
+  const [githubProjects, setGithubProjects] = useState<import('../types').Project[]>([])
   const confirm = useDialogs().confirm
   const toast = useToast()
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -159,11 +174,14 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       loadSystemPrompt()
       loadRetrySettings()
       loadThemeSettings()
+      loadGithubSettings()
+      loadGithubProjects()
       setProviderForm(null)
       setProviderPicker(false)
       setShowModelForm(false)
       setModelEdit(null)
       setError(null)
+      setGithubTestResult(null)
       // auto-select quick tab when setup incomplete, otherwise providers
       // we need providers/models length, but they are stale at open time — decide after refresh
       // default to quick for first-time feel
@@ -171,6 +189,42 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // Live panel: GET /api/projects/:id/github/rate-limit → {remaining, resetAt, effectiveIntervalMs, nextPollAt, etagHitRate} polled every 10s
+  useEffect(() => {
+    if (!open || !githubPollProjectId) return
+    let alive = true
+    const tick = async () => {
+      try {
+        const rate = await api.getGithubRateLimit(githubPollProjectId)
+        if (alive) setGithubRate(rate)
+      } catch {}
+    }
+    tick()
+    const iv = setInterval(tick, 10000)
+    return () => { alive = false; clearInterval(iv) }
+  }, [open, githubPollProjectId])
+
+  // chromium focused/blur pauses — notify backend when window focus changes if pollOnFocusOnly/pauseOnWindowBlur
+  useEffect(() => {
+    if (!open || !githubPollProjectId) return
+    const onFocus = () => { api.setGithubFocus(githubPollProjectId, document.hasFocus(), document.hasFocus()).catch(()=>{}) }
+    const onBlur = () => { api.setGithubFocus(githubPollProjectId, document.hasFocus(), document.hasFocus()).catch(()=>{}) }
+    const onVis = () => { api.setGithubFocus(githubPollProjectId, !document.hidden, document.hasFocus()).catch(()=>{}) }
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('blur', onBlur)
+    document.addEventListener('visibilitychange', onVis)
+    // initial
+    api.setGithubFocus(githubPollProjectId, !document.hidden, document.hasFocus()).catch(()=>{})
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('blur', onBlur)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [open, githubPollProjectId])
+
+  useEffect(() => { if (open) loadGithubSettings(githubProjectId || undefined) }, [githubProjectId])
+  useEffect(() => { if (open) loadGithubSettings(githubPollProjectId || undefined) }, [githubPollProjectId])
 
   // Auto-detect Ollama running via http://localhost:11434/api/tags with timeout, fail gracefully
   useEffect(() => {
@@ -367,6 +421,126 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     setThemeDangerInput(d.danger)
     setThemeBgInput(d.background)
     applyTheme(d)
+  }
+
+  async function loadGithubSettings(projectId?: string) {
+    try {
+      const info = await api.getGithubSettings(projectId || undefined)
+      setGithubMasked(info.masked || info.keyPreview || '')
+      setGithubHasToken(!!info.hasToken)
+      // also load poll settings
+      const poll = await api.getGithubPollSettings(projectId || undefined)
+      setGithubPoll(poll)
+      setGithubPollDraft({ ...poll })
+      setGithubCustomMs(String(poll.intervalMs))
+      setGithubCronInput(poll.cronExpr || '')
+      // load rate limit if project selected
+      if (projectId) {
+        try {
+          const rate = await api.getGithubRateLimit(projectId)
+          setGithubRate(rate)
+        } catch {}
+      } else {
+        setGithubRate(null)
+      }
+    } catch (e:any) { toast(e.message, 'error') }
+  }
+
+  async function loadGithubProjects() {
+    try {
+      const ps = await api.listProjects()
+      setGithubProjects(ps)
+    } catch {}
+  }
+
+  async function submitGithubToken() {
+    if (!githubTokenInput.trim()) return setError('GitHub token is required')
+    setGithubBusy(true)
+    setError(null)
+    setGithubTestResult(null)
+    try {
+      const res = await api.saveGithubToken(githubTokenInput.trim(), githubProjectId || undefined)
+      setGithubMasked(res.masked || res.keyPreview || '')
+      setGithubHasToken(true)
+      setGithubTokenInput('')
+      toast('GitHub token saved', 'success')
+      await loadGithubSettings(githubProjectId || undefined)
+    } catch (e:any) { setError(e.message) } finally { setGithubBusy(false) }
+  }
+
+  async function testGithubToken() {
+    setGithubBusy(true)
+    setError(null)
+    try {
+      const toTest = githubTokenInput.trim() || undefined
+      const res = await api.testGithubToken(toTest, githubProjectId || undefined)
+      if (res.ok) {
+        setGithubTestResult(`OK: ${res.user || 'authenticated'} remaining ${res.remaining ?? '?'}`)
+        toast('GitHub token valid', 'success')
+      } else {
+        setGithubTestResult(`Failed: ${res.error || 'invalid'}`)
+        setError(res.error || 'Test failed')
+      }
+    } catch (e:any) { setError(e.message); setGithubTestResult(`Error: ${e.message}`) } finally { setGithubBusy(false) }
+  }
+
+  async function submitGithubPoll() {
+    if (!githubPollDraft) return
+    setGithubPollBusy(true)
+    setError(null)
+    try {
+      // validate intervalMs 5000-300000 already clamped
+      const patch: any = {
+        enabled: githubPollDraft.enabled,
+        mode: githubPollDraft.mode,
+        intervalMs: githubPollDraft.intervalMs,
+        cronExpr: githubPollDraft.cronExpr,
+        endpoints: githubPollDraft.endpoints,
+        perEndpointInterval: githubPollDraft.perEndpointInterval,
+        pollOnFocusOnly: githubPollDraft.pollOnFocusOnly,
+        pauseOnWindowBlur: githubPollDraft.pauseOnWindowBlur,
+        useEtag: githubPollDraft.useEtag,
+        respectRateLimit: githubPollDraft.respectRateLimit,
+        smartEventOnly: githubPollDraft.smartEventOnly,
+        jitterMs: githubPollDraft.jitterMs,
+        maxRetries: githubPollDraft.maxRetries,
+        webhookUrl: (githubPollDraft as any).webhookUrl || null,
+        projectId: githubPollProjectId || undefined
+      }
+      const updated = await api.updateGithubPollSettings(patch)
+      setGithubPoll(updated)
+      setGithubPollDraft({ ...updated })
+      setGithubCustomMs(String(updated.intervalMs))
+      setGithubCronInput(updated.cronExpr || '')
+      toast('Poll settings saved', 'success')
+      // refresh rate to show effectiveIntervalMs
+      if (githubPollProjectId) {
+        try { const rate = await api.getGithubRateLimit(githubPollProjectId); setGithubRate(rate) } catch {}
+      }
+    } catch (e:any) { setError(e.message) } finally { setGithubPollBusy(false) }
+  }
+
+  async function pollNowGithub() {
+    if (!githubPollProjectId) return setError('Select a project for Poll now')
+    try {
+      await api.pollGithubNow(githubPollProjectId)
+      toast('Polled now', 'success')
+      try { const rate = await api.getGithubRateLimit(githubPollProjectId); setGithubRate(rate) } catch {}
+    } catch (e:any) {
+      if (String(e.message).includes('debounced')) toast('Poll debounced (5s)', 'error')
+      else setError(e.message)
+    }
+  }
+
+  async function pauseGithubPolling() {
+    if (!githubPollDraft) return
+    const nextEnabled = !githubPollDraft.enabled
+    try {
+      const updated = await api.updateGithubPollSettings({ enabled: nextEnabled, projectId: githubPollProjectId || undefined } as any)
+      setGithubPoll(updated)
+      setGithubPollDraft({ ...updated })
+      toast(nextEnabled ? 'Polling resumed' : 'Polling paused', 'success')
+    } catch (e:any) { setError(e.message) }
   }
 
   async function submitPlanPrompt() {
