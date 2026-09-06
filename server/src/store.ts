@@ -2622,7 +2622,7 @@ function loadFromSqlite(s: Database.Database): DB | null {
       themeSettings = { ...DEFAULT_THEME }
     }
 
-    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, themeSettings, skills, previews, mcpServers, lspServers, plugins }
+    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, themeSettings, skills, previews, mcpServers, lspServers, plugins, subAgents: [], teams: [], teamMembers: [] }
   } catch (e) {
     console.error('Failed to load from sqlite:', e)
     return null
@@ -2756,7 +2756,10 @@ function tryMigrateFromJson(): boolean {
         icon: typeof p.icon === 'string' && p.icon.trim() ? String(p.icon).trim().slice(0, 4) : undefined,
         createdAt: typeof p.createdAt === 'string' ? p.createdAt : new Date().toISOString(),
         updatedAt: typeof p.updatedAt === 'string' ? p.updatedAt : new Date().toISOString()
-      })) : []
+      })) : [],
+      subAgents: Array.isArray((parsed as any).subAgents) ? (parsed as any).subAgents : [],
+      teams: Array.isArray((parsed as any).teams) ? (parsed as any).teams : [],
+      teamMembers: Array.isArray((parsed as any).teamMembers) ? (parsed as any).teamMembers : []
     }
     // Migrate old skills missing updatedAt / projectId
     let migrated = false
@@ -2908,7 +2911,7 @@ export function loadDb(): void {
       autoContinueMaxAttempts: 5,
       autoContinueOnPlanIncomplete: true
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     } else {
@@ -2930,7 +2933,7 @@ export function loadDb(): void {
       autoContinueMaxAttempts: 5,
       autoContinueOnPlanIncomplete: true
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     }
