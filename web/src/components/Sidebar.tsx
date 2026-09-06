@@ -119,6 +119,42 @@ export function Sidebar(props: SidebarProps) {
     c.title.toLowerCase().includes(chatQuery.trim().toLowerCase())
   )
 
+  // Hybrid semantic search effect (debounced, hostile-input validated server-side)
+  useEffect(() => {
+    if (!semanticEnabled) {
+      setSemanticHits(null)
+      setSemanticMeta(null)
+      return
+    }
+    const q = semanticQuery.trim()
+    if (!q || q.length < 2) {
+      setSemanticHits(null)
+      setSemanticMeta(null)
+      return
+    }
+    if (!props.activeProject) {
+      setSemanticHits(null)
+      return
+    }
+    if (semanticDebounceRef.current) clearTimeout(semanticDebounceRef.current)
+    semanticDebounceRef.current = setTimeout(async () => {
+      setSemanticLoading(true)
+      try {
+        const res = await api.semanticSearch(props.activeProject!.id, q, { limit: 12 })
+        setSemanticHits(res.hits)
+        setSemanticMeta({ embeddingCount: res.embeddingCount, fallback: res.fallback })
+      } catch {
+        setSemanticHits([])
+        setSemanticMeta(null)
+      } finally {
+        setSemanticLoading(false)
+      }
+    }, 320)
+    return () => {
+      if (semanticDebounceRef.current) clearTimeout(semanticDebounceRef.current)
+    }
+  }, [semanticEnabled, semanticQuery, props.activeProject])
+
   return (
     <>
       <aside className={`sidebar${props.open ? ' open' : ''}`}>
@@ -235,6 +271,77 @@ export function Sidebar(props: SidebarProps) {
                 </div>
               ))}
             </div>
+          </div>
+          {/* Code Search — Semantic hybrid (server/src/store.ts:embeddings) */}
+          <div className="sidebar-section semantic-section" style={{ paddingTop: 8, borderTop: '1px solid var(--border)', marginTop: 12 }}>
+            <div className="section-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 6 }}>
+              <span>Code Search</span>
+              <label className="semantic-toggle" title="Hybrid semantic search (TF-IDF cosine rerank via SQLite embeddings, fallback to grep)">
+                <input type="checkbox" checked={semanticEnabled} onChange={(e) => setSemanticEnabled(e.target.checked)} disabled={!props.activeProject} />
+                <span>Semantic</span>
+              </label>
+            </div>
+            <div className="search-box" style={{ marginTop: 4 }}>
+              <IconSearch size={14} />
+              <input
+                className="search-input"
+                placeholder={semanticEnabled ? 'Semantic: e.g. auth logic, payment…' : 'Enable Semantic to search codebase…'}
+                value={semanticQuery}
+                onChange={(e) => setSemanticQuery(e.target.value)}
+                disabled={!props.activeProject || !semanticEnabled}
+              />
+              {semanticLoading && <span className="semantic-loading" aria-label="Searching">…</span>}
+            </div>
+            {semanticEnabled && props.activeProject && (
+              <div className="semantic-results">
+                {semanticQuery.trim().length >= 2 && semanticHits !== null && semanticHits.length === 0 && !semanticLoading && (
+                  <div className="dd-empty">No hits — try grep query or broader terms</div>
+                )}
+                {semanticHits && semanticHits.length > 0 && (
+                  <>
+                    <div className="semantic-meta">
+                      {semanticMeta?.fallback ? 'grep fallback (no embeddings yet)' : `hybrid rerank — ${semanticMeta?.embeddingCount ?? 0} embeddings`}
+                      <button
+                        className="btn btn-xs"
+                        title="Rebuild semantic index for this project (stores TF-IDF vectors in SQLite)"
+                        onClick={async () => {
+                          if (!props.activeProject) return
+                          try {
+                            await api.rebuildSemanticIndex(props.activeProject.id)
+                            const q = semanticQuery.trim()
+                            if (q) {
+                              const r = await api.semanticSearch(props.activeProject.id, q, { limit: 12 })
+                              setSemanticHits(r.hits)
+                              setSemanticMeta({ embeddingCount: r.embeddingCount, fallback: r.fallback })
+                            }
+                          } catch {}
+                        }}
+                        style={{ marginLeft: 6 }}
+                      >
+                        Index
+                      </button>
+                    </div>
+                    <div className="semantic-list">
+                      {semanticHits.map((hit, idx) => (
+                        <div key={idx} className="semantic-hit" title={hit.snippet ?? hit.path}>
+                          <div className="semantic-hit-path">
+                            <span className="semantic-hit-score">{hit.score.toFixed(2)}</span>
+                            <span className="semantic-hit-source">{hit.source}</span> {hit.path}
+                          </div>
+                          {hit.snippet && <div className="semantic-hit-snippet">{hit.snippet.slice(0, 120)}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {semanticEnabled && !semanticQuery.trim() && (
+                  <div className="dd-empty" style={{ fontSize: 12 }}>
+                    Enable Semantic and type query to search codebase (200 files, TF-IDF + grep rerank)
+                  </div>
+                )}
+              </div>
+            )}
+            {!props.activeProject && semanticEnabled && <div className="dd-empty">Select a project first</div>}
           </div>
         </div>
 

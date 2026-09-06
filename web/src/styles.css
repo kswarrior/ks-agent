@@ -623,6 +623,34 @@ textarea {
   z-index: 130;
 }
 
+/* Semantic hybrid search — web/src/components/Sidebar.tsx:Semantic */
+.semantic-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-faint);
+  cursor: pointer;
+  user-select: none;
+}
+.semantic-toggle input { accent-color: var(--primary); width: 13px; height: 13px; cursor: pointer; }
+.semantic-toggle span { color: var(--text-dim); }
+.semantic-loading { position: absolute; right: 8px; font-size: 12px; color: var(--text-faint); pointer-events: none; }
+.semantic-results { margin-top: 8px; }
+.semantic-meta { font-size: 11px; color: var(--text-faint); display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.btn-xs { padding: 3px 7px; font-size: 11px; border-radius: 6px; background: var(--btn); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; }
+.btn-xs:hover { background: var(--btn-hover); color: var(--text); }
+.semantic-list { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+.semantic-hit { padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; line-height: 1.4; }
+.semantic-hit-path { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
+.semantic-hit-score { background: var(--primary-bg); border: 1px solid var(--primary-border); color: var(--primary); border-radius: 4px; padding: 0 4px; font-size: 10.5px; font-weight: 700; flex-shrink: 0; }
+.semantic-hit-source { background: var(--btn); border: 1px solid var(--border); color: var(--text-faint); border-radius: 4px; padding: 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; }
+.semantic-hit-snippet { color: var(--text-dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.semantic-section .search-box { position: relative; }
+
 /* ---------------- Main / chat ---------------- */
 
 .main {
