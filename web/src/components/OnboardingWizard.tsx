@@ -25,7 +25,8 @@ const PRESETS: { name: string; baseUrl: string; models: string[]; needsKey: bool
   { name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'], needsKey: true, hint: 'Fast inference — console.groq.com' },
   { name: 'Together', baseUrl: 'https://api.together.xyz/v1', models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo'], needsKey: true, hint: 'together.ai' },
   { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', models: ['mistral-large-latest', 'mistral-small-latest'], needsKey: true, hint: 'console.mistral.ai' },
-  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'qwen2.5', 'mistral'], needsKey: false, hint: 'No key — runs offline on your machine' },
+  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'qwen2.5', 'mistral', 'deepseek-r1'], needsKey: false, hint: 'Offline · Air-gapped — no key, no cloud' },
+  { name: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1', models: ['llama-3.2-3b', 'qwen2.5-7b', 'mistral-7b'], needsKey: false, hint: 'Offline · LM Studio local server' },
 ]
 
 export function shouldAutoShowOnboarding(projects: Project[], providers: Provider[], models: ModelEntry[]): boolean {
