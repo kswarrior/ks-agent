@@ -1048,8 +1048,9 @@ function persistToSqlite(): void {
       }
     }
   }
-  // Keep FK ON throughout: deletes are children-first, inserts are parents-first (both satisfy FK)
-  try { s.pragma('foreign_keys = ON') } catch {}
+  // Embeddings are managed independently in SQLite (not via db JSON). Preserve them across bulk replace:
+  // temporarily disable FK so DELETE FROM projects does not cascade-delete embeddings for projects that are immediately re-inserted.
+  try { s.pragma('foreign_keys = OFF') } catch {}
   const txn = s.transaction(() => {
     s.prepare('DELETE FROM activities').run()
     s.prepare('DELETE FROM previews').run()
