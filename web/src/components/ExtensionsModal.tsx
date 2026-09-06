@@ -95,6 +95,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [pluginView, setPluginView] = useState<'installed' | 'marketplace'>('installed')
   const [pluginPublishLoading, setPluginPublishLoading] = useState<string | null>(null)
   const [skillPublishLoading, setSkillPublishLoading] = useState<string | null>(null)
+  const [marketplaceInstallProjectId, setMarketplaceInstallProjectId] = useState<string>('')
   const confirm = useDialogs().confirm
   const toast = useToast()
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -688,8 +689,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
   }
   async function installFromMarketplace(m: MarketplacePlugin) {
     try {
-      // install respects scope: if a project is selected in plugin form or current filter, use it; else global
-      const projectId = pluginForm.projectId || pluginEditForm.projectId || undefined
+      const projectId = marketplaceInstallProjectId || undefined
       await api.installMarketplacePlugin(m.id, projectId ? { projectId } : {})
       toast(`Installed ${m.name}${projectId ? ' (project)' : ' (global)'}`, 'success')
       await Promise.all([loadPlugins(), loadMarketplace()])
@@ -1769,6 +1769,16 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                       ))}
                     </div>
                   )}
+                  {pluginView === 'marketplace' && (
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>Install scope:</span>
+                      <select className="input" style={{ height: 30, fontSize: 13, minWidth: 160 }} value={marketplaceInstallProjectId} onChange={e => setMarketplaceInstallProjectId(e.target.value)}>
+                        <option value="">Global (all projects)</option>
+                        {skillProjects.map(p => <option key={p.id} value={p.id}>{p.name} — Global→{p.name}</option>)}
+                      </select>
+                      <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{marketplaceInstallProjectId ? 'per-project' : 'global'} install — toggle still works via Edit</span>
+                    </div>
+                  )}
                   {pluginView === 'installed' ? (
                     <>
                       {pluginsLoading ? (
@@ -2269,6 +2279,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     <div key={s.id} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontWeight: 600, flex: 1 }}>{s.name}</span>
+                        <button className="btn" style={{ padding: '4px 10px', fontSize: 12, background: '#eff6ff', borderColor: '#bfdbfe', color: '#2563eb' }} disabled={skillPublishLoading === s.id} onClick={() => publishSkillFlow(s)} title="Validate → export JSON bundle → list in marketplace">{skillPublishLoading === s.id ? 'Publishing…' : 'Publish'}</button>
                         <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEditSkill(s)} aria-label={`Edit ${s.name}`}><IconPencil size={14} /></button>
                         <button className="icon-btn" style={{ width: 28, height: 28, color: '#ef4444' }} onClick={() => removeSkill(s.id)} aria-label={`Delete ${s.name}`}><IconTrash size={14} /></button>
                       </div>

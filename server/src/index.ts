@@ -4905,4 +4905,10 @@ process.on('exit', () => {
   for (const sess of ptySessions.values()) {
     try { sess.pty.kill() } catch {}
   }
+  try { if (skillsWatcher) skillsWatcher.close() } catch {}
+  for (const w of pluginEntryWatchers.values()) { try { w.close() } catch {} }
 })
+try {
+  process.on('SIGINT', () => { try { if (skillsWatcher) skillsWatcher.close() } catch {}; for (const w of pluginEntryWatchers.values()) { try { w.close() } catch {} } })
+  process.on('SIGTERM', () => { try { if (skillsWatcher) skillsWatcher.close() } catch {}; for (const w of pluginEntryWatchers.values()) { try { w.close() } catch {} } })
+} catch {}
