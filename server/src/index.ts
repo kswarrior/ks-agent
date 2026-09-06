@@ -58,6 +58,9 @@ import {
   rebuildEmbeddingsForProjectAsync,
   getEmbeddingCount,
   clearEmbeddingsForProject,
+  subAgentsOf,
+  createTeam,
+  teamsOf,
   getEmbeddingSettings,
   updateEmbeddingSettings
 } from './store.js'
@@ -617,6 +620,30 @@ app.delete('/api/chats/:id/preview', (c) => {
   db.previews = (db.previews || []).filter((p) => p.chatId !== chat.id)
   if (db.previews.length !== before) saveDb()
   return c.json({ ok: true })
+})
+
+// ---------------- Sub-agents / Teams — 5 Modes Solo/Swarm/Hive/Squad/Infinity (vs.md:3.1, vs.md:96) ----------------
+
+app.get('/api/chats/:id/subagents', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  try { return c.json(subAgentsOf(chat.id)) } catch { return c.json([]) }
+})
+app.get('/api/chats/:id/teams', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  try { return c.json(teamsOf(chat.id)) } catch { return c.json([]) }
+})
+app.post('/api/chats/:id/teams', async (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const name = String(body.name ?? '').trim().slice(0,80) || 'Team'
+  try {
+    const t = createTeam(chat.id, name, body.headId ?? null)
+    return c.json(t, 201)
+  } catch (e: any) { return c.json({ error: String(e?.message||'cannot create team').slice(0,300) }, 400) }
 })
 
 // ---------------- Activities ----------------
