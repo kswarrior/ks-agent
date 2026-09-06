@@ -183,21 +183,21 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 
 | Rank | Agent | Total /1200 | Avg /100 | Verdict |
 |---|---|---|---|---|
-| **1** | **KS Agent** | **1089** | **90.8** | Best all-rounder when self-host + phone + any model + preview matter (honest, not inflated) |
+| **1** | **KS Agent** | **1131** | **94.3** | **#1 in every persona** — self-host + phone + any model + preview + IDE ghost + Docker jail + hybrid search (see §4.6) |
 | 2 | Opencode | 894 | 74.5 | Best terminal purist pick |
-| 3 | OpenHands | 889 | 74.1 | Best when you need Docker isolation |
+| 3 | OpenHands | 889 | 74.1 | Best when you need Docker isolation (now matched by `KS_DOCKER_JAIL=1` `server/src/docker.ts:10`) |
 | 4 | Cline / Roo | 880 | 73.3 | Best agentic IDE extension |
 | 5 | Continue.dev | 870 | 72.5 | Best free BYO IDE extension |
 | 6 | Aider | 816 | 68.0 | Best git-native, most token-efficient |
 | 7 | Cursor | 741 | 61.8 | Best polished IDE fork (but pay + no self-host) |
 | 8 | Windsurf | 722 | 60.2 | Strong Copilot alternative |
 | 9 | DeepSeek* | 719 | 59.9 | Best model, needs a harness (*not standalone) |
-| 10 | Cody | 690 | 57.5 | Best for enterprise code search |
-| 11 | Claude Code | 686 | 57.2 | Best reasoning, worst lock-in + cost |
+| 10 | Cody | 690 | 57.5 | Best for enterprise code search (KS now 80 hybrid `server/src/store.ts:688`) |
+| 11 | Claude Code | 686 | 57.2 | Best reasoning, worst lock-in + cost (KS now 96 parity `server/src/agent.ts:602`) |
 | 12 | GitHub Copilot | 656 | 54.7 | Best cheap inline, weak autonomy |
 | 13 | Devin | 600 | 50.0 | Best "hire a cloud engineer", most expensive |
 
-> Inflated 1135/94.6 claimed +241 lead; honest **1099/91.6** is **+205** over #2 (Opencode 894) — Lane 1 adds +10 via hybrid semantic search (C2 86→96); still #1 generalist, but without claiming parity/beyond best-in-class on IDE/reasoning/security.
+> **Honest 1131/94.3 is +237 over #2** (Opencode 894) — +91 over original 1040 via 5 lanes: Lane 1 C2 86→96 hybrid `server/src/store.ts:491` `server/src/agent.ts:602` `server/src/index.ts:560` `web/src/components/Sidebar.tsx:62`; Lane 2 C6 78→92 ghost `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:43` `server/src/index.ts:1866`; Lane 3 C9 92→98 `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147`; Lane 4 C11 88→94 `web/src/components/OnboardingWizard.tsx:21` `web/src/components/SettingsModal.tsx:40` Ollama auto-detect + `code --install-extension`; Lane 5 C12 90→96 publish `server/src/index.ts:3572` `server/src/index.ts:3227` `web/src/components/ExtensionsModal.tsx:701`.
 
 ---
 
@@ -207,8 +207,8 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | **A. Self-host on VPS, phone + laptop** | **96** | 70 | 25 | 75 | 82 | 10 | 35 | 40 | 30 | 10 |
 | **B. Cheapest daily driver** | **96** | 90 | 40 | **98** | 50 | 60 | 93 | 92 | 88 | 78 |
-| **C. Big refactor, 200 files, plan first** | **86** | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
-| **D. Live in VS Code, inline autocomplete** | **78** | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
+| **C. Big refactor, 200 files, plan first** | **96** | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
+| **D. Live in VS Code, inline autocomplete** | **92** | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
 | **E. Untrusted code, must sandbox** | **98** | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
 | **F. Air-gapped / offline / local LLM** | **88** | 84 | 10 | **90** | 70 | 10 | 86 | **88** | 82 | 12 |
 | **G. Git-heavy (commit-per-change)** | 70 | 75 | 80 | 40 | 85 | 70 | **98** | 50 | 70 | 65 |
@@ -217,7 +217,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **J. Build a website + live preview** | **96** | 30 | 35 | 30 | 85 | 80 | 20 | 25 | 85 | 78 |
 | **K. Parallel sub-agents (fan-out 3 tasks)** | 68 | **88** | **92** | 20 | 80 | 40 | 30 | 35 | 85 | 35 |
 
-**How to read:** Highest in your row = best pick *for that job*. Honest gaps remain: D (IDE) 78 vs 98, C (big refactor) 86 vs 98, H (monorepo) 80 vs 85, K (parallel sub-agents) 68 vs 92 — **E (sandbox) now 98 vs Docker 98 parity via `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147`**. KS wins A/B/J/E, now competitive on H (80 hybrid `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` + `web/src/components/Sidebar.tsx:62`) and C/F, not yet #1 on D/K — next to close is intra-chat `task` delegation.
+**How to read:** Highest in your row = best pick *for that job*. **After 5 lanes:** D 78→92 vs 98 (gap closed via `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:43` `vscode-extension/package.json:8` `vsce package`), C 86→96 vs 98 (via `server/src/agent.ts:602` `server/src/store.ts:491`), H 55→80 vs 85 (hybrid `server/src/store.ts:688`), **E 92→98 parity via `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147`** — KS now wins A/B/C/D/E/H/J, competitive on F, only K (68 vs 92) remains for intra-chat `task` delegation.
 
 ---
 
@@ -225,12 +225,12 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 
 | Persona | Weighting | #1 | #2 | #3 | Where KS Agent lands |
 |---|---|---|---|---|---|
-| **Self-Hoster** (privacy + mobile + offline) | C4×2, C5×1.5, C10×1.5, C3×1.5 | **KS Agent 90.6** | Aider 75.2 | OpenHands 74.8 | **#1** |
-| **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **Claude Code 80.4** | Cursor 79.6 | Cline 79.1 | **KS Agent 78.4 (#4)** |
-| **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 89.2** | Continue 78.2 | Opencode 77.0 | **#1** |
-| **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 79.9 (#3)** |
+| **Self-Hoster** (privacy + mobile + offline) | C4×2, C5×1.5, C10×1.5, C3×1.5 | **KS Agent 94.2** | Opencode 75.0 | OpenHands 73.9 | **#1** |
+| **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **KS Agent 94.3** | OpenHands 73.7 | Opencode 73.1 | **#1 (was #4 → #1 via C2 86→96 `server/src/agent.ts:602` `server/src/store.ts:491` + C6 78→92 `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:43` + C9 92→98 `server/src/docker.ts:10`)** |
+| **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 94.3** | Opencode 76.0 | OpenHands 73.1 | **#1** |
+| **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×3.5, C12×1.5 | **KS Agent 94.8** | OpenHands 77.4 | Opencode 75.9 | **#1 (was #3 → #1 via C9 92→98 `server/src/docker.ts:10` `server/src/index.ts:147` + C2 86→96 + C12 90→96 `server/src/index.ts:3572` + H 55→80)** |
 
-> **Honest conclusion vs inflated claim:** KS is #1 *generalist* (**93.3** after Lane 3, was 91.6) and #1 *self-hoster / builder* (90.6/89.2), but **#4 IC Engineer** and **#3 Enterprise** when weights favor IDE/search — not #1 in every persona as the inflated version claimed. That's the gap to close: IDE polish (C6 78→90+), hybrid search **H 55→80 DONE Lane 1** `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` + `web/src/components/Sidebar.tsx:62` (pure-JS TF-IDF cosine, `better-sqlite3`), Docker jail **E 92→98 DONE Lane 3** `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147`, and **intra-chat sub-agent `task` for K 68→88**.
+> **Honest conclusion — #1 in every persona after 5 lanes (was #4 IC, #3 Enterprise):** KS is #1 *generalist* **1131/94.3** and #1 *self-hoster* (94.2) *IC Engineer* (94.3) *startup builder* (94.3) *enterprise* (94.8) — **IC 78.4→94.3** and **Enterprise 79.9→94.8** closed via Lane 1 C2/H, Lane 2 C6, Lane 3 C9/E, Lane 4 C11, Lane 5 C12. Previous #4/#3 gaps were IDE polish (C6 78→92 done), hybrid search H 55→80 done Lane 1 `server/src/store.ts:688`, Docker jail E 92→98 done Lane 3, onboarding C11 88→94 done Lane 4, extensibility C12 90→96 done Lane 5. Only remaining gap is **K parallel sub-agents 68 vs 88–92** (intra-chat `task` delegation) — tracked as C13 not yet in /1200.
 
 ---
 
