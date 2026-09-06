@@ -1,1 +1,1 @@
-module.exports = { name: "my-plugin" }
+module.exports = { name: "my-plugin", v: 2 } // updated
