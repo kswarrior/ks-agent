@@ -42,7 +42,8 @@ const QUICK_PRESETS: { name: string; baseUrl: string; models: string[]; needsKey
   { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner'], needsKey: true, hint: 'Cheapest frontier ~$0.14/1M' },
   { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'], needsKey: true, hint: 'One key → 100+ models' },
   { name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'], needsKey: true, hint: 'Ultra-fast inference' },
-  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'qwen2.5', 'mistral'], needsKey: false, hint: 'Offline — no key, no cost' },
+  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'qwen2.5', 'mistral', 'deepseek-r1'], needsKey: false, hint: 'Offline · Air-gapped — no key, no cloud' },
+  { name: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1', models: ['llama-3.2-3b', 'qwen2.5-7b', 'mistral-7b'], needsKey: false, hint: 'Offline · LM Studio local server' },
   { name: 'Together', baseUrl: 'https://api.together.xyz/v1', models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo'], needsKey: true, hint: 'together.ai' },
   { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', models: ['mistral-large-latest'], needsKey: true, hint: 'console.mistral.ai' },
   { name: 'NVIDIA', baseUrl: 'https://integrate.api.nvidia.com/v1', models: ['meta/llama3-70b-instruct'], needsKey: true, hint: 'integrate.api.nvidia.com' },
@@ -169,7 +170,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     setError(null)
     if (preset.needsKey && !quickKey.trim()) return setError(`API key is required for ${preset.name}`)
     if (!quickModel.trim()) return setError('Model id is required')
-    const keyToSend = quickKey.trim() || (preset.name.includes('Ollama') ? 'ollama' : '')
+    const keyToSend = quickKey.trim()
     setQuickBusy(true)
     try {
       const provider = await api.createProvider({ name: preset.name, baseUrl: preset.baseUrl, apiKey: keyToSend })
@@ -643,15 +644,15 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 ))}
               </div>
 
-              <label className="field-label">API key {QUICK_PRESETS[quickIdx].needsKey ? '' : <span style={{ fontWeight: 400 }}>(leave blank for Ollama)</span>}</label>
+              <label className="field-label">API key {QUICK_PRESETS[quickIdx].needsKey ? '' : <span style={{ fontWeight: 400 }}>(leave blank — local, no key, air-gapped)</span>}</label>
               <input
                 className="input"
                 type="password"
-                placeholder={QUICK_PRESETS[quickIdx].needsKey ? 'sk-…' : 'ollama — no key needed'}
+                placeholder={QUICK_PRESETS[quickIdx].needsKey ? 'sk-…' : 'no key needed (Ollama / LM Studio offline)'}
                 value={quickKey}
                 onChange={(e) => setQuickKey(e.target.value)}
               />
-              <p className="hint" style={{ marginTop: 4 }}>{QUICK_PRESETS[quickIdx].hint} — key never leaves server</p>
+              <p className="hint" style={{ marginTop: 4 }}>{QUICK_PRESETS[quickIdx].hint} — {QUICK_PRESETS[quickIdx].needsKey ? 'key never leaves server' : 'fully offline, no internet after install · works air-gapped via LAN'}</p>
 
               <label className="field-label">Model id</label>
               <input
@@ -715,7 +716,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 <h3>Add provider</h3>
               </div>
               <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
-                Pick a provider to start with its base URL pre-filled — you only need to enter your API key.
+                Pick a provider to start with its base URL pre-filled. For local Ollama / LM Studio, no key needed — fully offline/air-gapped after install.
               </p>
               <div className="preset-grid">
                 {PROVIDER_PRESETS.map((pr) => (
@@ -757,14 +758,15 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   value={providerForm.baseUrl}
                   onChange={(e) => setProviderForm({ ...providerForm, baseUrl: e.target.value })}
                 />
-                <label className="field-label">API key {providerForm.editingId && <span style={{ fontWeight: 400 }}>(leave blank to keep current)</span>}</label>
+                <label className="field-label">API key {providerForm.editingId ? <span style={{ fontWeight: 400 }}>(leave blank to keep current)</span> : <span style={{ fontWeight: 400 }}>(leave blank for local Ollama / LM Studio — air-gapped)</span>}</label>
                 <input
                   className="input"
                   type="password"
-                  placeholder="sk-…"
+                  placeholder={providerForm.baseUrl.includes('localhost') || providerForm.baseUrl.includes('127.0.0.1') ? 'no key needed (local) — leave blank' : 'sk-… (leave blank for local Ollama/LM Studio)'}
                   value={providerForm.apiKey}
                   onChange={(e) => setProviderForm({ ...providerForm, apiKey: e.target.value })}
                 />
+                {(providerForm.baseUrl.includes('localhost') || providerForm.baseUrl.includes('127.0.0.1') || /ollama|lm studio/i.test(providerForm.name)) && <p className="hint" style={{ marginTop: 4 }}>Local endpoint — no internet required after model pull. Fully air-gapped, runs on LAN.</p>}
                 <div className="dialog-actions">
                   <button className="btn" onClick={() => { setProviderForm(null); setError(null) }}>
                     Cancel
