@@ -1129,6 +1129,8 @@ function persistToSqlite(): void {
     // Ensure FK remains ON for subsequent writes
     s.pragma('foreign_keys = ON')
   } catch {}
+  // Clean orphaned embeddings for projects that were truly deleted (not re-inserted)
+  try { s.prepare('DELETE FROM embeddings WHERE projectId NOT IN (SELECT id FROM projects)').run() } catch {}
 }
 
 function loadFromSqlite(s: Database.Database): DB | null {
