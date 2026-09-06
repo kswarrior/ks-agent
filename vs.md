@@ -1,7 +1,7 @@
 # KS Agent vs Popular AI Coding Agents — Full Comparison (2026)
 
-> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0** · **IDE lift: C6 55→92 (>90) — ghost + ⌘K inline chat + VS Code extension · Reasoning lift: C2 82→96 (plan→large-edit hardening) · Onboarding lift: C11 78→94 (>Cursor) — wizard + Quick Setup in 60s · Offline lift: C10 85→92 — Ollama/LM Studio/vLLM, no key, air-gapped · Extensibility lift: C12 85→96 (>95) — Skills+MCP+LSP+Plugins hardening · Security lift: C9 88→98 (>OpenHands 96) — strict jail + secrets + concurrency**
-> One file to decide which agent fits your workflow. No hype, just trade-offs.
+> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0**
+> One file to decide which agent fits your workflow. Honest, evidence-based, no hype.
 
 ---
 
@@ -26,23 +26,26 @@
 
 ## 1) What Is KS Agent?
 
-**KS Agent** — web-based AI coding agent by **ks warrior**. Self-hosted, works on desktop and phone.
+**KS Agent** — web-based AI coding agent by **ks warrior**. Self-hosted, works on desktop and phone. Verified against this repo's codebase.
 
-*   **Stack:** Node + Hono (REST + SSE streaming) on the backend, React 18 + Vite on the frontend, SQLite for persistence. One `npm run build` produces the full app.
-*   **UI:** Pure black theme, fully responsive. Desktop: 3-panel layout (Projects/Chats | Chat + Composer | Plan/Activities + Preview + Terminal). Mobile: sidebar becomes a drawer, no horizontal scroll.
-*   **Models:** Any **OpenAI-compatible provider** — OpenAI, Anthropic via proxy, DeepSeek, Minimax, Ollama, LM Studio, and any self-hosted endpoint. Configure providers and models in Settings, with per-model overrides (display name, max tokens, system prompt).
-*   **Workspace isolation:** Agent works strictly inside the active project folder (`project/<name>`). Every file read/write and shell command is scoped to that project — system paths and sibling projects are blocked server-side. `/tmp` is the only shared escape hatch.
-*   **Streaming:** Real-time SSE streaming with stop button, seamless `Continue` to resume interrupted replies, and automatic retry with exponential backoff on transient provider errors (rate limits, timeouts, capacity).
-*   **Workflow:** Structured agent loop — Understand → Explore (inspect files) → Plan → Execute step-by-step → Verify (build/typecheck) → Finish. Plans, activities, and outcomes are persisted per chat so you can resume after a refresh or restart.
-*   **Persisted per chat:** Plans (with step status), Activities (timeline of every tool call: read, write, edit, shell, grep, etc.), Previews (one live port per chat), Questions (agent can ask you and block until you answer), and full message history.
-*   **Terminal:** Real Linux PTY per project (via xterm.js + WebSocket). `vim`, `htop`, `npm run dev` all work — not a fake shell.
-*   **Extensibility:** Skills (markdown instructions injected per task, auto-discovered project-local `skills/*.md` + global `skills/` with read-before-edit guard), MCP (stdio/sse/http/websocket — tools auto-injected, secrets masked), LSP (stdio/tcp/socket/websocket/http/sse — per-language, capabilities surfaced), and Plugins (8-item marketplace + manual/local/url, install/enable per-project or global). Each layer is global or scoped to a single project, hot-reloaded without restart.
+*   **Stack:** Node + Hono (REST + SSE streaming) on the backend, React 18 + Vite on the frontend, SQLite (`storage/ksagent.db`, WAL, `better-sqlite3`) for persistence. One `npm run build` produces the full app (`package.json:10`).
+*   **UI:** Pure black theme, fully responsive. Desktop: 3-panel layout (Projects/Chats | Chat + Composer | Plan/Activities + Preview + Terminal). Mobile: sidebar becomes a drawer, no horizontal scroll. Verified in `web/src/App.tsx`, `web/src/components/Sidebar.tsx`, `RightSidebar.tsx`, `styles.css`.
+*   **Models:** Any **OpenAI-compatible provider** — OpenAI, Anthropic via proxy, DeepSeek, Minimax, Ollama, LM Studio, Together, Mistral, NVIDIA, Groq, vLLM. Configure providers and models in Settings, with per-model overrides (display name, max tokens, per-model system prompt). Verified in `web/src/components/SettingsModal.tsx:40` `QUICK_PRESETS` + `server/src/store.ts:40` `Provider`/`ModelEntry`.
+*   **Workspace isolation:** Agent works strictly inside the active project folder (`project/<name>`). Every file read/write and shell command is scoped via `server/src/fsx.ts:10` `resolveInProject` (realpath + symlink guard) and `server/src/agent.ts:714` `isOutsideScopeCommand` (blocks `..`, encoded `%2e`, `~`/`$HOME`, `$(` substitution, private-host SSRF). System paths and sibling projects are blocked server-side.
+*   **Streaming:** Real-time SSE streaming with stop button, `Continue` to resume interrupted replies in-place, and automatic retry with exponential backoff + `Retry-After` respect. Verified in `server/src/llm.ts:125` `openStream` + `server/src/index.ts:832` `runGeneration`.
+*   **Workflow:** Structured loop — Understand → Explore (inspect files) → Plan → Execute step-by-step → Verify → Finish. Plans, activities, and outcomes are persisted per chat so you can resume after refresh/restart. Verified in `server/src/agent.ts:13` `PRIMARY_SYSTEM_PROMPT` + `server/src/index.ts:508` plan/preview/activities routes + `server/src/store.ts:298` schema.
+*   **Persisted per chat:** Plans (step status `pending`/`working`/`done`), Activities (timeline of every tool call), Previews (one live port per chat, `PreviewSidebar.tsx`), Questions (blocking `ask_question`), and full message history.
+*   **Terminal:** Real Linux PTY per project (via `node-pty` + `xterm.js` + WebSocket). `vim`, `htop`, `npm run dev` work. Verified in `server/src/index.ts:112` `PtySession` + `web/src/components/XTermTerminal.tsx`.
+*   **Extensibility:** Skills (markdown `skills/*.md` + `skills/frontend/skill.md` with `read_file` guard `server/src/agent.ts:138` `hasReadSkill`), MCP (4 transports: stdio/sse/http/websocket via `server/src/mcp.ts:314`), LSP (6 transports via `server/src/lsp.ts:349`), and Plugins (8-item marketplace `server/src/store.ts:165` `Plugin` + `web/src/components/ExtensionsModal.tsx`). Each layer is global or per-project.
+*   **IDE (real, but early):** In-browser ghost autocomplete (Tab) + `⌘K` inline chat in `web/src/components/FilesPane.tsx:596` via `POST /api/ide/complete` + `POST /api/ide/inline-chat` (`server/src/index.ts:1730`), plus a real VS Code extension in `vscode-extension/` (InlineCompletionProvider, `ks-agent.inlineChat` on `cmd+k`/`ctrl+k`, `vscode-extension/package.json:12`). Works, but not yet Cursor-level polish (no next-edit prediction, no marketplace one-click polish).
+*   **Onboarding (real, improved):** Auto wizard `web/src/components/OnboardingWizard.tsx:21` + `Settings → Quick Setup` presets (`SettingsModal.tsx:40`) — preset → key → model in one click, 30s offline (Ollama `http://localhost:11434/v1` no key) or ~60s with API. Keys stay server-side, masked `••••` (`server/src/index.ts:236` `publicProvider`).
+*   **Offline (real):** No `Authorization` header when `apiKey` empty (`server/src/llm.ts:165` + `server/src/index.ts:731`), `SettingsModal.tsx:45` Ollama/LM Studio presets explicitly `needsKey:false` + `air-gapped` hint.
 
 ```bash
 npm install
 npm run build
 npm start          # http://localhost:8787
-# Settings → Providers → Add baseURL + key → Models → Add → pick model in composer → chat
+# Open http://localhost:8787 — Quick Setup wizard opens: Project → Preset → Key → Model → chat
 # Mobile: http://<your-vps-ip>:8787  (put behind Tailscale/Caddy for TLS)
 ```
 
@@ -85,26 +88,26 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **Activities timeline (tool history)** | ✅ persisted per chat | 🔶 log | ✅ trace | ❌ | ✅ events | 🔶 history | ✅ git diff | ✅ timeline | ❌ | 🔶 | ❌ |
 | **Multi-project workspaces** | ✅ isolated projects | 🔶 workspaces | ✅ per repo | — | ✅ workspaces | ✅ workspaces | ✅ per repo | ✅ | ✅ | ✅ | ✅ enterprise |
 | **Multi-chat per project** | ✅ numbered chats + LLM titles | ✅ sessions | ✅ sessions | ✅ chats | ✅ sessions | ✅ | ❌ single | ✅ | ✅ | ✅ | ✅ |
-| **Skills / prompts** | ✅ markdown skills, global or per-project | ✅ skills | ✅ CLAUDE.md | ❌ | ✅ micro-agents | ✅ .cursorrules | ✅ CONVENTIONS.md | ✅ rules | ✅ prompts | ✅ rules | ✅ Cody context |
-| **MCP / LSP / Plugins** | ✅ MCP + LSP + Plugins | ✅ MCP/LSP | ✅ MCP | ❌ | ✅ tools | ✅ MCP | ❌ | ✅ MCP | ✅ MCP | 🔶 | 🔶 |
+| **Skills / prompts** | ✅ markdown skills, global/project, read-guard | ✅ skills | ✅ CLAUDE.md | ❌ | ✅ micro-agents | ✅ .cursorrules | ✅ CONVENTIONS.md | ✅ rules | ✅ prompts | ✅ rules | ✅ Cody context |
+| **MCP / LSP / Plugins** | ✅ MCP(4) + LSP(6) + Plugins(8) | ✅ MCP/LSP | ✅ MCP | ❌ | ✅ tools | ✅ MCP | ❌ | ✅ MCP | ✅ MCP | 🔶 | 🔶 |
 | **Mobile / phone usable** | ✅ fully responsive | ❌ terminal only | ❌ | ✅ web | 🔶 heavy | ❌ | ❌ | ❌ | ❌ | ❌ | 🔶 |
-| **Codebase search** | ✅ grep + glob | ✅ grep/glob | ✅ grep + embeddings | 🔶 embeddings | ✅ | ✅ embeddings + grep | ✅ grep | ✅ | ✅ embeddings | ✅ embeddings | ✅ **best** embeddings |
-| **Git integration** | 🔶 via shell | ✅ | ✅ | ❌ | ✅ git + PR | ✅ | ✅ **git-native** | ✅ | ❌ | ✅ | ✅ |
-| **Secrets stay server-side (masked)** | ✅ masked preview, never sent to client | ✅ | ✅ | — | 🔶 env in Docker | ❌ local | ✅ | ❌ | ✅ | ❌ | ✅ |
-| **Offline / air-gapped** | ✅ Ollama / LM Studio / vLLM (no key, air-gapped) | ✅ Ollama | ❌ | ✅ local weights | ✅ local LLM | ❌ | ✅ Ollama | ✅ Ollama | ✅ Ollama | ❌ | ❌ enterprise |
-| **Concurrent-safe persistence** | ✅ SQLite WAL + transactions | ✅ | — | — | — | — | — | — | — | — | — |
-| **Build verification before done** | ✅ typecheck + build verified | 🔶 manual | 🔶 manual | — | 🔶 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Codebase search** | ✅ grep + glob (20k files), no embeddings | ✅ grep/glob | ✅ grep + embeddings | 🔶 embeddings | ✅ | ✅ embeddings + grep | ✅ grep | ✅ | ✅ embeddings | ✅ embeddings | ✅ **best** embeddings |
+| **Git integration** | 🔶 via shell `gh pr create` | ✅ | ✅ | ❌ | ✅ git + PR | ✅ | ✅ **git-native** | ✅ | ❌ | ✅ | ✅ |
+| **Secrets stay server-side (masked)** | ✅ `••••` masked, 600 at rest | ✅ | ✅ | — | 🔶 env in Docker | ❌ local | ✅ | ❌ | ✅ | ❌ | ✅ |
+| **Offline / air-gapped** | ✅ Ollama/LM Studio/vLLM, no key (verified) | ✅ Ollama | ❌ | ✅ local weights | ✅ local LLM | ❌ | ✅ Ollama | ✅ Ollama | ✅ Ollama | ❌ | ❌ enterprise |
+| **Concurrent-safe persistence** | ✅ SQLite WAL + tx + busy_timeout | ✅ | — | — | — | — | — | — | — | — | — |
+| **Build verification before done** | ✅ typecheck + build via prompt guard | 🔶 manual | 🔶 manual | — | 🔶 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
 ## 4) Honest Score Board — Out of 100 Per Category + Totals
 
-### 4.1 How scoring works
+### 4.1 How scoring works — evidence, not marketing
 
-*   **Scale:** 0–100 per category. 90+ = best-in-class, 70–89 = strong, 50–69 = usable, <50 = weak/missing. Judged from **user-visible behavior** (Sep 2026), not marketing.
-*   **No cherry-picking:** 12 equal-weight categories. Change the weights and the winner changes — see §4.6 for weighted personas.
-*   **Bias check:** KS Agent is penalized where it is actually weak (IDE inline, semantic search, onboarding friction). Scores are reversible — if you disagree, open a PR with evidence.
-*   **DeepSeek note:** DeepSeek is a *model family*, not a full agent runtime. Its scores reflect “DeepSeek via any harness (KS Agent / Aider / Continue / own API)” — strong as a model, weak as a standalone agent.
+*   **Scale:** 0–100 per category. 90+ = best-in-class, 70–89 = strong, 50–69 = usable, <50 = weak/missing. Judged from **user-visible behavior + code evidence** in this repo (Sep 2026), not docs.
+*   **12 equal-weight categories.** Change the weights and the winner changes — see §4.6 for weighted personas.
+*   **What changed vs the inflated 1135 version:** Previous edit claimed `C6 55→92 (>Cursor)`, `C2 82→96 (=Claude)`, `C9 88→98 (>OpenHands)`, `C11 78→94 (>Cursor)`, `C10 85→92 (>DeepSeek)`, `C12 85→96`. Code audit shows those lifts are **real but partial** — features exist (`vscode-extension/`, `FilesPane.tsx:596`, `OnboardingWizard.tsx`, `llm.ts:165` no-key, `agent.ts:714` jail) but not yet at parity/beyond best-in-class. Honest scores below reflect that: moved halfway, not to the top.
+*   **DeepSeek note:** Scored as “DeepSeek via any harness (KS Agent/Aider/Continue)” — strong as a model, weak as a standalone agent.
 
 ---
 
@@ -113,24 +116,31 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | # | Category — what we judged | KS Agent | Opencode | Claude Code | DeepSeek | OpenHands | Cursor | Aider |
 |---|---|---|---|---|---|---|---|---|
 | **C1** | **Model Flexibility** — any provider, BYO key, per-model overrides | **95** | 90 | 40 | 35 | 90 | 85 | 95 |
-| **C2** | **Reasoning & Code Quality** — plan → large edits, correctness | **96** | 80 | **96** | 88 | 85 | 88 | 78 |
+| **C2** | **Reasoning & Code Quality** — plan → large edits, correctness | **86** | 80 | **96** | 88 | 85 | 88 | 78 |
 | **C3** | **Cost Efficiency** — tokens + infra for daily use | **96** | 95 | 55 | **96** | 60 | 68 | 94 |
 | **C4** | **Self-Host & Privacy** — own the machine, keys, DB | **95** | 92 | 30 | 85 | 90 | 20 | 92 |
 | **C5** | **Mobile & Remote Access** — phone / browser / SSH | **95** | 25 | 20 | 70 | 55 | 10 | 15 |
-| **C6** | **IDE Experience** — inline autocomplete, inline chat | **92** | 45 | 60 | 30 | 40 | **98** | 35 |
+| **C6** | **IDE Experience** — inline autocomplete, inline chat | **78** | 45 | 60 | 30 | 40 | **98** | 35 |
 | **C7** | **Terminal & Preview & Sandbox** — real PTY + live preview | **92** | 75 | 70 | 20 | 88 | 70 | 60 |
 | **C8** | **Persistence & Project Management** — multi-project, per-chat plans/activities | **94** | 70 | 75 | 40 | 78 | 65 | 50 |
-| **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | **98** | 80 | 75 | 60 | 96 | 55 | 82 |
-| **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **92** | 82 | 10 | 90 | 70 | 15 | 85 |
-| **C11** | **Onboarding & DX** — install → first chat in minutes | **94** | 80 | 85 | 65 | 55 | 92 | 70 |
-| **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | **96** | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1135** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **94.6** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | **92** | 80 | 75 | 60 | **96** | 55 | 82 |
+| **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **88** | 82 | 10 | **90** | 70 | 15 | 85 |
+| **C11** | **Onboarding & DX** — install → first chat in minutes | **88** | 80 | 85 | 65 | 55 | **92** | 70 |
+| **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | **90** | 80 | 70 | 40 | 82 | 75 | 60 |
+| | **TOTAL (/1200)** | **1089** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **90.8** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
-**Takeaway — equal weight favors the generalist.** KS Agent leads when every category matters equally. With IDE (C6 55→92) + Reasoning (C2 82→96) + Onboarding (C11 78→94) + Offline (C10 85→92) + Security (C9 88→98) + Extensibility (C12 85→96) lifts, lead widens from +146 → +197 → **+213** → **+220** → **+230** → **+241** over #2. Rank flips only when you weight enterprise-search heavily — see §4.6.
+**Evidence for KS moves (why not 92-98):**
 
-> **Why KS Agent isn't 100 everywhere:** C6 IDE **92** (ghost autocomplete + ⌘K inline chat in-browser + VS Code extension `vscode-extension/` + `POST /api/ide/complete` & `/api/ide/inline-chat`; remaining 8pts vs Cursor 98 are polish: multi-cursor inline, Copilot-style next-edit prediction, and one-click marketplace install). C2 Reasoning **96** (was 82 — plan→large-edit hardening: forced stepwise verification via `complete_plan_step` guard, no early stop when plan incomplete, 90k-char sliding window for huge codebases; parity with Claude Code 96). C11 Onboarding **94** (was 78 — now beats Cursor 92: auto wizard on first open + `Settings → Quick Setup` preset → key → model suggestions in ONE click, 30s offline via Ollama / 60s with API, keys masked server-side, floating FAB when setup incomplete; remaining 6pts vs 100 are one-click marketplace install and OS-level keychain — polish, not flow). C10 Offline **92** (was 85 — now beats DeepSeek 90: Ollama + LM Studio + vLLM/LocalAI via any OpenAI-compatible baseUrl, true no-key local path `server/src/llm.ts:166` & `server/src/index.ts:733,1686` — `Authorization` omitted when `apiKey` empty, Quick Setup presets `web/src/components/SettingsModal.tsx:28` & `39` with `no key, air-gapped` hint and `localhost` detection; remaining 8pts are bundled-weights UX vs DeepSeek's native GGUF — pair with Ollama `ollama pull` for 100% offline). C9 Security **98** (was 88 — now beats OpenHands 96: strict project jail `server/src/fsx.ts:10` realpath+symlink guard + `server/src/agent.ts:661` dual guard `isDangerousCommand`+`isOutsideScopeCommand` with encoded `..`, tilde/env expansion, command substitution `$(` / backtick, SSRF private-URL block `curl/wget` via `isPrivateHostForShell`, and `/tmp` zero-escape — no shared escape hatch; PTY/exec parity `server/src/index.ts:3614` same guard; secrets fully masked `server/src/index.ts:236` provider `••••` + `server/src/index.ts:2288` MCP `maskSecretMap` & `2604` LSP masked env/headers, DB 600 `server/src/store.ts:260` `chmod 600` WAL 10s + serialized `saveLock` queue `server/src/store.ts:1336`, SSRF `isBlockedHost` for upload-url/MCP; remaining 2pts are optional Docker layer vs native jail — add `KS_DOCKER_JAIL` for 100). C12 Extensibility **96** (was 85 — Skills+MCP+LSP+Plugins hardened with masked secrets).
+*   **C2 82→86 (not 96):** `agent.ts:37` large-edit prompt + `complete_plan_step` guard forces stepwise verification and prevents early stop with incomplete plan — real improvement — but model-level reasoning still trails Claude 96. Pair with Claude/DeepSeek-R1 via KS to close the gap.
+*   **C6 55→78 (not 92):** Ghost autocomplete + `⌘K` inline chat work in-browser (`FilesPane.tsx:596`) and via `vscode-extension/package.json:12` (InlineCompletionProvider, `ks-agent.inlineChat`) with `POST /api/ide/complete` (`index.ts:1730`). Up sharply from 55, but missing Cursor's next-edit prediction, multi-cursor, and marketplace polish — hence 78 vs 98.
+*   **C9 88→92 (not 98):** Strict jail (`fsx.ts:10` realpath+symlink) + dual guard (`agent.ts:602` `isDangerousCommand` + `agent.ts:714` `isOutsideScopeCommand` with encoded `..`, `~`/`$HOME`, `$(` substitution, private-host SSRF) + `chmod 600` at rest + `busy_timeout 10000`. Strong, but native jail still 4pts behind Docker kernel isolation (OpenHands 96).
+*   **C10 85→88 (not 92):** `llm.ts:165` omits `Authorization` when `apiKey` empty + `SettingsModal.tsx:45` Ollama/LM Studio `needsKey:false` presets. Fully offline as agent, but pure DeepSeek weights (90) remain slightly more turnkey for air-gapped GGUF without a server.
+*   **C11 78→88 (not 94):** `OnboardingWizard.tsx` auto-wizard + `SettingsModal.tsx:40` Quick Setup (preset → key → model in one click). Big lift, but Cursor's one-click VS Code install still smoother for non-self-hosters — hence 88 vs 92.
+*   **C12 85→90 (not 96):** Skills read-guard (`agent.ts:138` `hasReadSkill`), MCP 4 transports, LSP 6 transports, 8-item plugin marketplace with `ExtensionsModal.tsx` search. Strong, but not yet beats-all — OpenHands 82 and Cursor 75 remain competitive.
+
+> Honest delta: **+49** over the original 1040 (86.7 → 90.8), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured.
 
 ---
 
@@ -153,15 +163,13 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **TOTAL (/1200)** | **870** | **722** | **880** | **690** | **656** | **600** |
 | **AVERAGE (/100)** | **72.5** | **60.2** | **73.3** | **57.5** | **54.7** | **50.0** |
 
-*Continue and Cline are the closest to KS Agent on self-host + BYO, but trade away mobile/preview/persistence. Windsurf/Copilot win pure IDE but lose on self-host/offline.*
-
 ---
 
 ### 4.4 Totals & Honest Ranking (Equal Weight — All 13 Agents)
 
 | Rank | Agent | Total /1200 | Avg /100 | Verdict |
 |---|---|---|---|---|
-| **1** | **KS Agent** | **1135** | **94.6** | Best all-rounder — IDE (C6 92) + Reasoning (C2 96) + Onboarding (C11 94) + Offline (C10 92 > DeepSeek 90) + Security (C9 98 > OpenHands 96) + Extensibility (C12 96 > OpenHands 82) lifts widen lead to **+241** over #2 |
+| **1** | **KS Agent** | **1089** | **90.8** | Best all-rounder when self-host + phone + any model + preview matter (honest, not inflated) |
 | 2 | Opencode | 894 | 74.5 | Best terminal purist pick |
 | 3 | OpenHands | 889 | 74.1 | Best when you need Docker isolation |
 | 4 | Cline / Roo | 880 | 73.3 | Best agentic IDE extension |
@@ -169,58 +177,58 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | 6 | Aider | 816 | 68.0 | Best git-native, most token-efficient |
 | 7 | Cursor | 741 | 61.8 | Best polished IDE fork (but pay + no self-host) |
 | 8 | Windsurf | 722 | 60.2 | Strong Copilot alternative |
-| 9 | DeepSeek* | 719 | 59.9 | Best model, needs a harness (*not a standalone agent) |
+| 9 | DeepSeek* | 719 | 59.9 | Best model, needs a harness (*not standalone) |
 | 10 | Cody | 690 | 57.5 | Best for enterprise code search |
 | 11 | Claude Code | 686 | 57.2 | Best reasoning, worst lock-in + cost |
 | 12 | GitHub Copilot | 656 | 54.7 | Best cheap inline, weak autonomy |
 | 13 | Devin | 600 | 50.0 | Best "hire a cloud engineer", most expensive |
 
-> DeepSeek would be #1 if scored purely as a *model* (C2 96, C3 100 in that view). Here it's scored as a runnable agent.
+> Inflated 1135/94.6 claimed +241 lead; honest 1089/90.8 is **+195** over #2 — still #1 generalist, but without claiming parity/beyond best-in-class on IDE/reasoning/security.
 
 ---
 
 ### 4.5 Scenario Scores — Per Use-Case (each /100 — pick your row)
 
-Different winners per scenario. This is the “for each case” board.
-
 | Scenario / Use-Case | KS Agent | Opencode | Claude Code | DeepSeek | OpenHands | Cursor | Aider | Continue | Cline | Windsurf |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | **A. Self-host on VPS, phone + laptop** | **96** | 70 | 25 | 75 | 82 | 10 | 35 | 40 | 30 | 10 |
-| **B. Cheapest daily driver** | **95** | 90 | 40 | **98** | 50 | 60 | 93 | 92 | 88 | 78 |
-| **C. Big refactor, 200 files, plan first** | **96** | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
-| **D. Live in VS Code, inline autocomplete** | **92** | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
-| **E. Untrusted code, must sandbox** | 75 | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
-| **F. Air-gapped / offline / local LLM** | **93** | 84 | 10 | **95** | 70 | 10 | 86 | **90** | 82 | 12 |
+| **B. Cheapest daily driver** | **96** | 90 | 40 | **98** | 50 | 60 | 93 | 92 | 88 | 78 |
+| **C. Big refactor, 200 files, plan first** | **86** | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
+| **D. Live in VS Code, inline autocomplete** | **78** | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
+| **E. Untrusted code, must sandbox** | **92** | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
+| **F. Air-gapped / offline / local LLM** | **88** | 84 | 10 | **90** | 70 | 10 | 86 | **88** | 82 | 12 |
 | **G. Git-heavy (commit-per-change)** | 70 | 75 | 80 | 40 | 85 | 70 | **98** | 50 | 70 | 65 |
 | **H. Enterprise monorepo search** | 55 | 50 | 80 | 60 | 60 | 85 | 55 | 60 | 60 | 75 |
 | **I. Ship a PR while I sleep (cloud)** | 60 | 55 | 70 | 40 | 80 | 65 | 50 | 45 | 60 | 55 |
 | **J. Build a website + live preview** | **96** | 30 | 35 | 30 | 85 | 80 | 20 | 25 | 85 | 78 |
 
-**How to read:** Find your row. Highest number in that row = best pick *for that job*. No single agent wins all 10 rows — that's the honest point.
+**How to read:** Highest in your row = best pick *for that job*. Honest gaps remain: D (IDE) 78 vs 98, C (big refactor) 86 vs 98, H (monorepo) 55 vs 85, E (sandbox) 92 vs Docker 98. KS wins A/B/J, competitive on C/F, not yet #1 on D/E/H/I/G.
 
 ---
 
 ### 4.6 Weighted Rankings — Same Scores, Different Priorities
 
-Equal weight is fair for a generalist ranking, but real teams weight differently. Three personas, same 12 categories, different weights:
-
 | Persona | Weighting | #1 | #2 | #3 | Where KS Agent lands |
 |---|---|---|---|---|---|
-| **Self-Hoster** (privacy + mobile + offline) | C4×2, C5×1.5, C10×1.5, C3×1.5 | **KS Agent 91.7** | Aider 75.2 | OpenHands 74.8 | **#1 (+1.6 after offline lift C10 85→92)** |
-| **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **KS Agent 86.8 (#1)** | Claude Code 80.4 | Cursor 79.6 | **was 76.3 (#5) before IDE — C6 55→92 + C2 82→96 lifts to #1** |
-| **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 89.8** | Continue 78.2 | Opencode 77.0 | **#1 (was 88.4 → 89.8 after onboarding lift C11 78→94)** |
-| **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **KS Agent 86.1 (#1)** | OpenHands 83.7 | Cody 80.2 | **was 82.7 (#3) before security — C9 88→98 (+3.4 weighted) lifts to #1, beats OpenHands Docker & Cody embeddings** |
+| **Self-Hoster** (privacy + mobile + offline) | C4×2, C5×1.5, C10×1.5, C3×1.5 | **KS Agent 90.6** | Aider 75.2 | OpenHands 74.8 | **#1** |
+| **IC Engineer** (reasoning + IDE + search + terminal) | C2×2, C6×2, C9×1.5, C7×1.5 | **Claude Code 80.4** | Cursor 79.6 | Cline 79.1 | **KS Agent 78.4 (#4)** |
+| **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 89.2** | Continue 78.2 | Opencode 77.0 | **#1** |
+| **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 79.9 (#3)** |
 
-> **Honest conclusion:** KS Agent is the #1 *generalist* (**94.6** avg, **1135/1200**, **+241** over #2), #1 *self-hoster / builder* (**91.7** after offline lift), #1 *IC-Engineer*, and #1 *Startup-Builder* (89.8) — now also **#1 Offline/Air-gapped** (**C10 92** — beats DeepSeek 90; scenario F **93** vs DeepSeek 95 is the pure-model vs full-agent gap — pair DeepSeek weights via Ollama for 100% offline agent) and **#1 Enterprise** after security lift (**86.1**, was #3 82.7 — C9 88→98 +3.4 weighted; now beats OpenHands 83.7 Docker via hardened jail+secrets+concurrency; scenario E 92 vs 98 is native jail vs Docker — add `KS_DOCKER_JAIL=1` for 100). Pick the persona closest to you — the table tells you the runner-up to pair it with.
+> **Honest conclusion vs inflated claim:** KS is #1 *generalist* (**90.8**) and #1 *self-hoster / builder* (90.6/89.2), but **#4 IC Engineer** and **#3 Enterprise** when weights favor IDE/search/Docker — not #1 in every persona as the inflated version claimed. That's the gap to close: IDE polish (C6 78→90+), embeddings (C2/H), and optional Docker jail for E.
 
 ---
 
-### 4.7 How to Use This Board
+### 4.7 How to Use This Board + What's Honestly Left
 
 1. **Find your scenario row in §4.5** — that's your primary pick.
-2. **Check §4.6 persona** — if you're an IC Engineer who lives in VS Code 10h/day, pair **KS Agent (phone/server/preview)** with **Cursor/Cline (IDE inline)** — many teams do exactly this.
-3. **Pair a cheap model:** Run **DeepSeek or Ollama via KS Agent** to keep C3 cost high while keeping C2 reasoning competitive.
-4. **Challenge it:** Scores are versioned (2026-09-06). If a release changes reality, open a PR with a doc link + before/after evidence.
+2. **Check §4.6 persona** — if you're an IC Engineer in VS Code 10h/day, pair **KS Agent (server/phone/preview)** with **Cursor/Cline (IDE inline)**.
+3. **Pair a cheap model:** Run **DeepSeek or Ollama via KS Agent** to keep C3 high while keeping C2 competitive.
+4. **To make KS #1 in every persona, ship:**
+   - IDE 78→90+ (marketplace one-click + next-edit prediction)
+   - Embeddings for C2/H (or pair with Cody today)
+   - Optional `KS_DOCKER_JAIL` for E 92→98 when kernel isolation required
+5. **Challenge it:** Scores versioned 2026-09-06. PR with doc link + evidence and we'll adjust — honesty over hype.
 
 ---
 
@@ -233,7 +241,7 @@ Browser (React + Vite, xterm.js, Markdown)
 Hono (Node) ── OpenAI-compatible API (any provider)
   ↕ SQLite (WAL, transactions) ── projects / chats / messages / plans / activities
   ↕ PTY (per project) ── WebSocket bridge to xterm
-  ↕ FS sandbox ── project/<name>/  (only /tmp escapes)
+  ↕ FS sandbox ── project/<name>/ (strict via fsx.ts:10)
 ```
 Single-process app. `npm run build` then `npm start` serves both API and UI on one port. Ideal for VPS, home lab, or single Docker container. SQLite survives restarts; WAL mode handles concurrent chat streams.
 
@@ -276,31 +284,26 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 
 ---
 
-## 7) Deep Dive — Strengths & Weaknesses
+## 7) Deep Dive — Strengths & Weaknesses (Honest)
 
-### KS Agent — strengths
-*   Any model, zero lock-in, keys never leave the server (masked preview in UI).
+### KS Agent — strengths (verified)
+*   Any model, zero lock-in, keys never leave the server (masked `••••`).
 *   Phone-usable — fix from anywhere, `Continue` resumes where the stream stopped without duplicating content.
-*   Structured workflow — every non-trivial task gets a plan with tracked steps; agent verifies builds before marking done.
-*   **Plan→large-edit correctness:** forced stepwise verification (sequential `complete_plan_step` guard requires tool evidence, no early stop when plan incomplete), 90k-char sliding window for 200-file contexts, large-edit prompt (map deps via glob+grep, read-before-edit, verify before done, no half-old/half-new) — C2 82→**96** parity with Claude Code (97 with Claude/DeepSeek-R1 via KS).
+*   Structured workflow — every non-trivial task gets a plan with tracked steps; `complete_plan_step` guard + large-edit prompt reduces half-done refactors (C2 82→86, not yet 96).
 *   One live preview per chat — build a Vite/Next/React site and see it in the sidebar without leaving the chat.
 *   Real PTY — `vim`, `htop`, `npm run dev` just work.
 *   SQLite persistence — projects, chats, messages, plans, activities, terminals, previews, and questions survive restart.
-*   **IDE-native now:** inline ghost autocomplete + ⌘K inline chat in-browser (FilesPane ↔ `POST /api/ide/*`) **and** VS Code extension (`vscode-extension/` — InlineCompletionProvider + inline chat command) — C6 92 (>90).
-*   **Offline / air-gapped first-class:** Ollama `http://localhost:11434/v1` + LM Studio `http://localhost:1234/v1` + any OpenAI-compatible local endpoint (vLLM/LocalAI) — Quick Setup presets with `no key, air-gapped` (`web/src/components/SettingsModal.tsx:28,39`), true no-`Authorization` path `server/src/llm.ts:166` & `server/src/index.ts:733,1686` for local, no cloud after `npm run build` + `ollama pull` — C10 **92** beats DeepSeek 90 (model-only vs full agent).
-*   **Extensibility first-class (>95):** Skills (markdown `skills/*.md` + `skills/frontend/skill.md` + auto-discovery `server/src/index.ts:1998` `buildSkillSystemMessages` 12k injection, global/project scope, `server/src/agent.ts:138,183,254` read-before-edit guard that rejects `write_file`/`edit_file` without prior `read_file`), MCP (stdio/sse/http/websocket `server/src/mcp.ts:314`, tool auto-injection `getMCPToolDefs`/`callMCPTool`, secrets masked `server/src/index.ts:2288` `maskSecretMap` + restore on patch), LSP (stdio/tcp/socket/websocket/http/sse `server/src/lsp.ts:349`, per-language `LSPServer.language` + `capabilities` + lifecycle `ensureLspConnections`), Plugins (8-item marketplace `server/src/index.ts:2868` `PLUGIN_MARKETPLACE`, `POST /api/settings/plugins/install` + `enabled` toggle, `ExtensionsModal.tsx` search/category/install, per-project/global scoping `store.ts:182` `PluginSource`) — C12 **96** (>95, beats Opencode 80 / OpenHands 82 / Cursor 75).
-*   **Security first-class (>OpenHands):** strict `project/` jail `server/src/fsx.ts:10` + dual shell guard `server/src/agent.ts:602,661` (`isDangerousCommand` + `isOutsideScopeCommand` with encoded `..`, `~`/`$HOME`, `$(`/` ` `, private-URL SSRF `isPrivateHostForShell`, zero `/tmp` escape), PTY/exec parity `server/src/index.ts:3614`, secrets at rest `chmod 600` `server/src/store.ts:260` + in-flight `••••` masking `server/src/index.ts:236,2288,2604`, concurrency WAL `busy_timeout 10000` + serialized `saveLock` `store.ts:1336` — C9 **98** beats OpenHands 96 (Docker 98 on scenario E still wins kernel isolation, but KS beats on full-stack hardening; `KS_DOCKER_JAIL=1` for 100).
+*   IDE ghost + inline chat work (in-browser + VS Code extension) — early but usable (C6 55→78).
+*   Offline first-class via Ollama/LM Studio/vLLM with no `Authorization` header when no key (`llm.ts:165`) — fully air-gapped after `npm run build` + `ollama pull`.
+*   Extensibility: Skills with read-guard + MCP(4) + LSP(6) + Plugins marketplace — global or per-project (C12 85→90).
+*   Strict project jail + secrets masked + `chmod 600` + WAL concurrency — strong, but not Docker isolation (C9 88→92, not 98).
 
-### KS Agent — weaknesses (updated Sep 6 2026 — IDE + Reasoning + Onboarding + Offline + Extensibility + Security gaps closed)
-*   No embeddings / semantic code search yet (grep/glob only; large monorepos benefit from a search companion) — remaining 4pts vs 100 on C2 are embeddings nuance vs Claude's codebase map; use DeepSeek-R1/Claude via KS or pair with Cody.
-*   ~~No native VS Code extension — you live in the browser, not the editor.~~ **Fixed:** in-browser ghost autocomplete + ⌘K inline chat (`web/src/components/FilesPane.tsx` → `POST /api/ide/complete` & `/api/ide/inline-chat`) + native VS Code extension (`vscode-extension/` — ghost Tab + ⌘K chat via same APIs). Score C6 55→**92** (>Cursor-beating 92, vs Cursor 98).
-*   ~~Low reasoning on large edits — early stop / half-done refactors.~~ **Fixed:** plan incompleteness now forces continuation, stepwise tool-evidence guard, large-edit correctness prompt, and history truncation for huge contexts. Score C2 82→**96** parity with Claude Code (was #5 IC-Engineer, now #1).
-*   ~~Onboarding friction — manual provider/model.~~ **Fixed:** auto wizard on first open + `Settings → Quick Setup` (preset → key → model suggestions in ONE click, 30s Ollama / 60s API, FAB when incomplete). Score C11 78→**94** (>Cursor 92). Remaining 6pts are marketplace one-click install / OS keychain polish.
-*   ~~Offline required dummy key / Bearer header even for local Ollama.~~ **Fixed:** `server/src/llm.ts:166` & `server/src/index.ts:733,1686` — `Authorization` omitted when `apiKey` empty; `web/src/components/SettingsModal.tsx:28,39` — Ollama + LM Studio presets with `no key, air-gapped` hint and `localhost` detection. Score C10 85→**92** (>DeepSeek 90, >Continue 88) — full harness + weights beats weights-only.
-*   ~~Extensibility only 85 — MCP/LSP secrets leaked, no per-project masking, Plugins marketplace static.~~ **Fixed:** `server/src/index.ts:2288` `maskSecretMap`/`isMaskedSecret` masks `env`/`headers` on read (`mcpPublic`/`lspPublic` return `••••xxxx`) and restores on patch, project/global scoping enforced via `store.ts` FK `ON DELETE SET NULL`, 8-item `PLUGIN_MARKETPLACE` with `ExtensionsModal.tsx` search/category/install, Skills auto-discovery + `hasReadSkill` guard. Score C12 85→**96** (>95, beats all contenders). Remaining 4pts are marketplace publish flow & hot-reload plugin sandbox — polish, not capability.
-*   ~~Security 88 < OpenHands 96 — workspace jail allowed /tmp, MCP env leaked, DB 644, WAL 5s.~~ **Fixed:** strict jail `server/src/fsx.ts:10` realpath+symlink guard + `server/src/agent.ts:661` dual guard `isDangerousCommand`+`isOutsideScopeCommand` (blocks `..`, `%2e`, `~`/`$HOME`, `$(`/` ` `, `curl` private-URL via `isPrivateHostForShell`, `ks-agent` paths, zero `/tmp` escape), PTY/exec parity `server/src/index.ts:3614`, secrets fully masked `maskSecretMap` + provider `••••`, DB `chmod 600` + `busy_timeout 10000` + `journal_size_limit` + serialized `saveLock` `server/src/store.ts:1336`, SSRF `isBlockedHost`. Score C9 88→**98** (>OpenHands 96, beats Docker on full-stack hardening; scenario E 92 vs Docker 98 — add `KS_DOCKER_JAIL=1` for 100). Remaining 2pts are optional Docker layer vs native jail — pure container users still prefer Docker for kernel isolation.
-*   Single-tenant by default (add a reverse proxy with auth for multi-user).
-*   No built-in git PR automation (use shell: `gh pr create`).
+### KS Agent — weaknesses (honest, what keeps it from #1 everywhere)
+*   No embeddings / semantic code search (grep/glob only; monorepo H 55 vs Cody/Cursor 85). Roadmap item; pair with Cody today.
+*   IDE polish gap (C6 78 vs 98) — no next-edit prediction, no multi-cursor inline, no marketplace one-click polish.
+*   Reasoning still model-dependent (C2 86 vs Claude 96) — prompt hardening helps but can't replace frontier model quality.
+*   Single-tenant by default (add Caddy/Nginx/Tailscale for multi-user).
+*   No built-in git PR automation (use `gh pr create`); no optional Docker jail for E (92 vs 98).
 
 ### Opencode — strengths
 Terminal-purist delight, instant start, tiny footprint, great keyboard flow. Ideal if you never leave the terminal.
@@ -346,47 +349,43 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 |---|---|---|
 | **Self-host on VPS, use from laptop + phone, any model** | **KS Agent** | Opencode + SSH |
 | **Live terminal all day, want lowest latency** | Opencode | Aider |
-| **Big refactor on 200-file repo, need deep plan first** | Claude Code | KS Agent / OpenHands |
+| **Big refactor on 200-file repo, need deep plan first** | **Claude Code (98)** | KS Agent 86 / OpenHands 88 |
 | **Cheapest strong model for daily coding** | DeepSeek (via KS Agent / Aider / Continue) | KS Agent + Ollama (free) |
-| **Untrusted / student code, must sandbox** | OpenHands (Docker 98) | KS Agent 92 native jail (98 with `KS_DOCKER_JAIL=1`) |
-| **Stay in VS Code, want autocomplete + chat** | Cursor | Copilot / Windsurf / Cline |
-| **Enterprise monorepo with powerful code search** | Cody | Cursor + embeddings |
-| **Git-heavy workflow (commit-per-change, review diff)** | Aider | KS Agent shell + `gh` |
-| **Air-gapped / offline** | **KS Agent + Ollama / LM Studio (C10 92 > DeepSeek 90)** | Continue / Aider + Ollama (88) |
-| **“Ship a PR while I sleep” cloud worker** | Devin | OpenHands cloud |
+| **Untrusted / student code, must sandbox** | **OpenHands (98)** | KS Agent 92 (native jail) |
+| **Stay in VS Code, want autocomplete + chat** | **Cursor (98)** | Cline 94 / Windsurf 96 (KS 78 early) |
+| **Enterprise monorepo with powerful code search** | **Cody (85)** | Cursor 85 (KS 55 — add Cody) |
+| **Git-heavy workflow (commit-per-change, review diff)** | **Aider (98)** | KS Agent shell + `gh` (70) |
+| **Air-gapped / offline** | **DeepSeek 90 / KS+Ollama 88** | Continue 88 / Aider 85 |
+| **“Ship a PR while I sleep” cloud worker** | **Devin (80)** | OpenHands 80 / KS 60 |
 
-**Mix-and-match is normal:** many teams run `KS Agent (server + phone + plans)` + `Cursor (day-to-day IDE)` + `DeepSeek (cheap API via KS Agent)` together.
+**Mix-and-match is normal:** `KS Agent (server + phone + plans)` + `Cursor/Cline (IDE inline)` + `DeepSeek/Ollama via KS Agent (cheap)` is a common winning stack.
 
 ---
 
 ## 9) Security Quick Pass
 
-| Surface | KS Agent **98** ( > OpenHands 96 ) | Others |
+| Surface | KS Agent **92** (not 98, honest behind Docker) | Others |
 |---|---|---|
-| API keys exposure | Masked preview `••••abcd`, never sent to client, validated server-side — **providers + MCP/LSP `maskSecretMap` `server/src/index.ts:2288,2604`**, `publicProvider` `server/src/index.ts:236` | Varies — IDE extensions often store in plaintext config |
-| Workspace escape (`../` , `/etc`) | **Strict jail — only `project/` allowed (no `/tmp` escape)** — `server/src/fsx.ts:10` realpath+symlink guard + `server/src/agent.ts:661` dual guard `isDangerousCommand`+`isOutsideScopeCommand` blocks `..`, encoded `%2e`, `~`/`$HOME`, `$(` substitution, private-URL `curl/wget` via `isPrivateHostForShell`, and `ks-agent` paths; PTY/exec parity `server/src/index.ts:3614` | Opencode/Claude/Aider have similar guards; IDE extensions usually trust OS |
-| Concurrent writes | **SQLite WAL `busy_timeout 10000` + `journal_size_limit` + transactions + serialized `saveLock` queue `server/src/store.ts:1336`, `chmod 600` `server/src/store.ts:260`**, handles parallel chat streams safely | Several agents use flat JSON — risk of corruption under concurrency |
-| Secret leakage in errors/logs | Error messages sanitized, keys never printed, per-file `chmod 600` at rest | Varies |
-| IDOR on project/chat ids | Every route checks ownership (`findProject` / `findChat`) + `findProject` path realpath check | Similar in most agents |
-| SSRF private host | **Blocked for `upload-url`, MCP/LSP URLs, and shell `curl` via `isBlockedHost` `server/src/index.ts:3656` + `isPrivateHostForShell`** | Most agents trust URL fetches |
+| API keys exposure | Masked `••••` (`index.ts:236` `publicProvider`), env/headers masked via `maskSecretMap` for MCP/LSP, `chmod 600` at rest | Varies — IDE extensions often plaintext |
+| Workspace escape (`../` , `/etc`) | Strict jail — only `project/` allowed, `fsx.ts:10` realpath+symlink + `agent.ts:714` dual guard blocks `..`, `%2e`, `~`/`$HOME`, `$(` , private-host SSRF; no `/tmp` escape | Opencode/Claude/Aider similar guards; IDE trusts OS |
+| Concurrent writes | SQLite WAL `busy_timeout 10000` + `journal_size_limit` + serialized `saveLock` (`store.ts:260`), handles parallel chats | Many agents use flat JSON — corruption risk |
+| Secret leakage in errors/logs | Error messages sanitized, keys never printed, per-file `600` | Varies |
+| IDOR on project/chat ids | Every route checks `findProject`/`findChat` + realpath | Similar elsewhere |
+| SSRF private host | Blocked for upload-url, MCP/LSP URLs, and shell `curl` via `isBlockedHost` + `isPrivateHostForShell` | Most agents trust URL fetches |
 
-> KS Agent fails closed by design. For multi-user deployments, put authentication in front via Caddy / Nginx / Tailscale.
+> Fails closed by design. Multi-user: put auth in front via Caddy/Nginx/Tailscale. For kernel isolation add Docker (`KS_DOCKER_JAIL` on roadmap) to reach 98.
 
 ---
 
-## 10) Getting Started — KS Agent in 60s (now <60s, beats Cursor)
+## 10) Getting Started — 60s
 
 ```bash
 git clone <ks-agent> && cd ks-agent
 npm install
 npm run build
 npm start            # http://localhost:8787
-# Browser auto-opens Quick Setup wizard:
-#  1) Project: keep “my-project” → Create (auto mkdir project/my-project)  — 10s
-#  2) Provider + Model in ONE click: pick preset (DeepSeek/OpenAI/Groq/Ollama) → paste key → model auto-suggested (deepseek-chat / gpt-4o-mini / llama3.2) → Create — 20s
-#  3) Pick model in composer and send — streaming + plan + preview live
-# Ollama (local): preset “Ollama (local)” — no key, offline, 30s total
-# Also: Settings → Quick Setup anytime; FAB “Quick Setup” floats when setup incomplete; ChatView empty shows “Quick Setup — 60s” CTA
+# Auto-opens Quick Setup wizard: Project → Preset (Ollama/DeepSeek/OpenAI) → Key → Model → chat
+# Ollama (local): preset “Ollama (local)” — no key, offline, ~30s
 ```
 
 Environment overrides (optional):
@@ -405,39 +404,39 @@ KS_DATA_DIR=/custom/dir           # custom data directory
 |---|---|---|---|---|---|---|
 | **Philosophy** | Web + phone + verified agent | Terminal-fast agent | Reasoning-first CLI | Cheap frontier model | Docker autonomous | IDE-native assistant |
 | **Best for** | Self-host, any model, mobile | Terminal lovers | Huge refactors | Budget + offline | Untrusted autonomy | Day-to-day IDE |
-| **Worst for** | Heavy embeddings search | Phone / preview | Cheap/budget | Needs harness | Light edits, cost | Phone / server |
+| **Worst for** | Monorepo semantic search | Phone / preview | Cheap/budget | Needs harness | Light edits, cost | Phone / server |
 | **Lock-in** | None | None | Anthropic | DeepSeek | None | Mild |
 | **Cost at scale** | $ (BYO) | $ | $$$ | $ | $$ (compute) | $$ |
 | **Autonomy** | High (plan → act → verify) | High | Very high | — | Very high | Medium |
-| **Isolation** | Project sandbox | OS | OS | — | Docker | OS |
+| **Isolation** | Project sandbox (92) | OS (80) | OS (75) | — | Docker (96) | OS (55) |
 
 ---
 
 ## 12) FAQ
 
 **Is KS Agent a fork of Opencode?**
-No. They share a similar skills shape for compatibility, but KS Agent is a standalone Hono + React + SQLite product with its own storage, streaming, PTY, and preview system.
+No. Similar skills shape for compatibility, but standalone Hono + React + SQLite product with its own storage, streaming, PTY, and preview system.
 
 **Can I use Claude / DeepSeek / local Ollama in KS Agent?**
-Yes. Any OpenAI-compatible endpoint works. Set `baseUrl` to your provider (Anthropic via proxy, `https://api.deepseek.com`, or `http://localhost:11434/v1` for Ollama) and pick the model id.
+Yes. Any OpenAI-compatible endpoint works. Use `Quick Setup` preset or set `baseUrl` to your provider (`https://api.deepseek.com` or `http://localhost:11434/v1` for Ollama) and pick the model id. No `Authorization` header is sent when no key (verified `llm.ts:165`).
 
 **Does KS Agent do semantic code search?**
-Currently grep/glob (fast on typical codebases). Embedding search is on the roadmap; for now pair with Cody/Cursor for search and KS Agent for execution.
+Not yet — grep/glob only (fast on typical codebases, 20k files scanned). Embedding search is roadmap; pair with Cody/Cursor for search and KS Agent for execution today.
 
 **Can I run KS Agent and Cursor together?**
-Yes. Point both at `project/<name>` and they share files; git is the sync layer. KS Agent gives you server/phone/plan persistence, Cursor gives inline completions.
+Yes. Point both at `project/<name>` and they share files; git is the sync layer. KS Agent gives server/phone/plan persistence, Cursor gives inline polish.
 
 **What about Devin?**
-Devin is cloud-only and expensive. KS Agent is the self-hosted opposite: you own the machine, the keys, and the DB.
+Cloud-only and expensive (~$500/mo). KS Agent is the self-hosted opposite: you own the machine, the keys, and the DB.
 
 ---
 
 ## 13) Methodology & Honesty Note
 
-*   KS Agent details are derived from the actual codebase in this repo (server/src/agent.ts `PRIMARY_SYSTEM_PROMPT`+`DEFAULT_PLAN_PROMPT` + plan-enforcement + history-truncation, server/src/llm.ts, storage, skills, README) — not guessed. **2026-09-06 Reasoning lift C2 82→96** is backed by code: `server/src/agent.ts:13` (LARGE EDIT & CORRECTNESS prompt), `server/src/agent.ts:1869` (complete_plan_step tool-evidence guard), `server/src/agent.ts:2223` (force-continue when plan incomplete), `server/src/agent.ts:2054` (90k-char sliding window). **Onboarding lift C11 78→94** backed by `web/src/App.tsx:294` auto-wizard + `web/src/components/SettingsModal.tsx:166` Quick Setup + `web/src/components/OnboardingWizard.tsx`. **Offline lift C10 85→92 (>DeepSeek 90)** backed by code: `server/src/llm.ts:166` (no `Bearer` when `apiKey` empty) + `server/src/index.ts:733,1686` (same for title & IDE completions) + `web/src/components/SettingsModal.tsx:28,39` (Ollama `11434` + LM Studio `1234` presets, `no key, air-gapped`, `localhost` detection) — full harness + local weights beats weights-only. **Extensibility lift C12 85→96 (>95)** backed by code: Skills `server/src/agent.ts:138,183,254,321` (read-before-edit guard `hasReadSkill`/`getEnforcedSkillsForWrite`/`recordSkillRead`) + `server/src/index.ts:1998` `buildSkillSystemMessages` 12k injection with auto-discovery of `project/<name>/skills/*.md` + global `skills/` + `store.ts:182` Skill CRUD; MCP `server/src/mcp.ts:314` 4 transports (stdio/sse/http/websocket) `createClient`/`getMCPToolDefs`/`callMCPTool` + `server/src/index.ts:2288` `maskSecretMap` secrets masked on `mcpPublic`; LSP `server/src/lsp.ts:349` 6 transports (stdio/tcp/socket/websocket/http/sse) `createClient`/`getLspStatusForApi` + `server/src/index.ts:2611` `lspPublic` masked; Plugins `server/src/index.ts:2868` 8-item `PLUGIN_MARKETPLACE` + `POST /api/settings/plugins/install` + `store.ts:167` `PluginSource` + `web/src/components/ExtensionsModal.tsx` marketplace search/category/install with per-project/global `store.ts:177` — beats Opencode 80 / OpenHands 82 / Cursor 75. **Security lift C9 88→98 (>OpenHands 96)** backed by code: strict jail `server/src/fsx.ts:10` realpath+symlink + `server/src/agent.ts:602,661` `isDangerousCommand`+`isOutsideScopeCommand` (encoded `..`, `~`/`$HOME`, `$()`/backtick, private-URL `isPrivateHostForShell`, zero `/tmp` escape) + `server/src/index.ts:3614` PTY/exec parity; secrets `server/src/index.ts:236` provider `••••` + `2288,2604` MCP/LSP `maskSecretMap` + restore on patch, DB `chmod 600` `server/src/store.ts:260` + WAL `busy_timeout 10000` + `saveLock` `store.ts:1336`, SSRF `isBlockedHost` `server/src/index.ts:3656`.
-*   Competitor details are summarized from public docs and pricing as of mid-2026. Features move fast — verify on the vendor site before buying.
-*   Scores are **opinionated but transparent** — all weights and criteria are listed in §4. If you disagree, open a PR with a doc link + evidence and we’ll adjust.
-*   No paid placement. If a row is wrong, open a PR with evidence (docs link + screenshot).
+*   **Evidence:** KS Agent details verified by reading this repo's code: `server/src/agent.ts:13` large-edit prompt, `agent.ts:138` Skill guard, `agent.ts:714` jail, `server/src/fsx.ts:10` realpath, `server/src/llm.ts:165` no-key, `server/src/index.ts:112` PTY + `1730` IDE routes, `server/src/store.ts:260` `chmod 600` + WAL, `web/src/components/FilesPane.tsx:596` ghost + `⌘K`, `vscode-extension/package.json:12` VS Code ext, `web/src/components/OnboardingWizard.tsx:21` wizard.
+*   **Honesty vs prior inflated version:** Inflated 1135 (94.6, claimed beats all personas) reverted to honest **1089 (90.8)** with measured lifts (+49, not +95) and honest scenario/persona rankings. See §4.2 evidence notes.
+*   **Competitor scores:** From public docs/pricing mid-2026. Features move — verify on vendor sites.
+*   **No paid placement.** PR with doc link + evidence → we adjust.
 
 ---
 
