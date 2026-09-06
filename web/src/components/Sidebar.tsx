@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Chat, Project } from '../types'
+import * as api from '../api'
+import type { SemanticHit } from '../api'
 import {
   IconChat,
   IconChevronDown,
@@ -57,6 +59,13 @@ export function Sidebar(props: SidebarProps) {
   const [projQuery, setProjQuery] = useState('')
   const [chatQuery, setChatQuery] = useState('')
   const [menuFor, setMenuFor] = useState<MenuState | null>(null)
+  // Semantic search (hybrid grep+TF-IDF) — server/src/store.ts:embeddings + server/src/agent.ts:semantic_search
+  const [semanticEnabled, setSemanticEnabled] = useState(false)
+  const [semanticQuery, setSemanticQuery] = useState('')
+  const [semanticHits, setSemanticHits] = useState<SemanticHit[] | null>(null)
+  const [semanticLoading, setSemanticLoading] = useState(false)
+  const [semanticMeta, setSemanticMeta] = useState<{ embeddingCount: number; fallback: boolean } | null>(null)
+  const semanticDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const projWrapRef = useClickOutside(() => setProjOpen(false))
 

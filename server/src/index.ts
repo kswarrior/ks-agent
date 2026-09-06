@@ -52,7 +52,11 @@ import {
   type Plugin,
   type PluginSource,
   findPlugin,
-  getPlugins
+  getPlugins,
+  semanticSearch,
+  rebuildEmbeddingsForProject,
+  getEmbeddingCount,
+  clearEmbeddingsForProject
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
@@ -555,6 +559,108 @@ app.get('/api/chats/:id/activities', (c) => {
   const chat = findChat(c.req.param('id'))
   if (!chat) return c.json({ error: 'Chat not found' }, 404)
   return c.json(activitiesOf(chat.id))
+})
+
+// ---------------- Semantic Search (hybrid grep + TF-IDF cosine) — server/src/store.ts:embeddings + server/src/agent.ts:semantic_search ----------------
+
+app.post('/api/projects/:id/search/semantic', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const rawQ = body.query ?? body.pattern ?? body.q ?? body.text ?? ''
+  const query = String(rawQ ?? '').trim()
+  if (!query) return c.json({ error: 'query is required' }, 400)
+  if (query.length > 500) return c.json({ error: 'query too long (max 500)' }, 400)
+  if (query.includes('\0')) return c.json({ error: 'invalid query' }, 400)
+  const rawLimit = body.limit ?? body.max_results ?? body.maxResults ?? 20
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(rawLimit) || 20)))
+  const rawInclude = body.include != null ? String(body.include).trim().slice(0, 200) : null
+  if (rawInclude && rawInclude.includes('\0')) return c.json({ error: 'invalid include' }, 400)
+  if (rawInclude && rawInclude.includes('..')) return c.json({ error: 'invalid include (no "..")' }, 400)
+  try {
+    const hits = semanticSearch(project.id, query, { limit, include: rawInclude || undefined, projectPath: project.path })
+    const embeddingCount = getEmbeddingCount(project.id)
+    return c.json({ query, hits, total: hits.length, embeddingCount, fallback: embeddingCount === 0 })
+  } catch (e: any) {
+    return c.json({ error: String(e?.message || 'semantic search failed').slice(0, 400) }, 400)
+  }
+})
+app.get('/api/projects/:id/search/semantic', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const query = String(c.req.query('q') ?? c.req.query('query') ?? '').trim()
+  if (!query) return c.json({ error: 'query is required (?q=)' }, 400)
+  if (query.length > 500) return c.json({ error: 'query too long' }, 400)
+  if (query.includes('\0')) return c.json({ error: 'invalid query' }, 400)
+  const rawLimit = c.req.query('limit') ?? '20'
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(rawLimit) || 20)))
+  const rawInclude = c.req.query('include') ? String(c.req.query('include')).trim().slice(0, 200) : null
+  if (rawInclude && rawInclude.includes('\0')) return c.json({ error: 'invalid include' }, 400)
+  if (rawInclude && rawInclude.includes('..')) return c.json({ error: 'invalid include' }, 400)
+  try {
+    const hits = semanticSearch(project.id, query, { limit, include: rawInclude || undefined, projectPath: project.path })
+    const embeddingCount = getEmbeddingCount(project.id)
+    return c.json({ query, hits, total: hits.length, embeddingCount, fallback: embeddingCount === 0 })
+  } catch (e: any) {
+    return c.json({ error: String(e?.message || 'failed').slice(0, 400) }, 400)
+  }
+})
+// Generic POST /api/search/semantic with { projectId, query } for flexibility
+app.post('/api/search/semantic', async (c) => {
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const pid = String(body.projectId ?? body.project_id ?? '').trim()
+  const rawQ = body.query ?? body.pattern ?? body.q ?? ''
+  const query = String(rawQ ?? '').trim()
+  if (!pid) return c.json({ error: 'projectId is required' }, 400)
+  if (!query) return c.json({ error: 'query is required' }, 400)
+  if (query.length > 500) return c.json({ error: 'query too long' }, 400)
+  if (query.includes('\0') || pid.includes('\0')) return c.json({ error: 'invalid input' }, 400)
+  const project = findProject(pid)
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  const rawLimit = body.limit ?? body.max_results ?? 20
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(rawLimit) || 20)))
+  const rawInclude = body.include != null ? String(body.include).trim().slice(0, 200) : null
+  if (rawInclude && rawInclude.includes('..')) return c.json({ error: 'invalid include' }, 400)
+  try {
+    const hits = semanticSearch(project.id, query, { limit, include: rawInclude || undefined, projectPath: project.path })
+    const embeddingCount = getEmbeddingCount(project.id)
+    return c.json({ query, hits, total: hits.length, embeddingCount, fallback: embeddingCount === 0 })
+  } catch (e: any) {
+    return c.json({ error: String(e?.message || 'failed').slice(0,400) },400)
+  }
+})
+app.post('/api/projects/:id/search/index', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  try {
+    const indexed = rebuildEmbeddingsForProject(project.id)
+    const embeddingCount = getEmbeddingCount(project.id)
+    return c.json({ ok: true, indexed, embeddingCount })
+  } catch (e: any) {
+    return c.json({ error: String(e?.message || 'index failed').slice(0,400) }, 500)
+  }
+})
+app.delete('/api/projects/:id/search/index', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  try {
+    clearEmbeddingsForProject(project.id)
+    return c.json({ ok: true, embeddingCount: 0 })
+  } catch (e: any) {
+    return c.json({ error: String(e?.message || 'clear failed').slice(0,400) }, 500)
+  }
+})
+app.get('/api/projects/:id/search/status', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  try {
+    const embeddingCount = getEmbeddingCount(project.id)
+    return c.json({ projectId: project.id, embeddingCount, hasEmbeddings: embeddingCount>0 })
+  } catch (e: any) {
+    return c.json({ error: String(e?.message || 'failed').slice(0,400) }, 500)
+  }
 })
 
 // ---------------- Skill status (for right sidebar activity) ----------------

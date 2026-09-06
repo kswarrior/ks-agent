@@ -334,6 +334,23 @@ export const listSkills = () => req<Skill[]>('/api/settings/skills')
 export const createSkill = (s: { name: string; note: string; mainFile: string; files: string[]; projectId?: string }) =>
   req<Skill>('/api/settings/skills', json('POST', s))
 export const deleteSkill = (id: string) => req<{ ok: true }>(`/api/settings/skills/${id}`, { method: 'DELETE' })
+
+// Semantic Search (hybrid grep + TF-IDF cosine) — server/src/store.ts:embeddings, server/src/agent.ts:semantic_search
+export type SemanticHit = { path: string; score: number; snippet?: string; source: 'semantic' | 'grep' | 'hybrid' }
+export const semanticSearch = (projectId: string, query: string, opts?: { limit?: number; include?: string }) =>
+  req<{ query: string; hits: SemanticHit[]; total: number; embeddingCount: number; fallback: boolean }>(`/api/projects/${projectId}/search/semantic`, json('POST', { query, limit: opts?.limit ?? 20, include: opts?.include ?? null }))
+export const semanticSearchGet = (projectId: string, query: string, opts?: { limit?: number; include?: string }) => {
+  const qs = new URLSearchParams({ q: query })
+  if (opts?.limit) qs.set('limit', String(opts.limit))
+  if (opts?.include) qs.set('include', opts.include)
+  return req<{ query: string; hits: SemanticHit[]; total: number; embeddingCount: number; fallback: boolean }>(`/api/projects/${projectId}/search/semantic?${qs.toString()}`)
+}
+export const rebuildSemanticIndex = (projectId: string) =>
+  req<{ ok: true; indexed: number; embeddingCount: number }>(`/api/projects/${projectId}/search/index`, json('POST', {}))
+export const clearSemanticIndex = (projectId: string) =>
+  req<{ ok: true; embeddingCount: number }>(`/api/projects/${projectId}/search/index`, { method: 'DELETE' })
+export const getSemanticStatus = (projectId: string) =>
+  req<{ projectId: string; embeddingCount: number; hasEmbeddings: boolean }>(`/api/projects/${projectId}/search/status`)
 export const updateSkill = (id: string, patch: Partial<{ name: string; note: string; mainFile: string; files: string[]; projectId?: string }>) =>
   req<Skill>(`/api/settings/skills/${id}`, json('PATCH', patch))
 export const createSkillFile = (path: string, content: string) =>
