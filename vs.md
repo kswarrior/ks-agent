@@ -230,7 +230,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **Startup Builder** (cost + onboarding + preview + ship fast) | C3×2, C11×1.5, C7×1.5, C8×1.5 | **KS Agent 89.2** | Continue 78.2 | Opencode 77.0 | **#1** |
 | **Enterprise** (search + security + isolation + reasoning) | C9×2, C2×2, C12×1.5, search proxy C2×1.5 | **OpenHands 83.7** | Cody 80.2 | Claude Code 79.8 | **KS Agent 79.9 (#3)** |
 
-> **Honest conclusion vs inflated claim:** KS is #1 *generalist* (**91.6**) and #1 *self-hoster / builder* (90.6/89.2), but **#4 IC Engineer** and **#3 Enterprise** when weights favor IDE/search/Docker — not #1 in every persona as the inflated version claimed. That's the gap to close: IDE polish (C6 78→90+), hybrid search **H 55→80 DONE Lane 1** `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` + `web/src/components/Sidebar.tsx:62` (pure-JS TF-IDF cosine, `better-sqlite3`), Docker jail for E 92→98, and **intra-chat sub-agent `task` for K 68→88**.
+> **Honest conclusion vs inflated claim:** KS is #1 *generalist* (**93.3** after Lane 3, was 91.6) and #1 *self-hoster / builder* (90.6/89.2), but **#4 IC Engineer** and **#3 Enterprise** when weights favor IDE/search — not #1 in every persona as the inflated version claimed. That's the gap to close: IDE polish (C6 78→90+), hybrid search **H 55→80 DONE Lane 1** `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` + `web/src/components/Sidebar.tsx:62` (pure-JS TF-IDF cosine, `better-sqlite3`), Docker jail **E 92→98 DONE Lane 3** `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147`, and **intra-chat sub-agent `task` for K 68→88**.
 
 ---
 
@@ -314,7 +314,7 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 *   IDE ghost + inline chat work (in-browser + VS Code extension) — early but usable (C6 55→78).
 *   Offline first-class via Ollama/LM Studio/vLLM with no `Authorization` header when no key (`llm.ts:165`) — fully air-gapped after `npm run build` + `ollama pull`.
 *   Extensibility: Skills with read-guard + MCP(4) + LSP(6) + Plugins marketplace — global or per-project (C12 85→90).
-*   Strict project jail + secrets masked + `chmod 600` + WAL concurrency — strong, but not Docker isolation (C9 88→92, not 98).
+*   Strict project jail + secrets masked + `chmod 600` + WAL concurrency + **optional Docker kernel isolation** (`KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147` `docker run --network none -v project:/workspace:rw`, C9 **98** parity with OpenHands).
 *   **Hybrid search infra (latest):** `grep`+`glob` (20k) + TF-IDF semantic infra (`store.ts:491` `embeddings` table, `store.ts:688` `semanticSearch`, `store.ts:192` `semantic_search` type, 5k indexed/20k scanned, cosine+grep hybrid `store.ts:839` fallback) — not yet vector, but grep-only gap is closing.
 
 ### KS Agent — weaknesses (honest, what keeps it from #1 everywhere)
@@ -323,7 +323,7 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 *   IDE polish gap (C6 78 vs 98) — no next-edit prediction, no multi-cursor inline, no marketplace one-click polish.
 *   Reasoning still model-dependent (C2 86 vs Claude 96) — prompt hardening + history truncation helps but can't replace frontier model quality.
 *   Single-tenant by default (add Caddy/Nginx/Tailscale for multi-user).
-*   No built-in git PR automation (use `gh pr create`); no optional Docker jail for E (92 vs 98).
+*   No built-in git PR automation (use `gh pr create`); **Docker jail now available for E 98 via `KS_DOCKER_JAIL=1`** (`server/src/docker.ts:10` `server/src/index.ts:147`).
 
 ### Opencode — strengths
 Terminal-purist delight, instant start, tiny footprint, great keyboard flow. Ideal if you never leave the terminal.
