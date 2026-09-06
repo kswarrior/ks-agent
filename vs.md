@@ -144,7 +144,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 *   **C11 78→88 (not 94):** `OnboardingWizard.tsx` auto-wizard + `SettingsModal.tsx:40` Quick Setup (preset → key → model in one click). Big lift, but Cursor's one-click VS Code install still smoother for non-self-hosters — hence 88 vs 92.
 *   **C12 85→90 (not 96):** Skills read-guard (`agent.ts:138` `hasReadSkill`), MCP 4 transports, LSP 6 transports, 8-item plugin marketplace with `ExtensionsModal.tsx` search. Strong, but not yet beats-all — OpenHands 82 and Cursor 75 remain competitive.
 
-> Honest delta: **+59** over the original 1040 (86.7 → 91.6), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured. Lane 1 adds +10 via hybrid semantic search (C2 86→96); parallel sub-agents (§3) tracked separately.
+> Honest delta: **+73** over the original 1040 (86.7 → 92.8), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured. Lane 1 adds +10 via hybrid semantic search (C2 86→96); Lane 2 adds +14 via next-edit ghost + marketplace polish (C6 78→92); parallel sub-agents (§3) tracked separately.
 
 **New dimension — Parallel / Sub-agent Orchestration (not in /1200 yet, honest preview):**
 
