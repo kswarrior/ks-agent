@@ -3122,7 +3122,7 @@ type MarketplacePlugin = {
   category: string
 }
 
-const PLUGIN_MARKETPLACE: MarketplacePlugin[] = [
+let PLUGIN_MARKETPLACE: MarketplacePlugin[] = [
   { id: 'prettier', name: 'Prettier', description: 'Opinionated code formatter. Enforces consistent style by parsing and re-printing code.', version: '3.2.1', publisher: 'Prettier', icon: '✨', tags: ['formatter', 'productivity'], downloads: 12400000, rating: 4.8, category: 'Formatters' },
   { id: 'eslint', name: 'ESLint', description: 'Find and fix problems in your JavaScript and TypeScript code with pluggable linting rules.', version: '8.57.0', publisher: 'Microsoft', icon: '🔍', tags: ['linter', 'productivity'], downloads: 8700000, rating: 4.7, category: 'Linters' },
   { id: 'gitlens', name: 'GitLens', description: 'Supercharge Git — blame, history, file annotations and rich commit graph inside KS Agent.', version: '14.9.1', publisher: 'GitKraken', icon: '🌿', tags: ['git', 'scm'], downloads: 6500000, rating: 4.9, category: 'SCM' },
@@ -3132,6 +3132,168 @@ const PLUGIN_MARKETPLACE: MarketplacePlugin[] = [
   { id: 'vite', name: 'Vite', description: 'Next-generation frontend tooling. Instant HMR, optimized builds and preview integration.', version: '5.4.0', publisher: 'Evan You', icon: '⚡', tags: ['build', 'frontend'], downloads: 2900000, rating: 4.7, category: 'Build' },
   { id: 'todo-tree', name: 'Todo Tree', description: 'Highlight and list TODO, FIXME, HACK comments across your workspace with quick navigation.', version: '0.0.226', publisher: 'Gruntfuggly', icon: '🌳', tags: ['productivity', 'navigation'], downloads: 1800000, rating: 4.6, category: 'Productivity' }
 ]
+
+// ---------------- Hot-reload: watch skills/ + plugin entryPoint (no restart, log + DB timestamp) ----------------
+const pluginEntryWatchers = new Map<string, fs.FSWatcher>()
+let skillsWatcher: fs.FSWatcher | null = null
+const hotReloadDebounce = new Map<string, NodeJS.Timeout>()
+
+function resolvePluginEntryAbs(plugin: Plugin): string | null {
+  if (!plugin.entryPoint) return null
+  const ep = String(plugin.entryPoint).trim()
+  if (!ep) return null
+  if (plugin.projectId) {
+    const proj = findProject(plugin.projectId)
+    if (!proj) return null
+    const abs = resolveInProject(proj.path, ep)
+    return abs
+  }
+  // global plugin: try cwd-relative, then skills/
+  const cand1 = path.resolve(process.cwd(), ep)
+  try {
+    if (fs.existsSync(cand1)) return cand1
+  } catch {}
+  const cand2 = path.join(process.cwd(), 'skills', ep)
+  try {
+    if (fs.existsSync(cand2)) return cand2
+  } catch {}
+  // fallback to cwd resolved for watching parent dir even if not yet exists
+  return cand1
+}
+
+function ensurePluginWatcher(plugin: Plugin): void {
+  if (!plugin.entryPoint) return
+  const id = plugin.id
+  const prev = pluginEntryWatchers.get(id)
+  if (prev) { try { prev.close() } catch {} ; pluginEntryWatchers.delete(id) }
+  const abs = resolvePluginEntryAbs(plugin)
+  if (!abs) return
+  let watchTarget: string | null = null
+  let isFile = false
+  try {
+    const st = fs.statSync(abs)
+    if (st.isFile()) { watchTarget = abs; isFile = true }
+    else if (st.isDirectory()) { watchTarget = abs; isFile = false }
+  } catch {
+    // file doesn't exist yet: watch parent dir
+    try {
+      const parent = path.dirname(abs)
+      if (fs.existsSync(parent) && fs.statSync(parent).isDirectory()) watchTarget = parent
+    } catch {}
+  }
+  if (!watchTarget) return
+  try {
+    const w = fs.watch(watchTarget, (eventType, filename) => {
+      // for file watcher, filename may be null; for dir watcher, filter by basename
+      if (!isFile && filename) {
+        const base = path.basename(abs)
+        if (filename !== base && !filename.endsWith('/' + base) && !String(filename).includes(base)) return
+      }
+      const key = 'plugin:' + id
+      const existing = hotReloadDebounce.get(key)
+      if (existing) clearTimeout(existing)
+      const t = setTimeout(() => {
+        hotReloadDebounce.delete(key)
+        // verify still exists
+        const cur = findPlugin(id)
+        if (!cur) return
+        // if entry still points to same file, check mtime
+        try {
+          const a = resolvePluginEntryAbs(cur)
+          if (a && fs.existsSync(a)) {
+            // touch timestamp
+            cur.updatedAt = new Date().toISOString()
+            saveDb()
+            console.log(`[hot-reload] plugin "${cur.name}" entryPoint changed (${cur.entryPoint}) -> reloaded, updatedAt=${cur.updatedAt}`)
+          }
+        } catch {}
+      }, 300)
+      hotReloadDebounce.set(key, t)
+    })
+    w.on('error', () => {})
+    pluginEntryWatchers.set(id, w)
+  } catch (e) {
+    console.warn(`[hot-reload] failed to watch plugin ${plugin.name} entryPoint ${abs}:`, String((e as any)?.message || e).slice(0, 200))
+  }
+}
+
+function removePluginWatcher(id: string): void {
+  const w = pluginEntryWatchers.get(id)
+  if (w) { try { w.close() } catch {} ; pluginEntryWatchers.delete(id) }
+  const t = hotReloadDebounce.get('plugin:' + id)
+  if (t) { clearTimeout(t); hotReloadDebounce.delete('plugin:' + id) }
+}
+
+function setupHotReload(): void {
+  const skillsDir = path.join(process.cwd(), 'skills')
+  if (skillsWatcher) { try { skillsWatcher.close() } catch {} ; skillsWatcher = null }
+  try {
+    if (fs.existsSync(skillsDir)) {
+      // fs.watch recursive works on Linux Node >=19; fallback to non-recursive if unsupported
+      try {
+        skillsWatcher = fs.watch(skillsDir, { recursive: true } as any, (eventType, filename) => {
+          if (!filename) return
+          const key = 'skills:' + String(filename)
+          const existing = hotReloadDebounce.get(key)
+          if (existing) clearTimeout(existing)
+          const t = setTimeout(() => {
+            hotReloadDebounce.delete(key)
+            // find skills whose mainFile or files matches changed file
+            const rel = String(filename).replace(/\\/g, '/')
+            const base = path.basename(rel)
+            let touched = 0
+            for (const sk of getDb().skills) {
+              const mainBase = path.basename(sk.mainFile)
+              const matches = sk.mainFile === rel || sk.mainFile.endsWith('/' + rel) || mainBase === base || (sk.files || []).some(f => f === rel || path.basename(f) === base)
+              // also generic: if any skill's mainFile basename matches changed file basename, assume hot-reload
+              if (matches || rel === sk.mainFile) {
+                sk.updatedAt = new Date().toISOString()
+                touched++
+              }
+            }
+            if (touched) {
+              try { saveDb() } catch {}
+              console.log(`[hot-reload] skills/ changed: ${rel} (${eventType}) -> reloaded ${touched} skill(s)`)
+            } else {
+              console.log(`[hot-reload] skills/ changed: ${rel} (${eventType})`)
+            }
+          }, 300)
+          hotReloadDebounce.set(key, t)
+        })
+        skillsWatcher.on('error', () => {})
+        console.log(`[hot-reload] watching skills/ (${skillsDir})`)
+      } catch {
+        // fallback non-recursive
+        skillsWatcher = fs.watch(skillsDir, (eventType, filename) => {
+          const rel = String(filename || 'unknown').replace(/\\/g, '/')
+          console.log(`[hot-reload] skills/ changed: ${rel} (${eventType})`)
+          const key = 'skills:fallback:' + rel
+          const ex = hotReloadDebounce.get(key)
+          if (ex) clearTimeout(ex)
+          const t = setTimeout(() => {
+            hotReloadDebounce.delete(key)
+            for (const sk of getDb().skills) {
+              if (path.basename(sk.mainFile) === path.basename(rel)) {
+                sk.updatedAt = new Date().toISOString()
+              }
+            }
+            try { saveDb() } catch {}
+          }, 400)
+          hotReloadDebounce.set(key, t)
+        })
+        console.log(`[hot-reload] watching skills/ (non-recursive) ${skillsDir}`)
+      }
+    }
+  } catch (e) {
+    console.warn('[hot-reload] skills watcher failed', String((e as any)?.message || e).slice(0, 200))
+  }
+  // watch existing plugins
+  try {
+    for (const p of getPlugins()) {
+      if (p.entryPoint) ensurePluginWatcher(p)
+    }
+  } catch {}
+}
 
 function isValidPluginName(name: string): boolean {
   return name.length >= 2 && name.length <= 80
