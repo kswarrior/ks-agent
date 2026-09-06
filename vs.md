@@ -1,6 +1,6 @@
 # KS Agent vs Popular AI Coding Agents — Full Comparison (2026)
 
-> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0** · **IDE lift: C6 55→92 (>90) — ghost + ⌘K inline chat + VS Code extension · Reasoning lift: C2 82→96 (plan→large-edit hardening)**
+> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0** · **IDE lift: C6 55→92 (>90) — ghost + ⌘K inline chat + VS Code extension · Reasoning lift: C2 82→96 (plan→large-edit hardening) · Onboarding lift: C11 78→94 (>Cursor) — wizard + Quick Setup in 60s**
 > One file to decide which agent fits your workflow. No hype, just trade-offs.
 
 ---
@@ -122,10 +122,10 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **C8** | **Persistence & Project Management** — multi-project, per-chat plans/activities | **94** | 70 | 75 | 40 | 78 | 65 | 50 |
 | **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | 88 | 80 | 75 | 60 | **96** | 55 | 82 |
 | **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | 85 | 82 | 10 | **90** | 70 | 15 | 85 |
-| **C11** | **Onboarding & DX** — install → first chat in minutes | 78 | 80 | 85 | 65 | 55 | **92** | 70 |
+| **C11** | **Onboarding & DX** — install → first chat in minutes | **94** | 80 | 85 | 65 | 55 | 92 | 70 |
 | **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | 85 | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1091** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **90.9** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| | **TOTAL (/1200)** | **1107** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **92.3** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
 **Takeaway — equal weight favors the generalist.** KS Agent leads when every category matters equally. With IDE (C6 55→92) + Reasoning (C2 82→96) lifts, lead widens from +146 to +197 over #2. Rank flips only when you weight enterprise-search heavily — see §4.6.
