@@ -11,6 +11,8 @@ import { ChatView } from './components/ChatView'
 import { SettingsModal } from './components/SettingsModal'
 import { ExtensionsModal } from './components/ExtensionsModal'
 import { AddProjectModal } from './components/AddProjectModal'
+import { OnboardingWizard, shouldAutoShowOnboarding } from './components/OnboardingWizard'
+import { IconSparkles } from './icons'
 import { applyTheme } from './theme'
 
 const LS_PROJECT = 'ks.activeProject'
@@ -41,6 +43,8 @@ function KsAgent() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showPreviewBanner, setShowPreviewBanner] = useState(false)
   const previewBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [providers, setProviders] = useState<import('./types').Provider[]>([])
 
   // Keep the right workspace panel always open whenever the screen is wide
   // enough for it to fit next to the left sidebar and the composer input.
@@ -261,9 +265,30 @@ function KsAgent() {
     }
   }, [toast])
 
+  const refreshProviders = useCallback(async () => {
+    try {
+      const list = await api.listProviders()
+      setProviders(list)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    }
+  }, [toast])
+
   useEffect(() => {
     refreshModels()
-  }, [refreshModels])
+    refreshProviders()
+  }, [refreshModels, refreshProviders])
+
+  // auto-show onboarding wizard when setup incomplete (install → first chat in 60s)
+  useEffect(() => {
+    if (projects.length === 0 && models.length === 0 && providers.length === 0) return // still loading initial
+    // wait until initial load settled (projects or providers known)
+    const needs = shouldAutoShowOnboarding(projects, providers, models)
+    if (needs) {
+      const t = setTimeout(() => setOnboardingOpen(true), 600)
+      return () => clearTimeout(t)
+    }
+  }, [projects.length, providers.length, models.length])
 
   // ---- background generation tracking ----
   const trackGeneration = useCallback(
@@ -1159,9 +1184,35 @@ function KsAgent() {
         </div>
       )}
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onDataChanged={refreshModels} />
+      <SettingsModal open={settingsOpen} onClose={() => { setSettingsOpen(false); refreshProviders(); refreshModels() }} onDataChanged={() => { refreshProviders(); refreshModels() }} />
       <ExtensionsModal open={extensionsOpen} onClose={() => setExtensionsOpen(false)} />
       <AddProjectModal open={addProjectOpen} onClose={() => setAddProjectOpen(false)} onCreated={submitAddProject} />
+      <OnboardingWizard
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+        projects={projects}
+        providers={providers}
+        models={models}
+        onProjectCreated={(p) => {
+          setProjects((prev) => [...prev, p])
+          setActiveProjectId(p.id)
+          refreshProviders()
+        }}
+        onProviderModelCreated={() => {
+          refreshProviders()
+          refreshModels()
+        }}
+      />
+      {!onboardingOpen && (projects.length === 0 || providers.length === 0 || models.length === 0) && (
+        <button
+          className="onboarding-fab"
+          onClick={() => setOnboardingOpen(true)}
+          title="Quick Setup — install → first chat in 60s"
+          aria-label="Open Quick Setup"
+        >
+          <IconSparkles size={16} /> Quick Setup
+        </button>
+      )}
     </div>
   )
 }
