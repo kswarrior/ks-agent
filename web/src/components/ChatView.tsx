@@ -202,9 +202,11 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
 }
 
 function ThinkingCard({ stage, stageLabel, thinking, hasContent, retryReason }: { stage: string; stageLabel: string; thinking?: string; hasContent: boolean; retryReason?: string }) {
-  const text = useMemo(() => {
-    const t = (thinking ?? '').trim().replace(/\s+/g, ' ')
-    if (t) return t.length > 120 ? t.slice(0, 120) + '…' : t
+  const [expanded, setExpanded] = useState(false)
+  const fullText = useMemo(() => (thinking ?? '').trim(), [thinking])
+  const preview = useMemo(() => {
+    const t = fullText.replace(/\s+/g, ' ')
+    if (t) return t.length > 90 ? t.slice(0, 90) + '…' : t
     if (retryReason) return retryReason === 'timeout' ? 'handling timeout' : retryReason === 'resource_exhausted' ? 'handling capacity' : `retrying ${retryReason}`
     if (stage === 'explore') return 'exploring project files'
     if (stage === 'planning') return 'planning'
@@ -212,17 +214,39 @@ function ThinkingCard({ stage, stageLabel, thinking, hasContent, retryReason }: 
     if (stage === 'understand') return 'understanding your request'
     if (!hasContent) return 'preparing response'
     return 'generating response'
-  }, [thinking, stage, hasContent, retryReason])
+  }, [fullText, stage, hasContent, retryReason])
 
   const label = stageLabel && stageLabel !== 'Executing' ? stageLabel : 'Thinking'
+  const hasFullContent = !!fullText
 
   return (
-    <div className="thinking-card" aria-live="polite">
-      <span className="thinking-label">{label}</span>
-      <span className="thinking-bracket">&lt;</span>
-      <span className="thinking-text" title={text}>{text}</span>
-      <span className="thinking-bracket">&gt;</span>
-      <span className="dots" aria-hidden><span className="dot" /><span className="dot" /><span className="dot" /></span>
+    <div className={`thinking-card${expanded ? ' expanded' : ''}`} aria-live="polite">
+      <button
+        className="thinking-header"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-label={expanded ? 'Hide thinking' : 'Show thinking'}
+        title={expanded ? 'Hide thinking' : 'Show full thinking'}
+        type="button"
+      >
+        <span className="thinking-label">{label}</span>
+        <span className="thinking-bracket">&lt;</span>
+        <span className="thinking-text" title={preview}>{preview}</span>
+        <span className="thinking-bracket">&gt;</span>
+        <span className="thinking-chevron" aria-hidden>
+          <IconChevronDown size={12} style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' } as any} />
+        </span>
+        <span className="dots" aria-hidden><span className="dot" /><span className="dot" /><span className="dot" /></span>
+      </button>
+      {expanded && (
+        <div className="thinking-body" role="region" aria-label="AI thinking">
+          <div className="thinking-body-label">&lt;thinking&gt;</div>
+          <div className="thinking-body-content">
+            {hasFullContent ? fullText : preview}
+          </div>
+          <div className="thinking-body-label">&lt;/thinking&gt;</div>
+        </div>
+      )}
     </div>
   )
 }
