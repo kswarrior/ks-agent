@@ -986,7 +986,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
                   onClick={onEditorSelect}
                   onBlur={() => { /* keep ghost until next focus */ }}
                   disabled={editLoading}
-                  placeholder={editLoading ? 'Loading…' : 'Start typing…  (Tab to accept ghost, ⌘K for inline chat)'}
+                  placeholder={editLoading ? 'Loading…' : 'Start typing…  (Tab: accept ghost, Shift+Tab/Esc: dismiss, ⌘K: inline chat)'}
                   spellCheck={false}
                   autoFocus
                 />
@@ -1009,7 +1009,7 @@ export function FilesPane({ projectId }: FilesPaneProps) {
           )}
           <div className="fp-editor-footer" style={{ borderLeft: `3px solid ${selectedColor}`, paddingLeft: 8 }}>
             <span className="fp-editor-lang" style={{ color: selectedColor }}>{selectedLanguage}</span>
-            <span className="fp-editor-hint">{editLoading ? 'Loading…' : `${editContent.split('\n').length} lines • ${editContent.length} chars`}{ghostText ? ' • ghost: Tab to accept' : ''}{inlineChat.open ? ' • inline chat: ⌘K' : ''}</span>
+            <span className="fp-editor-hint">{editLoading ? 'Loading…' : `${editContent.split('\n').length} lines • ${editContent.length} chars`}{ghostText ? ` • ghost: Tab accept, Shift+Tab dismiss (${ghostText.split('\n').length} lines)` : ''}{inlineChat.open ? ' • inline chat: ⌘K' : ''}</span>
             <span className="fp-editor-ide" style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 11, color: 'var(--text-faint)' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: ghostText ? 'var(--primary)' : '#22c55e', display: 'inline-block' }} />{ghostText ? 'ghost' : 'autocomplete ready'}</span>
               <span>·</span>
