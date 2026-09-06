@@ -55,7 +55,7 @@ interface ProviderForm {
 }
 
 export function SettingsModal({ open, onClose, onDataChanged }: Props) {
-  const [tab, setTab] = useState<Tab>('providers')
+  const [tab, setTab] = useState<Tab>('quick')
   const [providers, setProviders] = useState<Provider[]>([])
   const [models, setModels] = useState<ModelEntry[]>([])
   const [providerForm, setProviderForm] = useState<ProviderForm | null>(null)
@@ -132,6 +132,17 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
   }
 
+  // quick setup state
+  const [quickIdx, setQuickIdx] = useState(1)
+  const [quickKey, setQuickKey] = useState('')
+  const [quickModel, setQuickModel] = useState(QUICK_PRESETS[1].models[0])
+  const [quickDisplay, setQuickDisplay] = useState('')
+  const [quickBusy, setQuickBusy] = useState(false)
+
+  useEffect(() => {
+    setQuickModel(QUICK_PRESETS[quickIdx].models[0])
+  }, [quickIdx])
+
   useEffect(() => {
     if (open) {
       refresh()
@@ -143,9 +154,37 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       setProviderPicker(false)
       setShowModelForm(false)
       setModelEdit(null)
+      setError(null)
+      // auto-select quick tab when setup incomplete, otherwise providers
+      // we need providers/models length, but they are stale at open time — decide after refresh
+      // default to quick for first-time feel
+      setTab('quick')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  async function submitQuickSetup() {
+    const preset = QUICK_PRESETS[quickIdx]
+    setError(null)
+    if (preset.needsKey && !quickKey.trim()) return setError(`API key is required for ${preset.name}`)
+    if (!quickModel.trim()) return setError('Model id is required')
+    const keyToSend = quickKey.trim() || (preset.name.includes('Ollama') ? 'ollama' : '')
+    setQuickBusy(true)
+    try {
+      const provider = await api.createProvider({ name: preset.name, baseUrl: preset.baseUrl, apiKey: keyToSend })
+      await api.createModel({ providerId: provider.id, model: quickModel.trim(), ...(quickDisplay.trim() ? { displayName: quickDisplay.trim() } : {}) })
+      setQuickKey('')
+      setQuickDisplay('')
+      toast(`Quick Setup done — ${preset.name} · ${quickModel.trim()}`, 'success')
+      await refresh()
+      onDataChanged()
+      setTab('models')
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setQuickBusy(false)
+    }
+  }
 
   async function refresh() {
     try {
@@ -511,6 +550,17 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           onPointerLeave={handleTabsPointerUp}
         >
           <button
+            className={`tab${tab === 'quick' ? ' active' : ''}`}
+            onClick={(e) => {
+              if (dragMovedRef.current) { dragMovedRef.current = false; return }
+              setTab('quick')
+              setError(null)
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+            }}
+          >
+            Quick Setup
+          </button>
+          <button
             className={`tab${tab === 'providers' ? ' active' : ''}`}
             onClick={(e) => {
               if (dragMovedRef.current) { dragMovedRef.current = false; return }
@@ -568,6 +618,88 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
 
         <div className="tab-body">
           {error && <p className="field-error" style={{ marginBottom: 10 }}>{error}</p>}
+
+          {tab === 'quick' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              <div style={{ padding: '12px 14px', background: 'var(--primary-bg)', border: '1px solid var(--primary-border)', borderRadius: 10, marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)', marginBottom: 4 }}>⚡ Quick Setup — provider + model in one click</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.5 }}>Beats Cursor’s multi-step flow. Pick a preset, paste key, choose model — 30s offline (Ollama) or 60s with API. Keys stay server-side, masked in UI.</div>
+              </div>
+
+              <div className="preset-grid" style={{ marginBottom: 14 }}>
+                {QUICK_PRESETS.map((pr, idx) => (
+                  <button
+                    key={pr.name}
+                    type="button"
+                    className={`preset-card${quickIdx === idx ? ' active' : ''}`}
+                    onClick={() => setQuickIdx(idx)}
+                    style={quickIdx === idx ? { borderColor: 'var(--primary)', background: 'var(--primary-bg)' } : undefined}
+                  >
+                    <span className="preset-name">{pr.name}{!pr.needsKey && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-faint)', marginLeft: 6 }}>no key</span>}</span>
+                    <span className="preset-url">{pr.baseUrl}</span>
+                    <span className="hint" style={{ marginTop: 2, lineHeight: 1.3 }}>{pr.hint}</span>
+                  </button>
+                ))}
+              </div>
+
+              <label className="field-label">API key {QUICK_PRESETS[quickIdx].needsKey ? '' : <span style={{ fontWeight: 400 }}>(leave blank for Ollama)</span>}</label>
+              <input
+                className="input"
+                type="password"
+                placeholder={QUICK_PRESETS[quickIdx].needsKey ? 'sk-…' : 'ollama — no key needed'}
+                value={quickKey}
+                onChange={(e) => setQuickKey(e.target.value)}
+              />
+              <p className="hint" style={{ marginTop: 4 }}>{QUICK_PRESETS[quickIdx].hint} — key never leaves server</p>
+
+              <label className="field-label">Model id</label>
+              <input
+                className="input"
+                placeholder={QUICK_PRESETS[quickIdx].models[0]}
+                value={quickModel}
+                onChange={(e) => setQuickModel(e.target.value)}
+                list="quick-model-suggestions"
+                onKeyDown={(e) => e.key === 'Enter' && !quickBusy && submitQuickSetup()}
+              />
+              <datalist id="quick-model-suggestions">
+                {QUICK_PRESETS[quickIdx].models.map((m) => <option key={m} value={m} />)}
+              </datalist>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                {QUICK_PRESETS[quickIdx].models.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="btn"
+                    style={{ padding: '4px 8px', fontSize: 12, background: quickModel === m ? 'var(--primary-bg)' : undefined, borderColor: quickModel === m ? 'var(--primary-border)' : undefined, color: quickModel === m ? 'var(--primary)' : undefined }}
+                    onClick={() => setQuickModel(m)}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+
+              <label className="field-label">Display name <span style={{ fontWeight: 400 }}>(optional)</span></label>
+              <input
+                className="input"
+                placeholder="e.g. DeepSeek Chat (optional)"
+                value={quickDisplay}
+                onChange={(e) => setQuickDisplay(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !quickBusy && submitQuickSetup()}
+              />
+
+              <div className="dialog-actions">
+                <button className="btn btn-primary" onClick={submitQuickSetup} disabled={quickBusy}>
+                  {quickBusy ? 'Creating…' : 'Create provider + model'}
+                </button>
+              </div>
+
+              {(providers.length === 0 || models.length === 0) && (
+                <p className="hint" style={{ marginTop: 10, textAlign: 'center' }}>
+                  After this you can pick the model in the composer and send your first message. <br /> Need a project? Create one in the sidebar → <code>my-project</code> → <code>project/my-project</code> auto-created.
+                </p>
+              )}
+            </div>
+          )}
 
           {tab === 'providers' && providerPicker ? (
             <>
