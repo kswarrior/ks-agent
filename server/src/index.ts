@@ -1654,6 +1654,188 @@ app.patch('/api/settings/theme', async (c) => {
   return c.json(updateThemeSettings(patch))
 })
 
+// ---------------- IDE — Inline autocomplete & inline chat ----------------
+
+// Helper: resolve model/provider for IDE features (stateless, no DB write)
+function resolveIdeProvider(modelId?: string): { provider: { baseUrl: string; apiKey: string; name: string }; model: string; maxTokens?: number } | { error: string } {
+  const db = getDb()
+  const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
+  const resolved = modelEntry ?? db.models[0]
+  if (!resolved) return { error: 'No model configured. Add a provider and model in Settings.' }
+  const provider = db.providers.find((p) => p.id === resolved.providerId)
+  if (!provider) return { error: 'Model has no valid provider' }
+  return { provider, model: resolved.model, maxTokens: resolved.maxTokens }
+}
+
+async function callIdeChatCompletion(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: { role: string; content: string }[],
+  opts?: { maxTokens?: number; temperature?: number; signal?: AbortSignal }
+): Promise<string> {
+  const clean = baseUrl.replace(/\/+$/, '')
+  const url = /\/chat\/completions$/.test(clean) ? clean : clean + '/chat/completions'
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    temperature: opts?.temperature ?? 0.2,
+    max_tokens: opts?.maxTokens ?? 256,
+    stream: false
+  }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+    signal: opts?.signal ?? AbortSignal.timeout(20000)
+  })
+  if (!res.ok) {
+    let detail = ''
+    try { detail = (await res.text()).slice(0, 400) } catch {}
+    throw new Error(`Provider responded ${res.status}${detail ? `: ${detail}` : ''}`)
+  }
+  const data: any = await res.json().catch(() => null)
+  const raw = data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text ?? ''
+  return typeof raw === 'string' ? raw : ''
+}
+
+app.get('/api/ide/status', (c) => {
+  const db = getDb()
+  const hasProvider = db.providers.length > 0
+  const hasModel = db.models.length > 0
+  const ready = hasProvider && hasModel
+  return c.json({
+    ready,
+    hasProvider,
+    hasModel,
+    providerCount: db.providers.length,
+    modelCount: db.models.length,
+    features: {
+      autocomplete: ready,
+      inlineChat: ready,
+      vsCodeExtension: true
+    },
+    vscodeExtension: {
+      name: 'ks-agent-vscode',
+      publisher: 'ks-warrior',
+      marketplace: false,
+      localPath: 'vscode-extension/',
+      install: 'code --install-extension vscode-extension/  OR  vsce package && code --install-extension ks-agent-*.vsix',
+      commands: ['ks-agent.inlineComplete', 'ks-agent.inlineChat', 'ks-agent.connect']
+    }
+  })
+})
+
+app.post('/api/ide/complete', async (c) => {
+  const body = await c.req.json().catch(() => ({} as any))
+  const projectId = body.projectId ? String(body.projectId).trim() : ''
+  const filePath = body.filePath != null ? String(body.filePath).trim() : ''
+  const prefix = body.prefix != null ? String(body.prefix) : ''
+  const suffix = body.suffix != null ? String(body.suffix) : ''
+  const language = body.language != null ? String(body.language).trim().slice(0, 40) : ''
+  const modelId = body.modelId ? String(body.modelId).trim() : undefined
+
+  if (!prefix && !suffix) return c.json({ error: 'prefix or suffix required' }, 400)
+  if (prefix.length > 8000) return c.json({ error: 'prefix too long (max 8000)' }, 400)
+  if (suffix.length > 8000) return c.json({ error: 'suffix too long (max 8000)' }, 400)
+  if (filePath && filePath.length > 500) return c.json({ error: 'filePath too long' }, 400)
+  if (filePath && filePath.includes('\0')) return c.json({ error: 'Invalid filePath' }, 400)
+
+  let project: Project | undefined
+  if (projectId) {
+    project = findProject(projectId)
+    if (!project) return c.json({ error: 'Project not found' }, 404)
+    if (filePath) {
+      const abs = resolveInProject(project.path, filePath)
+      if (!abs) return c.json({ error: 'Invalid filePath' }, 400)
+    }
+  }
+
+  const resolved = resolveIdeProvider(modelId)
+  if ('error' in resolved) return c.json({ error: resolved.error }, 400)
+  const { provider, model } = resolved
+
+  // Build a tiny completion prompt — keep it fast and deterministic for ghost text
+  const system = 'You are an inline code completion engine for an IDE. Given the file prefix (code before cursor) and suffix (code after cursor), output ONLY the completion that should be inserted at CURSOR — no explanation, no markdown, no quotes, no preamble. Keep it to 1-3 lines or <=120 chars. If nothing to complete, output empty string. Complete naturally for the language.'
+  const user = `Language: ${language || 'plaintext'}\nFile: ${filePath || '(unsaved)'}\nPrefix:\n${prefix.slice(-4000)}\n---CURSOR---\nSuffix:\n${suffix.slice(0, 2000)}`
+  try {
+    const raw = await callIdeChatCompletion(provider.baseUrl, provider.apiKey, model, [
+      { role: 'system', content: system },
+      { role: 'user', content: user }
+    ], { maxTokens: 128, temperature: 0.2 })
+    let completion = raw.trim()
+    // Strip markdown fences if model wraps
+    if (completion.startsWith('```')) {
+      completion = completion.replace(/^```[a-z]*\n?/i, '').replace(/```\s*$/,'').trim()
+    }
+    if (completion.length > 500) completion = completion.slice(0, 500)
+    // Don't return prefix echo
+    if (completion && prefix.endsWith(completion)) completion = ''
+    return c.json({ completion, model, language, filePath: filePath || null })
+  } catch (e: any) {
+    const msg = String(e?.message || 'Provider error').slice(0, 500)
+    return c.json({ error: msg, completion: '' }, 502)
+  }
+})
+
+app.post('/api/ide/inline-chat', async (c) => {
+  const body = await c.req.json().catch(() => ({} as any))
+  const projectId = body.projectId ? String(body.projectId).trim() : ''
+  const filePath = body.filePath != null ? String(body.filePath).trim() : ''
+  const selection = body.selection != null ? String(body.selection) : ''
+  const instruction = body.instruction != null ? String(body.instruction).trim() : ''
+  const surroundingContext = body.surroundingContext != null ? String(body.surroundingContext) : ''
+  const modelId = body.modelId ? String(body.modelId).trim() : undefined
+
+  if (!selection) return c.json({ error: 'selection is required' }, 400)
+  if (selection.length > 12000) return c.json({ error: 'selection too long (max 12000)' }, 400)
+  if (!instruction) return c.json({ error: 'instruction is required' }, 400)
+  if (instruction.length > 2000) return c.json({ error: 'instruction too long (max 2000)' }, 400)
+  if (surroundingContext.length > 8000) return c.json({ error: 'surroundingContext too long' }, 400)
+  if (filePath && filePath.length > 500) return c.json({ error: 'filePath too long' }, 400)
+
+  let project: Project | undefined
+  if (projectId) {
+    project = findProject(projectId)
+    if (!project) return c.json({ error: 'Project not found' }, 404)
+    if (filePath) {
+      const abs = resolveInProject(project.path, filePath)
+      if (!abs) return c.json({ error: 'Invalid filePath' }, 400)
+    }
+  }
+
+  const resolved = resolveIdeProvider(modelId)
+  if ('error' in resolved) return c.json({ error: resolved.error }, 400)
+  const { provider, model } = resolved
+
+  const system = 'You are an inline chat code assistant inside an IDE. The user has selected code and given an instruction. Return ONLY the transformed code for the selection — no explanation, no markdown fence unless the instruction says to explain. Preserve language and formatting. If instruction is to explain, return a concise explanation (max 6 bullets) instead of code.'
+  const userParts = [
+    filePath ? `File: ${filePath}` : null,
+    surroundingContext ? `Context:\n${surroundingContext.slice(0, 4000)}` : null,
+    `Selected code:\n\`\`\`\n${selection.slice(0, 8000)}\n\`\`\``,
+    `Instruction: ${instruction}`
+  ].filter(Boolean).join('\n\n')
+
+  try {
+    const raw = await callIdeChatCompletion(provider.baseUrl, provider.apiKey, model, [
+      { role: 'system', content: system },
+      { role: 'user', content: userParts }
+    ], { maxTokens: 1024, temperature: 0.3 })
+    let result = raw
+    // If model wrapped code in fences, keep inner when instruction is code-editing, else keep full
+    const looksLikeCodeEdit = /fix|refactor|edit|transform|rewrite|add|remove|implement|convert/i.test(instruction)
+    if (looksLikeCodeEdit && result.includes('```')) {
+      const m = result.match(/```[a-z]*\n?([\s\S]*?)```/)
+      if (m) result = m[1]
+    }
+    if (result.length > 12000) result = result.slice(0, 12000)
+    return c.json({ result, model, filePath: filePath || null })
+  } catch (e: any) {
+    const msg = String(e?.message || 'Provider error').slice(0, 500)
+    return c.json({ error: msg }, 502)
+  }
+})
+
 // ---------------- Skills ----------------
 
 function isValidRelPath(p: string, maxLen = 500): boolean {
