@@ -145,7 +145,7 @@ export function activate(context: vscode.ExtensionContext) {
             : sel
           const startPos = range.start
           const startOffset = editor.document.offsetAt(startPos)
-          const success = await editor.edit((eb) => {
+          const success = await editor.edit((eb: vscode.TextEditorEdit) => {
             eb.replace(range, result)
           }, { undoStopBefore: true, undoStopAfter: true })
           if (!success) throw new Error('Edit failed')
