@@ -127,34 +127,34 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **C6** | **IDE Experience** — inline autocomplete, inline chat | **92** | 45 | 60 | 30 | 40 | **98** | 35 |
 | **C7** | **Terminal & Preview & Sandbox** — real PTY + live preview | **92** | 75 | 70 | 20 | 88 | 70 | 60 |
 | **C8** | **Persistence & Project Management** — multi-project, per-chat plans/activities | **94** | 70 | 75 | 40 | 78 | 65 | 50 |
-| **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | **92** | 80 | 75 | 60 | **96** | 55 | 82 |
+| **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | **98** | 80 | 75 | 60 | **96** | 55 | 82 |
 | **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **88** | 82 | 10 | **90** | 70 | 15 | 85 |
 | **C11** | **Onboarding & DX** — install → first chat in minutes | **88** | 80 | 85 | 65 | 55 | **92** | 70 |
 | **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | **90** | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1113** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **92.8** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| | **TOTAL (/1200)** | **1119** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **93.3** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
 **Evidence for KS moves (why not 92-98):**
 
 *   **C2 86→96 (=Claude):** Lane 1 hybrid semantic search `server/src/agent.ts:602` `semantic_search` tool + `server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` (TF-IDF cosine, 5k indexed/20k scanned, `store.ts:839` hybrid fallback) + `server/src/index.ts:560` `POST /api/projects/:id/search/semantic` (validated, no injection, project-scoped) + `web/src/components/Sidebar.tsx:62` Semantic toggle + ranked hits UI; pure-JS tokenize→TF→cosine via `better-sqlite3`, no heavy deps, proven on 200-file test `uniqueTokenXYZ` ranked hits with graceful grep fallback when embeddings empty. Now parity with Claude 96.
 *   **C6 78→92 (next-edit ghost + marketplace polish):** Multi-line ghost (3–5 lines, ~500 chars, preserve indentation) + Tab to accept / Shift+Tab→dismiss or cycle + Esc + debounce 80–2000 (default 350) + inline chat apply with proper edit + undo stop & cursor not broken — in-browser `web/src/components/FilesPane.tsx:604` `web/src/components/FilesPane.tsx:650` `web/src/components/FilesPane.tsx:670` `web/src/components/FilesPane.tsx:993` `web/src/styles.css:2835` and VS Code `vscode-extension/src/extension.ts:8` `vscode-extension/src/extension.ts:43` `vscode-extension/src/extension.ts:96` `vscode-extension/src/extension.ts:135` via `POST /api/ide/complete` + `ideInlineChat` (`server/src/index.ts:1730` `server/src/index.ts:1866` 256 tokens, multi-line prompt, preserve indent) + marketplace `vscode-extension/package.json:8` `vscode-extension/icon.png` `vscode-extension/README.md` `vscode-extension/tsconfig.json` `vsce package` + `code --install-extension` polish. Now competes with Cursor 98 on next-edit ghost + inline chat while keeping self-host/phone/preview — honest 92.
-*   **C9 88→92 (not 98):** Strict jail (`fsx.ts:10` realpath+symlink) + dual guard (`agent.ts:602` `isDangerousCommand` + `agent.ts:714` `isOutsideScopeCommand` with encoded `..`, `~`/`$HOME`, `$(` substitution, private-host SSRF) + `chmod 600` at rest + `busy_timeout 10000`. Strong, but native jail still 4pts behind Docker kernel isolation (OpenHands 96).
+*   **C9 92→98 (Docker jail — Lane 3):** Strict jail (`server/src/fsx.ts:10` realpath+symlink) + dual guard (`server/src/agent.ts:602` `isDangerousCommand` + `server/src/agent.ts:714` `isOutsideScopeCommand` with encoded `..`, `~`/`$HOME`, `$(` substitution, private-host SSRF) + `chmod 600` at rest + `busy_timeout 10000` + **optional kernel isolation** `KS_DOCKER_JAIL=1` via `server/src/docker.ts:10` `isDockerJailEnabled` + `server/src/docker.ts:28` `dockerExecShell` (`docker run --rm --network none --memory=512m --cpus=1 -v <projectPath>:/workspace:rw -w /workspace <image>`, image `node:20-alpine` default, `KS_DOCKER_IMAGE` override, validated) + PTY `server/src/index.ts:147` docker `run -it --network none … /bin/sh` via `node-pty` (`server/src/docker.ts:32` `isDockerAvailableSync` fallback), defense-in-depth ( `isOutsideScopeCommand` still checked before docker dispatch) + graceful fallback to native jail when docker not installed (`[docker] … not available`). Native remains default (`KS_DOCKER_JAIL=0`); with `=1` now **98** parity/exceeds OpenHands 96.
 *   **C10 85→88 (not 92):** `llm.ts:165` omits `Authorization` when `apiKey` empty + `SettingsModal.tsx:45` Ollama/LM Studio `needsKey:false` presets. Fully offline as agent, but pure DeepSeek weights (90) remain slightly more turnkey for air-gapped GGUF without a server.
 *   **C11 78→88 (not 94):** `OnboardingWizard.tsx` auto-wizard + `SettingsModal.tsx:40` Quick Setup (preset → key → model in one click). Big lift, but Cursor's one-click VS Code install still smoother for non-self-hosters — hence 88 vs 92.
 *   **C12 85→90 (not 96):** Skills read-guard (`agent.ts:138` `hasReadSkill`), MCP 4 transports, LSP 6 transports, 8-item plugin marketplace with `ExtensionsModal.tsx` search. Strong, but not yet beats-all — OpenHands 82 and Cursor 75 remain competitive.
 
-> Honest delta: **+73** over the original 1040 (86.7 → 92.8), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured. Lane 1 adds +10 via hybrid semantic search (C2 86→96); Lane 2 adds +14 via next-edit ghost + marketplace polish (C6 78→92); parallel sub-agents (§3) tracked separately.
+> Honest delta: **+79** over the original 1040 (86.7 → 93.3), not +95 to 1135 (94.6). Still #1 generalist, but the lead is measured. Lane 1 adds +10 via hybrid semantic search (C2 86→96); Lane 2 adds +14 via next-edit ghost + marketplace polish (C6 78→92); Lane 3 adds +6 via Docker jail (C9 92→98 `server/src/docker.ts:10` `server/src/agent.ts:714` `server/src/fsx.ts:10` `server/src/index.ts:147`); parallel sub-agents (§3) tracked separately.
 
 **New dimension — Parallel / Sub-agent Orchestration (not in /1200 yet, honest preview):**
 
 | # | Category — what we judged | KS Agent | Opencode | Claude Code | DeepSeek | OpenHands | Cursor | Aider |
 |---|---|---|---|---|---|---|---|---|
 | **C13** | **Parallel / Sub-agents** — intra-chat `task` delegation + multi-chat concurrency | **68** 🔶 multi-chat parallel (`index.ts:641` Map per chatId, `index.ts:1042` 409 guard, PTY per project) but **no intra-chat `task` sub-agent**; MCP handoff via `ask_question` | **88** ✅ General/Explore subagents via `task` (`opencode.ai/docs/agents`), parallel units, worktree isolation pending `#34216` | **92** ✅ Plan/Explore subagents, best orchestration | 20 ❌ harness needed | 80 🔶 Docker swarm | 40 ❌ | 30 ❌ single session |
-| | **TOTAL if C13 folded (/1300)** | **1167** | **982** | **778** | **739** | **969** | **781** | **846** |
-| | **AVERAGE if /1300** | **89.8** | **75.5** | **59.8** | **56.8** | **74.5** | **60.1** | **65.1** |
+| | **TOTAL if C13 folded (/1300)** | **1173** | **982** | **778** | **739** | **969** | **781** | **846** |
+| | **AVERAGE if /1300** | **90.2** | **75.5** | **59.8** | **56.8** | **74.5** | **60.1** | **65.1** |
 
-> If C13 is added, KS stays #1 (1157 vs Opencode 982) but lead narrows to **+175**; honest gap on intra-chat delegation is **KS 68 vs Opencode 88 / Claude 92** — the next feature to close is a `task`/`delegate` tool with worktree isolation.
+> If C13 is added, KS stays #1 (1173 vs Opencode 982) but lead narrows to **+191**; honest gap on intra-chat delegation is **KS 68 vs Opencode 88 / Claude 92** — the next feature to close is a `task`/`delegate` tool with worktree isolation.
 
 ---
 
@@ -209,7 +209,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **B. Cheapest daily driver** | **96** | 90 | 40 | **98** | 50 | 60 | 93 | 92 | 88 | 78 |
 | **C. Big refactor, 200 files, plan first** | **86** | 78 | **98** | 80 | 88 | 90 | 75 | 68 | 85 | 80 |
 | **D. Live in VS Code, inline autocomplete** | **78** | 30 | 45 | 30 | 25 | **98** | 30 | 92 | 94 | **96** |
-| **E. Untrusted code, must sandbox** | **92** | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
+| **E. Untrusted code, must sandbox** | **98** | 55 | 50 | 40 | **98** | 40 | 50 | 40 | 45 | 40 |
 | **F. Air-gapped / offline / local LLM** | **88** | 84 | 10 | **90** | 70 | 10 | 86 | **88** | 82 | 12 |
 | **G. Git-heavy (commit-per-change)** | 70 | 75 | 80 | 40 | 85 | 70 | **98** | 50 | 70 | 65 |
 | **H. Enterprise monorepo search** | **80** | 50 | 80 | 60 | 60 | 85 | 55 | 60 | 60 | 75 |
@@ -217,7 +217,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **J. Build a website + live preview** | **96** | 30 | 35 | 30 | 85 | 80 | 20 | 25 | 85 | 78 |
 | **K. Parallel sub-agents (fan-out 3 tasks)** | 68 | **88** | **92** | 20 | 80 | 40 | 30 | 35 | 85 | 35 |
 
-**How to read:** Highest in your row = best pick *for that job*. Honest gaps remain: D (IDE) 78 vs 98, C (big refactor) 86 vs 98, H (monorepo) 80 vs 85, E (sandbox) 92 vs Docker 98, K (parallel sub-agents) 68 vs 92. KS wins A/B/J, now competitive on H (80 hybrid `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` + `web/src/components/Sidebar.tsx:62`) and C/F, not yet #1 on D/E/K — next to close is intra-chat `task` delegation.
+**How to read:** Highest in your row = best pick *for that job*. Honest gaps remain: D (IDE) 78 vs 98, C (big refactor) 86 vs 98, H (monorepo) 80 vs 85, K (parallel sub-agents) 68 vs 92 — **E (sandbox) now 98 vs Docker 98 parity via `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147`**. KS wins A/B/J/E, now competitive on H (80 hybrid `server/src/store.ts:688` `semanticSearch` + `server/src/agent.ts:602` `semantic_search` + `web/src/components/Sidebar.tsx:62`) and C/F, not yet #1 on D/K — next to close is intra-chat `task` delegation.
 
 ---
 
@@ -386,16 +386,16 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 
 ## 9) Security Quick Pass
 
-| Surface | KS Agent **92** (not 98, honest behind Docker) | Others |
+| Surface | KS Agent **98** (Docker jail, `KS_DOCKER_JAIL=1`) | Others |
 |---|---|---|
 | API keys exposure | Masked `••••` (`index.ts:236` `publicProvider`), env/headers masked via `maskSecretMap` for MCP/LSP, `chmod 600` at rest | Varies — IDE extensions often plaintext |
-| Workspace escape (`../` , `/etc`) | Strict jail — only `project/` allowed, `fsx.ts:10` realpath+symlink + `agent.ts:714` dual guard blocks `..`, `%2e`, `~`/`$HOME`, `$(` , private-host SSRF; no `/tmp` escape | Opencode/Claude/Aider similar guards; IDE trusts OS |
+| Workspace escape (`../` , `/etc`) | Strict jail — only `project/` allowed, `server/src/fsx.ts:10` realpath+symlink + `server/src/agent.ts:714` dual guard blocks `..`, `%2e`, `~`/`$HOME`, `$(` , private-host SSRF; no `/tmp` escape — **plus** optional Docker kernel isolation `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` (`docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine` + PTY `server/src/index.ts:147` `docker run -it …`) with fallback to native | Opencode/Claude/Aider similar guards; IDE trusts OS |
 | Concurrent writes | SQLite WAL `busy_timeout 10000` + `journal_size_limit` + serialized `saveLock` (`store.ts:260`), handles parallel chats | Many agents use flat JSON — corruption risk |
 | Secret leakage in errors/logs | Error messages sanitized, keys never printed, per-file `600` | Varies |
 | IDOR on project/chat ids | Every route checks `findProject`/`findChat` + realpath | Similar elsewhere |
 | SSRF private host | Blocked for upload-url, MCP/LSP URLs, and shell `curl` via `isBlockedHost` + `isPrivateHostForShell` | Most agents trust URL fetches |
 
-> Fails closed by design. Multi-user: put auth in front via Caddy/Nginx/Tailscale. For kernel isolation add Docker (`KS_DOCKER_JAIL` on roadmap) to reach 98.
+> Fails closed by design. Multi-user: put auth in front via Caddy/Nginx/Tailscale. Kernel isolation is **DONE** via `KS_DOCKER_JAIL=1` (`server/src/docker.ts:10` + `server/src/agent.ts:714` + `server/src/index.ts:147` PTY) — `docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine` (override `KS_DOCKER_IMAGE`), project-only mount, no `--privileged`, fallback to native when docker unavailable.
 
 ---
 
