@@ -879,15 +879,14 @@ export function ExtensionsModal({ open, onClose }: Props) {
     if (!target) { toast('File name is required', 'error'); return }
     if (!isValidSkillRelPath(target)) { toast(`Invalid file path: "${target}"`, 'error'); return }
     if (form.files.includes(target) || form.mainFile === target) { toast('File already exists in skill', 'error'); return }
+    if (form.files.length >= 20) { toast('Too many files (max 20)', 'error'); return }
+    if (target.length > 500) { toast('Path too long (max 500)', 'error'); return }
     const projId = (form.projectId || '').trim() || skillFileBrowserProject || skillProjects[0]?.id || ''
     const isGlobal = !projId
     if (isEdit) setSkillEditCreateLoading(true); else setSkillCreateLoading(true)
     try {
       if (isGlobal) {
-        const res = await fetch('/api/settings/skills/files', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: target, content }) })
-        let data: any = null
-        try { data = await res.json() } catch {}
-        if (!res.ok) throw new Error(data?.error || `Failed to create file (${res.status})`)
+        await api.createSkillFile(target, content)
       } else {
         await api.createFileEntry(projId, 'file', target)
         if (content) await api.saveFileContent(projId, target, content)

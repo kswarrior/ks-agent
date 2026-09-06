@@ -336,6 +336,8 @@ export const createSkill = (s: { name: string; note: string; mainFile: string; f
 export const deleteSkill = (id: string) => req<{ ok: true }>(`/api/settings/skills/${id}`, { method: 'DELETE' })
 export const updateSkill = (id: string, patch: Partial<{ name: string; note: string; mainFile: string; files: string[]; projectId?: string }>) =>
   req<Skill>(`/api/settings/skills/${id}`, json('PATCH', patch))
+export const createSkillFile = (path: string, content: string) =>
+  req<{ ok: true; path: string }>('/api/settings/skills/files', json('POST', { path, content }))
 
 // MCP Servers
 export const listMcpServers = () => req<MCPServer[]>('/api/settings/mcp')
