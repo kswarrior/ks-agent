@@ -401,3 +401,6 @@ export const installMarketplacePlugin = (marketplaceId: string, opts?: { project
 export const updatePlugin = (id: string, patch: Partial<{ name: string; description: string; version: string; publisher: string; entryPoint: string; source: string; marketplaceId: string; enabled: boolean; projectId: string; tags: string[]; icon: string }>) =>
   req<Plugin>(`/api/settings/plugins/${id}`, json('PATCH', patch))
 export const deletePlugin = (id: string) => req<{ ok: true }>(`/api/settings/plugins/${id}`, { method: 'DELETE' })
+export const publishPlugin = (id: string) => req<{ ok: true; bundle: { manifest: Record<string, unknown>; files: Record<string, string>; exportedAt: string; pluginId: string }; marketplace: MarketplacePlugin }>(`/api/settings/plugins/${id}/publish`, json('POST', {}))
+export const exportPlugin = (id: string) => req<{ manifest: Record<string, unknown>; files: Record<string, string>; exportedAt: string; pluginId: string }>(`/api/settings/plugins/${id}/export`)
+export const publishSkill = (id: string) => req<{ ok: true; bundle: { manifest: Record<string, unknown>; files: Record<string, string>; exportedAt: string; skillId: string }; marketplace: MarketplacePlugin }>(`/api/settings/skills/${id}/publish`, json('POST', {}))

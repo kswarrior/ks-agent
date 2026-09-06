@@ -93,6 +93,8 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [pluginPickerEntries, setPluginPickerEntries] = useState<FileEntry[]>([])
   const [pluginPickerLoading, setPluginPickerLoading] = useState(false)
   const [pluginView, setPluginView] = useState<'installed' | 'marketplace'>('installed')
+  const [pluginPublishLoading, setPluginPublishLoading] = useState<string | null>(null)
+  const [skillPublishLoading, setSkillPublishLoading] = useState<string | null>(null)
   const confirm = useDialogs().confirm
   const toast = useToast()
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -686,12 +688,54 @@ export function ExtensionsModal({ open, onClose }: Props) {
   }
   async function installFromMarketplace(m: MarketplacePlugin) {
     try {
-      await api.installMarketplacePlugin(m.id, {})
-      toast(`Installed ${m.name}`, 'success')
+      // install respects scope: if a project is selected in plugin form or current filter, use it; else global
+      const projectId = pluginForm.projectId || pluginEditForm.projectId || undefined
+      await api.installMarketplacePlugin(m.id, projectId ? { projectId } : {})
+      toast(`Installed ${m.name}${projectId ? ' (project)' : ' (global)'}`, 'success')
       await Promise.all([loadPlugins(), loadMarketplace()])
       setPluginView('installed')
     } catch (e: any) {
       toast(e.message, 'error')
+    }
+  }
+  async function publishPluginFlow(p: Plugin) {
+    setPluginPublishLoading(p.id)
+    setError(null)
+    try {
+      // validate → export → marketplace list
+      toast(`Validating ${p.name}…`, 'success')
+      const res = await api.publishPlugin(p.id)
+      toast(`Published ${p.name} v${p.version} → marketplace`, 'success')
+      await Promise.all([loadPlugins(), loadMarketplace()])
+      setPluginView('marketplace')
+      // show bundle preview briefly via console
+      console.log('[publish] bundle', res.bundle)
+    } catch (e: any) {
+      const msg = String(e?.message || 'Publish failed')
+      if (msg.includes('entryPoint does not exist')) toast(msg, 'error')
+      else if (msg.includes('semver') || msg.includes('Invalid version')) toast(msg, 'error')
+      else toast(msg, 'error')
+      setError(msg)
+    } finally {
+      setPluginPublishLoading(null)
+    }
+  }
+  async function publishSkillFlow(s: Skill) {
+    setSkillPublishLoading(s.id)
+    setError(null)
+    try {
+      toast(`Validating skill ${s.name}…`, 'success')
+      const res = await api.publishSkill(s.id)
+      toast(`Published skill ${s.name} → marketplace`, 'success')
+      await Promise.all([loadSkills(), loadMarketplace()])
+      setTab('plugins')
+      setPluginView('marketplace')
+      console.log('[publish] skill bundle', res.bundle)
+    } catch (e: any) {
+      toast(e.message, 'error')
+      setError(e.message)
+    } finally {
+      setSkillPublishLoading(null)
     }
   }
   async function refreshPluginPicker() {
@@ -1794,6 +1838,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                                   )}
                                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                                     <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setPluginExpanded(prev => ({ ...prev, [p.id]: !prev[p.id] }))}>{isExpanded ? 'Hide details' : 'Details'}</button>
+                                    <button className="btn" style={{ padding: '4px 10px', fontSize: 12, background: '#eff6ff', borderColor: '#bfdbfe', color: '#2563eb' }} disabled={pluginPublishLoading === p.id} onClick={() => publishPluginFlow(p)} title="Validate → export JSON bundle → list in marketplace">{pluginPublishLoading === p.id ? 'Publishing…' : 'Publish'}</button>
                                     <span style={{ fontSize: 12, color: p.enabled ? '#16a34a' : 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                       <span style={{ width: 6, height: 6, borderRadius: 99, background: p.enabled ? '#22c55e' : '#6b7280', display: 'inline-block' }} /> {p.enabled ? 'Active' : 'Inactive'}
                                     </span>

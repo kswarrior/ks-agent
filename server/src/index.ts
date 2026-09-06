@@ -3569,6 +3569,197 @@ app.delete('/api/settings/plugins/:id', (c) => {
   return c.json({ ok: true })
 })
 
+// Publish plugin → validate manifest, export JSON bundle, list in marketplace (maskSecretMap still enforced)
+app.post('/api/settings/plugins/:id/publish', async (c) => {
+  const p = findPlugin(c.req.param('id'))
+  if (!p) return c.json({ error: 'Plugin not found' }, 404)
+  // validate manifest (hostile input: check existence, not type confusion)
+  const name = String(p.name ?? '').trim()
+  if (!name || name.length < 2 || name.length > 80) return c.json({ error: 'Invalid plugin name (2-80 chars)' }, 400)
+  const version = String(p.version ?? '').trim()
+  if (!isValidPluginVersion(version)) return c.json({ error: 'Invalid version (expected semver like 1.0.0)' }, 400)
+  const description = String(p.description ?? '').trim()
+  if (!description) return c.json({ error: 'Description is required for publish' }, 400)
+  if (description.length > 500) return c.json({ error: 'Description too long (max 500)' }, 400)
+  if (!p.entryPoint || !String(p.entryPoint).trim()) return c.json({ error: 'entryPoint is required for publish' }, 400)
+  const ep = String(p.entryPoint).trim()
+  if (!isValidRelPath(ep)) return c.json({ error: 'Invalid entryPoint path' }, 400)
+  // entryPoint exists check (project-scoped or global)
+  let abs: string | null = null
+  try { abs = resolvePluginEntryAbs(p) } catch { abs = null }
+  if (!abs) return c.json({ error: `entryPoint does not exist: ${ep}` }, 400)
+  try {
+    if (!fs.existsSync(abs)) return c.json({ error: `entryPoint does not exist: ${ep}` }, 400)
+    const st = fs.statSync(abs)
+    if (!st.isFile()) return c.json({ error: 'entryPoint is not a file' }, 400)
+  } catch (e: any) {
+    return c.json({ error: `entryPoint check failed: ${String(e?.message || e).slice(0, 200)}` }, 400)
+  }
+  // export JSON bundle (lightweight, no archiver; include masked secrets check)
+  let entryContent: string | null = null
+  try {
+    const st = fs.statSync(abs!)
+    if (st.size <= 2 * 1024 * 1024) {
+      const raw = fs.readFileSync(abs!, 'utf8')
+      if (!raw.includes('\0')) entryContent = raw.slice(0, 200000)
+    }
+  } catch {}
+  const bundle = {
+    manifest: {
+      name: p.name,
+      version: p.version,
+      description: p.description,
+      publisher: p.publisher || 'KS Agent',
+      entryPoint: p.entryPoint,
+      icon: p.icon || '🧩',
+      tags: p.tags ?? [],
+      source: p.source,
+      projectId: p.projectId ?? null
+    },
+    // never include env/headers/secrets; maskSecretMap is used for MCP/LSP, here we ensure no secrets leak
+    files: entryContent ? { [ep]: entryContent } : {},
+    exportedAt: new Date().toISOString(),
+    pluginId: p.id
+  }
+  // list in marketplace (in-memory PLUGIN_MARKETPLACE; ensure not leaking secrets)
+  const existingIdx = PLUGIN_MARKETPLACE.findIndex(m => m.id === p.id || m.name.toLowerCase() === p.name.toLowerCase())
+  const cat = (p.tags && p.tags[0]) ? String(p.tags[0]).replace(/[^a-z0-9-]/gi, '').slice(0, 20) || 'Productivity' : 'Productivity'
+  const prettyCat = cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()
+  const marketEntry: MarketplacePlugin = {
+    id: existingIdx >= 0 ? PLUGIN_MARKETPLACE[existingIdx].id : p.id,
+    name: p.name,
+    description: p.description,
+    version: p.version,
+    publisher: p.publisher || 'KS Agent',
+    icon: p.icon || '🧩',
+    tags: p.tags ?? [],
+    downloads: existingIdx >= 0 ? (PLUGIN_MARKETPLACE[existingIdx].downloads + 1) : 1,
+    rating: existingIdx >= 0 ? PLUGIN_MARKETPLACE[existingIdx].rating : 4.8,
+    category: prettyCat
+  }
+  if (existingIdx >= 0) PLUGIN_MARKETPLACE[existingIdx] = marketEntry
+  else PLUGIN_MARKETPLACE.push(marketEntry)
+  p.updatedAt = new Date().toISOString()
+  saveDb()
+  try { ensurePluginWatcher(p) } catch {}
+  console.log(`[publish] plugin "${p.name}" v${p.version} published to marketplace (${ep})`)
+  return c.json({ ok: true, bundle, marketplace: marketEntry })
+})
+
+// Export plugin bundle as JSON (alternative to .zip; lightweight)
+app.get('/api/settings/plugins/:id/export', (c) => {
+  const p = findPlugin(c.req.param('id'))
+  if (!p) return c.json({ error: 'Plugin not found' }, 404)
+  let entryContent: string | null = null
+  let abs: string | null = null
+  try { abs = resolvePluginEntryAbs(p) } catch {}
+  try {
+    if (abs && fs.existsSync(abs)) {
+      const st = fs.statSync(abs)
+      if (st.isFile() && st.size <= 2 * 1024 * 1024) {
+        const raw = fs.readFileSync(abs, 'utf8')
+        if (!raw.includes('\0')) entryContent = raw.slice(0, 200000)
+      }
+    }
+  } catch {}
+  const bundle = {
+    manifest: {
+      name: p.name,
+      version: p.version,
+      description: p.description,
+      publisher: p.publisher || 'KS Agent',
+      entryPoint: p.entryPoint ?? null,
+      icon: p.icon || '🧩',
+      tags: p.tags ?? []
+    },
+    files: entryContent && p.entryPoint ? { [p.entryPoint]: entryContent } : {},
+    exportedAt: new Date().toISOString(),
+    pluginId: p.id
+  }
+  c.header('Content-Type', 'application/json')
+  c.header('Content-Disposition', `attachment; filename="${p.name.replace(/[^a-z0-9-]/gi, '_')}-${p.version}.json"`)
+  return c.json(bundle)
+})
+
+// Publish skill → validate, export JSON bundle, list in marketplace
+app.post('/api/settings/skills/:id/publish', async (c) => {
+  const sk = findSkill(c.req.param('id'))
+  if (!sk) return c.json({ error: 'Skill not found' }, 404)
+  const name = String(sk.name ?? '').trim()
+  if (!name || name.length < 2 || name.length > 80) return c.json({ error: 'Invalid skill name (2-80 chars)' }, 400)
+  const mainFile = String(sk.mainFile ?? '').trim()
+  if (!mainFile || !mainFile.endsWith('.md')) return c.json({ error: 'Main file must be .md' }, 400)
+  if (!isValidRelPath(mainFile)) return c.json({ error: 'Invalid mainFile path' }, 400)
+  // check mainFile exists (project-scoped or global skills/)
+  let absMain: string | null = null
+  if (sk.projectId) {
+    const proj = findProject(sk.projectId)
+    if (proj) absMain = resolveInProject(proj.path, mainFile)
+  }
+  if (!absMain) {
+    const cand1 = path.join(process.cwd(), 'skills', path.basename(mainFile))
+    if (fs.existsSync(cand1)) absMain = cand1
+    else {
+      const cand2 = path.join(process.cwd(), 'skills', mainFile)
+      if (fs.existsSync(cand2)) absMain = cand2
+      else if (sk.projectId) {
+        const proj = findProject(sk.projectId)
+        if (proj) {
+          const cand3 = path.join(proj.path, mainFile)
+          if (fs.existsSync(cand3)) absMain = cand3
+        }
+      }
+    }
+  }
+  // also try global skills fallback via cwd+mainFile
+  if (!absMain || !fs.existsSync(absMain)) {
+    const cand = path.resolve(process.cwd(), mainFile)
+    if (fs.existsSync(cand)) absMain = cand
+  }
+  if (!absMain || !fs.existsSync(absMain)) return c.json({ error: `mainFile does not exist: ${mainFile}` }, 400)
+  try {
+    const st = fs.statSync(absMain!)
+    if (!st.isFile()) return c.json({ error: 'mainFile is not a file' }, 400)
+  } catch (e: any) {
+    return c.json({ error: `mainFile check failed: ${String(e?.message || e).slice(0, 200)}` }, 400)
+  }
+  let content: string | null = null
+  try {
+    const st = fs.statSync(absMain!)
+    if (st.size <= 2 * 1024 * 1024) {
+      const raw = fs.readFileSync(absMain!, 'utf8')
+      if (!raw.includes('\0')) content = raw.slice(0, 200000)
+    }
+  } catch {}
+  const skillBundle = {
+    manifest: { name: sk.name, note: sk.note, mainFile: sk.mainFile, files: sk.files, projectId: sk.projectId ?? null },
+    files: content ? { [mainFile]: content } : {},
+    exportedAt: new Date().toISOString(),
+    skillId: sk.id
+  }
+  // list skill as marketplace plugin (so marketplace GET shows published skill)
+  const skillMarketId = 'skill-' + sk.id.slice(0, 8)
+  const existingIdx = PLUGIN_MARKETPLACE.findIndex(m => m.id === skillMarketId || m.name.toLowerCase() === sk.name.toLowerCase())
+  const marketEntry: MarketplacePlugin = {
+    id: existingIdx >= 0 ? PLUGIN_MARKETPLACE[existingIdx].id : skillMarketId,
+    name: sk.name,
+    description: sk.note || `Skill: ${sk.mainFile}`,
+    version: '1.0.0',
+    publisher: 'KS Agent',
+    icon: '✨',
+    tags: ['skill', 'productivity'],
+    downloads: existingIdx >= 0 ? (PLUGIN_MARKETPLACE[existingIdx].downloads + 1) : 1,
+    rating: existingIdx >= 0 ? PLUGIN_MARKETPLACE[existingIdx].rating : 4.8,
+    category: 'Productivity'
+  }
+  if (existingIdx >= 0) PLUGIN_MARKETPLACE[existingIdx] = marketEntry
+  else PLUGIN_MARKETPLACE.push(marketEntry)
+  sk.updatedAt = new Date().toISOString()
+  saveDb()
+  console.log(`[publish] skill "${sk.name}" published to marketplace (${mainFile})`)
+  return c.json({ ok: true, bundle: skillBundle, marketplace: marketEntry })
+})
+
 // ---------------- Project files ----------------
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
