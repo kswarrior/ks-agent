@@ -605,7 +605,9 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     if (!projectId || !selected || editLoading) { clearGhost(); return }
     // Don't ghost for very short prefix or when already has ghost that matches
     if (prefix.length < 3 && suffix.length < 3) { clearGhost(); return }
-    // debounce 350ms
+    // debounce 80–2000ms clamp, default 350ms — tuning for responsiveness vs provider calls
+    const GHOST_DEBOUNCE_MS = 350
+    const debounceMs = Math.max(80, Math.min(2000, GHOST_DEBOUNCE_MS))
     if (ghostTimerRef.current) clearTimeout(ghostTimerRef.current)
     const reqId = ++ghostRequestIdRef.current
     ghostTimerRef.current = setTimeout(async () => {
@@ -616,19 +618,23 @@ export function FilesPane({ projectId }: FilesPaneProps) {
       try {
         const res = await api.ideComplete({ projectId: projectId!, filePath: selected ?? undefined, prefix, suffix, language: selectedLanguage })
         if (ghostRequestIdRef.current !== reqId) return
-        const comp = (res.completion || '').trimEnd()
-        // avoid echoing prefix tail or huge completions
-        if (!comp || comp.length > 400 || prefix.endsWith(comp)) {
+        // Multi-line ghost: allow up to ~500 chars / 3–5 lines, preserve indentation (trimEnd only)
+        let comp = (res.completion || '').replace(/\r\n/g, '\n').trimEnd()
+        if (!comp || prefix.endsWith(comp)) {
           setGhostText('')
         } else {
-          setGhostText(comp)
+          if (comp.length > 500) comp = comp.slice(0, 500).trimEnd()
+          const lines = comp.split('\n')
+          if (lines.length > 5) comp = lines.slice(0, 5).join('\n').trimEnd()
+          if (!comp || prefix.endsWith(comp)) setGhostText('')
+          else setGhostText(comp)
         }
       } catch {
         if (ghostRequestIdRef.current === reqId) setGhostText('')
       } finally {
         if (ghostRequestIdRef.current === reqId) setGhostLoading(false)
       }
-    }, 350)
+    }, debounceMs)
   }
 
   function handleEditorChange(next: string) {
@@ -653,11 +659,14 @@ export function FilesPane({ projectId }: FilesPaneProps) {
     const pos = el.selectionStart ?? editContent.length
     const before = editContent.slice(0, pos)
     const after = editContent.slice(pos)
-    const inserted = ghostText.startsWith('\n') ? ghostText : ghostText
+    // Multi-line ghost: preserve indentation exactly as returned (up to 500 chars / 5 lines)
+    const inserted = ghostText
     const next = before + inserted + after
     handleContentChange(next)
     setGhostText('')
-    // move cursor after inserted ghost
+    ghostRequestIdRef.current++
+    if (ghostTimerRef.current) { clearTimeout(ghostTimerRef.current); ghostTimerRef.current = null }
+    // move cursor after inserted ghost — offset-based, works for multi-line, cursor not broken
     setTimeout(() => {
       const newPos = pos + inserted.length
       el.selectionStart = el.selectionEnd = newPos
@@ -668,13 +677,19 @@ export function FilesPane({ projectId }: FilesPaneProps) {
   }
 
   function onEditorKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Tab to accept ghost
+    // Tab to accept ghost, Shift+Tab to dismiss or cycle (multi-line ghost)
     if (e.key === 'Tab' && ghostText) {
+      if (e.shiftKey) {
+        e.preventDefault()
+        clearGhost()
+        return
+      }
       e.preventDefault()
       acceptGhost()
       return
     }
     if (e.key === 'Escape' && ghostText) {
+      e.preventDefault()
       clearGhost()
       return
     }
