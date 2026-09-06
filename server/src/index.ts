@@ -55,8 +55,11 @@ import {
   getPlugins,
   semanticSearch,
   rebuildEmbeddingsForProject,
+  rebuildEmbeddingsForProjectAsync,
   getEmbeddingCount,
-  clearEmbeddingsForProject
+  clearEmbeddingsForProject,
+  getEmbeddingSettings,
+  updateEmbeddingSettings
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
@@ -372,6 +375,10 @@ app.post('/api/projects', async (c) => {
   const project = { id: newId(), name, path: dir, createdAt: new Date().toISOString() }
   db.projects.push(project)
   saveDb()
+  // vector index lifecycle: on project create → rebuildEmbeddingsForProject async (incremental, contentHash, concurrent-safe via WAL busy_timeout + saveLock)
+  void (async () => {
+    try { await rebuildEmbeddingsForProjectAsync(project.id) } catch (e) { console.warn('[embed] rebuild after project create failed', String((e as any)?.message||e).slice(0,200)) }
+  })()
   return c.json(project, 201)
 })
 
@@ -681,7 +688,11 @@ app.post('/api/projects/:id/search/index', async (c) => {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
   try {
-    const indexed = rebuildEmbeddingsForProject(project.id)
+    // prefer async vector rebuild (OpenAI/Ollama/local fallback) — concurrent-safe via WAL busy_timeout + saveLock
+    const indexed = await rebuildEmbeddingsForProjectAsync(project.id).catch(async (e) => {
+      // fallback to sync local if async fails
+      try { return rebuildEmbeddingsForProject(project.id) } catch (e2:any) { throw e }
+    })
     const embeddingCount = getEmbeddingCount(project.id)
     return c.json({ ok: true, indexed, embeddingCount })
   } catch (e: any) {
@@ -1803,6 +1814,33 @@ app.patch('/api/settings/theme', async (c) => {
   }
   if (Object.keys(patch).length === 0) return c.json({ error: 'No valid fields to update' }, 400)
   return c.json(updateThemeSettings(patch))
+})
+
+
+// ---------------- Settings: embeddings (vector provider) — OpenAI-compatible + Ollama + local MiniLM fallback ----------------
+app.get('/api/settings/embeddings', (c) => {
+  try {
+    const s = getEmbeddingSettings()
+    // never leak full apiKey — mask like provider
+    const masked = s.apiKey ? `••••${s.apiKey.slice(-4)}` : ''
+    return c.json({ ...s, apiKey: undefined, keyPreview: masked })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,400) }, 500) }
+})
+app.patch('/api/settings/embeddings', async (c) => {
+  let body:any={}
+  try { body = await c.req.json() } catch {}
+  const allowed: (keyof import('./store.js').EmbeddingSettings)[] = ['provider','baseUrl','apiKey','model','dimensions','enabled']
+  const patch:any = {}
+  for (const k of allowed) if (body[k]!==undefined) patch[k]=body[k]
+  if (patch.provider && !['local','openai','ollama'].includes(String(patch.provider).toLowerCase())) return c.json({ error: 'provider must be local|openai|ollama' },400)
+  if (patch.baseUrl && typeof patch.baseUrl==='string' && patch.baseUrl.length>500) return c.json({ error: 'baseUrl too long' },400)
+  if (patch.model && typeof patch.model==='string' && patch.model.length>100) return c.json({ error: 'model too long' },400)
+  if (patch.dimensions && (isNaN(Number(patch.dimensions))|| Number(patch.dimensions)<64 || Number(patch.dimensions)>3072)) return c.json({ error: 'dimensions must be 64-3072' },400)
+  try {
+    const updated = updateEmbeddingSettings(patch)
+    const masked = updated.apiKey ? `••••${updated.apiKey.slice(-4)}` : ''
+    return c.json({ ...updated, apiKey: undefined, keyPreview: masked })
+  } catch (e:any) { return c.json({ error: String(e?.message||'failed').slice(0,400) },500) }
 })
 
 // ---------------- IDE — Inline autocomplete & inline chat ----------------

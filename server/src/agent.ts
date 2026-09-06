@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, type Plan, type Question, type Activity } from './store.js'
+import { findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
@@ -37,7 +37,7 @@ export const PRIMARY_SYSTEM_PROMPT =
 
 'LARGE EDIT & CORRECTNESS — when touching 3+ files or >200 lines (plan → large edits): Before editing, map dependencies via glob+grep+semantic_search (find callers, imports, types) and read EVERY file you will touch fully — imports, callers, config — to avoid breaking contracts. Plan must be 3-10 concrete, sequentially verifiable steps (e.g. Step 1 update types, Step 2 migrate callers, Step 3 verify build). Execute ONE step at a time: make the minimal targeted edits for that step, then IMMEDIATELY re-read changed files and run verification (typecheck/build/lint or targeted run_shell) BEFORE calling complete_plan_step — never mark a step done without tool evidence that it compiles/passes. Preserve behavior unless explicitly requested: no half-old/half-new states; for refactors behavior must be IDENTICAL — capture before (read/grep/build output), compare after. If verification fails, name root cause in one line, apply minimal fix, re-verify — do NOT claim completion while any step is pending or any check fails. Prefer apply_patch/edit_file with exact surrounding context over wholesale rewrites; keep edits wired across all layers (route→store→api→component) and prove contracts match (names/casing/nullability/types/status codes). ' +
 
-'SEARCH — for codebase exploration on large repos (100-200+ files) prefer semantic_search (hybrid grep + TF-IDF cosine rerank, lightweight local embeddings stored in SQLite via better-sqlite3, TF-IDF cosine, no external service, fallback to grep when no embeddings) over plain grep. semantic_search reranks grep results semantically and works without external service; no heavy deps. Use grep for exact regex and glob for file discovery; semantic_search complements them with semantic ranking and gracefully falls back to grep when embeddings empty/unavailable. ' +
+'SEARCH — for codebase exploration on large repos (100-200+ files) prefer semantic_search (vector+hybrid 20k vector+BM25+grep via sqlite-vec/HNSW, FLOAT32[384/768] per CHUNK 400-600 tokens 100 overlap, OpenAI text-embedding-3-small / Ollama nomic-embed-text / local MiniLM fallback, 0.5*vectorCosine+0.3*BM25+0.2*grepBoost rerank, 5k indexed/20k scanned) over plain grep. semantic_search is vector+BM25 hybrid with sqlite-vec/HNSW fallback to pure-JS HNSW scan + BM25, gracefully falls back to grep when embeddings empty. For "find where X is implemented" always try semantic_search FIRST before grep. Use grep for exact regex and glob for file discovery. ' +
 
 'ERROR RULE: inspect real command errors, fix the root cause, and retry meaningful verification. Never hide useful errors or blindly repeat failures. ' +
 
@@ -600,16 +600,18 @@ const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'semantic_search',
-      description: 'Hybrid semantic search for codebase (grep + TF-IDF cosine rerank, lightweight local embeddings stored in SQLite via better-sqlite3, no external service, gracefully falls back to grep when no embeddings). Preferred for large codebase search (100-200+ files) to find conceptually relevant files beyond exact regex — e.g., "where is auth logic", "payment handling". Reranks grep results semantically using tokenized TF-IDF vectors and cosine similarity; if embeddings empty, falls back to grep results. Use for broad concept queries and large-repo exploration.',
+      description: 'Vector+hybrid semantic search for codebase (20k vector+BM25+grep via sqlite-vec/HNSW, FLOAT32[384/768] per CHUNK 400-600 tokens 100 overlap, OpenAI text-embedding-3-small / Ollama nomic-embed-text / local MiniLM fallback, 0.5*vectorCosine+0.3*BM25+0.2*grepBoost hybrid rerank). Preferred for large codebase search (100-200+ files) to find conceptually relevant files beyond exact regex — e.g., "where is auth logic", "payment handling". For "find where X is implemented" ALWAYS prefer semantic_search FIRST before grep. Reranks via vector cosine + BM25 + grep boost; if embeddings empty, falls back to grep results. Use for broad concept queries and large-repo exploration.',
       parameters: {
         type: 'object',
         properties: {
-          pattern: { type: 'string', description: 'Search query — natural language or regex/text, e.g., "authentication logic", "payment.*handler", "uniqueTokenXYZ". Treated as semantic query + grep pattern hybrid.' },
+          query: { type: 'string', description: 'Search query — natural language or regex/text, e.g., "authentication logic", "payment.*handler", "uniqueTokenXYZ". Treated as semantic query + grep pattern hybrid (alias for pattern).' },
+          pattern: { type: 'string', description: 'Alias for query — same as query param, kept for backward compat.' },
           path: { type: 'string', description: 'Directory to search in, relative to ${projectfolder} root. Empty = project root (default).' },
           include: { type: 'string', description: 'Optional glob to filter files, e.g., "*.ts", "*.{js,ts}", "src/**/*.tsx". If omitted, searches all text files.' },
-          max_results: { type: 'integer', description: 'Max ranked hits to return (1-100, default 20)' }
+          limit: { type: 'integer', description: 'Max ranked hits to return (1-100, default 20) — alias for max_results.' },
+          max_results: { type: 'integer', description: 'Alias for limit.' }
         },
-        required: ['pattern']
+        required: []
       }
     }
   }
@@ -1576,6 +1578,8 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       } catch (e: any) {
         return err(e?.message || 'cannot write file')
       }
+      // vector index lifecycle: upsert embedding (per CHUNK vector, incremental contentHash) — concurrent-safe via WAL busy_timeout + saveLock, backward compatible
+      try { if (ctx.projectId) { const fpW = String(args.path ?? ''); const cW = typeof args.content === 'string' ? args.content : ''; if (fpW) { try { upsertEmbedding(ctx.projectId, fpW, cW) } catch {} } } } catch {}
       return ok(`OK wrote ${Buffer.byteLength(content, 'utf8')} bytes to ${args.path}`, `wrote ${args.path}`)
     }
 
@@ -1619,6 +1623,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
           saveDb()
         }
       } catch {}
+      try { if (ctx.projectId) { const fpE = String(args.path ?? ''); if (fpE) { try { upsertEmbedding(ctx.projectId, fpE, newContent) } catch {} } } } catch {}
       return ok(`OK edited ${args.path} at line ${editStartLine}${replaceAll ? ` (${occurrences} occurrences replaced)` : ''}`, `edited ${args.path} @${editStartLine}${replaceAll ? ` x${occurrences}` : ''}`)
     }
 
@@ -1714,6 +1719,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       } catch (e: any) {
         return err(e?.message || 'cannot delete')
       }
+            try { if (ctx.projectId) { const fpD = String(args.path ?? '').trim(); if (fpD) deleteEmbedding(ctx.projectId, fpD) } } catch {}
       return ok(`OK deleted ${rel}${stat.isDirectory() ? ' (directory)' : ''}`, `deleted ${rel}`)
     }
 
@@ -1752,6 +1758,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
           return err(e2?.message || e?.message || 'cannot move')
         }
       }
+      try { if (ctx.projectId) { try { deleteEmbedding(ctx.projectId, srcRel) } catch {} try { const fullM = fs.readFileSync(destAbs, 'utf8'); if (!fullM.includes('\0')) upsertEmbedding(ctx.projectId, destRel, fullM) } catch { try { const s = fs.statSync(destAbs); if (s.isDirectory()) { /* directory move: rebuild in background */ void import('./store.js').then(m=> { try { const { rebuildEmbeddingsForProject } = m as any; if (rebuildEmbeddingsForProject) rebuildEmbeddingsForProject(ctx.projectId) } catch {} }) } } catch {} } } } catch {}
       return ok(`OK moved ${srcRel} → ${destRel}`, `moved ${srcRel}`)
     }
 
@@ -1779,6 +1786,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       } catch (e: any) {
         return err(e?.message || 'cannot append')
       }
+      try { if (ctx.projectId) { const fpA = String(args.path ?? ''); if (fpA) { try { const fullA = fs.readFileSync(abs, 'utf8'); upsertEmbedding(ctx.projectId, fpA, fullA) } catch { try { upsertEmbedding(ctx.projectId, fpA, content) } catch {} } } } } catch {}
       return ok(`OK appended ${Buffer.byteLength(content, 'utf8')} bytes to ${args.path} (now ${existingSize + Buffer.byteLength(content, 'utf8')} bytes)`, `appended ${args.path}`)
     }
 
@@ -1807,6 +1815,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         } catch (e: any) {
           return err(e?.message || 'cannot write file')
         }
+        try { if (ctx.projectId) { const fpP = String(args.path ?? ''); const cP = patch; if (fpP) { try { upsertEmbedding(ctx.projectId, fpP, cP) } catch {} } } } catch {}
         return ok(`OK wrote ${Buffer.byteLength(patch, 'utf8')} bytes to ${args.path} (via apply_patch as full content)`, `patched ${args.path}`)
       }
       // Unified diff patch: apply hunks
@@ -1891,6 +1900,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       } catch (e: any) {
         return err(e?.message || 'cannot write patched file')
       }
+      try { if (ctx.projectId) { const fpH = String(args.path ?? ''); if (fpH) { try { upsertEmbedding(ctx.projectId, fpH, newContent) } catch {} } } } catch {}
       return ok(`OK patched ${args.path} — ${hunks.length} hunk(s) applied, ${resultLines.length} lines`, `patched ${args.path}`)
     }
 
