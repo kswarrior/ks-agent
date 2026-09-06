@@ -355,6 +355,15 @@ function AssistantMeta({ message }: { message: Message }) {
   )
 }
 
+const MODES = [
+  { id: 'solo', label: 'Solo', desc: 'Single session', icon: '◐' },
+  { id: 'swarm', label: 'Swarm', desc: 'Main → 5 sub-agents', icon: '⬡' },
+  { id: 'hive', label: 'Hive', desc: 'Fractal depth 2', icon: '⬢' },
+  { id: 'squad', label: 'Squad', desc: 'Team + Head', icon: '▣' },
+  { id: 'infinity', label: 'Infinity', desc: 'Unlimited + Preview', icon: '∞' },
+] as const
+type ModeId = typeof MODES[number]['id']
+
 interface Props {
   chat: Chat | null
   hasProject: boolean
@@ -375,6 +384,8 @@ interface Props {
   activities?: Activity[]
   onContinue?: () => void
   retryInfo?: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string } | null
+  selectedMode?: ModeId | null
+  onSelectMode?: (id: ModeId) => void
 }
 
 export function ChatView(props: Props) {
@@ -383,6 +394,22 @@ export function ChatView(props: Props) {
   const [modelQuery, setModelQuery] = useState('')
   const [provOpen, setProvOpen] = useState(false)
   const [provFilterId, setProvFilterId] = useState<string | null>(null)
+  const [modeOpen, setModeOpen] = useState(false)
+  const [localMode, setLocalMode] = useState<ModeId>(() => {
+    try {
+      const v = localStorage.getItem('ks.selectedMode') as ModeId | null
+      return (v && (MODES as any).some((m: any) => m.id === v) ? v : 'solo') as ModeId
+    } catch { return 'solo' }
+  })
+  const selectedMode: ModeId = (props.selectedMode as ModeId) ?? localMode
+  const setSelectedMode = (id: ModeId) => {
+    if (props.onSelectMode) props.onSelectMode(id)
+    else {
+      setLocalMode(id)
+      try { localStorage.setItem('ks.selectedMode', id) } catch {}
+    }
+  }
+  const selectedModeObj = MODES.find(m => m.id === selectedMode) ?? MODES[0]
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -464,6 +491,21 @@ export function ChatView(props: Props) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [modelOpen])
+
+  useEffect(() => {
+    if (!modeOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setModeOpen(false) }
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Element | null
+      if (!t || !t.closest('.mode-chip-wrap')) setModeOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDown)
+    }
+  }, [modeOpen])
 
   // Flow status for chat (replaces rectangular while AI writes)
   const plan = (props as any).plan as Plan | null | undefined
@@ -661,6 +703,71 @@ export function ChatView(props: Props) {
             }}
           />
           <div className="composer-bar">
+            <div className="mode-chip-wrap" style={{ position: 'relative' }}>
+              <button
+                className="mode-chip"
+                onClick={() => setModeOpen((v) => !v)}
+                title={`Mode: ${selectedModeObj.label} — ${selectedModeObj.desc}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 10px',
+                  background: selectedMode === 'solo' ? 'var(--surface-2)' : 'var(--primary-bg)',
+                  border: `1px solid ${selectedMode === 'solo' ? 'var(--border)' : 'var(--primary-border)'}`,
+                  borderRadius: 8,
+                  color: selectedMode === 'solo' ? 'var(--text-dim)' : 'var(--primary)',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                }}
+              >
+                <span style={{ fontSize: 13, lineHeight: 1 }}>{selectedModeObj.icon}</span>
+                <span>{selectedModeObj.label}</span>
+                <IconChevronDown size={12} style={{ opacity: 0.7 }} />
+              </button>
+              {modeOpen && (
+                <div
+                  className="mode-dd"
+                  style={{
+                    position: 'absolute',
+                    bottom: 'calc(100% + 8px)',
+                    left: 0,
+                    minWidth: 220,
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                    zIndex: 45,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div style={{ padding: '6px 8px 4px', fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.4, textTransform: 'uppercase' }}>Mode — 5 Levels</div>
+                  {MODES.map((m) => (
+                    <button
+                      key={m.id}
+                      className={`dd-item${m.id === selectedMode ? ' active' : ''}`}
+                      onClick={() => {
+                        setSelectedMode(m.id as ModeId)
+                        setModeOpen(false)
+                      }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', textAlign: 'left' }}
+                    >
+                      <span style={{ width: 22, textAlign: 'center', fontSize: 13 }}>{m.icon}</span>
+                      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.label}</span>
+                        <small style={{ color: 'var(--text-faint)', fontSize: 11 }}>{m.desc}</small>
+                      </span>
+                      {m.id === selectedMode && <span style={{ color: 'var(--primary)', fontSize: 12 }}>✓</span>}
+                    </button>
+                  ))}
+                  <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.4 }}>
+                    Solo=1 agent · Swarm=main→5 · Hive=nested · Squad=Team+Head · Infinity=unlimited+Preview
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="model-chip-wrap">
               <button
                 className={`model-chip${selectedModel ? '' : ' none'}`}

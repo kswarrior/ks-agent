@@ -18,6 +18,7 @@ import { applyTheme } from './theme'
 const LS_PROJECT = 'ks.activeProject'
 const LS_CHAT = 'ks.activeChat'
 const LS_MODEL = 'ks.selectedModel'
+const LS_MODE = 'ks.selectedMode'
 
 function KsAgent() {
   const toast = useToast()
@@ -34,6 +35,7 @@ function KsAgent() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => { try { return localStorage.getItem(LS_PROJECT) } catch { return null } })
   const [activeChatId, setActiveChatId] = useState<string | null>(() => { try { return localStorage.getItem(LS_CHAT) } catch { return null } })
   const [selectedModelId, setSelectedModelId] = useState<string | null>(() => { try { return localStorage.getItem(LS_MODEL) } catch { return null } })
+  const [selectedMode, setSelectedMode] = useState<string>(() => { try { const v = localStorage.getItem(LS_MODE); return v && ['solo','swarm','hive','squad','infinity'].includes(v) ? v : 'solo' } catch { return 'solo' } })
 
   const [sidebarOpen, setSidebarOpen] = useState(() => { try { return window.matchMedia('(min-width: 900px)').matches } catch { return true } })
   const [rsbOpen, setRsbOpen] = useState(() => { try { return window.matchMedia('(min-width: 1200px)').matches } catch { return true } })
@@ -132,6 +134,10 @@ function KsAgent() {
       else localStorage.removeItem(LS_MODEL)
     } catch {}
   }, [selectedModelId])
+
+  useEffect(() => {
+    try { localStorage.setItem(LS_MODE, selectedMode) } catch {}
+  }, [selectedMode])
 
   // load chats when project changes
   useEffect(() => {
