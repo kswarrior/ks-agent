@@ -236,13 +236,14 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 
 ### 4.7 How to Use This Board + What's Honestly Left
 
-1. **Find your scenario row in §4.5** — that's your primary pick.
-2. **Check §4.6 persona** — if you're an IC Engineer in VS Code 10h/day, pair **KS Agent (server/phone/preview)** with **Cursor/Cline (IDE inline)**.
+1. **Find your scenario row in §4.5** — that's your primary pick. For parallel fan-out see **row K** — pick **Claude 92 / Opencode 88 / Cline 85** for intra-chat sub-agents, **KS 68** for multi-chat concurrency.
+2. **Check §4.6 persona** — if you're an IC Engineer in VS Code 10h/day, pair **KS Agent (server/phone/preview)** with **Cursor/Cline (IDE inline)**; for swarm tasks pair **KS Agent (host)** with **Opencode/Claude sub-agents** via MCP.
 3. **Pair a cheap model:** Run **DeepSeek or Ollama via KS Agent** to keep C3 high while keeping C2 competitive.
 4. **To make KS #1 in every persona, ship:**
    - IDE 78→90+ (marketplace one-click + next-edit prediction)
-   - Embeddings for C2/H **DONE Lane 1** `server/src/agent.ts:602 semantic_search` + `server/src/store.ts:420 embeddings` + `web/src/components/Sidebar.tsx:210` hybrid TF-IDF cosine rerank via SQLite better-sqlite3, fallback to grep
+   - Embeddings for C2/H — hybrid TF-IDF infra done (`store.ts:491` `embeddings` table + `store.ts:688` `semanticSearch` 5k indexed/20k scanned, cosine+grep hybrid `store.ts:839` fallback, `store.ts:192` `semantic_search` type reserved); next: wire as `semantic_search` tool + optional vector sidecar for H 55→65→85
    - Optional `KS_DOCKER_JAIL` for E 92→98 when kernel isolation required
+   - **Sub-agents for K 68→88** — add intra-chat `task`/`delegate` tool with `index.ts:641` Map reuse + worktree isolation (like Opencode `#34216`) so 3 tasks fan-out without 409 guard
 5. **Challenge it:** Scores versioned 2026-09-06. PR with doc link + evidence and we'll adjust — honesty over hype.
 
 ---
@@ -257,11 +258,12 @@ Hono (Node) ── OpenAI-compatible API (any provider)
   ↕ SQLite (WAL, transactions) ── projects / chats / messages / plans / activities
   ↕ PTY (per project) ── WebSocket bridge to xterm
   ↕ FS sandbox ── project/<name>/ (strict via fsx.ts:10)
+  ↕ Parallelism ── generations Map per chatId (index.ts:641) + PTY per project; multi-chat concurrency, no intra-chat `task` yet
 ```
-Single-process app. `npm run build` then `npm start` serves both API and UI on one port. Ideal for VPS, home lab, or single Docker container. SQLite survives restarts; WAL mode handles concurrent chat streams.
+Single-process app. `npm run build` then `npm start` serves both API and UI on one port. Ideal for VPS, home lab, or single Docker container. SQLite survives restarts; WAL mode handles concurrent chat streams (`store.ts:264` `busy_timeout 10000`, `index.ts:1042` 409 guard per chat). Latest: hybrid TF-IDF search infra (`store.ts:491`/`688`) + history truncation 90k (`agent.ts:2151`) for 200-file repos.
 
 ### Opencode
-Go binary + TUI renderer. Extremely fast cold start, tiny memory, SSH-native. Config points to skills. No browser needed, but no phone UI or live preview.
+Go binary + TUI renderer. Extremely fast cold start, tiny memory, SSH-native. Config points to skills. No browser needed, but no phone UI or live preview. **Parallelism:** primary Build + restricted Plan + **subagents General (parallel tasks) / Explore (read-only)** via `task` tool (`opencode.ai/docs/agents`); multi-agent swarm via `worktree` service pending `#34216` — no native worktree isolation today, workaround `git worktree add` per worker.
 
 ### Claude Code
 Anthropic CLI that talks to the Claude API. Deep codebase map via embeddings + agentic loop. Best at “understand 200 files then plan.” Closed source, Anthropic-only.
@@ -304,19 +306,22 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 ### KS Agent — strengths (verified)
 *   Any model, zero lock-in, keys never leave the server (masked `••••`).
 *   Phone-usable — fix from anywhere, `Continue` resumes where the stream stopped without duplicating content.
-*   Structured workflow — every non-trivial task gets a plan with tracked steps; `complete_plan_step` guard + large-edit prompt reduces half-done refactors (C2 82→86, not yet 96).
+*   Structured workflow — every non-trivial task gets a plan with tracked steps; `complete_plan_step` guard + large-edit prompt + history truncation (`agent.ts:2151` 90k) reduces half-done refactors on 200-file repos (C2 82→86, not yet 96).
+*   **Parallel, not sub-agent — but powerful:** Multi-chat + multi-project concurrency — N chats/projects stream in parallel (`index.ts:641` `generations` Map, `index.ts:940` `/api/generations`), each with own plan/activities/preview/PTY. Blocking `ask_question` + MCP (4 transports) lets you ("sub-agent as me") or an external agent answer and handoff — `you` are the powerful sub-agent. See §3 new row.
 *   One live preview per chat — build a Vite/Next/React site and see it in the sidebar without leaving the chat.
 *   Real PTY — `vim`, `htop`, `npm run dev` just work.
-*   SQLite persistence — projects, chats, messages, plans, activities, terminals, previews, and questions survive restart.
+*   SQLite persistence — projects, chats, messages, plans, activities, terminals, previews, and questions survive restart (WAL `busy_timeout 10000`, `chmod 600` at rest).
 *   IDE ghost + inline chat work (in-browser + VS Code extension) — early but usable (C6 55→78).
 *   Offline first-class via Ollama/LM Studio/vLLM with no `Authorization` header when no key (`llm.ts:165`) — fully air-gapped after `npm run build` + `ollama pull`.
 *   Extensibility: Skills with read-guard + MCP(4) + LSP(6) + Plugins marketplace — global or per-project (C12 85→90).
 *   Strict project jail + secrets masked + `chmod 600` + WAL concurrency — strong, but not Docker isolation (C9 88→92, not 98).
+*   **Hybrid search infra (latest):** `grep`+`glob` (20k) + TF-IDF semantic infra (`store.ts:491` `embeddings` table, `store.ts:688` `semanticSearch`, `store.ts:192` `semantic_search` type, 5k indexed/20k scanned, cosine+grep hybrid `store.ts:839` fallback) — not yet vector, but grep-only gap is closing.
 
 ### KS Agent — weaknesses (honest, what keeps it from #1 everywhere)
-*   No embeddings / semantic code search (grep/glob only; monorepo H 55 vs Cody/Cursor 85). Roadmap item; pair with Cody today.
+*   **No intra-chat `task` sub-agents yet** — you get multi-chat parallelism (K 68) but not Opencode/Claude-style fan-out inside one chat (`task` → General/Explore) — need to open N chats or use MCP swarm. Roadmap: `task` delegate + worktree isolation (like Opencode `#34216`). Pair with Opencode/Claude for fan-out today (vs K 88–92).
+*   **Search not yet vector** — hybrid TF-IDF (`store.ts:688`) is real but lightweight; parity needs vector embeddings or Cody/Cursor for monorepo H 55 vs 85. Tool wiring pending.
 *   IDE polish gap (C6 78 vs 98) — no next-edit prediction, no multi-cursor inline, no marketplace one-click polish.
-*   Reasoning still model-dependent (C2 86 vs Claude 96) — prompt hardening helps but can't replace frontier model quality.
+*   Reasoning still model-dependent (C2 86 vs Claude 96) — prompt hardening + history truncation helps but can't replace frontier model quality.
 *   Single-tenant by default (add Caddy/Nginx/Tailscale for multi-user).
 *   No built-in git PR automation (use `gh pr create`); no optional Docker jail for E (92 vs 98).
 
@@ -365,15 +370,17 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 | **Self-host on VPS, use from laptop + phone, any model** | **KS Agent** | Opencode + SSH |
 | **Live terminal all day, want lowest latency** | Opencode | Aider |
 | **Big refactor on 200-file repo, need deep plan first** | **Claude Code (98)** | KS Agent 86 / OpenHands 88 |
+| **Fan-out 3 parallel sub-agents (swarm)** | **Claude 92 / Opencode 88** | **KS Agent 68 multi-chat** (no intra-chat `task` yet) / Cline 85 |
 | **Cheapest strong model for daily coding** | DeepSeek (via KS Agent / Aider / Continue) | KS Agent + Ollama (free) |
 | **Untrusted / student code, must sandbox** | **OpenHands (98)** | KS Agent 92 (native jail) |
 | **Stay in VS Code, want autocomplete + chat** | **Cursor (98)** | Cline 94 / Windsurf 96 (KS 78 early) |
-| **Enterprise monorepo with powerful code search** | **Cody (85)** | Cursor 85 (KS 55 — add Cody) |
+| **Enterprise monorepo with powerful code search** | **Cody (85)** | Cursor 85 (KS 55 hybrid TF-IDF `store.ts:688` — add Cody) |
 | **Git-heavy workflow (commit-per-change, review diff)** | **Aider (98)** | KS Agent shell + `gh` (70) |
 | **Air-gapped / offline** | **DeepSeek 90 / KS+Ollama 88** | Continue 88 / Aider 85 |
 | **“Ship a PR while I sleep” cloud worker** | **Devin (80)** | OpenHands 80 / KS 60 |
 
-**Mix-and-match is normal:** `KS Agent (server + phone + plans)` + `Cursor/Cline (IDE inline)` + `DeepSeek/Ollama via KS Agent (cheap)` is a common winning stack.
+**Mix-and-match is normal:** `KS Agent (server + phone + plans + multi-chat parallel)` + `Cursor/Cline (IDE inline)` + `DeepSeek/Ollama via KS Agent (cheap)` + **`Opencode/Claude sub-agents` for fan-out via MCP** is a common winning stack.
+> **Sub-agent as you — powerful point:** In KS Agent, **you are the sub-agent**. Blocking `ask_question` (`server/src/agent.ts:575`) pauses the main agent until you (human or MCP-delegated AI like me) answer — with clickable options + custom input. Combine with MCP (4 transports) to delegate a task to an external AI/worker and resume — parallel multi-chat (`index.ts:641`) gives you N agents at once.
 
 ---
 
@@ -418,11 +425,12 @@ KS_DATA_DIR=/custom/dir           # custom data directory
 | Dimension | KS Agent | Opencode | Claude Code | DeepSeek | OpenHands | Cursor |
 |---|---|---|---|---|---|---|
 | **Philosophy** | Web + phone + verified agent | Terminal-fast agent | Reasoning-first CLI | Cheap frontier model | Docker autonomous | IDE-native assistant |
-| **Best for** | Self-host, any model, mobile | Terminal lovers | Huge refactors | Budget + offline | Untrusted autonomy | Day-to-day IDE |
-| **Worst for** | Monorepo semantic search | Phone / preview | Cheap/budget | Needs harness | Light edits, cost | Phone / server |
+| **Best for** | Self-host, any model, mobile + **multi-chat parallel** | Terminal lovers + **sub-agent swarm** | Huge refactors + subagents | Budget + offline | Untrusted autonomy | Day-to-day IDE |
+| **Worst for** | Monorepo vector search (hybrid only) / intra-chat fan-out | Phone / preview | Cheap/budget | Needs harness | Light edits, cost | Phone / server |
 | **Lock-in** | None | None | Anthropic | DeepSeek | None | Mild |
 | **Cost at scale** | $ (BYO) | $ | $$$ | $ | $$ (compute) | $$ |
-| **Autonomy** | High (plan → act → verify) | High | Very high | — | Very high | Medium |
+| **Autonomy** | High (plan → act → verify) | High (task subagents) | Very high (subagents) | — | Very high | Medium |
+| **Parallelism** | **Multi-chat (68)** — N chats/projects concurrent (`index.ts:641`), MCP handoff, no intra-chat `task` yet | **Sub-agents 88** — General/Explore via `task`, worktree pending | **92** Plan/Explore | — | 80 Swarm | 40 | 
 | **Isolation** | Project sandbox (92) | OS (80) | OS (75) | — | Docker (96) | OS (55) |
 
 ---
@@ -436,10 +444,16 @@ No. Similar skills shape for compatibility, but standalone Hono + React + SQLite
 Yes. Any OpenAI-compatible endpoint works. Use `Quick Setup` preset or set `baseUrl` to your provider (`https://api.deepseek.com` or `http://localhost:11434/v1` for Ollama) and pick the model id. No `Authorization` header is sent when no key (verified `llm.ts:165`).
 
 **Does KS Agent do semantic code search?**
-Not yet — grep/glob only (fast on typical codebases, 20k files scanned). Embedding search is roadmap; pair with Cody/Cursor for search and KS Agent for execution today.
+Hybrid today — `grep`/`glob` (20k scanned) + **TF-IDF semantic infra** (`server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch`, 5k indexed/20k scanned, cosine+grep hybrid `store.ts:839` fallback, `store.ts:192` `semantic_search` type). Lightweight, no heavy deps, pure-JS via `better-sqlite3`; tool wiring in progress — when empty it falls back to grep hits. For vector-grade monorepo search, pair with Cody/Cursor today.
+
+**Does KS Agent have sub-agents / parallel agents like Opencode?**
+Not yet intra-chat — **Opencode wins here (88 vs KS 68)**. Opencode has `General` (parallel tasks) + `Explore` (read-only) subagents via `task` tool (`opencode.ai/docs/agents`) with worktree isolation pending `#34216`. **KS Agent has multi-chat parallelism** instead: each chat is an independent agent (`server/src/index.ts:641` `generations` Map per chatId, `server/src/index.ts:1042` 409 guard per chat, `server/src/index.ts:940` `/api/generations`), so open 3 chats → 3 agents run concurrently, each with own plan/preview/PTY (`index.ts:112`). For branching tasks use N chats or MCP delegate. **Powerful point — sub-agent as you:** blocking `ask_question` (`server/src/agent.ts:575`) pauses until *you* (human or MCP-delegated AI like me) answer with options + custom input — you are the high-quality sub-agent, with MCP (4 transports) bridging to external workers. Roadmap: intra-chat `task`/`delegate` with worktree isolation to reach 88–92 (see §4.7).
 
 **Can I run KS Agent and Cursor together?**
 Yes. Point both at `project/<name>` and they share files; git is the sync layer. KS Agent gives server/phone/plan persistence, Cursor gives inline polish.
+
+**Can I run KS Agent + Opencode sub-agents together?**
+Yes — winning stack: **KS Agent (self-host, phone, multi-chat, preview)** for orchestration + **Opencode/Claude sub-agents** for fan-out via MCP (`server/src/mcp.ts:314` 4 transports) or just git worktrees. Share `project/` on disk.
 
 **What about Devin?**
 Cloud-only and expensive (~$500/mo). KS Agent is the self-hosted opposite: you own the machine, the keys, and the DB.
