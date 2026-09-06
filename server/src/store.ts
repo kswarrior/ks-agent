@@ -1401,7 +1401,7 @@ export function semanticSearch(projectId: string, query: string, opts?: { limit?
         idfMap.set(term, v)
       }
       // compute raw scores
-      type Scored = ChunkData & { vectorScore:number; bm25:number; grepBoost:number; finalScore:number }
+      type Scored = ChunkData & { vectorScore:number; bm25:number; grepBoost:number; finalScore:number; source: SemanticHit['source'] }
       const scored: Scored[] = []
       let maxBm25 = 0
       const tmp = chunkDatas.map(c=> {
@@ -1426,7 +1426,7 @@ export function semanticSearch(projectId: string, query: string, opts?: { limit?
         else if (normBm>0.4) source='bm25'
         else if (c.hasGrep) source='grep'
         else source='vector'
-        scored.push({ ...c, vectorScore: vecScore, bm25: normBm, grepBoost, finalScore: final, snippet: c.snippet })
+        scored.push({ ...c, vectorScore: vecScore, bm25: normBm, grepBoost, finalScore: final, snippet: c.snippet, source })
         // augment source for low fallback
       }
       // Filter very low when no vector and no grep? keep hybrid behavior: if no grep and score <0.15 hide
