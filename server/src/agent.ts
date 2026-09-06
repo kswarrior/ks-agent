@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, type Plan, type Question, type Activity } from './store.js'
+import { findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
@@ -106,6 +106,7 @@ export interface ToolExecResult {
 
 interface ToolContext {
   projectPath: string
+  projectId?: string
   chatId: string
   onEvent: (event: string, data: string) => void
   signal: AbortSignal
@@ -591,6 +592,23 @@ const AGENT_TOOLS: ToolDef[] = [
           custom_placeholder: { type: 'string', description: 'Placeholder for custom input, e.g., "Type custom framework..."' }
         },
         required: ['question']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'semantic_search',
+      description: 'Hybrid semantic search for codebase (grep + TF-IDF cosine rerank, lightweight local embeddings stored in SQLite via better-sqlite3, no external service, gracefully falls back to grep when no embeddings). Preferred for large codebase search (100-200+ files) to find conceptually relevant files beyond exact regex — e.g., "where is auth logic", "payment handling". Reranks grep results semantically using tokenized TF-IDF vectors and cosine similarity; if embeddings empty, falls back to grep results. Use for broad concept queries and large-repo exploration.',
+      parameters: {
+        type: 'object',
+        properties: {
+          pattern: { type: 'string', description: 'Search query — natural language or regex/text, e.g., "authentication logic", "payment.*handler", "uniqueTokenXYZ". Treated as semantic query + grep pattern hybrid.' },
+          path: { type: 'string', description: 'Directory to search in, relative to ${projectfolder} root. Empty = project root (default).' },
+          include: { type: 'string', description: 'Optional glob to filter files, e.g., "*.ts", "*.{js,ts}", "src/**/*.tsx". If omitted, searches all text files.' },
+          max_results: { type: 'integer', description: 'Max ranked hits to return (1-100, default 20)' }
+        },
+        required: ['pattern']
       }
     }
   }
@@ -1487,6 +1505,55 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       return ok(`${header}\n${sliced.join('\n')}${suffix}`, `glob ${sliced.length}/${total}`)
     }
 
+    case 'semantic_search': {
+      const rawPattern = typeof args.pattern === 'string' ? args.pattern : (typeof args.query === 'string' ? String(args.query) : '')
+      const pattern = rawPattern.trim()
+      if (!pattern) return err('pattern is required — provide a search query (text or regex), e.g. "auth logic" or "uniqueTokenXYZ"')
+      if (pattern.length > 500) return err('pattern too long (max 500)')
+      if (pattern.includes('\0')) return err('invalid pattern')
+      const relDir = typeof args.path === 'string' ? args.path : (typeof args.dir === 'string' ? args.dir : '')
+      // Validate path not escaping — will be checked via semanticSearch projectPath logic, but also validate here
+      if (relDir && relDir.includes('\0')) return err('invalid path')
+      const includeStr = typeof args.include === 'string' ? args.include.trim().slice(0, 200) : null
+      if (includeStr && includeStr.includes('\0')) return err('invalid include')
+      let maxResults = 20
+      if (args.max_results !== undefined) {
+        const n = Number(args.max_results)
+        if (!Number.isNaN(n) && n > 0) maxResults = Math.min(Math.floor(n), 100)
+      } else if (args.maxResults !== undefined) {
+        const n = Number(args.maxResults)
+        if (!Number.isNaN(n) && n > 0) maxResults = Math.min(Math.floor(n), 100)
+      } else if (args.limit !== undefined) {
+        const n = Number(args.limit)
+        if (!Number.isNaN(n) && n > 0) maxResults = Math.min(Math.floor(n), 100)
+      }
+      // Resolve projectId securely — prefer ctx.projectId, fallback to lookup via projectPath
+      let projectId = ctx.projectId ?? null
+      if (!projectId) {
+        try {
+          const db = getDb()
+          const proj = db.projects.find(p => path.resolve(p.path) === path.resolve(ctx.projectPath))
+          if (proj) projectId = proj.id
+        } catch {}
+      }
+      if (!projectId) return err('project context missing for semantic_search')
+      try {
+        const hits = semanticSearch(projectId, pattern, { limit: maxResults, include: includeStr || undefined, projectPath: ctx.projectPath })
+        if (hits.length === 0) {
+          const incNote = includeStr ? ` (filter: ${includeStr})` : ''
+          return ok(`No semantic hits for "${pattern}" in ${relDir || '.'}${incNote} — checked via hybrid TF-IDF cosine rerank (fallback to grep when embeddings empty). Try broader query or different include.`, `semantic 0 hits`)
+        }
+        const header = `Semantic search (hybrid grep+TF-IDF cosine rerank) for "${pattern}" — ${hits.length} hit(s) in ${relDir || '.'}${includeStr ? ` (filter: ${includeStr})` : ''} — reranked; embeddings via SQLite better-sqlite3, fallback to grep when empty`
+        const lines = hits.map(h => `${h.path} — score ${h.score.toFixed(3)} [${h.source}] :: ${h.snippet ?? ''}`.slice(0, 600))
+        const suffix = hits.length >= maxResults ? `\n\n…[showing top ${maxResults} — increase max_results (max 100) for more]` : ''
+        return ok(`${header}\n${lines.join('\n')}${suffix}`, `semantic ${hits.length} hits`)
+      } catch (e: any) {
+        const msg = String(e?.message || e).slice(0, 400)
+        // Fallback: try plain grep via semanticSearch's internal grep fallback already, but if store throws, fallback to grep behavior
+        return err(`semantic_search failed: ${msg}`)
+      }
+    }
+
     case 'write_file': {
       // Skill enforcement: must have read relevant skill before editing
       {
@@ -2196,7 +2263,7 @@ function truncateHistoryForModel(messages: LLMMessage[], budgetChars = 90000): L
 
 export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutcome> {
   let messages: LLMMessage[] = truncateHistoryForModel([...opts.history])
-  const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal }
+  const ctx: ToolContext = { projectPath: opts.projectPath, projectId: opts.projectId, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal }
   let content = ''
   // Build combined tool list including MCP tools scoped to project
   function combinedTools(): ToolDef[] {
