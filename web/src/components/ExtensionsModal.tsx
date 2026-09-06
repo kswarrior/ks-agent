@@ -41,6 +41,17 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [skillPickerDir, setSkillPickerDir] = useState('')
   const [skillPickerEntries, setSkillPickerEntries] = useState<FileEntry[]>([])
   const [skillPickerLoading, setSkillPickerLoading] = useState(false)
+  // Create file inside skills (mirrors Extensions → Files create flow: asks folder + file name + content)
+  const [skillCreateOpen, setSkillCreateOpen] = useState(false)
+  const [skillCreateFolder, setSkillCreateFolder] = useState('')
+  const [skillCreateFileName, setSkillCreateFileName] = useState('')
+  const [skillCreateContent, setSkillCreateContent] = useState('')
+  const [skillCreateLoading, setSkillCreateLoading] = useState(false)
+  const [skillEditCreateOpen, setSkillEditCreateOpen] = useState(false)
+  const [skillEditCreateFolder, setSkillEditCreateFolder] = useState('')
+  const [skillEditCreateFileName, setSkillEditCreateFileName] = useState('')
+  const [skillEditCreateContent, setSkillEditCreateContent] = useState('')
+  const [skillEditCreateLoading, setSkillEditCreateLoading] = useState(false)
 
   // --- MCP state ---
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
@@ -808,6 +819,99 @@ export function ExtensionsModal({ open, onClose }: Props) {
       setSkillPickerEntries([])
     } finally {
       setSkillPickerLoading(false)
+    }
+  }
+
+  // --- Skills: create file helpers (folder + main file name like frontend/skill.md => folder=frontend, main=skill.md) ---
+  function inferSkillFolder(name: string, mainFile: string): string {
+    if (mainFile && mainFile.includes('/')) return mainFile.slice(0, mainFile.lastIndexOf('/'))
+    if (name) return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+    return ''
+  }
+  function buildSkillTargetPath(folder: string, fileName: string): string {
+    const f = folder.trim().replace(/^\/+|\/+$/g, '')
+    const n = fileName.trim().replace(/^\/+/, '').replace(/\/+/g, '/')
+    if (!n) return ''
+    if (n.includes('/')) return n
+    return f ? `${f}/${n}` : n
+  }
+  function isValidSkillRelPath(p: string): boolean {
+    if (!p || p.length > 500 || p.includes('\0') || p.startsWith('/') || p.startsWith('\\') || p.includes('//') || p.includes('\\')) return false
+    const parts = p.split('/').filter(Boolean)
+    if (parts.length === 0) return false
+    if (parts.join('/') !== p) return false
+    for (const seg of parts) {
+      if (seg === '.' || seg === '..' || seg.trim() !== seg || seg.includes('/') || seg.includes('\\') || seg.includes('\0')) return false
+    }
+    return true
+  }
+  function openSkillCreate(isEdit: boolean) {
+    const form = isEdit ? skillEditForm : skillForm
+    const folder = inferSkillFolder(form.name, form.mainFile)
+    if (isEdit) {
+      setSkillEditCreateFolder(folder)
+      setSkillEditCreateFileName('')
+      setSkillEditCreateContent('')
+      setSkillEditCreateOpen(true)
+    } else {
+      setSkillCreateFolder(folder)
+      setSkillCreateFileName('')
+      setSkillCreateContent('')
+      setSkillCreateOpen(true)
+    }
+    if (skillProjects.length === 0) loadSkillProjects()
+    if (!skillFileBrowserProject && skillProjects.length > 0) setSkillFileBrowserProject(skillProjects[0].id)
+  }
+  async function handleCreateSkillFile(isEdit: boolean) {
+    const folder = isEdit ? skillEditCreateFolder : skillCreateFolder
+    const fileName = isEdit ? skillEditCreateFileName : skillCreateFileName
+    const content = isEdit ? skillEditCreateContent : skillCreateContent
+    const form = isEdit ? skillEditForm : skillForm
+    const target = buildSkillTargetPath(folder, fileName)
+    if (!target) { toast('File name is required', 'error'); return }
+    if (!isValidSkillRelPath(target)) { toast(`Invalid file path: "${target}"`, 'error'); return }
+    if (form.files.includes(target) || form.mainFile === target) { toast('File already exists in skill', 'error'); return }
+    const projId = (form.projectId || '').trim() || skillFileBrowserProject || skillProjects[0]?.id || ''
+    const isGlobal = !projId
+    if (isEdit) setSkillEditCreateLoading(true); else setSkillCreateLoading(true)
+    try {
+      if (isGlobal) {
+        const res = await fetch('/api/settings/skills/files', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: target, content }) })
+        let data: any = null
+        try { data = await res.json() } catch {}
+        if (!res.ok) throw new Error(data?.error || `Failed to create file (${res.status})`)
+      } else {
+        await api.createFileEntry(projId, 'file', target)
+        if (content) await api.saveFileContent(projId, target, content)
+        if (skillFileBrowserProject === projId) {
+          try { await refreshSkillPicker() } catch {}
+        }
+      }
+      if (isEdit) {
+        setSkillEditForm({ ...skillEditForm, files: [...skillEditForm.files, target] })
+        setSkillEditCreateOpen(false)
+        setSkillEditCreateFolder('')
+        setSkillEditCreateFileName('')
+        setSkillEditCreateContent('')
+      } else {
+        const newFiles = [...skillForm.files, target]
+        // If main file empty and created file is the conventional main, auto-set it (folder/skill.md)
+        let newMain = skillForm.mainFile
+        if (!newMain && target.endsWith('.md')) {
+          const base = target.split('/').pop() ?? target
+          if (base.toLowerCase() === 'skill.md' || newFiles.length === 1) newMain = target
+        }
+        setSkillForm({ ...skillForm, files: newFiles, mainFile: newMain })
+        setSkillCreateOpen(false)
+        setSkillCreateFolder('')
+        setSkillCreateFileName('')
+        setSkillCreateContent('')
+      }
+      toast(`Created ${target}`, 'success')
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      if (isEdit) setSkillEditCreateLoading(false); else setSkillCreateLoading(false)
     }
   }
 

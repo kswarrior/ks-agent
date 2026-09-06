@@ -1787,6 +1787,30 @@ app.patch('/api/settings/skills/:id', async (c) => {
   return c.json(skill)
 })
 
+// Global skills file creation (for skills without a project or when creating folder/skill.md structure)
+const skillsDirGlobal = path.join(process.cwd(), 'skills')
+app.post('/api/settings/skills/files', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const rel = String(body.path ?? '').trim()
+  const content = body.content != null ? String(body.content) : ''
+  if (!rel) return c.json({ error: 'Path is required' }, 400)
+  if (rel.length > 500) return c.json({ error: 'Path too long (max 500)' }, 400)
+  if (!isValidRelPath(rel)) return c.json({ error: `Invalid file path: "${rel}"` }, 400)
+  if (Buffer.byteLength(content, 'utf8') > 10 * 1024 * 1024) return c.json({ error: 'Content too large (max 10MB)' }, 400)
+  try { fs.mkdirSync(skillsDirGlobal, { recursive: true }) } catch {}
+  const absRoot = path.resolve(skillsDirGlobal)
+  const abs = path.resolve(absRoot, rel)
+  if (abs !== absRoot && !abs.startsWith(absRoot + path.sep)) return c.json({ error: 'Invalid path' }, 400)
+  if (fs.existsSync(abs)) return c.json({ error: `"${rel}" already exists` }, 400)
+  try {
+    fs.mkdirSync(path.dirname(abs), { recursive: true })
+    fs.writeFileSync(abs, content, 'utf8')
+  } catch (e: any) {
+    return c.json({ error: e?.message || 'Failed to create file' }, 400)
+  }
+  return c.json({ ok: true, path: rel }, 201)
+})
+
 function buildSkillSystemMessages(project: Project | undefined): LLMMessage[] {
   const skills = getSkills()
   const MAX_FILE_BYTES = 12 * 1024
