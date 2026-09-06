@@ -2285,6 +2285,18 @@ function normalizeMCPHeaders(raw: unknown): Record<string, string> | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
+function maskSecretMap(map?: Record<string, string>): Record<string, string> {
+  if (!map) return {}
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(map)) {
+    out[k] = v ? `••••${v.slice(-4)}` : ''
+  }
+  return out
+}
+function isMaskedSecret(v: string): boolean {
+  return typeof v === 'string' && v.startsWith('••••')
+}
+
 function mcpPublic(server: MCPServer): Record<string, unknown> {
   const state = getMCPServerState(server.id)
   return {
@@ -2294,8 +2306,8 @@ function mcpPublic(server: MCPServer): Record<string, unknown> {
     command: server.command ?? null,
     args: server.args ?? [],
     url: server.url ?? null,
-    env: server.env ?? {},
-    headers: server.headers ?? {},
+    env: maskSecretMap(server.env),
+    headers: maskSecretMap(server.headers),
     projectId: server.projectId ?? null,
     enabled: server.enabled,
     createdAt: server.createdAt,
@@ -2459,8 +2471,48 @@ app.patch('/api/settings/mcp/:id', async (c) => {
   if ('command' in v) srv.command = v.command
   if ('args' in v) srv.args = v.args
   if ('url' in v) srv.url = v.url
-  if ('env' in v) srv.env = v.env
-  if ('headers' in v) srv.headers = v.headers
+  if ('env' in v) {
+    // Preserve original secrets when client sends masked placeholders (••••xxxx)
+    if (v.env === undefined) {
+      delete srv.env
+    } else if (srv.env) {
+      const merged: Record<string, string> = { ...v.env }
+      let hasMasked = false
+      for (const [k, val] of Object.entries(v.env)) {
+        if (isMaskedSecret(val)) {
+          hasMasked = true
+          // If masked value matches preview of original, keep original; otherwise keep masked as-is (should not happen)
+          if (srv.env[k] && val === `••••${srv.env[k].slice(-4)}`) {
+            merged[k] = srv.env[k]
+          }
+        }
+      }
+      // If all incoming were masked and count matches, preserve any keys not sent? No, client sent complete env map
+      // If client sent masked values for all keys, merged already restores originals
+      srv.env = Object.keys(merged).length ? merged : undefined
+      // If client cleared env (empty object) and we had secrets, respect clear intent only if no masked sentinel
+      if (hasMasked && Object.keys(v.env).length === Object.keys(srv.env ?? {}).length) {
+        // already handled
+      }
+    } else {
+      srv.env = v.env
+    }
+  }
+  if ('headers' in v) {
+    if (v.headers === undefined) {
+      delete srv.headers
+    } else if (srv.headers) {
+      const merged: Record<string, string> = { ...v.headers }
+      for (const [k, val] of Object.entries(v.headers)) {
+        if (isMaskedSecret(val) && srv.headers[k] && val === `••••${srv.headers[k].slice(-4)}`) {
+          merged[k] = srv.headers[k]
+        }
+      }
+      srv.headers = Object.keys(merged).length ? merged : undefined
+    } else {
+      srv.headers = v.headers
+    }
+  }
   if ('projectId' in v) {
     if (v.projectId === undefined) delete srv.projectId
     else srv.projectId = v.projectId
@@ -2611,8 +2663,8 @@ function lspPublic(server: LSPServer): Record<string, unknown> {
     command: server.command ?? null,
     args: server.args ?? [],
     url: server.url ?? null,
-    env: server.env ?? {},
-    headers: server.headers ?? {},
+    env: maskSecretMap(server.env),
+    headers: maskSecretMap(server.headers),
     projectId: server.projectId ?? null,
     enabled: server.enabled,
     createdAt: server.createdAt,
@@ -2775,8 +2827,26 @@ app.patch('/api/settings/lsp/:id', async (c) => {
   if ('command' in v) srv.command = v.command
   if ('args' in v) srv.args = v.args
   if ('url' in v) srv.url = v.url
-  if ('env' in v) srv.env = v.env
-  if ('headers' in v) srv.headers = v.headers
+  if ('env' in v) {
+    if (v.env === undefined) delete srv.env
+    else if (srv.env) {
+      const merged: Record<string, string> = { ...v.env }
+      for (const [k, val] of Object.entries(v.env)) {
+        if (isMaskedSecret(val) && srv.env[k] && val === `••••${srv.env[k].slice(-4)}`) merged[k] = srv.env[k]
+      }
+      srv.env = Object.keys(merged).length ? merged : undefined
+    } else srv.env = v.env
+  }
+  if ('headers' in v) {
+    if (v.headers === undefined) delete srv.headers
+    else if (srv.headers) {
+      const merged: Record<string, string> = { ...v.headers }
+      for (const [k, val] of Object.entries(v.headers)) {
+        if (isMaskedSecret(val) && srv.headers[k] && val === `••••${srv.headers[k].slice(-4)}`) merged[k] = srv.headers[k]
+      }
+      srv.headers = Object.keys(merged).length ? merged : undefined
+    } else srv.headers = v.headers
+  }
   if ('projectId' in v) {
     if (v.projectId === undefined) delete srv.projectId
     else srv.projectId = v.projectId
