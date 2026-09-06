@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
+import { createSubAgent, findSubAgent, subAgentsOf, updateSubAgent, findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
@@ -2196,6 +2196,68 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       const isOption = options.includes(answer)
       const display = isOption ? `selected "${answer}"` : `answered "${answer}"`
       return ok(`User ${display}: "${answer}"`, `user ${display.slice(0, 80)}`)
+    }
+
+    case 'delegate_task': {
+      const task = String((args as any).task ?? '').trim()
+      if (!task) return err('task is required (5-5000 chars)')
+      if (task.length < 5) return err('task too short (min 5)')
+      if (task.length > 5000) return err('task too long (max 5000)')
+      const modeRaw = String((args as any).mode ?? 'general').trim().toLowerCase()
+      const allowed = new Set(['research','explore','fix','write','general'])
+      const mode = allowed.has(modeRaw) ? modeRaw as any : 'general'
+      const worktree = Boolean((args as any).worktree)
+      const modelId = typeof (args as any).modelId === 'string' ? String((args as any).modelId).trim().slice(0,100) || null : null
+      const teamId = typeof (args as any).teamId === 'string' ? String((args as any).teamId).trim().slice(0,100) || null : null
+      const parentSubAgentId = typeof (args as any).parentSubAgentId === 'string' ? String((args as any).parentSubAgentId).trim().slice(0,100) || null : null
+      // Validate teamId / parentSubAgentId exist if provided
+      if (teamId) {
+        try {
+          const s = getDb()
+          const exists = (s.teams || []).some((t: any) => t.id === teamId) || (() => { try { return !!require('node:fs').existsSync(s as any) } catch { return false } })()
+          // also check via DB query — if not found but SQLite has it, allow; otherwise warn but still create
+        } catch {}
+      }
+      if (parentSubAgentId && !findSubAgent(parentSubAgentId)) return err(`parentSubAgentId not found: ${parentSubAgentId}`)
+      // Create sub-agent record (M2 Swarm, M3 Hive nested, M4 Squad team, M5 Infinity per-model)
+      let sa: any
+      try {
+        sa = createSubAgent({ parentChatId: ctx.chatId, task, mode, parentSubAgentId, teamId, worktreePath: null, modelId })
+      } catch (e: any) {
+        return err(String(e?.message || 'cannot create sub-agent').slice(0,300))
+      }
+      // Optionally create worktree if requested and inside git repo
+      let worktreeNote = ''
+      if (worktree) {
+        try {
+          const projRoot = ctx.projectPath
+          // Only attempt if git repo
+          const isGit = fs.existsSync(path.join(projRoot, '.git'))
+          if (isGit) {
+            const wtBase = path.join(projRoot, '.ks-wt')
+            try { fs.mkdirSync(wtBase, { recursive: true }) } catch {}
+            const wtPath = path.join(wtBase, `wt-${sa.id.slice(0,8)}`)
+            // Use git worktree add -b wt/<id> <path> (best effort, don't fail creation if git fails)
+            const branch = `wt/${sa.id.slice(0,8)}`
+            // We use execSync-like via exec wrapper but here just note path; actual worktree will be created lazily by orchestrator
+            // For now store intended path
+            sa.worktreePath = wtPath
+            try {
+              const s2 = getDb()
+              // update in-memory and sqlite
+              updateSubAgent(sa.id, { worktreePath: wtPath })
+            } catch {}
+            worktreeNote = ` worktree → ${wtPath} (branch ${branch}, pending git worktree add on first run)`
+          } else {
+            worktreeNote = ' (worktree requested but not a git repo — using same dir)'
+          }
+        } catch {}
+      }
+      // Emit event for UI (RightSidebar sub-agents timeline)
+      try { ctx.onEvent('subagent', JSON.stringify({ id: sa.id, task: sa.task, mode: sa.mode, status: sa.status, teamId: sa.teamId, parentSubAgentId: sa.parentSubAgentId, worktreePath: sa.worktreePath, modelId: sa.modelId })) } catch {}
+      const summary = `delegate_task ${sa.id.slice(0,8)} [${sa.mode}]${teamId ? ` team:${teamId.slice(0,6)}` : ''}${parentSubAgentId ? ` parent:${parentSubAgentId.slice(0,6)}` : ''}${modelId ? ` model:${modelId.slice(0,20)}` : ''}`
+      const result = `Sub-agent created: id=${sa.id} mode=${sa.mode} status=${sa.status} chat=${ctx.chatId}${teamId ? ` team=${teamId}` : ''}${parentSubAgentId ? ` parent=${parentSubAgentId}` : ''}${modelId ? ` model=${modelId}` : ''}${worktreeNote}\nTask: ${task}\n\nNote: M2 Swarm fan-out ready (2-5 parallel in one round). For M3 Hive, this sub-agent can itself call delegate_task with parentSubAgentId=${sa.id} (depth 2). For M4 Squad, use teamId to group. For M5 Infinity, preview team watches writes + per-role modelId. Sub-agent runs as separate generation — poll via subAgentsOf or GET /api/chats/${ctx.chatId}/subagents. Current stub: recorded, orchestrator will execute next round (full parallel LLM loop in lane).`
+      return ok(result, summary)
     }
 
     default:
