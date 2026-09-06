@@ -6,7 +6,14 @@
   "version": "0.1.0",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other"],
-  "keywords": ["ai", "autocomplete", "inline-chat", "ks-agent", "copilot"],
+  "keywords": ["ai", "autocomplete", "inline-chat", "ks-agent", "copilot", "next-edit", "ghost-text"],
+  "icon": "icon.png",
+  "galleryBanner": { "color": "#0a0a0a", "theme": "dark" },
+  "repository": { "type": "git", "url": "https://github.com/kswarrior/ks-agent" },
+  "homepage": "https://github.com/kswarrior/ks-agent#readme",
+  "bugs": { "url": "https://github.com/kswarrior/ks-agent/issues" },
+  "license": "MIT",
+  "qna": "marketplace",
   "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
@@ -36,7 +43,9 @@
         "ksAgent.debounceMs": {
           "type": "number",
           "default": 350,
-          "description": "Debounce (ms) before requesting a completion."
+          "description": "Debounce (ms) before requesting a completion. Clamped 80–2000, default 350. Lower = more responsive, higher = fewer provider calls.",
+          "minimum": 80,
+          "maximum": 2000
         }
       }
     },
