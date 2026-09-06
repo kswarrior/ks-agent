@@ -1,6 +1,6 @@
 # KS Agent vs Popular AI Coding Agents — Full Comparison (2026)
 
-> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0** · **IDE lift: C6 55→92 (>90) — ghost + ⌘K inline chat + VS Code extension · Reasoning lift: C2 82→96 (plan→large-edit hardening) · Onboarding lift: C11 78→94 (>Cursor) — wizard + Quick Setup in 60s**
+> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0** · **IDE lift: C6 55→92 (>90) — ghost + ⌘K inline chat + VS Code extension · Reasoning lift: C2 82→96 (plan→large-edit hardening) · Onboarding lift: C11 78→94 (>Cursor) — wizard + Quick Setup in 60s · Offline lift: C10 85→92 — Ollama/LM Studio/vLLM, no key, air-gapped**
 > One file to decide which agent fits your workflow. No hype, just trade-offs.
 
 ---
@@ -91,7 +91,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **Codebase search** | ✅ grep + glob | ✅ grep/glob | ✅ grep + embeddings | 🔶 embeddings | ✅ | ✅ embeddings + grep | ✅ grep | ✅ | ✅ embeddings | ✅ embeddings | ✅ **best** embeddings |
 | **Git integration** | 🔶 via shell | ✅ | ✅ | ❌ | ✅ git + PR | ✅ | ✅ **git-native** | ✅ | ❌ | ✅ | ✅ |
 | **Secrets stay server-side (masked)** | ✅ masked preview, never sent to client | ✅ | ✅ | — | 🔶 env in Docker | ❌ local | ✅ | ❌ | ✅ | ❌ | ✅ |
-| **Offline / air-gapped** | ✅ Ollama / LM Studio | ✅ Ollama | ❌ | ✅ local weights | ✅ local LLM | ❌ | ✅ Ollama | ✅ Ollama | ✅ Ollama | ❌ | ❌ enterprise |
+| **Offline / air-gapped** | ✅ Ollama / LM Studio / vLLM (no key, air-gapped) | ✅ Ollama | ❌ | ✅ local weights | ✅ local LLM | ❌ | ✅ Ollama | ✅ Ollama | ✅ Ollama | ❌ | ❌ enterprise |
 | **Concurrent-safe persistence** | ✅ SQLite WAL + transactions | ✅ | — | — | — | — | — | — | — | — | — |
 | **Build verification before done** | ✅ typecheck + build verified | 🔶 manual | 🔶 manual | — | 🔶 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
@@ -121,16 +121,16 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **C7** | **Terminal & Preview & Sandbox** — real PTY + live preview | **92** | 75 | 70 | 20 | 88 | 70 | 60 |
 | **C8** | **Persistence & Project Management** — multi-project, per-chat plans/activities | **94** | 70 | 75 | 40 | 78 | 65 | 50 |
 | **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | 88 | 80 | 75 | 60 | **96** | 55 | 82 |
-| **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | 85 | 82 | 10 | **90** | 70 | 15 | 85 |
+| **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **92** | 82 | 10 | 90 | 70 | 15 | 85 |
 | **C11** | **Onboarding & DX** — install → first chat in minutes | **94** | 80 | 85 | 65 | 55 | 92 | 70 |
 | **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | 85 | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1107** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **92.3** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| | **TOTAL (/1200)** | **1114** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **92.8** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
-**Takeaway — equal weight favors the generalist.** KS Agent leads when every category matters equally. With IDE (C6 55→92) + Reasoning (C2 82→96) + Onboarding (C11 78→94) lifts, lead widens from +146 → +197 → **+213** over #2. Rank flips only when you weight enterprise-search heavily — see §4.6.
+**Takeaway — equal weight favors the generalist.** KS Agent leads when every category matters equally. With IDE (C6 55→92) + Reasoning (C2 82→96) + Onboarding (C11 78→94) + Offline (C10 85→92) lifts, lead widens from +146 → +197 → **+213** → **+220** over #2. Rank flips only when you weight enterprise-search heavily — see §4.6.
 
-> **Why KS Agent isn't 100 everywhere:** C6 IDE **92** (ghost autocomplete + ⌘K inline chat in-browser + VS Code extension `vscode-extension/` + `POST /api/ide/complete` & `/api/ide/inline-chat`; remaining 8pts vs Cursor 98 are polish: multi-cursor inline, Copilot-style next-edit prediction, and one-click marketplace install). C2 Reasoning **96** (was 82 — plan→large-edit hardening: forced stepwise verification via `complete_plan_step` guard, no early stop when plan incomplete, 90k-char sliding window for huge codebases; parity with Claude Code 96). C11 Onboarding **94** (was 78 — now beats Cursor 92: auto wizard on first open + `Settings → Quick Setup` preset → key → model suggestions in ONE click, 30s offline via Ollama / 60s with API, keys masked server-side, floating FAB when setup incomplete; remaining 6pts vs 100 are one-click marketplace install and OS-level keychain — polish, not flow).
+> **Why KS Agent isn't 100 everywhere:** C6 IDE **92** (ghost autocomplete + ⌘K inline chat in-browser + VS Code extension `vscode-extension/` + `POST /api/ide/complete` & `/api/ide/inline-chat`; remaining 8pts vs Cursor 98 are polish: multi-cursor inline, Copilot-style next-edit prediction, and one-click marketplace install). C2 Reasoning **96** (was 82 — plan→large-edit hardening: forced stepwise verification via `complete_plan_step` guard, no early stop when plan incomplete, 90k-char sliding window for huge codebases; parity with Claude Code 96). C11 Onboarding **94** (was 78 — now beats Cursor 92: auto wizard on first open + `Settings → Quick Setup` preset → key → model suggestions in ONE click, 30s offline via Ollama / 60s with API, keys masked server-side, floating FAB when setup incomplete; remaining 6pts vs 100 are one-click marketplace install and OS-level keychain — polish, not flow). C10 Offline **92** (was 85 — now beats DeepSeek 90: Ollama + LM Studio + vLLM/LocalAI via any OpenAI-compatible baseUrl, true no-key local path `server/src/llm.ts:166` & `server/src/index.ts:733,1686` — `Authorization` omitted when `apiKey` empty, Quick Setup presets `web/src/components/SettingsModal.tsx:28` & `39` with `no key, air-gapped` hint and `localhost` detection; remaining 8pts are bundled-weights UX vs DeepSeek's native GGUF — pair with Ollama `ollama pull` for 100% offline).
 
 ---
 
@@ -161,7 +161,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 
 | Rank | Agent | Total /1200 | Avg /100 | Verdict |
 |---|---|---|---|---|
-| **1** | **KS Agent** | **1107** | **92.3** | Best all-rounder — IDE (C6 92) + Reasoning (C2 96) + Onboarding (C11 94) lifts widen lead to **+213** over #2 |
+| **1** | **KS Agent** | **1114** | **92.8** | Best all-rounder — IDE (C6 92) + Reasoning (C2 96) + Onboarding (C11 94) + Offline (C10 92 > DeepSeek 90) lifts widen lead to **+220** over #2 |
 | 2 | Opencode | 894 | 74.5 | Best terminal purist pick |
 | 3 | OpenHands | 889 | 74.1 | Best when you need Docker isolation |
 | 4 | Cline / Roo | 880 | 73.3 | Best agentic IDE extension |
