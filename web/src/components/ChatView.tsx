@@ -204,9 +204,11 @@ function RetryCard({ retryInfo }: { retryInfo: { attempt: number; maxAttempts: n
 function ThinkingCard({ stage, stageLabel, thinking, hasContent, retryReason }: { stage: string; stageLabel: string; thinking?: string; hasContent: boolean; retryReason?: string }) {
   const [expanded, setExpanded] = useState(false)
   const fullText = useMemo(() => (thinking ?? '').trim(), [thinking])
-  const preview = useMemo(() => {
-    const t = fullText.replace(/\s+/g, ' ')
-    if (t) return t.length > 90 ? t.slice(0, 90) + '…' : t
+  const hasContentFlag = !!fullText || !!retryReason || !!stage
+
+  // Fallback only for body when no thinking yet — header always shows just Thinking
+  const bodyFallback = useMemo(() => {
+    if (fullText) return fullText
     if (retryReason) return retryReason === 'timeout' ? 'handling timeout' : retryReason === 'resource_exhausted' ? 'handling capacity' : `retrying ${retryReason}`
     if (stage === 'explore') return 'exploring project files'
     if (stage === 'planning') return 'planning'
@@ -216,8 +218,7 @@ function ThinkingCard({ stage, stageLabel, thinking, hasContent, retryReason }: 
     return 'generating response'
   }, [fullText, stage, hasContent, retryReason])
 
-  const label = stageLabel && stageLabel !== 'Executing' ? stageLabel : 'Thinking'
-  const hasFullContent = !!fullText
+  if (!hasContentFlag && !hasContent) return null
 
   return (
     <div className={`thinking-card${expanded ? ' expanded' : ''}`} aria-live="polite">
@@ -226,12 +227,11 @@ function ThinkingCard({ stage, stageLabel, thinking, hasContent, retryReason }: 
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
         aria-label={expanded ? 'Hide thinking' : 'Show thinking'}
-        title={expanded ? 'Hide thinking' : 'Show full thinking'}
+        title={expanded ? 'Hide thinking' : 'Show thinking'}
         type="button"
       >
-        <span className="thinking-label">{label}</span>
         <span className="thinking-bracket">&lt;</span>
-        <span className="thinking-text" title={preview}>{preview}</span>
+        <span className="thinking-text">Thinking</span>
         <span className="thinking-bracket">&gt;</span>
         <span className="thinking-chevron" aria-hidden>
           <IconChevronDown size={12} style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' } as any} />
@@ -240,11 +240,9 @@ function ThinkingCard({ stage, stageLabel, thinking, hasContent, retryReason }: 
       </button>
       {expanded && (
         <div className="thinking-body" role="region" aria-label="AI thinking">
-          <div className="thinking-body-label">&lt;thinking&gt;</div>
           <div className="thinking-body-content">
-            {hasFullContent ? fullText : preview}
+            {bodyFallback}
           </div>
-          <div className="thinking-body-label">&lt;/thinking&gt;</div>
         </div>
       )}
     </div>
