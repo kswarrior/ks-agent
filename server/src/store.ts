@@ -336,7 +336,7 @@ const dbFile = process.env.KS_SQLITE_PATH
   ? path.resolve(process.env.KS_SQLITE_PATH)
   : path.join(storageDir, 'ksagent.db')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
 
 let sqlite: Database.Database | null = null
 
@@ -399,6 +399,49 @@ function ensureDb(): Database.Database {
       headers TEXT,
       fetchedAt TEXT NOT NULL
     );
+  `) } catch {}
+  // Sub-agents / Teams — 5 Modes: Solo/Swarm/Hive/Squad/Infinity (vs.md:3.1, vs.md:96)
+  try { sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS subAgents (
+      id TEXT PRIMARY KEY,
+      parentChatId TEXT NOT NULL,
+      parentSubAgentId TEXT,
+      teamId TEXT,
+      task TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      status TEXT NOT NULL,
+      worktreePath TEXT,
+      modelId TEXT,
+      result TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(parentChatId) REFERENCES chats(id) ON DELETE CASCADE,
+      FOREIGN KEY(parentSubAgentId) REFERENCES subAgents(id) ON DELETE CASCADE,
+      FOREIGN KEY(teamId) REFERENCES teams(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_subAgents_parentChatId ON subAgents(parentChatId);
+    CREATE INDEX IF NOT EXISTS idx_subAgents_teamId ON subAgents(teamId);
+    CREATE INDEX IF NOT EXISTS idx_subAgents_status ON subAgents(status);
+    CREATE TABLE IF NOT EXISTS teams (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      chatId TEXT NOT NULL,
+      headId TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(chatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_teams_chatId ON teams(chatId);
+    CREATE TABLE IF NOT EXISTS teamMembers (
+      id TEXT PRIMARY KEY,
+      teamId TEXT NOT NULL,
+      role TEXT NOT NULL,
+      subAgentId TEXT,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY(teamId) REFERENCES teams(id) ON DELETE CASCADE,
+      FOREIGN KEY(subAgentId) REFERENCES subAgents(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_teamMembers_teamId ON teamMembers(teamId);
   `) } catch {}
   // Harden DB file permissions — secrets at rest (apiKeys) must be 600
   try { fs.chmodSync(dbFile, 0o600) } catch {}
