@@ -488,6 +488,364 @@ function initSchema(s: Database.Database): void {
   `)
 }
 
+// ---------------- Embeddings / Semantic Search — lightweight TF-IDF cosine (server/src/store.ts:embeddings) ----------------
+// Pure-JS TF-IDF: tokenize → term freq → cosine, stored in SQLite via better-sqlite3.
+// No heavy deps; optional sqlite-vec can be layered later but fallback works without external service.
+const EMBED_STOPWORDS = new Set([
+  'the','is','at','which','on','and','a','an','of','to','in','for','with','as','by','that','this','it','from','or','be','are','was','were','has','have','had','will','would','can','if','else','when','then','than','so','but','not','we','you','they','he','she','its','our','your','their','i','me','my','us'
+])
+const EMBED_MAX_FILE_SIZE = 500 * 1024 // 500 KB cap per file for embedding
+const EMBED_MAX_TOKENS_PER_FILE = 2000
+const EMBED_MAX_FILES_INDEXED = 5000
+const EMBED_MAX_FILES_SCANNED = 20000
+const EMBED_IGNORED_DIRS = new Set(['node_modules','.git','.hg','.svn','dist','dist-server','storage','data','.next','build','.turbo','.vite','coverage','.cache','.opencode','.claude','.cursor','.vscode','.idea','.parcel-cache','.output','.vercel','.netlify','tmp','logs','.tmp'])
+
+function tokenizeForEmbedding(text: string): string[] {
+  return text.toLowerCase().split(/[^a-z0-9_]+/).filter(t => t.length >= 2 && t.length <= 32 && !EMBED_STOPWORDS.has(t)).slice(0, EMBED_MAX_TOKENS_PER_FILE)
+}
+function termFreqMap(tokens: string[]): Record<string, number> {
+  const m: Record<string, number> = {}
+  for (const t of tokens) m[t] = (m[t] || 0) + 1
+  return m
+}
+function hashContent(text: string): string {
+  return createHash('sha256').update(text).digest('hex').slice(0, 32)
+}
+function sanitizeEmbeddingPath(p: string): string | null {
+  const t = p.trim().replace(/\\/g, '/')
+  if (!t || t.length > 500 || t.includes('\0') || t.includes('..') || t.startsWith('/') ) return null
+  if (t.split('/').some(seg => !seg || seg === '.' || seg === '..')) return null
+  return t
+}
+export function ensureEmbeddingTable(): void {
+  const s = ensureDb()
+  s.exec(`
+    CREATE TABLE IF NOT EXISTS embeddings (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      contentHash TEXT NOT NULL,
+      tokens TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_embeddings_projectId ON embeddings(projectId);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_embeddings_project_path ON embeddings(projectId, filePath);
+  `)
+}
+function isIgnoredDirEmbed(name: string): boolean {
+  return EMBED_IGNORED_DIRS.has(name)
+}
+function isTextFileForEmbed(fileName: string): boolean {
+  const ext = path.extname(fileName).toLowerCase()
+  const binaryExts = new Set(['.png','.jpg','.jpeg','.gif','.webp','.ico','.pdf','.zip','.tar','.gz','.7z','.mp4','.mp3','.woff','.woff2','.ttf','.eot','.otf','.exe','.dll','.so','.a','.o','.class','.jar','.pyc','.pyo','.bin','.dat','.db','.sqlite','.sqlite3'])
+  if (binaryExts.has(ext)) return false
+  return true
+}
+function globToRegExpEmbed(pattern: string): RegExp | null {
+  try {
+    let s = pattern.trim()
+    let re = ''
+    let i = 0
+    while (i < s.length) {
+      const c = s[i]
+      if (c === '*') {
+        if (s[i+1] === '*') {
+          if (s[i+2] === '/') { re += '(?:.*\\/)?'; i+=3 } else { re += '.*'; i+=2 }
+        } else { re += '[^\\/]*'; i++ }
+      } else if (c === '?') { re += '[^\\/]'; i++ }
+      else if (c === '{') {
+        const j = s.indexOf('}', i)
+        if (j > i) { const inner = s.slice(i+1, j); const parts = inner.split(',').map(p=>p.trim().replace(/[.*+^${}()|[\]\\]/g,'\\$&')); re += '(?:'+parts.join('|')+')'; i=j+1 } else { re += '\\{'; i++ }
+      } else if (c === '[') {
+        const j = s.indexOf(']', i)
+        if (j > i) { re += s.slice(i, j+1); i=j+1 } else { re += '\\['; i++ }
+      } else if (/[.+^${}()|[\]\\]/.test(c)) { re += '\\'+c; i++ } else { re += c; i++ }
+    }
+    return new RegExp('^'+re+'$')
+  } catch { return null }
+}
+
+export function upsertEmbedding(projectId: string, filePath: string, content: string): void {
+  const pid = String(projectId ?? '').trim()
+  if (!pid || pid.length > 100) throw new Error('projectId required')
+  const fp = sanitizeEmbeddingPath(filePath)
+  if (!fp) throw new Error('invalid filePath')
+  const text = String(content ?? '')
+  if (Buffer.byteLength(text, 'utf8') > 2 * 1024 * 1024) throw new Error('content too large')
+  const tokens = tokenizeForEmbedding(text)
+  const tf = termFreqMap(tokens)
+  const hash = hashContent(text)
+  const s = ensureDb()
+  ensureEmbeddingTable()
+  const now = new Date().toISOString()
+  const id = `${pid}:${fp}`
+  // Use INSERT OR REPLACE to handle unique constraint
+  s.prepare(`INSERT INTO embeddings (id, projectId, filePath, contentHash, tokens, updatedAt) VALUES (?,?,?,?,?,?)
+             ON CONFLICT(projectId, filePath) DO UPDATE SET contentHash=excluded.contentHash, tokens=excluded.tokens, updatedAt=excluded.updatedAt`).run(
+    id, pid, fp, hash, JSON.stringify(tf), now
+  )
+}
+export function deleteEmbedding(projectId: string, filePath: string): void {
+  const pid = String(projectId ?? '').trim()
+  const fp = sanitizeEmbeddingPath(filePath)
+  if (!pid || !fp) return
+  try { ensureDb().prepare('DELETE FROM embeddings WHERE projectId=? AND filePath=?').run(pid, fp) } catch {}
+}
+export function clearEmbeddingsForProject(projectId: string): void {
+  const pid = String(projectId ?? '').trim()
+  if (!pid) return
+  try { ensureDb().prepare('DELETE FROM embeddings WHERE projectId=?').run(pid) } catch {}
+}
+export function getEmbeddingCount(projectId: string): number {
+  const pid = String(projectId ?? '').trim()
+  if (!pid) return 0
+  try {
+    ensureEmbeddingTable()
+    const row = ensureDb().prepare('SELECT COUNT(*) as c FROM embeddings WHERE projectId=?').get(pid) as any
+    return Number(row?.c ?? 0)
+  } catch { return 0 }
+}
+function collectFilesForEmbedding(root: string, includePattern: string | null, maxFiles: number): string[] {
+  const includeRe = includePattern ? globToRegExpEmbed(includePattern) : null
+  const results: string[] = []
+  const stack: string[] = [root]
+  let scannedDirs = 0
+  while (stack.length && results.length < maxFiles && scannedDirs < EMBED_MAX_FILES_SCANNED) {
+    const cur = stack.pop()!
+    scannedDirs++
+    let entries: fs.Dirent[]
+    try { entries = fs.readdirSync(cur, { withFileTypes: true }) } catch { continue }
+    for (const ent of entries) {
+      const full = path.join(cur, ent.name)
+      if (ent.isDirectory()) {
+        if (isIgnoredDirEmbed(ent.name)) continue
+        stack.push(full)
+      } else if (ent.isFile()) {
+        if (results.length >= maxFiles) break
+        if (!isTextFileForEmbed(ent.name)) continue
+        if (includeRe) {
+          const rel = path.relative(root, full).split(path.sep).join('/')
+          if (!includeRe.test(rel) && !includeRe.test(ent.name)) continue
+        }
+        results.push(full)
+      }
+    }
+  }
+  return results
+}
+function cosineTfIdf(queryTf: Record<string, number>, docTf: Record<string, number>, idf: Map<string, number>, queryLen: number, docLen: number): number {
+  // compute weighted dot and norms
+  let dot = 0
+  let normQ = 0
+  let normD = 0
+  // query norm and dot
+  for (const [term, cnt] of Object.entries(queryTf)) {
+    const tfQ = cnt / Math.max(1, queryLen)
+    const idfVal = idf.get(term) ?? 1
+    const wQ = tfQ * idfVal
+    normQ += wQ * wQ
+    const cntD = (docTf as any)[term]
+    if (cntD != null) {
+      const tfD = cntD / Math.max(1, docLen)
+      const wD = tfD * idfVal
+      dot += wQ * wD
+    }
+  }
+  // doc norm over all its terms
+  for (const [term, cnt] of Object.entries(docTf)) {
+    const tfD = cnt / Math.max(1, docLen)
+    const idfVal = idf.get(term) ?? 1
+    const wD = tfD * idfVal
+    normD += wD * wD
+  }
+  if (normQ === 0 || normD === 0) return 0
+  return dot / (Math.sqrt(normQ) * Math.sqrt(normD))
+}
+export function rebuildEmbeddingsForProject(projectId: string): number {
+  const proj = findProject(projectId)
+  if (!proj) throw new Error('Project not found')
+  const root = proj.path
+  try { if (!fs.statSync(root).isDirectory()) throw new Error('Project path not a directory') } catch (e: any) { throw new Error(e?.message || 'Invalid project path') }
+  const files = collectFilesForEmbedding(root, null, EMBED_MAX_FILES_INDEXED)
+  let indexed = 0
+  for (const abs of files) {
+    try {
+      const st = fs.statSync(abs)
+      if (st.size > EMBED_MAX_FILE_SIZE) continue
+      const content = fs.readFileSync(abs, 'utf8')
+      if (content.includes('\0')) continue
+      const rel = path.relative(root, abs).split(path.sep).join('/')
+      const safe = sanitizeEmbeddingPath(rel)
+      if (!safe) continue
+      upsertEmbedding(projectId, safe, content)
+      indexed++
+    } catch {}
+  }
+  return indexed
+}
+export interface SemanticHit { path: string; score: number; snippet?: string; source: 'semantic' | 'grep' | 'hybrid' }
+export function semanticSearch(projectId: string, query: string, opts?: { limit?: number; include?: string | null; projectPath?: string }): SemanticHit[] {
+  const rawQuery = String(query ?? '').trim()
+  if (!rawQuery) return []
+  if (rawQuery.length > 500) throw new Error('query too long (max 500)')
+  // sanitize query — reject null bytes and overly long tokens, but allow regex-like queries for grep fallback
+  if (rawQuery.includes('\0')) throw new Error('invalid query')
+  const pid = String(projectId ?? '').trim()
+  if (!pid) throw new Error('projectId required')
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(opts?.limit ?? 20) || 20)))
+  const includeRaw = opts?.include != null ? String(opts.include).trim().slice(0, 200) : null
+  if (includeRaw && includeRaw.includes('\0')) throw new Error('invalid include')
+  // resolve project path securely
+  let projectPath = opts?.projectPath ?? null
+  if (!projectPath) {
+    const proj = findProject(pid)
+    if (!proj) return []
+    projectPath = proj.path
+  }
+  // validate projectPath is expected project (prevent IDOR)
+  const projCheck = findProject(pid)
+  if (projCheck && path.resolve(projectPath) !== path.resolve(projCheck.path)) {
+    // if caller supplied path, ensure it matches stored project path
+    throw new Error('projectPath mismatch')
+  }
+  let rootAbs: string
+  try { rootAbs = path.resolve(projectPath!); if (!fs.existsSync(rootAbs) || !fs.statSync(rootAbs).isDirectory()) return [] } catch { return [] }
+  ensureEmbeddingTable()
+  // collect candidate files (respect include)
+  const files = collectFilesForEmbedding(rootAbs, includeRaw || null, EMBED_MAX_FILES_SCANNED)
+  if (files.length === 0) return []
+  // Build live token maps for IDF if needed, also collect grep match info
+  const queryTokensArr = tokenizeForEmbedding(rawQuery)
+  // if query tokenization yields empty (e.g., pure symbols), fall back to raw split for grep-only mode
+  const effectiveQueryForTokens = queryTokensArr.length ? queryTokensArr : rawQuery.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).slice(0, 20)
+  const queryTf = termFreqMap(effectiveQueryForTokens)
+  const queryLen = effectiveQueryForTokens.length || 1
+  // Prepare per-file data: tf, docLen, hasGrepHit, snippet, rawTokens?
+  type FileData = { abs: string; rel: string; tf: Record<string, number>; docLen: number; hasGrep: boolean; snippet: string; size: number }
+  const fileDatas: FileData[] = []
+  // Also collect DF for IDF: term -> doc count
+  const df = new Map<string, number>()
+  // For grep detection, compile regex from query (fallback to literal if invalid)
+  let grepRe: RegExp | null = null
+  try { grepRe = new RegExp(rawQuery, 'mi') } catch {
+    try { const esc = rawQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); grepRe = new RegExp(esc, 'mi') } catch { grepRe = null }
+  }
+  // Load embeddings map for quick lookup
+  let embedMap = new Map<string, Record<string, number>>()
+  try {
+    const rows = ensureDb().prepare('SELECT filePath, tokens FROM embeddings WHERE projectId=?').all(pid) as any[]
+    for (const r of rows) {
+      try { const parsed = JSON.parse(r.tokens); if (parsed && typeof parsed === 'object') embedMap.set(r.filePath, parsed as Record<string, number>) } catch {}
+    }
+  } catch {}
+  for (const abs of files) {
+    try {
+      const st = fs.statSync(abs)
+      if (st.size > EMBED_MAX_FILE_SIZE) continue
+      const rel = path.relative(rootAbs, abs).split(path.sep).join('/')
+      const safe = sanitizeEmbeddingPath(rel)
+      if (!safe) continue
+      let content: string
+      try { content = fs.readFileSync(abs, 'utf8') } catch { continue }
+      if (content.includes('\0')) continue
+      // Check grep hit (line level) and capture snippet
+      let hasGrep = false
+      let snippet = ''
+      if (grepRe) {
+        const lines = content.split('\n')
+        for (let i=0;i<lines.length;i++) {
+          try {
+            if (grepRe.global) grepRe.lastIndex = 0
+            if (grepRe.test(lines[i])) { hasGrep = true; const trim = lines[i].trim().slice(0, 300); snippet = `${rel}:${i+1}:${trim}`; break }
+            if (grepRe.global) grepRe.lastIndex = 0
+          } catch { if (lines[i].toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep = true; snippet = `${rel}:${i+1}:${lines[i].trim().slice(0,300)}`; break } }
+        }
+        // also check whole content substring fallback if no line hit but content contains query substring
+        if (!hasGrep && content.toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep = true; if (!snippet) snippet = `${rel}:1:${content.slice(0,300).replace(/\n/g,' ').trim()}` }
+      } else {
+        if (content.toLowerCase().includes(rawQuery.toLowerCase())) { hasGrep = true; snippet = `${rel}:1:${content.slice(0,300).replace(/\n/g,' ').trim()}` }
+      }
+      if (!snippet) snippet = `${rel}:1:${content.slice(0,200).replace(/\n/g,' ').trim()}`
+      // Prefer stored embedding tokens if available and not stale (size/hash check optional but we use stored if present)
+      let tf: Record<string, number>
+      let docLen: number
+      const stored = embedMap.get(safe)
+      if (stored && Object.keys(stored).length) {
+        tf = stored
+        docLen = Object.values(stored).reduce((a,b)=>a+b, 0) || 1
+      } else {
+        const toks = tokenizeForEmbedding(content)
+        if (toks.length === 0) continue
+        tf = termFreqMap(toks)
+        docLen = toks.length
+      }
+      // update DF
+      for (const term of Object.keys(tf)) {
+        df.set(term, (df.get(term) ?? 0) + 1)
+      }
+      fileDatas.push({ abs, rel, tf, docLen, hasGrep, snippet, size: st.size })
+    } catch {}
+  }
+  if (fileDatas.length === 0) return []
+  const N = fileDatas.length
+  // compute IDF smoothed
+  const idf = new Map<string, number>()
+  const allTerms = new Set<string>([...Object.keys(queryTf), ...Array.from(df.keys())])
+  for (const term of allTerms) {
+    const d = df.get(term) ?? 0
+    const v = Math.log((N + 1) / (d + 1)) + 1
+    idf.set(term, v)
+  }
+  // also ensure query terms have idf even if not in doc DF
+  for (const term of Object.keys(queryTf)) if (!idf.has(term)) idf.set(term, Math.log((N+1)/1)+1)
+  // score each file
+  const scored: (FileData & { score: number; finalScore: number; source: SemanticHit['source'] })[] = []
+  const hasAnyEmbedding = embedMap.size > 0
+  for (const fd of fileDatas) {
+    const sem = cosineTfIdf(queryTf, fd.tf, idf, queryLen, fd.docLen)
+    // hybrid boost: if grep hit, boost score; if no embedding, still rank by sem but fallback ensures grep hits rank higher when embeddings missing
+    let final = sem
+    let source: SemanticHit['source'] = hasAnyEmbedding ? 'hybrid' : 'grep'
+    if (fd.hasGrep) {
+      // boost grep hits: +0.25 plus semantic component
+      final = sem * 0.7 + 0.3
+      // if semantic is very low but grep hit, ensure at least 0.35
+      if (final < 0.35) final = 0.35 + sem * 0.1
+      source = hasAnyEmbedding ? 'hybrid' : 'grep'
+    } else {
+      // No grep hit: only semantic matters; penalize slightly but still surface if high semantic
+      final = sem * 0.9
+      source = 'semantic'
+      // if embeddings empty and no grep hit, we still surface but low score; fallback spec says still return grep results when empty — so we will filter later to prefer grep hits when embeddings empty
+    }
+    // tiny tie-breaker: shorter paths slightly preferred? not needed
+    // Filter out very low semantic when no grep hit and embeddings missing? keep threshold
+    if (!fd.hasGrep && !hasAnyEmbedding && sem < 0.05) {
+      // when no embeddings and no grep hit, don't surface pure semantic low scores — fallback to grep-only
+      continue
+    }
+    // When embeddings empty, we fallback to grep-only: only keep grep hits if any exist
+    scored.push({ ...fd, score: sem, finalScore: final, source })
+  }
+  // If embeddings empty and we filtered to keep only grep hits, and there were grep hits, ensure we return them
+  // If no grep hits but embeddings present, semantic results remain
+  // Sort by finalScore desc, then by grep hit, then by path
+  scored.sort((a,b) => {
+    if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore
+    if (a.hasGrep !== b.hasGrep) return a.hasGrep ? -1 : 1
+    return a.rel.localeCompare(b.rel)
+  })
+  // When embeddings empty, prioritize grep hits strictly: if any grep hit exists, return only grep hits (fallback behavior)
+  let filtered = scored
+  if (!hasAnyEmbedding) {
+    const grepHits = scored.filter(s => s.hasGrep)
+    if (grepHits.length > 0) filtered = grepHits
+  }
+  const top = filtered.slice(0, limit)
+  return top.map(s => ({ path: s.rel, score: Math.round(s.finalScore * 1000)/1000, snippet: s.snippet, source: s.source }))
+}
+
 function migrateLspSchema(s: Database.Database): void {
   try {
     const cols = s.prepare("PRAGMA table_info(lspServers)").all() as any[]
