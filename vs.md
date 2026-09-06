@@ -462,9 +462,9 @@ Cloud-only and expensive (~$500/mo). KS Agent is the self-hosted opposite: you o
 
 ## 13) Methodology & Honesty Note
 
-*   **Evidence:** KS Agent details verified by reading this repo's code: `server/src/agent.ts:13` large-edit prompt, `agent.ts:138` Skill guard, `agent.ts:714` jail, `server/src/fsx.ts:10` realpath, `server/src/llm.ts:165` no-key, `server/src/index.ts:112` PTY + `1730` IDE routes, `server/src/store.ts:260` `chmod 600` + WAL, `web/src/components/FilesPane.tsx:596` ghost + `⌘K`, `vscode-extension/package.json:12` VS Code ext, `web/src/components/OnboardingWizard.tsx:21` wizard.
-*   **Honesty vs prior inflated version:** Inflated 1135 (94.6, claimed beats all personas) reverted to honest **1089 (90.8)** with measured lifts (+49, not +95) and honest scenario/persona rankings. See §4.2 evidence notes.
-*   **Competitor scores:** From public docs/pricing mid-2026. Features move — verify on vendor sites.
+*   **Evidence:** KS Agent details verified by reading this repo's code: `server/src/agent.ts:13` large-edit prompt, `agent.ts:138` Skill guard, `agent.ts:714` jail + `agent.ts:2151` history truncation 90k + `agent.ts:575` `ask_question` blocking, `server/src/fsx.ts:10` realpath, `server/src/llm.ts:165` no-key + `server/src/llm.ts:125` streaming, `server/src/index.ts:112` PTY + `641` `generations` Map per chatId + `1042` 409 guard + `940` `/api/generations` + `1730` IDE routes, `server/src/store.ts:264` WAL `busy_timeout 10000` + `491` `embeddings` table + `688` `semanticSearch` + `192` `semantic_search` type + `260` `chmod 600`, `web/src/components/FilesPane.tsx:596` ghost + `⌘K`, `vscode-extension/package.json:12` VS Code ext, `web/src/components/OnboardingWizard.tsx:21` wizard, `server/src/mcp.ts:314` MCP 4 transports + `server/src/lsp.ts:349` LSP 6. Opencode sub-agent evidence: `opencode.ai/docs/agents` Build/Plan/General(`subagent`)/Explore + `#34216` worktree pending.
+*   **Honesty vs prior inflated version:** Inflated 1135 (94.6, claimed beats all personas) reverted to honest **1089 (90.8)** with measured lifts (+49, not +95) and honest scenario/persona rankings — plus new C13 preview (K 68 vs 88/92) tracked but not folded into /1200. See §4.2 evidence notes + §3 new row.
+*   **Competitor scores:** From public docs/pricing mid-2026 (Opencode `task` + General/Explore confirmed Sep 5 2026 via `opencode.ai/docs/agents`, worktree `#34216` Sep 2026). Features move — verify on vendor sites.
 *   **No paid placement.** PR with doc link + evidence → we adjust.
 
 ---
