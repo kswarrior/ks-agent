@@ -32,6 +32,7 @@ function App() {
       setServerInfo(data);
     } catch (error) {
       console.error('Failed to load server info:', error);
+      setServerInfo(undefined);
     }
   };
 
