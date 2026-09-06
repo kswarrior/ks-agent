@@ -185,6 +185,20 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
     onClose()
   }
 
+  async function handleCopyExt() {
+    try {
+      await navigator.clipboard.writeText(EXT_INSTALL_CMD)
+      toast('Copied: ' + EXT_INSTALL_CMD, 'success')
+      setExtCopied(true)
+      setTimeout(() => setExtCopied(false), 2000)
+    } catch {
+      toast(EXT_INSTALL_CMD, 'success')
+    }
+  }
+
+  const ollamaBadge = ollamaStatus === 'running' ? 'Ollama running ✓' : ollamaStatus === 'checking' ? 'Checking Ollama…' : ollamaStatus === 'offline' ? 'Ollama offline' : null
+  const effectiveModels = presetIdx === 6 && ollamaModels.length > 0 ? ollamaModels : preset.models
+
   return (
     <div className="overlay" onMouseDown={onClose}>
       <div className="wizard" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Quick Setup wizard">
@@ -246,6 +260,28 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
                     <span>Send your first message — streaming, plans, preview live</span>
                   </div>
                 </div>
+              </div>
+              {ollamaBadge && (
+                <div className={`wiz-ollama-banner ${ollamaStatus}`} style={{ marginTop: 8 }}>
+                  <span style={{ fontWeight: 750, fontSize: 12, color: ollamaStatus === 'running' ? '#16a34a' : ollamaStatus === 'checking' ? 'var(--text-dim)' : 'var(--text-faint)' }}>{ollamaBadge}</span>
+                  {ollamaStatus === 'running' && ollamaModels.length > 0 && <span className="hint" style={{ marginLeft: 8 }}>{ollamaModels.slice(0, 3).join(', ')}{ollamaModels.length > 3 ? ' +' + (ollamaModels.length - 3) + ' more' : ''}</span>}
+                  {ollamaStatus === 'running' && ollamaModels.length === 0 && <span className="hint" style={{ marginLeft: 8 }}>no local models yet — try `ollama pull llama3.2`</span>}
+                </div>
+              )}
+              <div className="wiz-ext-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>Install VS Code Extension</span>
+                  <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)', textDecoration: 'none' }}><IconExternalLink size={12} /> vscode-extension/</a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <code className="wiz-ext-cmd">{EXT_INSTALL_CMD}</code>
+                  <button className="btn" style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }} onClick={handleCopyExt} aria-label="Copy install command"><IconCopy size={12} />{extCopied ? 'Copied!' : 'Copy'}</button>
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>One-click: copies <code>code --install-extension</code> command. See <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer">README</a> for <code>vsce package</code> → <code>.vsix</code> flow.</p>
+              </div>
+              <div className="wiz-keychain-hint">
+                <IconLock size={14} style={{ flexShrink: 0, color: 'var(--text-dim)' }} />
+                <span style={{ fontSize: 12, lineHeight: 1.4 }}><strong>Tip:</strong> store keys in OS keychain, not plaintext — <code>security</code> (macOS), <code>secret-tool</code>/<code>pass</code> (Linux), Credential Manager (Windows). Keys stay server-side, masked <code>••••</code>.</span>
               </div>
               <div className="wizard-actions">
                 <button className="btn" onClick={handleDismiss}>Skip</button>
@@ -309,6 +345,24 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
             <div className="wiz-panel">
               <h3 className="wiz-section-title">Add provider + model — one step</h3>
               <p className="hint" style={{ marginTop: 0, marginBottom: 12 }}>Pick a preset, paste your key, choose a model. This creates both at once — beats Cursor’s multi-step flow.</p>
+              {ollamaStatus === 'running' && (
+                <div className="wiz-ollama-banner running">
+                  <span style={{ fontWeight: 750, fontSize: 13, color: '#16a34a' }}>● Ollama running ✓</span>
+                  <span className="hint" style={{ marginLeft: 8 }}>{ollamaModels.length > 0 ? `detected ${ollamaModels.length} model${ollamaModels.length === 1 ? '' : 's'}: ${ollamaModels.slice(0, 4).join(', ')}${ollamaModels.length > 4 ? ' +' + (ollamaModels.length - 4) + ' more' : ''}` : 'no local models — `ollama pull llama3.2` to add'}</span>
+                </div>
+              )}
+              {ollamaStatus === 'checking' && (
+                <div className="wiz-ollama-banner checking">
+                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-dim)' }}>Checking Ollama…</span>
+                  <span className="hint" style={{ marginLeft: 8 }}>fetching http://localhost:11434/api/tags</span>
+                </div>
+              )}
+              {ollamaStatus === 'offline' && presetIdx === 6 && (
+                <div className="wiz-ollama-banner offline">
+                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-faint)' }}>Ollama offline</span>
+                  <span className="hint" style={{ marginLeft: 8 }}>start with `ollama serve` — graceful fallback if not running</span>
+                </div>
+              )}
 
               {hasProvider && hasModel && (
                 <div style={{ padding: '10px 12px', background: '#0a1a0a', border: '1px solid #1a3a1a', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>
@@ -319,19 +373,23 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
               )}
 
               <div className="preset-grid" style={{ marginBottom: 14 }}>
-                {PRESETS.map((pr, idx) => (
-                  <button
-                    key={pr.name}
-                    type="button"
-                    className={`preset-card${presetIdx === idx ? ' active' : ''}`}
-                    onClick={() => setPresetIdx(idx)}
-                    style={presetIdx === idx ? { borderColor: 'var(--primary)', background: 'var(--primary-bg)' } : undefined}
-                  >
-                    <span className="preset-name">{pr.name}{!pr.needsKey && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-faint)', marginLeft: 6 }}>no key</span>}</span>
-                    <span className="preset-url">{pr.baseUrl}</span>
-                    <span className="hint" style={{ marginTop: 2 }}>{pr.hint}</span>
-                  </button>
-                ))}
+                {PRESETS.map((pr, idx) => {
+                  const isOllama = pr.name === 'Ollama (local)'
+                  const ollamaRunning = isOllama && ollamaStatus === 'running'
+                  return (
+                    <button
+                      key={pr.name}
+                      type="button"
+                      className={`preset-card${presetIdx === idx ? ' active' : ''}${ollamaRunning ? ' ollama-running' : ''}`}
+                      onClick={() => setPresetIdx(idx)}
+                      style={presetIdx === idx ? { borderColor: 'var(--primary)', background: 'var(--primary-bg)' } : ollamaRunning && presetIdx !== idx ? { borderColor: '#86efac', background: '#f0fdf4' } : undefined}
+                    >
+                      <span className="preset-name">{pr.name}{!pr.needsKey && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-faint)', marginLeft: 6 }}>no key</span>}{ollamaRunning && <span style={{ fontWeight: 700, fontSize: 11, color: '#16a34a', marginLeft: 6, border: '1px solid #86efac', background: '#dcfce7', padding: '1px 6px', borderRadius: 99 }}>Ollama running ✓</span>}</span>
+                      <span className="preset-url">{pr.baseUrl}</span>
+                      <span className="hint" style={{ marginTop: 2 }}>{pr.hint}</span>
+                    </button>
+                  )
+                })}
               </div>
 
               <label className="field-label">API key {preset.needsKey ? '' : <span style={{ fontWeight: 400 }}>(leave blank for Ollama)</span>}</label>
@@ -343,21 +401,25 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
                 onChange={(e) => setApiKey(e.target.value)}
               />
               <p className="hint" style={{ marginTop: 4 }}>{preset.hint} — key stays server-side, never sent to client</p>
+              <div className="wiz-keychain-hint">
+                <IconLock size={12} style={{ flexShrink: 0, color: '#d97706' }} />
+                <span style={{ fontSize: 11.5, lineHeight: 1.4 }}><strong>Tip:</strong> store keys in OS keychain, not plaintext — <code>security find-generic-password</code> (macOS) · <code>secret-tool</code>/<code>pass</code> (Linux) · Credential Manager (Windows). Keys never logged/returned.</span>
+              </div>
 
-              <label className="field-label">Model id</label>
+              <label className="field-label">Model id {presetIdx === 6 && ollamaModels.length > 0 && <span style={{ fontWeight: 400, fontSize: 11, color: '#16a34a', marginLeft: 6 }}>auto-filled from Ollama</span>}</label>
               <input
                 className="input"
-                placeholder={preset.models[0]}
+                placeholder={effectiveModels[0] ?? preset.models[0]}
                 value={modelId}
                 onChange={(e) => setModelId(e.target.value)}
                 list="wiz-model-suggestions"
                 onKeyDown={(e) => e.key === 'Enter' && !busy && handleCreateProviderModel()}
               />
               <datalist id="wiz-model-suggestions">
-                {preset.models.map((m) => <option key={m} value={m} />)}
+                {effectiveModels.map((m) => <option key={m} value={m} />)}
               </datalist>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                {preset.models.map((m) => (
+                {effectiveModels.map((m) => (
                   <button
                     key={m}
                     type="button"
@@ -369,9 +431,23 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
                   </button>
                 ))}
               </div>
+              {presetIdx === 6 && ollamaModels.length > 0 && <p className="hint" style={{ marginTop: 6, color: '#16a34a' }}>✓ Suggestions from <code>http://localhost:11434/api/tags</code> (AbortController {OLLAMA_TIMEOUT_MS}ms, fail gracefully)</p>}
+              {presetIdx === 6 && ollamaStatus === 'offline' && <p className="hint" style={{ marginTop: 6 }}>Ollama not running — install via <code>ollama pull llama3.2</code> then start <code>ollama serve</code>. Graceful fallback.</p>}
 
               <label className="field-label">Display name <span style={{ fontWeight: 400 }}>(optional)</span></label>
               <input className="input" placeholder="e.g. DeepSeek Chat (optional)" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+
+              <div className="wiz-ext-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>Install VS Code Extension</span>
+                  <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)', textDecoration: 'none' }}><IconExternalLink size={12} /> vscode-extension/</a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <code className="wiz-ext-cmd">{EXT_INSTALL_CMD}</code>
+                  <button className="btn" style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }} onClick={handleCopyExt} aria-label="Copy install command"><IconCopy size={12} />{extCopied ? 'Copied!' : 'Copy'}</button>
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>One-click: copies <code>code --install-extension</code> command. See <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer">README</a> for <code>vsce package</code> → <code>.vsix</code>.</p>
+              </div>
 
               <div className="wizard-actions">
                 <button className="btn" onClick={() => setStep(hasProject ? 0 : 1)} disabled={busy}>
