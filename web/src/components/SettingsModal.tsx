@@ -3,8 +3,12 @@ import * as api from '../api'
 import type { ModelEntry, Provider, RetrySettings, ThemeSettings } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
-import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate } from '../icons'
+import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate, IconCopy, IconExternalLink, IconLock } from '../icons'
 import { applyTheme, DEFAULT_THEME } from '../theme'
+
+const EXT_INSTALL_CMD = 'code --install-extension ks-warrior.ks-agent-vscode'
+const OLLAMA_TAGS_URL = 'http://localhost:11434/api/tags'
+const OLLAMA_TIMEOUT_MS = 1500
 
 interface Props {
   open: boolean
@@ -140,6 +144,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [quickModel, setQuickModel] = useState(QUICK_PRESETS[1].models[0])
   const [quickDisplay, setQuickDisplay] = useState('')
   const [quickBusy, setQuickBusy] = useState(false)
+  const [quickOllamaStatus, setQuickOllamaStatus] = useState<'idle' | 'checking' | 'running' | 'offline'>('idle')
+  const [quickOllamaModels, setQuickOllamaModels] = useState<string[]>([])
+  const [quickExtCopied, setQuickExtCopied] = useState(false)
 
   useEffect(() => {
     setQuickModel(QUICK_PRESETS[quickIdx].models[0])
@@ -164,6 +171,61 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // Auto-detect Ollama running via http://localhost:11434/api/tags with timeout, fail gracefully
+  useEffect(() => {
+    if (!open) return
+    setQuickOllamaStatus('checking')
+    setQuickOllamaModels([])
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS)
+    fetch(OLLAMA_TAGS_URL, { signal: controller.signal })
+      .then(async (res) => {
+        clearTimeout(t)
+        if (!res.ok) throw new Error('not ok')
+        const data: any = await res.json().catch(() => null)
+        const models: string[] = []
+        if (data && Array.isArray(data.models)) {
+          for (const m of data.models) {
+            const raw = typeof m.name === 'string' ? m.name : typeof m.model === 'string' ? m.model : ''
+            if (raw) {
+              const base = raw.split(':')[0].trim()
+              if (base) models.push(base)
+            }
+          }
+        }
+        const uniq = Array.from(new Set(models))
+        if (uniq.length) {
+          setQuickOllamaModels(uniq)
+          setQuickOllamaStatus('running')
+          // auto-select Ollama preset and pre-fill first model, keep 60s flow intact
+          setQuickIdx(4)
+          setQuickModel(uniq[0])
+        } else {
+          setQuickOllamaStatus('running')
+          setQuickIdx(4)
+        }
+      })
+      .catch(() => {
+        clearTimeout(t)
+        setQuickOllamaStatus('offline')
+      })
+    return () => {
+      clearTimeout(t)
+      controller.abort()
+    }
+  }, [open])
+
+  async function handleCopyQuickExt() {
+    try {
+      await navigator.clipboard.writeText(EXT_INSTALL_CMD)
+      toast('Copied: ' + EXT_INSTALL_CMD, 'success')
+      setQuickExtCopied(true)
+      setTimeout(() => setQuickExtCopied(false), 2000)
+    } catch {
+      toast(EXT_INSTALL_CMD, 'success')
+    }
+  }
 
   async function submitQuickSetup() {
     const preset = QUICK_PRESETS[quickIdx]
@@ -625,23 +687,40 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               <div style={{ padding: '12px 14px', background: 'var(--primary-bg)', border: '1px solid var(--primary-border)', borderRadius: 10, marginBottom: 14 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--primary)', marginBottom: 4 }}>⚡ Quick Setup — provider + model in one click</div>
-                <div style={{ fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.5 }}>Beats Cursor’s multi-step flow. Pick a preset, paste key, choose model — 30s offline (Ollama) or 60s with API. Keys stay server-side, masked in UI.</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.5 }}>Beats Cursor’s multi-step flow. Pick a preset, paste key, choose model — 30s offline (Ollama) or 60s with API. Keys stay server-side, masked in UI. {quickOllamaStatus === 'running' && 'Ollama running ✓ — auto-filled.'}</div>
               </div>
 
+              {quickOllamaStatus === 'running' && (
+                <div className="wiz-ollama-banner running" style={{ marginBottom: 12 }}>
+                  <span style={{ fontWeight: 750, fontSize: 13, color: '#16a34a' }}>● Ollama running ✓</span>
+                  <span className="hint" style={{ marginLeft: 8 }}>{quickOllamaModels.length > 0 ? `detected ${quickOllamaModels.length} model${quickOllamaModels.length === 1 ? '' : 's'}: ${quickOllamaModels.slice(0, 4).join(', ')}${quickOllamaModels.length > 4 ? ' +' + (quickOllamaModels.length - 4) + ' more' : ''}` : 'no local models — `ollama pull llama3.2` to add'}</span>
+                </div>
+              )}
+              {quickOllamaStatus === 'checking' && (
+                <div className="wiz-ollama-banner checking" style={{ marginBottom: 12 }}>
+                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-dim)' }}>Checking Ollama…</span>
+                  <span className="hint" style={{ marginLeft: 8 }}>fetching http://localhost:11434/api/tags</span>
+                </div>
+              )}
+
               <div className="preset-grid" style={{ marginBottom: 14 }}>
-                {QUICK_PRESETS.map((pr, idx) => (
-                  <button
-                    key={pr.name}
-                    type="button"
-                    className={`preset-card${quickIdx === idx ? ' active' : ''}`}
-                    onClick={() => setQuickIdx(idx)}
-                    style={quickIdx === idx ? { borderColor: 'var(--primary)', background: 'var(--primary-bg)' } : undefined}
-                  >
-                    <span className="preset-name">{pr.name}{!pr.needsKey && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-faint)', marginLeft: 6 }}>no key</span>}</span>
-                    <span className="preset-url">{pr.baseUrl}</span>
-                    <span className="hint" style={{ marginTop: 2, lineHeight: 1.3 }}>{pr.hint}</span>
-                  </button>
-                ))}
+                {QUICK_PRESETS.map((pr, idx) => {
+                  const isOllama = pr.name === 'Ollama (local)'
+                  const ollamaRunning = isOllama && quickOllamaStatus === 'running'
+                  return (
+                    <button
+                      key={pr.name}
+                      type="button"
+                      className={`preset-card${quickIdx === idx ? ' active' : ''}${ollamaRunning ? ' ollama-running' : ''}`}
+                      onClick={() => setQuickIdx(idx)}
+                      style={quickIdx === idx ? { borderColor: 'var(--primary)', background: 'var(--primary-bg)' } : ollamaRunning && quickIdx !== idx ? { borderColor: '#86efac', background: '#f0fdf4' } : undefined}
+                    >
+                      <span className="preset-name">{pr.name}{!pr.needsKey && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-faint)', marginLeft: 6 }}>no key</span>}{ollamaRunning && <span style={{ fontWeight: 700, fontSize: 11, color: '#16a34a', marginLeft: 6, border: '1px solid #86efac', background: '#dcfce7', padding: '1px 6px', borderRadius: 99 }}>Ollama running ✓</span>}</span>
+                      <span className="preset-url">{pr.baseUrl}</span>
+                      <span className="hint" style={{ marginTop: 2, lineHeight: 1.3 }}>{pr.hint}</span>
+                    </button>
+                  )
+                })}
               </div>
 
               <label className="field-label">API key {QUICK_PRESETS[quickIdx].needsKey ? '' : <span style={{ fontWeight: 400 }}>(leave blank — local, no key, air-gapped)</span>}</label>
@@ -653,32 +732,45 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 onChange={(e) => setQuickKey(e.target.value)}
               />
               <p className="hint" style={{ marginTop: 4 }}>{QUICK_PRESETS[quickIdx].hint} — {QUICK_PRESETS[quickIdx].needsKey ? 'key never leaves server' : 'fully offline, no internet after install · works air-gapped via LAN'}</p>
-
-              <label className="field-label">Model id</label>
-              <input
-                className="input"
-                placeholder={QUICK_PRESETS[quickIdx].models[0]}
-                value={quickModel}
-                onChange={(e) => setQuickModel(e.target.value)}
-                list="quick-model-suggestions"
-                onKeyDown={(e) => e.key === 'Enter' && !quickBusy && submitQuickSetup()}
-              />
-              <datalist id="quick-model-suggestions">
-                {QUICK_PRESETS[quickIdx].models.map((m) => <option key={m} value={m} />)}
-              </datalist>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                {QUICK_PRESETS[quickIdx].models.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    className="btn"
-                    style={{ padding: '4px 8px', fontSize: 12, background: quickModel === m ? 'var(--primary-bg)' : undefined, borderColor: quickModel === m ? 'var(--primary-border)' : undefined, color: quickModel === m ? 'var(--primary)' : undefined }}
-                    onClick={() => setQuickModel(m)}
-                  >
-                    {m}
-                  </button>
-                ))}
+              <div className="wiz-keychain-hint">
+                <IconLock size={12} style={{ flexShrink: 0, color: '#d97706' }} />
+                <span style={{ fontSize: 11.5, lineHeight: 1.4 }}><strong>Tip:</strong> store keys in OS keychain, not plaintext — <code>security find-generic-password</code> (macOS) · <code>secret-tool</code>/<code>pass</code> (Linux) · Credential Manager (Windows). Keys never logged/returned.</span>
               </div>
+
+              <label className="field-label">Model id {quickIdx === 4 && quickOllamaModels.length > 0 && <span style={{ fontWeight: 400, fontSize: 11, color: '#16a34a', marginLeft: 6 }}>auto-filled from Ollama</span>}</label>
+              {(() => {
+                const effectiveQuickModels = quickIdx === 4 && quickOllamaModels.length > 0 ? quickOllamaModels : QUICK_PRESETS[quickIdx].models
+                return (
+                  <>
+                    <input
+                      className="input"
+                      placeholder={effectiveQuickModels[0] ?? QUICK_PRESETS[quickIdx].models[0]}
+                      value={quickModel}
+                      onChange={(e) => setQuickModel(e.target.value)}
+                      list="quick-model-suggestions"
+                      onKeyDown={(e) => e.key === 'Enter' && !quickBusy && submitQuickSetup()}
+                    />
+                    <datalist id="quick-model-suggestions">
+                      {effectiveQuickModels.map((m) => <option key={m} value={m} />)}
+                    </datalist>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                      {effectiveQuickModels.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className="btn"
+                          style={{ padding: '4px 8px', fontSize: 12, background: quickModel === m ? 'var(--primary-bg)' : undefined, borderColor: quickModel === m ? 'var(--primary-border)' : undefined, color: quickModel === m ? 'var(--primary)' : undefined }}
+                          onClick={() => setQuickModel(m)}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                    {quickIdx === 4 && quickOllamaModels.length > 0 && <p className="hint" style={{ marginTop: 6, color: '#16a34a' }}>✓ Suggestions from <code>http://localhost:11434/api/tags</code> (AbortController {OLLAMA_TIMEOUT_MS}ms, fail gracefully)</p>}
+                    {quickIdx === 4 && quickOllamaStatus === 'offline' && <p className="hint" style={{ marginTop: 6 }}>Ollama not running — <code>ollama serve</code> then <code>ollama pull llama3.2</code>. Graceful fallback.</p>}
+                  </>
+                )
+              })()}
 
               <label className="field-label">Display name <span style={{ fontWeight: 400 }}>(optional)</span></label>
               <input
@@ -688,6 +780,18 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 onChange={(e) => setQuickDisplay(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !quickBusy && submitQuickSetup()}
               />
+
+              <div className="wiz-ext-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>Install VS Code Extension</span>
+                  <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)', textDecoration: 'none' }}><IconExternalLink size={12} /> vscode-extension/</a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <code className="wiz-ext-cmd">{EXT_INSTALL_CMD}</code>
+                  <button className="btn" style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }} onClick={handleCopyQuickExt} aria-label="Copy install command"><IconCopy size={12} />{quickExtCopied ? 'Copied!' : 'Copy'}</button>
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>One-click: copies <code>code --install-extension</code> command. See <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer">README</a> for <code>vsce package</code> → <code>.vsix</code>.</p>
+              </div>
 
               <div className="dialog-actions">
                 <button className="btn btn-primary" onClick={submitQuickSetup} disabled={quickBusy}>

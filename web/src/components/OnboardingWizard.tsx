@@ -488,13 +488,24 @@ export function OnboardingWizard({ open, onClose, projects, providers, models, o
                   <strong style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{models[0]?.model ?? modelId}</strong>
                 </div>
               </div>
+              <div className="wiz-ext-card" style={{ textAlign: 'left', marginTop: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>Install VS Code Extension</span>
+                  <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)', textDecoration: 'none' }}><IconExternalLink size={12} /> vscode-extension/</a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <code className="wiz-ext-cmd">{EXT_INSTALL_CMD}</code>
+                  <button className="btn" style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }} onClick={handleCopyExt} aria-label="Copy install command"><IconCopy size={12} />{extCopied ? 'Copied!' : 'Copy'}</button>
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>One-click install via <code>code --install-extension</code>. See <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer">README</a> for <code>.vsix</code> flow. {ollamaStatus === 'running' && ollamaModels.length > 0 ? `Ollama models ready: ${ollamaModels.slice(0,3).join(', ')}.` : ''}</p>
+              </div>
               <div className="wizard-actions" style={{ justifyContent: 'center' }}>
                 <button className="btn btn-primary" onClick={() => { dismissOnboarding(); onClose() }} style={{ padding: '10px 22px', fontSize: 15 }}>
                   Start chatting <IconChevronRight size={16} />
                 </button>
               </div>
               <p className="hint" style={{ textAlign: 'center', marginTop: 10 }}>
-                Tip: try <code>“build a todo app”</code> and watch plan → preview live.
+                Tip: try <code>“build a todo app”</code> and watch plan → preview live. <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconLock size={10} /> store keys in OS keychain</span>
               </p>
             </div>
           )}
