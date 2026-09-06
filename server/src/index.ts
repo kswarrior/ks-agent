@@ -3462,6 +3462,7 @@ app.post('/api/settings/plugins', async (c) => {
   }
   getDb().plugins.push(plugin)
   saveDb()
+  try { if (plugin.entryPoint) ensurePluginWatcher(plugin) } catch {}
   return c.json(plugin, 201)
 })
 
@@ -3502,6 +3503,7 @@ app.post('/api/settings/plugins/install', async (c) => {
   }
   getDb().plugins.push(plugin)
   saveDb()
+  try { if (plugin.entryPoint) ensurePluginWatcher(plugin) } catch {}
   return c.json(plugin, 201)
 })
 
@@ -3553,6 +3555,7 @@ app.patch('/api/settings/plugins/:id', async (c) => {
   }
   p.updatedAt = new Date().toISOString()
   saveDb()
+  try { if (p.entryPoint) ensurePluginWatcher(p); else removePluginWatcher(p.id) } catch {}
   return c.json(p)
 })
 
@@ -3562,6 +3565,7 @@ app.delete('/api/settings/plugins/:id', (c) => {
   if (idx === -1) return c.json({ error: 'Plugin not found' }, 404)
   getDb().plugins.splice(idx, 1)
   saveDb()
+  try { removePluginWatcher(id) } catch {}
   return c.json({ ok: true })
 })
 
@@ -4629,6 +4633,7 @@ app.get('*', async (c, next) => {
 const port = Number(process.env.PORT || 8787)
 const server = serve({ fetch: app.fetch, port, hostname: process.env.HOST || '0.0.0.0' })
 console.log(`KS Agent listening on http://localhost:${port}`)
+try { setupHotReload() } catch (e) { console.warn('[hot-reload] setup failed at listen', String((e as any)?.message || e).slice(0, 300)) }
 
 // ---------------- WebSocket PTY ----------------
 
