@@ -242,7 +242,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 4. **To make KS #1 in every persona, ship:**
    - IDE 78→90+ (marketplace one-click + next-edit prediction)
    - Embeddings for C2/H **DONE Lane 1** `server/src/store.ts:491` `embeddings` table + `server/src/store.ts:688` `semanticSearch` (TF-IDF cosine, 5k indexed/20k scanned, `server/src/store.ts:839` hybrid fallback) + `server/src/agent.ts:602` `semantic_search` tool + `server/src/index.ts:560` `POST /api/projects/:id/search/semantic` + `web/src/components/Sidebar.tsx:62` Semantic toggle with ranked hits — pure-JS, no heavy deps, proven 200-file, fallback to grep
-   - Optional `KS_DOCKER_JAIL` for E 92→98 when kernel isolation required
+   - Optional `KS_DOCKER_JAIL` for E 92→98 **DONE Lane 3** `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/agent.ts:714` `server/src/fsx.ts:10` `server/src/index.ts:147` (`docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine`, `KS_DOCKER_IMAGE` override, fallback to native)
    - **Sub-agents for K 68→88** — add intra-chat `task`/`delegate` tool with `index.ts:641` Map reuse + worktree isolation (like Opencode `#34216`) so 3 tasks fan-out without 409 guard
 5. **Challenge it:** Scores versioned 2026-09-06. PR with doc link + evidence and we'll adjust — honesty over hype.
 
@@ -256,8 +256,8 @@ Browser (React + Vite, xterm.js, Markdown)
   ↕ REST + SSE + WebSocket
 Hono (Node) ── OpenAI-compatible API (any provider)
   ↕ SQLite (WAL, transactions) ── projects / chats / messages / plans / activities
-  ↕ PTY (per project) ── WebSocket bridge to xterm
-  ↕ FS sandbox ── project/<name>/ (strict via fsx.ts:10)
+  ↕ PTY (per project) ── WebSocket bridge to xterm (native or Docker `KS_DOCKER_JAIL=1` `server/src/index.ts:147`)
+  ↕ FS sandbox ── project/<name>/ (strict via server/src/fsx.ts:10 + server/src/agent.ts:714 + optional Docker `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `docker run --network none -v project:/workspace:rw`)
   ↕ Parallelism ── generations Map per chatId (index.ts:641) + PTY per project; multi-chat concurrency, no intra-chat `task` yet
 ```
 Single-process app. `npm run build` then `npm start` serves both API and UI on one port. Ideal for VPS, home lab, or single Docker container. SQLite survives restarts; WAL mode handles concurrent chat streams (`store.ts:264` `busy_timeout 10000`, `index.ts:1042` 409 guard per chat). Latest: hybrid TF-IDF search infra (`store.ts:491`/`688`) + history truncation 90k (`agent.ts:2151`) for 200-file repos.
@@ -416,6 +416,8 @@ Environment overrides (optional):
 PORT=8787 npm start
 KS_SQLITE_PATH=/data/ksagent.db   # custom SQLite path
 KS_DATA_DIR=/custom/dir           # custom data directory
+KS_DOCKER_JAIL=1                  # optional kernel isolation — route run_shell + PTY through docker (`server/src/docker.ts:10` `server/src/index.ts:147`)
+KS_DOCKER_IMAGE=node:20-alpine    # image for jail (default node:20-alpine, or alpine) — see README.md Docker Jail
 ```
 
 ---
