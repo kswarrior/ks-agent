@@ -1883,6 +1883,21 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
           return err(`cannot complete step ${idx} before step ${i} is done — complete steps sequentially`)
         }
       }
+      // Correctness guard for large edits: each step after the first must have tool evidence before marking done
+      if (idx > 0 && plan.steps.length >= 2) {
+        try {
+          const db = getDb()
+          const acts = (db.activities || []).filter((a: any) => a.chatId === ctx.chatId && a.ok === true)
+          const workTypes = new Set(['read_file','write_file','edit_file','apply_patch','append_file','move_file','delete_file','run_shell','grep','glob','list_files','get_file_info'])
+          const sincePlan = acts.filter((a: any) => workTypes.has(a.toolType) && a.timestamp >= plan.createdAt)
+          // For large edits (3+ steps or >2 files) require at least idx work activities to prove stepwise progress
+          const isLargeEdit = plan.steps.length >= 3
+          const needed = isLargeEdit ? idx : 1
+          if (sincePlan.length < needed) {
+            return err(`cannot mark step ${idx} done without tool evidence — perform the step's work with tools (read/write/edit/run_shell/grep) and verify (re-read or run build/typecheck) before calling complete_plan_step. Found only ${sincePlan.length} work tool(s) since plan start, need ${needed}.`)
+          }
+        } catch {}
+      }
       step.status = 'done'
       plan.updatedAt = new Date().toISOString()
       saveDb()
@@ -2029,8 +2044,61 @@ function revertWorkingSteps(ctx: ToolContext): void {
   }
 }
 
+/**
+ * History truncation for huge codebases — keeps the model within context window.
+ * Without this, exploring a 200-file repo (list_files + grep + read_file) can push
+ * history beyond 100k chars and cause hallucinations or provider errors.
+ * Strategy: keep system prefix intact, then sliding window over the tail that fits
+ * within budget, dropping oldest tool results first but always keeping recent evidence.
+ */
+function truncateHistoryForModel(messages: LLMMessage[], budgetChars = 90000): LLMMessage[] {
+  const estimate = (m: LLMMessage) => (m.content?.length ?? 0) + (m.tool_calls ? JSON.stringify(m.tool_calls).length : 0) + 20
+  const total = messages.reduce((acc, m) => acc + estimate(m), 0)
+  if (total <= budgetChars) return messages
+  // Keep all system messages at prefix (usually first 3-5)
+  const systemPrefix: LLMMessage[] = []
+  let idx = 0
+  while (idx < messages.length && messages[idx].role === 'system') {
+    systemPrefix.push(messages[idx])
+    idx++
+  }
+  const rest = messages.slice(idx)
+  const systemBudget = systemPrefix.reduce((a, m) => a + estimate(m), 0)
+  const remainingBudget = Math.max(20000, budgetChars - systemBudget)
+  // Take from tail backwards until budget
+  const tail: LLMMessage[] = []
+  let used = 0
+  for (let i = rest.length - 1; i >= 0; i--) {
+    const m = rest[i]
+    const c = estimate(m)
+    if (used + c > remainingBudget && tail.length > 6) break
+    tail.unshift(m)
+    used += c
+    if (used >= remainingBudget) {
+      // If next message is a tool result, keep its tool_call pair together
+      if (i > 0 && rest[i - 1].role === 'assistant' && (rest[i - 1] as any).tool_calls) {
+        // Keep the pair if still within extra margin
+        if (used + estimate(rest[i - 1]) < remainingBudget + 5000) {
+          tail.unshift(rest[i - 1])
+        }
+      }
+      break
+    }
+  }
+  // If we truncated, insert a notice so model knows history was compacted
+  if (tail.length < rest.length) {
+    const dropped = rest.length - tail.length
+    const notice: LLMMessage = {
+      role: 'system',
+      content: `[history truncated: ${dropped} oldest messages dropped to fit context window (${total}→${systemBudget + used} chars). Recent tool evidence and plan state are preserved. Continue from current plan step.]`
+    }
+    return [...systemPrefix, notice, ...tail]
+  }
+  return [...systemPrefix, ...tail]
+}
+
 export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutcome> {
-  const messages: LLMMessage[] = [...opts.history]
+  let messages: LLMMessage[] = truncateHistoryForModel([...opts.history])
   const ctx: ToolContext = { projectPath: opts.projectPath, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal }
   let content = ''
   // Build combined tool list including MCP tools scoped to project
@@ -2152,14 +2220,15 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           continue
         }
       }
-      // Prevent stopping when plan is still incomplete — force continuation when alwaysRetry is on or plan has pending steps
+      // Prevent stopping when plan is still incomplete — force continuation until every step is done (large-edit correctness)
       const planNow = findPlanForChat(ctx.chatId)
       const hasIncomplete = !!planNow && planNow.steps.some(s => s.status !== 'done')
       if (hasIncomplete) {
         const lastMsg = messages[messages.length - 1]
         const alreadyContinue = lastMsg?.role === 'user' && typeof lastMsg.content === 'string' && lastMsg.content.includes('plan still has pending')
-        // If alwaysRetry is enabled, be aggressive; otherwise only retry if model produced short non-final answer
-        const shouldForceContinue = !!opts.retrySettings?.alwaysRetry || hasShortContent || (outcome.text.trim().length < 800 && !outcome.text.toLowerCase().includes('complete'))
+        // For correctness on large edits, always force continue when plan is incomplete — don't trust short/long heuristics.
+        // The model must complete every step via complete_plan_step; early stop is the primary cause of half-done refactors.
+        const shouldForceContinue = true
         if (!alreadyContinue && shouldForceContinue && round < MAX_TOOL_ROUNDS - 1) {
           if (outcome.text.trim()) messages.push({ role: 'assistant', content: outcome.text })
           const pending = planNow!.steps.filter(s => s.status !== 'done').map(s => s.title).join(', ')
@@ -2179,6 +2248,8 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         function: { name: c.name, arguments: c.args }
       }))
     })
+    // Keep history within model window for huge codebases after pushing assistant tool_calls
+    messages = truncateHistoryForModel(messages)
 
     for (const call of outcome.toolCalls) {
       // Persist activity for this tool call (per chat, like plan) so it survives refresh
