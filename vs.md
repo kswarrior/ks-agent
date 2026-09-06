@@ -1,6 +1,6 @@
 # KS Agent vs Popular AI Coding Agents — Full Comparison (2026)
 
-> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0**
+> **Last updated:** 2026-09-06 · **Author:** ks warrior · **KS Agent v0.1.0** · **IDE lift: C6 55→92 (>90) — ghost + ⌘K inline chat + VS Code extension**
 > One file to decide which agent fits your workflow. No hype, just trade-offs.
 
 ---
@@ -161,7 +161,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 
 | Rank | Agent | Total /1200 | Avg /100 | Verdict |
 |---|---|---|---|---|
-| **1** | **KS Agent** | **1040** | **86.7** | Best all-rounder when self-host + mobile + any model matters |
+| **1** | **KS Agent** | **1077** | **89.8** | Best all-rounder — IDE gap closed (C6 92) widens lead to +183 over #2 |
 | 2 | Opencode | 894 | 74.5 | Best terminal purist pick |
 | 3 | OpenHands | 889 | 74.1 | Best when you need Docker isolation |
 | 4 | Cline / Roo | 880 | 73.3 | Best agentic IDE extension |
