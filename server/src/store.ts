@@ -222,6 +222,17 @@ export interface TeamMember {
   createdAt: string
 }
 
+export interface SubAgentMessage {
+  id: string
+  subAgentId: string
+  parentChatId: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  createdAt: string
+  toolCallId?: string | null
+  toolName?: string | null
+}
+
 export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'semantic_search' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | 'get_file_info' | 'delete_file' | 'move_file' | 'append_file' | 'apply_patch' | 'delegate_task'
 
 export interface Activity {
@@ -313,6 +324,7 @@ interface DB {
   subAgents: SubAgent[]
   teams: Team[]
   teamMembers: TeamMember[]
+  subAgentMessages: SubAgentMessage[]
 }
 
 // Backwards compat alias
@@ -336,7 +348,7 @@ const dbFile = process.env.KS_SQLITE_PATH
   ? path.resolve(process.env.KS_SQLITE_PATH)
   : path.join(storageDir, 'ksagent.db')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [], subAgentMessages: [] }
 
 let sqlite: Database.Database | null = null
 
@@ -442,6 +454,20 @@ function ensureDb(): Database.Database {
       FOREIGN KEY(subAgentId) REFERENCES subAgents(id) ON DELETE SET NULL
     );
     CREATE INDEX IF NOT EXISTS idx_teamMembers_teamId ON teamMembers(teamId);
+    CREATE TABLE IF NOT EXISTS subAgentMessages (
+      id TEXT PRIMARY KEY,
+      subAgentId TEXT NOT NULL,
+      parentChatId TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      toolCallId TEXT,
+      toolName TEXT,
+      FOREIGN KEY(subAgentId) REFERENCES subAgents(id) ON DELETE CASCADE,
+      FOREIGN KEY(parentChatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_subAgentMessages_subAgentId ON subAgentMessages(subAgentId);
+    CREATE INDEX IF NOT EXISTS idx_subAgentMessages_parentChatId ON subAgentMessages(parentChatId);
   `) } catch {}
   // Harden DB file permissions — secrets at rest (apiKeys) must be 600
   try { fs.chmodSync(dbFile, 0o600) } catch {}
@@ -769,6 +795,42 @@ export function createTeam(chatId: string, name: string, headId?: string | null)
   try { db.teams.push(t) } catch {}
   return t
 }
+// ---------------- SubAgent Messages — per sub-agent chat (so frontend can see sub-agent chat) ----------------
+export function addSubAgentMessage(subAgentId: string, parentChatId: string, role: SubAgentMessage['role'], content: string, extra?: { toolCallId?: string | null; toolName?: string | null }): SubAgentMessage {
+  const sid = String(subAgentId ?? '').trim()
+  const pid = String(parentChatId ?? '').trim()
+  if (!sid) throw new Error('subAgentId required')
+  if (!pid) throw new Error('parentChatId required')
+  const msg: SubAgentMessage = { id: randomUUID(), subAgentId: sid, parentChatId: pid, role, content: String(content ?? ''), createdAt: new Date().toISOString(), toolCallId: extra?.toolCallId ?? null, toolName: extra?.toolName ?? null }
+  try {
+    const s = ensureDb()
+    s.prepare('INSERT INTO subAgentMessages (id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName) VALUES (?,?,?,?,?,?,?,?)').run(msg.id, msg.subAgentId, msg.parentChatId, msg.role, msg.content, msg.createdAt, msg.toolCallId, msg.toolName)
+  } catch {}
+  try { db.subAgentMessages.push(msg) } catch {}
+  // keep sorted by createdAt — push order is chronological
+  return msg
+}
+export function messagesOfSubAgent(subAgentId: string): SubAgentMessage[] {
+  const sid = String(subAgentId ?? '').trim()
+  if (!sid) return []
+  try {
+    const s = ensureDb()
+    const rows = s.prepare('SELECT id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName FROM subAgentMessages WHERE subAgentId=? ORDER BY createdAt').all(sid) as any[]
+    if (rows.length) return rows as SubAgentMessage[]
+  } catch {}
+  return (db.subAgentMessages || []).filter((m) => m.subAgentId === sid).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+export function messagesOfSubAgentsForChat(parentChatId: string): SubAgentMessage[] {
+  const pid = String(parentChatId ?? '').trim()
+  if (!pid) return []
+  try {
+    const s = ensureDb()
+    const rows = s.prepare('SELECT id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName FROM subAgentMessages WHERE parentChatId=? ORDER BY createdAt').all(pid) as any[]
+    if (rows.length) return rows as SubAgentMessage[]
+  } catch {}
+  return (db.subAgentMessages || []).filter((m) => m.parentChatId === pid).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
 export function teamsOf(chatId: string): Team[] {
   const cid = String(chatId ?? '').trim()
   if (!cid) return []
@@ -1019,6 +1081,20 @@ function initSchema(s: Database.Database): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS subAgentMessages (
+      id TEXT PRIMARY KEY,
+      subAgentId TEXT NOT NULL,
+      parentChatId TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      toolCallId TEXT,
+      toolName TEXT,
+      FOREIGN KEY(subAgentId) REFERENCES subAgents(id) ON DELETE CASCADE,
+      FOREIGN KEY(parentChatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_subAgentMessages_subAgentId ON subAgentMessages(subAgentId);
+    CREATE INDEX IF NOT EXISTS idx_subAgentMessages_parentChatId ON subAgentMessages(parentChatId);
   `)
 }
 
