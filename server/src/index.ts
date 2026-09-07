@@ -1562,6 +1562,7 @@ app.post('/api/chats/:id/continue', async (c) => {
   const rawContent = String(body.content ?? body.instruction ?? body.message ?? '').trim()
   if (rawContent.length > 50000) return c.json({ error: 'Content too long (max 50000 chars)' }, 400)
   const modelId = body.modelId ? String(body.modelId) : ''
+  const agentMode = parseAgentMode((body as any).mode)
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
   const resolvedModel = modelEntry ?? db.models[0]
@@ -1602,10 +1603,12 @@ app.post('/api/chats/:id/continue', async (c) => {
     const skillMessages = buildSkillSystemMessages(project)
     let history: LLMMessage[]
     {
+      const modeMsg = modeInstruction(agentMode)
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
         ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+        ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
         ...skillMessages,
         ...cleanMessagesForHistory(chat.id)
       ]
@@ -1691,10 +1694,12 @@ app.post('/api/chats/:id/continue', async (c) => {
     let history: LLMMessage[]
     {
       const base = cleanMessagesForHistory(chat.id)
+      const modeMsg2 = modeInstruction(agentMode)
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
         ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+        ...(modeMsg2 ? [{ role: 'system' as const, content: modeMsg2 }] : []),
         ...skillMessages
       ]
       if (planIncompleteBeforeClear2 && existingPlanBeforeClear2) {

@@ -242,6 +242,38 @@ export interface Activity {
   expanded?: boolean
 }
 
+export type SubAgentMode = 'research' | 'explore' | 'fix' | 'write' | 'general'
+export type SubAgentStatus = 'pending' | 'working' | 'done' | 'error'
+
+export interface SubAgent {
+  id: string
+  parentChatId: string
+  parentSubAgentId?: string | null
+  teamId?: string | null
+  task: string
+  mode: SubAgentMode
+  status: SubAgentStatus
+  worktreePath?: string | null
+  modelId?: string | null
+  result?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Team {
+  id: string
+  name: string
+  chatId: string
+  headId?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ActiveAgentView =
+  | { kind: 'main' }
+  | { kind: 'subagent'; id: string }
+  | { kind: 'team'; id: string }
+
 export interface GithubTokenInfo {
   hasToken: boolean
   masked: string

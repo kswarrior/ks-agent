@@ -40,12 +40,13 @@ export const listMessages = (chatId: string) => req<Message[]>(`/api/chats/${cha
 export async function sendMessage(
   chatId: string,
   content: string,
-  modelId: string | null
+  modelId: string | null,
+  mode?: string | null
 ): Promise<{ userMsgId: string; assistantId: string; model: string }> {
   const res = await fetch(`/api/chats/${chatId}/messages`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, modelId })
+    body: JSON.stringify({ content, modelId, ...(mode ? { mode } : {}) })
   })
   let data: any = null
   try {
@@ -58,12 +59,13 @@ export async function sendMessage(
 export async function continueChat(
   chatId: string,
   content?: string,
-  modelId?: string | null
+  modelId?: string | null,
+  mode?: string | null
 ): Promise<{ userMsgId?: string; assistantId: string; model: string; continued?: boolean; content?: string }> {
   const res = await fetch(`/api/chats/${chatId}/continue`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content: content ?? '', modelId: modelId ?? null })
+    body: JSON.stringify({ content: content ?? '', modelId: modelId ?? null, ...(mode ? { mode } : {}) })
   })
   let data: any = null
   try {
@@ -86,6 +88,7 @@ export interface StreamHandlers {
   onQuestion?: (question: Question) => void
   onChatTitle?: (data: { chatId: string; title: string; seq?: number }) => void
   onPreview?: (preview: Preview) => void
+  onSubAgent?: (sub: import('./types').SubAgent) => void
   onRetry?: (info: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }) => void
   onError: (message: string) => void
   onDone: () => void
@@ -172,6 +175,9 @@ export async function streamChatEvents(
               break
             case 'preview':
               handlers.onPreview?.(parsed as Preview)
+              break
+            case 'subagent':
+              handlers.onSubAgent?.(parsed as import('./types').SubAgent)
               break
             case 'retry':
               handlers.onRetry?.(parsed as { attempt: number; maxAttempts: number; delay: number; reason: string; error: string })
