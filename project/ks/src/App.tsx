@@ -97,18 +97,21 @@ export function App() {
   const sendCommand = useCallback((command: string) => {
     if (!command.trim()) return
     const trimmed = command.trim()
-    setConsoleHistory(prev => [
+    setPanelState(prev => ({
       ...prev,
-      { command: trimmed, timestamp: new Date().toISOString() },
-    ])
-    setPanelState(prev => ({ ...prev, consoleInput: '' }))
+      history: [...prev.history, { command: trimmed, timestamp: new Date().toISOString() }],
+      consoleInput: '',
+    }))
     // RCON send would go here
     console.log(`[RCON] Executed: ${trimmed}`)
   }, [])
 
-  const onConsoleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') sendCommand(panelState.consoleInput)
-  }, [panelState.consoleInput, sendCommand])
+  const onConsoleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const input = (e.currentTarget as HTMLInputElement).value
+      sendCommand(input)
+    }
+  }, [sendCommand])
 
   const formatNumber = (num: number) => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
