@@ -917,7 +917,7 @@ function KsAgent() {
       })
       // restore optimistically hidden message on failure
       if (isPure) {
-        setMessages((prev) => (prev.some((m) => m.id === lastAssistant.id) ? prev : [...prev, lastAssistant]))
+        if (lastAssistant) setMessages((prev) => (prev.some((m) => m.id === lastAssistant!.id) ? prev : [...prev, lastAssistant!]))
       } else {
         setMessages((prev) => prev.filter((m) => !m.id.startsWith('tmp-')))
       }
@@ -963,7 +963,7 @@ function KsAgent() {
         : false
       const planForContinue = chatId ? plans[chatId] ?? null : null
       const planIncompleteForContinue = !!(planForContinue && planForContinue.steps.some((s) => s.status !== 'done'))
-      if (lastAssistant && (wasInterrupted || planIncompleteForContinue)) {
+      if ((lastAssistant && (wasInterrupted || planIncompleteForContinue)) || (!lastAssistant && planIncompleteForContinue)) {
         return handleContinue(content)
       }
     }
