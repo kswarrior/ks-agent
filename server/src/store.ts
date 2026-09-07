@@ -2230,6 +2230,8 @@ function seedDefaultSkills(): boolean {
         note,
         mainFile,
         files: [],
+        role: 'optional',
+        triggers: '',
         createdAt: now,
         updatedAt: now
       })
@@ -2259,6 +2261,8 @@ function seedDefaultSkills(): boolean {
             note,
             mainFile,
             files: existingFiles,
+            role: 'must',
+            triggers: 'web/**/*',
             createdAt: now,
             updatedAt: now
           })
@@ -2275,6 +2279,11 @@ function seedDefaultSkills(): boolean {
               currentFiles.add(f)
               needUpdate = true
             }
+          }
+          if (!existingSkill.role) {
+            existingSkill.role = 'must'
+            existingSkill.triggers = 'web/**/*'
+            needUpdate = true
           }
           if (needUpdate) {
             existingSkill.files = [...currentFiles]
@@ -2865,6 +2874,8 @@ function tryMigrateFromJson(): boolean {
         mainFile: String(s.mainFile).trim(),
         files: Array.isArray(s.files) ? [...new Set(s.files.map((f: any) => String(f).trim()).filter(Boolean))] : [],
         projectId: typeof s.projectId === 'string' && s.projectId.trim() ? String(s.projectId).trim() : undefined,
+        role: typeof s.role === 'string' && ['must','recommended','optional'].includes(String(s.role).trim().toLowerCase()) ? String(s.role).trim().toLowerCase() as SkillRole : undefined,
+        triggers: typeof s.triggers === 'string' && s.triggers.trim() ? String(s.triggers).trim().slice(0, 500) : undefined,
         createdAt: typeof s.createdAt === 'string' ? s.createdAt : new Date().toISOString(),
         updatedAt: typeof s.updatedAt === 'string' ? s.updatedAt : undefined
       })) : [],
@@ -2919,13 +2930,22 @@ function tryMigrateFromJson(): boolean {
       teamMembers: Array.isArray((parsed as any).teamMembers) ? (parsed as any).teamMembers : [],
       subAgentMessages: Array.isArray((parsed as any).subAgentMessages) ? (parsed as any).subAgentMessages : []
     }
-    // Migrate old skills missing updatedAt / projectId
+    // Migrate old skills missing updatedAt / projectId / role
     let migrated = false
     for (const s of db.skills) {
       if (!s.updatedAt) { s.updatedAt = s.createdAt; migrated = true }
       if (Array.isArray(s.files)) {
         const deduped = [...new Set(s.files.map((f: any) => String(f).trim()).filter(Boolean))]
         if (deduped.length !== s.files.length) { s.files = deduped; migrated = true }
+      }
+      if (!(s as any).role) {
+        if (s.name.toLowerCase() === 'frontend' || s.mainFile.toLowerCase().includes('frontend')) {
+          (s as any).role = 'must'
+          ;(s as any).triggers = 'web/**/*'
+        } else {
+          (s as any).role = 'optional'
+        }
+        migrated = true
       }
     }
     if (!db.retrySettings.retryOnStatusCodes.includes(500)) {
@@ -3038,6 +3058,15 @@ export function loadDb(): void {
         if (Array.isArray(sk.files)) {
           const deduped = [...new Set(sk.files.map((f: any) => String(f).trim()).filter(Boolean))]
           if (deduped.length !== sk.files.length) { (sk as any).files = deduped; migrated = true }
+        }
+        if (!(sk as any).role) {
+          if (sk.name.toLowerCase() === 'frontend' || sk.mainFile.toLowerCase().includes('frontend')) {
+            (sk as any).role = 'must'
+            ;(sk as any).triggers = 'web/**/*'
+          } else {
+            (sk as any).role = 'optional'
+          }
+          migrated = true
         }
       }
       if (!db.retrySettings.retryOnStatusCodes.includes(500)) {
