@@ -2857,10 +2857,10 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       }
       // Also for planning: dedicated planning sub-agent (user: "also for planning, another sub agent also")
       // For non-trivial tasks, ensure at least one planning-focused delegate exists, even if minDelegates already satisfied
-      const isNonTrivialForPlanning = userContentForForce.length > 30 || /build|create|implement|app|feature|system|todo|panel|dashboard|refactor|migrate|design/i.test(userContentForForce)
+      const isNonTrivialForPlanning = userContentForForce.length > 60 || (/build|todo|app|feature|system|panel|dashboard|refactor|migrate|design|implement|architecture/i.test(userContentForForce) && userContentForForce.length > 20)
       const hasPlanningDelegate = outcome.toolCalls.some(c => {
-        try { const a = JSON.parse(c.args); return String(a.task ?? '').toLowerCase().includes('plan') } catch { return false }
-      }) || (() => { try { return subAgentsOf(ctx.chatId).some(s => s.task.toLowerCase().includes('plan')) } catch { return false } })()
+        try { const a = JSON.parse(c.args); const t = String(a.task ?? '').toLowerCase(); return t.includes('plan') || t.includes('design') || t.includes('architecture') || t.includes('data model') } catch { return false }
+      }) || (() => { try { return subAgentsOf(ctx.chatId).some(s => { const t = s.task.toLowerCase(); return t.includes('plan') || t.includes('design') || t.includes('architecture') || t.includes('data model') }) } catch { return false } })()
       if (isNonTrivialForPlanning && !hasPlanningDelegate && !forcedModeChats.has(ctx.chatId + ':plan')) {
         const teamForPlanning = (mode === 'squad' || mode === 'infinity') ? (() => { try { const ts = teamsOf(ctx.chatId); return ts[0]?.id ?? null } catch { return null } })() : null
         const planningTask = `Planning: Create a detailed execution plan (3-10 steps) for: ${userContentForForce.slice(0, 200)} — analyze project, list files, propose steps, call create_plan`
