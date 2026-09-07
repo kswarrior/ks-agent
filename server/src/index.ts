@@ -590,6 +590,12 @@ app.delete('/api/projects/:id', async (c) => {
   db.activities = (db.activities || []).filter((a: any) => !chatIds.has(a.chatId))
   // @ts-ignore - previews may not exist in old DB files
   db.previews = (db.previews || []).filter((p: any) => !chatIds.has(p.chatId))
+  // @ts-ignore - sub-agents/teams + messages per chat
+  db.subAgentMessages = (db.subAgentMessages || []).filter((m: any) => !chatIds.has(m.parentChatId))
+  // @ts-ignore
+  db.subAgents = (db.subAgents || []).filter((a: any) => !chatIds.has(a.parentChatId))
+  // @ts-ignore
+  db.teams = (db.teams || []).filter((t: any) => !chatIds.has(t.chatId))
   for (const cid of chatIds) {
     generations.get(cid)?.controller.abort()
     generations.delete(cid)
@@ -685,6 +691,16 @@ app.delete('/api/chats/:id', (c) => {
   db.activities = (db.activities || []).filter((a: any) => a.chatId !== id)
   // @ts-ignore
   db.previews = (db.previews || []).filter((p: any) => p.chatId !== id)
+  // @ts-ignore
+  db.subAgentMessages = (db.subAgentMessages || []).filter((m: any) => m.parentChatId !== id)
+  // @ts-ignore
+  db.subAgents = (db.subAgents || []).filter((a: any) => a.parentChatId !== id)
+  // @ts-ignore
+  db.teams = (db.teams || []).filter((t: any) => t.chatId !== id)
+  // @ts-ignore
+  db.teamMembers = (db.teamMembers || []).filter((tm: any) => {
+    try { return !db.teams.some((t: any) => t.id === tm.teamId) && tm.subAgentId ? !db.subAgents.some((sa: any) => sa.id === tm.subAgentId) : true } catch { return true }
+  })
   generations.get(id)?.controller.abort()
   generations.delete(id)
   try { clearSkillReadsForChat(id) } catch {}
