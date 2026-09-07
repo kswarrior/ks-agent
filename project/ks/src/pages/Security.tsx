@@ -5,7 +5,12 @@ export function Security() {
     { id: 1, name: 'Firewall', status: 'enabled' },
     { id: 2, name: 'RCON Password', status: 'set' },
     { id: 3, name: 'IP Whitelist', status: 'disabled' },
+    { id: 4, name: '2FA', status: 'disabled' },
   ])
+
+  const toggle = (id: number) => {
+    setRules(rules.map(r => r.id===id ? { ...r, status: r.status === 'enabled' ? 'disabled' : 'enabled' } : r))
+  }
 
   return (
     <div className="page">
@@ -23,11 +28,9 @@ export function Security() {
           {rules.map(r => (
             <div key={r.id} className="table-row">
               <span>{r.name}</span>
-              <span>{r.status}</span>
+              <span><span className={`badge ${r.status === 'enabled' || r.status === 'set' ? 'badge-online' : 'badge-offline'}`}>{r.status}</span></span>
               <span>
-                <button className="btn" onClick={() => setRules(rules.map(x => x.id===r.id ? { ...x, status: x.status === 'enabled' ? 'disabled' : 'enabled'} : x))}>
-                  Toggle
-                </button>
+                <button className="btn" onClick={() => toggle(r.id)}>Toggle</button>
               </span>
             </div>
           ))}

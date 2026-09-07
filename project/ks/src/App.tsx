@@ -9,7 +9,7 @@ import { Security } from './pages/Security'
 import { Dashboard } from './pages/Dashboard'
 
 export function App() {
-  const [active, setActive] = useState('todo')
+  const [active, setActive] = useState('dashboard')
   const [server, setServer] = useState<Server>({
     id: 'minecraft-1',
     name: 'Survival Hub',
@@ -322,7 +322,7 @@ export function App() {
     </>
   )}
 
-      {active === 'todo' && <TodoApp />}
+      {active === 'dashboard' && <div className="page"><Dashboard server={server} /></div>}
       {active === 'players' && <div className="page"><Players /></div>}
       {active === 'console' && <div className="page"><Console /></div>}
       {active === 'analytics' && <div className="page"><Analytics /></div>}
