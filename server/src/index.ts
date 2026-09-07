@@ -1683,8 +1683,152 @@ app.post('/api/chats/:id/continue', async (c) => {
   try { if (agentMode === 'squad' || agentMode === 'infinity') ensureTeamForMode(chat.id, agentMode) } catch {}
   const msgs = messagesOf(chat.id)
   const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant')
-  if (!lastAssistant) return c.json({ error: 'No assistant message to continue from' }, 400)
   const isPureContinue = !rawContent || isContinueKeyword(rawContent)
+  const earlyPlan = findPlanForChat(chat.id)
+  const earlyPlanIncomplete = isPlanIncomplete(earlyPlan)
+  if (!lastAssistant) {
+    if (!earlyPlanIncomplete) return c.json({ error: 'No assistant message to continue from' }, 400)
+    // No assistant yet but plan is still incomplete (generation crashed before persisting). Allow resume.
+    if (isPureContinue) {
+      if (chat.seq == null || !Number.isInteger(chat.seq)) {
+        chat.seq = nextChatSeq(chat.projectId)
+        if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
+      }
+      touchChat(chat)
+      saveDb()
+      const modelSystemPrompt =
+        (resolvedModel.systemPrompt?.trim()) ||
+        (db.systemPrompt?.trim()) ||
+        PRIMARY_SYSTEM_PROMPT
+      const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
+      const skillMessages = buildSkillSystemMessages(project)
+      let history: LLMMessage[]
+      {
+        const modeMsg = modeInstruction(agentMode)
+        const contextNote = contextModeSystemNote(contextMode)
+        let toolContext: LLMMessage[] = []
+        if (contextMode === 'full') {
+          try {
+            const acts = activitiesOf(chat.id).slice(-25)
+            if (acts.length) {
+              const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
+              if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference:\n${snippet}` }]
+            }
+          } catch {}
+        }
+        const clean = cleanMessagesForHistory(chat.id)
+        const prefix: LLMMessage[] = [
+          { role: 'system', content: modelSystemPrompt },
+          ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+          ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+          ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
+          ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
+          ...skillMessages,
+          ...toolContext,
+          ...clean
+        ]
+        const continueInstruction: LLMMessage = {
+          role: 'user',
+          content:
+            'Your previous response finished but the plan is still incomplete — some steps were not marked done via complete_plan_step. RECHECK now: verify each pending step by reading files or running checks, then IMMEDIATELY call complete_plan_step for each step that is actually done (one call per index). If work remains, execute the next pending step fully (tools + edits) before claiming completion. Do not add preamble like "Continuing...".'
+        }
+        const resume = planResumeContext(earlyPlan!)
+        history = [...prefix, { role: 'system', content: resume }, continueInstruction]
+      }
+      const job: GenerationJob = {
+        chatId: chat.id,
+        assistantId: newId(),
+        model: resolvedModel.model,
+        modelDisplayName: resolvedModel.displayName,
+        providerName: provider.name,
+        content: '',
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        controller: new AbortController(),
+        listeners: new Set()
+      }
+      generations.set(chat.id, job)
+      const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
+      void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
+        job.finishedAt = new Date().toISOString()
+      })
+      return c.json({ assistantId: job.assistantId, model: job.model, continued: true, content: '' })
+    } else {
+      // Extra instruction with no prior assistant but plan incomplete — store user message and resume plan
+      const userMsg = {
+        id: newId(),
+        chatId: chat.id,
+        role: 'user' as const,
+        content: rawContent,
+        createdAt: new Date().toISOString()
+      }
+      db.messages.push(userMsg)
+      if (chat.seq == null || !Number.isInteger(chat.seq)) {
+        chat.seq = nextChatSeq(chat.projectId)
+        if (chat.title === 'New chat') chat.title = `Chat ${chat.seq}`
+      }
+      touchChat(chat)
+      saveDb()
+      const modelSystemPrompt =
+        (resolvedModel.systemPrompt?.trim()) ||
+        (db.systemPrompt?.trim()) ||
+        PRIMARY_SYSTEM_PROMPT
+      const planPrompt = db.planPrompt.trim() || DEFAULT_PLAN_PROMPT
+      const skillMessages = buildSkillSystemMessages(project)
+      let history: LLMMessage[]
+      {
+        const base = cleanMessagesForHistory(chat.id)
+        const modeMsg2 = modeInstruction(agentMode)
+        const contextNote2 = contextModeSystemNote(contextMode)
+        let toolContext2: LLMMessage[] = []
+        if (contextMode === 'full') {
+          try {
+            const acts = activitiesOf(chat.id).slice(-25)
+            if (acts.length) {
+              const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
+              if (snippet.trim()) toolContext2 = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference:\n${snippet}` }]
+            }
+          } catch {}
+        }
+        const prefix: LLMMessage[] = [
+          { role: 'system', content: modelSystemPrompt },
+          ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+          ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+          ...(modeMsg2 ? [{ role: 'system' as const, content: modeMsg2 }] : []),
+          ...(contextNote2 ? [{ role: 'system' as const, content: contextNote2 }] : []),
+          ...skillMessages,
+          ...toolContext2
+        ]
+        const resume = planResumeContext(earlyPlan!)
+        if (base.length > 0 && base[base.length - 1].role === 'user') {
+          const beforeLast = base.slice(0, -1)
+          const last = base[base.length - 1]
+          history = [...prefix, ...beforeLast, { role: 'system', content: resume }, last]
+        } else {
+          history = [...prefix, ...base, { role: 'system', content: resume }]
+        }
+      }
+      const job: GenerationJob = {
+        chatId: chat.id,
+        assistantId: newId(),
+        model: resolvedModel.model,
+        modelDisplayName: resolvedModel.displayName,
+        providerName: provider.name,
+        content: '',
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        controller: new AbortController(),
+        listeners: new Set()
+      }
+      generations.set(chat.id, job)
+      void generateAndPersistTitle(chat, rawContent, provider, resolvedModel.model).catch(() => {})
+      const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
+      void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
+        job.finishedAt = new Date().toISOString()
+      })
+      return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
+    }
+  }
   if (isPureContinue) {
     const wasInterruptedPure = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
     const existingPlanForPure2 = findPlanForChat(chat.id)

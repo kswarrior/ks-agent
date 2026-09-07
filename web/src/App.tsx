@@ -857,16 +857,18 @@ function KsAgent() {
     const pendingAuto = autoContinueTimersRef.current.get(chatId)
     if (pendingAuto) { clearTimeout(pendingAuto); autoContinueTimersRef.current.delete(chatId) }
     const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
-    if (!lastAssistant) {
+    const planForContinueEarly = (plans as any)[chatId] ?? null
+    const planIncompleteEarly = !!(planForContinueEarly && planForContinueEarly.steps.some((s: any) => s.status !== 'done'))
+    if (!lastAssistant && !planIncompleteEarly) {
       toast('No previous response to continue', 'error')
       return
     }
-    const stripped = stripInterrupted(lastAssistant.content)
+    const stripped = lastAssistant ? stripInterrupted(lastAssistant.content) : ''
     // Pure continue (no extraContent) → update in place, hide old bubble to avoid duplication
     const isPure = !extraContent || !extraContent.trim() || isContinueKeyword(extraContent)
     if (isPure) {
-      // Optimistically hide interrupted bubble; streaming will show merged content
-      setMessages((prev) => prev.filter((m) => m.id !== lastAssistant.id))
+      // Optimistically hide interrupted bubble; streaming will show merged content (if no prior assistant, just start fresh)
+      if (lastAssistant) setMessages((prev) => prev.filter((m) => m.id !== lastAssistant!.id))
       setStreams((prev) => ({ ...prev, [chatId]: stripped }))
     } else {
       const tempUserMsg: Message = {
@@ -889,7 +891,7 @@ function KsAgent() {
       // For pure continue preserve plan/activities so AI picks up where it left off
       if (!isPure) {
         // For "any other" with extra instruction but still continuation, preserve if was interrupted OR plan still incomplete
-        const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
+        const wasInterrupted = lastAssistant ? (/\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error) : false
         const planForContinueAny = plans[chatId] ?? null
         const planIncompleteForContinueAny = !!(planForContinueAny && planForContinueAny.steps.some((s) => s.status !== 'done'))
         const shouldPreservePlan = wasInterrupted || planIncompleteForContinueAny
