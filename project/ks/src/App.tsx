@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Server, BackendStatus, BackendConsole, ConsoleCommand, PanelState } from './types'
+import { TodoApp } from './TodoApp'
 import { Servers } from './pages/Servers'
 import { Players } from './pages/Players'
 import { Console } from './pages/Console'
@@ -8,7 +9,7 @@ import { Security } from './pages/Security'
 import { Dashboard } from './pages/Dashboard'
 
 export function App() {
-  const [active, setActive] = useState('dashboard')
+  const [active, setActive] = useState('todo')
   const [server, setServer] = useState<Server>({
     id: 'minecraft-1',
     name: 'Survival Hub',
@@ -323,6 +324,7 @@ export function App() {
         </>
       )}
 
+      {active === 'todo' && <TodoApp />}
       {active === 'players' && <div className="page"><Players /></div>}
       {active === 'console' && <div className="page"><Console /></div>}
       {active === 'analytics' && <div className="page"><Analytics /></div>}
