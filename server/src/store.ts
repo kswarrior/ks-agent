@@ -250,7 +250,7 @@ export interface SubAgentMessage {
   toolName?: string | null
 }
 
-export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'semantic_search' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | 'get_file_info' | 'delete_file' | 'move_file' | 'append_file' | 'apply_patch' | 'delegate_task'
+export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'semantic_search' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | 'get_file_info' | 'delete_file' | 'move_file' | 'append_file' | 'apply_patch' | 'delegate_task' | 'git_status' | 'git_diff' | 'git_log' | 'git_commit' | 'git_branch' | 'git_push' | 'git_create_pr'
 
 export interface Activity {
   id: string
