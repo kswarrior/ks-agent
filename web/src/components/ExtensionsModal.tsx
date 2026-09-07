@@ -2300,10 +2300,14 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {skills.map(s => {
                     const projName = s.projectId ? skillProjects.find(p => p.id === s.projectId)?.name ?? s.projectId.slice(0, 8) : null
+                    const role = (s.role || 'optional') as Skill['role']
+                    const roleStyle = role === 'must' ? { bg: '#fee2e2', color: '#dc2626', border: '#fecaca', label: 'Must' } : role === 'recommended' ? { bg: '#fef3c7', color: '#d97706', border: '#fde68a', label: 'Recommended' } : { bg: 'var(--surface-2)', color: 'var(--text-faint)', border: 'var(--border)', label: 'Optional' }
                     return (
-                    <div key={s.id} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div key={s.id} className="provider-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, borderLeft: `3px solid ${role === 'must' ? '#ef4444' : role === 'recommended' ? '#f59e0b' : 'var(--border)'}` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontWeight: 600, flex: 1 }}>{s.name}</span>
+                        <span title={role === 'must' ? 'Must - AI must read it before writing' : role === 'recommended' ? 'Recommended - AI should read it' : 'Optional - no enforcement'} style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.06, padding: '3px 7px', borderRadius: 999, background: roleStyle.bg, color: roleStyle.color, border: `1px solid ${roleStyle.border}` }}>{roleStyle.label}</span>
+                        {s.triggers && <span title={`Triggers: ${s.triggers}`} style={{ fontSize: 10, padding: '2px 6px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--text-faint)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'ui-monospace, monospace' }}>{s.triggers}</span>}
                         <button className="btn" style={{ padding: '4px 10px', fontSize: 12, background: '#eff6ff', borderColor: '#bfdbfe', color: '#2563eb' }} disabled={skillPublishLoading === s.id} onClick={() => publishSkillFlow(s)} title="Validate → export JSON bundle → list in marketplace">{skillPublishLoading === s.id ? 'Publishing…' : 'Publish'}</button>
                         <button className="icon-btn" style={{ width: 28, height: 28 }} onClick={() => startEditSkill(s)} aria-label={`Edit ${s.name}`}><IconPencil size={14} /></button>
                         <button className="icon-btn" style={{ width: 28, height: 28, color: '#ef4444' }} onClick={() => removeSkill(s.id)} aria-label={`Delete ${s.name}`}><IconTrash size={14} /></button>

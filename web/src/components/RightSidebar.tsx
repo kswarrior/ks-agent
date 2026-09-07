@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import type { Plan, Project, Terminal, Activity, SubAgent, Team, SubAgentMessage } from '../types'
+import type { Plan, Project, Terminal, Activity, SubAgent, Team, SubAgentMessage, Skill } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
 import { IconCheck, IconPlus, IconSearch, IconActivity, IconRotate, IconChevronLeft, IconTerminal, IconTrash, IconPencil } from '../icons'
@@ -68,23 +68,42 @@ function getSkillDisplayName(rawPath: string): string {
 
 function SkillsPane({ activities }: { activities: Activity[] }) {
   const skillActivities = useMemo(() => activities.filter(isSkillRead), [activities])
+  const [skillDefs, setSkillDefs] = useState<Skill[]>([])
+  useEffect(() => {
+    let cancelled = false
+    api.listSkills().then(list => { if (!cancelled) setSkillDefs(list) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const distinctSkills = useMemo(() => {
-    const map = new Map<string, { display: string; raw: string; count: number; lastTs: string }>()
+    const map = new Map<string, { display: string; raw: string; count: number; lastTs: string; role?: string; triggers?: string }>()
     for (const a of skillActivities) {
       const raw = String((a.args as any)?.path ?? '').trim()
       const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').toLowerCase()
       const key = norm || raw.toLowerCase()
       const display = getSkillDisplayName(raw)
+      // lookup role from skill defs
+      let role: string | undefined
+      let triggers: string | undefined
+      const def = skillDefs.find(s => {
+        const mf = s.mainFile.toLowerCase()
+        const n = norm
+        if (mf === n) return true
+        if (mf === n.replace(/^skills\//,'')) return true
+        if (n.endsWith('/' + mf)) return true
+        if (s.files.some(f => f.toLowerCase() === n || n.endsWith('/' + f.toLowerCase()))) return true
+        return false
+      })
+      if (def) { role = def.role; triggers = def.triggers }
       const existing = map.get(key)
       if (existing) {
         existing.count += 1
         if (new Date(a.timestamp).getTime() > new Date(existing.lastTs).getTime()) existing.lastTs = a.timestamp
       } else {
-        map.set(key, { display, raw: raw.replace(/^skills\//,''), count: 1, lastTs: a.timestamp })
+        map.set(key, { display, raw: raw.replace(/^skills\//,''), count: 1, lastTs: a.timestamp, role, triggers })
       }
     }
     return Array.from(map.values()).sort((a,b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime())
-  }, [skillActivities])
+  }, [skillActivities, skillDefs])
 
   if (skillActivities.length === 0) {
     return (
@@ -107,21 +126,30 @@ function SkillsPane({ activities }: { activities: Activity[] }) {
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 8px' }}>{skillActivities.length} total</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {distinctSkills.map(s => (
-          <div key={s.raw} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, borderLeft: '3px solid #86efac' }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: '#86efac1a', border: '1px solid #86efac30', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#86efac', boxShadow: '0 0 6px rgba(134,239,172,0.6)' }} />
+        {distinctSkills.map(s => {
+          const role = (s.role || 'optional').toLowerCase()
+          const roleStyle = role === 'must' ? { bg: '#fee2e2', color: '#dc2626', border: '#fecaca', label: 'Must' } : role === 'recommended' ? { bg: '#fef3c7', color: '#d97706', border: '#fde68a', label: 'Recommended' } : { bg: 'var(--surface-2)', color: 'var(--text-faint)', border: 'var(--border)', label: 'Optional' }
+          const borderLeft = role === 'must' ? '#ef4444' : role === 'recommended' ? '#f59e0b' : '#86efac'
+          return (
+          <div key={s.raw} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, borderLeft: `3px solid ${borderLeft}` }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: role === 'must' ? '#fee2e21a' : role === 'recommended' ? '#fef3c71a' : '#86efac1a', border: `1px solid ${role === 'must' ? '#fecaca30' : role === 'recommended' ? '#fde68a30' : '#86efac30'}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: role === 'must' ? '#ef4444' : role === 'recommended' ? '#f59e0b' : '#86efac', boxShadow: `0 0 6px ${role === 'must' ? 'rgba(239,68,68,0.5)' : role === 'recommended' ? 'rgba(245,158,11,0.5)' : 'rgba(134,239,172,0.6)'}` }} />
             </span>
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: 13, fontWeight: 650, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.display}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 650, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.display}</span>
+                <span title={role === 'must' ? 'Must - AI must read it before writing' : role === 'recommended' ? 'Recommended - AI should read it' : 'Optional'} style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.06, padding: '2px 5px', borderRadius: 999, background: roleStyle.bg, color: roleStyle.color, border: `1px solid ${roleStyle.border}`, flexShrink: 0 }}>{roleStyle.label}</span>
+              </span>
               <span style={{ display: 'block', fontSize: 11, color: 'var(--text-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'ui-monospace, monospace' }} title={s.raw}>{s.raw}</span>
+              {s.triggers && <span style={{ display: 'block', fontSize: 10, color: 'var(--text-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'ui-monospace, monospace' }} title={s.triggers}>↳ {s.triggers}</span>}
             </span>
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
               <span style={{ fontSize: 11, fontWeight: 700, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 7px', color: 'var(--text-dim)' }}>×{s.count}</span>
               <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{new Date(s.lastTs).toLocaleTimeString()}</span>
             </span>
           </div>
-        ))}
+          )
+        })}
       </div>
       <div style={{ marginTop: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5 }}>
         Skill reads are <code style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px' }}>read_file</code> on <code style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px' }}>skills/*.md</code> — excluded from Activity counts.
