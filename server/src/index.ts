@@ -2958,8 +2958,30 @@ app.post('/api/settings/skills', async (c) => {
   if (duplicate) return c.json({ error: 'A skill with this name already exists' }, 400)
   const duplicateFile = getDb().skills.some((s) => s.mainFile.toLowerCase() === mainFile.toLowerCase())
   if (duplicateFile) return c.json({ error: 'A skill with this main file already exists' }, 400)
+  let role: Skill['role'] = 'optional'
+  if (body.role != null && String(body.role).trim() !== '') {
+    const r = String(body.role).trim().toLowerCase()
+    if (!['must','recommended','optional'].includes(r)) return c.json({ error: 'Invalid role: must be must, recommended or optional' }, 400)
+    role = r as Skill['role']
+  }
+  let triggers = ''
+  if (body.triggers != null && String(body.triggers).trim() !== '') {
+    triggers = String(body.triggers).trim().slice(0, 500)
+    const parts = triggers.split(',').map(s => s.trim()).filter(Boolean)
+    if (parts.length > 10) return c.json({ error: 'Too many triggers (max 10)' }, 400)
+    for (const p of parts) {
+      if (p.length > 100) return c.json({ error: `Trigger too long: "${p.slice(0, 30)}"` }, 400)
+      if (p.includes('\0') || p.includes('\\')) return c.json({ error: `Invalid trigger: "${p}"` }, 400)
+    }
+    triggers = parts.join(', ')
+  }
+  // Auto-default Frontend skill to must + web triggers if not specified
+  if (!body.role && name.toLowerCase() === 'frontend' && !triggers) {
+    role = 'must'
+    triggers = 'web/**/*'
+  }
   const now = new Date().toISOString()
-  const skill: Skill = { id: newId(), name, note, mainFile, files, projectId: projectId || undefined, createdAt: now, updatedAt: now }
+  const skill: Skill = { id: newId(), name, note, mainFile, files, projectId: projectId || undefined, role, triggers: triggers || undefined, createdAt: now, updatedAt: now }
   getDb().skills.push(skill)
   saveDb()
   return c.json(skill, 201)
@@ -3045,6 +3067,30 @@ app.patch('/api/settings/skills/:id', async (c) => {
       skill.projectId = v
     } else {
       delete skill.projectId
+    }
+  }
+  if (body.role !== undefined) {
+    const v = String(body.role).trim().toLowerCase()
+    if (v === '') {
+      delete (skill as any).role
+    } else {
+      if (!['must','recommended','optional'].includes(v)) return c.json({ error: 'Invalid role: must be must, recommended or optional' }, 400)
+      ;(skill as any).role = v
+    }
+  }
+  if (body.triggers !== undefined) {
+    const raw = body.triggers != null ? String(body.triggers).trim() : ''
+    if (!raw) {
+      delete (skill as any).triggers
+    } else {
+      if (raw.length > 500) return c.json({ error: 'Triggers too long (max 500)' }, 400)
+      const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
+      if (parts.length > 10) return c.json({ error: 'Too many triggers (max 10)' }, 400)
+      for (const p of parts) {
+        if (p.length > 100) return c.json({ error: `Trigger too long: "${p.slice(0,30)}"` }, 400)
+        if (p.includes('\0') || p.includes('\\')) return c.json({ error: `Invalid trigger: "${p}"` }, 400)
+      }
+      ;(skill as any).triggers = parts.join(', ')
     }
   }
   skill.updatedAt = new Date().toISOString()
