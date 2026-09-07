@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Activity, Chat, Message, ModelEntry, Plan, Question } from '../types'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconRotate, IconSearch, IconStop, IconCopy, IconCheck } from '../icons'
+import { IconChevronDown, IconRotate, IconSearch, IconStop, IconCopy, IconCheck, IconModeSolo, IconModeSwarm, IconModeHive, IconModeSquad, IconModeInfinity } from '../icons'
 import { QuestionList } from './QuestionCard'
 import { useToast } from '../toast'
 
@@ -356,11 +356,11 @@ function AssistantMeta({ message }: { message: Message }) {
 }
 
 const MODES = [
-  { id: 'solo', label: 'Solo', desc: 'Single session', icon: '◐' },
-  { id: 'swarm', label: 'Swarm', desc: 'Main → 5 sub-agents', icon: '⬡' },
-  { id: 'hive', label: 'Hive', desc: 'Fractal depth 2', icon: '⬢' },
-  { id: 'squad', label: 'Squad', desc: 'Team + Head', icon: '▣' },
-  { id: 'infinity', label: 'Infinity', desc: 'Unlimited + Preview', icon: '∞' },
+  { id: 'solo', label: 'Solo', desc: 'Single session', Icon: IconModeSolo },
+  { id: 'swarm', label: 'Swarm', desc: 'Main → 5 sub-agents', Icon: IconModeSwarm },
+  { id: 'hive', label: 'Hive', desc: 'Fractal depth 2', Icon: IconModeHive },
+  { id: 'squad', label: 'Squad', desc: 'Team + Head', Icon: IconModeSquad },
+  { id: 'infinity', label: 'Infinity', desc: 'Unlimited + Preview', Icon: IconModeInfinity },
 ] as const
 type ModeId = typeof MODES[number]['id']
 
@@ -708,24 +708,25 @@ export function ChatView(props: Props) {
                 className="mode-chip"
                 onClick={() => setModeOpen((v) => !v)}
                 title={`Mode: ${selectedModeObj.label} — ${selectedModeObj.desc}`}
+                aria-label={`Mode: ${selectedModeObj.label}`}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '6px 10px',
+                  justifyContent: 'center',
+                  gap: 3,
+                  width: 36,
+                  height: 36,
+                  padding: 0,
                   background: selectedMode === 'solo' ? 'var(--surface-2)' : 'var(--primary-bg)',
                   border: `1px solid ${selectedMode === 'solo' ? 'var(--border)' : 'var(--primary-border)'}`,
                   borderRadius: 8,
                   color: selectedMode === 'solo' ? 'var(--text-dim)' : 'var(--primary)',
-                  fontSize: 12.5,
-                  fontWeight: 600,
                   cursor: 'pointer',
                   lineHeight: 1,
                 }}
               >
-                <span style={{ fontSize: 13, lineHeight: 1 }}>{selectedModeObj.icon}</span>
-                <span>{selectedModeObj.label}</span>
-                <IconChevronDown size={12} style={{ opacity: 0.7 }} />
+                <selectedModeObj.Icon size={16} />
+                <IconChevronDown size={10} style={{ opacity: 0.55, flexShrink: 0 } as any} />
               </button>
               {modeOpen && (
                 <div
@@ -754,7 +755,9 @@ export function ChatView(props: Props) {
                       }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', textAlign: 'left' }}
                     >
-                      <span style={{ width: 22, textAlign: 'center', fontSize: 13 }}>{m.icon}</span>
+                      <span style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: m.id === selectedMode ? 'var(--primary)' : 'var(--text-dim)' }}>
+                        <m.Icon size={16} />
+                      </span>
                       <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.label}</span>
                         <small style={{ color: 'var(--text-faint)', fontSize: 11 }}>{m.desc}</small>

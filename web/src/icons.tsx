@@ -511,3 +511,76 @@ export const IconLock = ({ size, className, style }: IconProps) => (
     <circle cx="12" cy="15.5" r="1.2" fill="currentColor" stroke="none" />
   </svg>
 )
+
+// ── Mode icons: Solo / Swarm / Hive / Squad / Infinity ──
+
+export const IconModeSolo = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <circle cx="12" cy="12" r="7.5" opacity="0.9" />
+    <circle cx="12" cy="8.7" r="2.35" />
+    <path d="M8 15.85 C8 13.55 10.05 12.65 12 12.65 C13.95 12.65 16 13.55 16 15.85" />
+  </svg>
+)
+
+export const IconModeSwarm = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <circle cx="12" cy="12" r="2.15" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="2.15" />
+    <circle cx="12" cy="5.55" r="1.45" />
+    <circle cx="17.7" cy="9.3" r="1.45" />
+    <circle cx="15.65" cy="15.9" r="1.45" />
+    <circle cx="8.35" cy="15.9" r="1.45" />
+    <circle cx="6.3" cy="9.3" r="1.45" />
+    <line x1="12" y1="12" x2="12" y2="7" />
+    <line x1="12" y1="12" x2="16.35" y2="10.15" />
+    <line x1="12" y1="12" x2="14.7" y2="14.6" />
+    <line x1="12" y1="12" x2="9.3" y2="14.6" />
+    <line x1="12" y1="12" x2="7.65" y2="10.15" />
+  </svg>
+)
+
+export const IconModeHive = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M12 4.7 L18.2 8.3 L18.2 15.7 L12 19.3 L5.8 15.7 L5.8 8.3 Z" />
+    <circle cx="12" cy="12" r="1.55" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.55" />
+    <line x1="12" y1="12" x2="12" y2="8.2" />
+    <line x1="12" y1="12" x2="14.9" y2="13.7" />
+    <line x1="12" y1="12" x2="9.1" y2="13.7" />
+    <path d="M12 5.7 L13.3 6.45 L13.3 7.95 L12 8.7 L10.7 7.95 L10.7 6.45 Z" />
+    <path d="M15.8 13 L17.1 13.75 L17.1 15.25 L15.8 16 L14.5 15.25 L14.5 13.75 Z" />
+    <path d="M8.2 13 L9.5 13.75 L9.5 15.25 L8.2 16 L6.9 15.25 L6.9 13.75 Z" />
+  </svg>
+)
+
+export const IconModeSquad = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    {/* head (lead) */}
+    <circle cx="12" cy="6.7" r="1.9" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="6.7" r="1.9" />
+    <path d="M9.2 11.1 C9.2 9.55 10.4 8.85 12 8.85 C13.6 8.85 14.8 9.55 14.8 11.1" />
+    {/* team */}
+    <circle cx="7.35" cy="13.85" r="1.22" />
+    <path d="M5.55 17.55 C5.55 16.2 6.35 15.45 7.35 15.45 C8.35 15.45 9.15 16.2 9.15 17.55" />
+    <circle cx="12" cy="14.25" r="1.22" />
+    <path d="M10.2 17.95 C10.2 16.6 11 15.85 12 15.85 C13 15.85 13.8 16.6 13.8 17.95" />
+    <circle cx="16.65" cy="13.85" r="1.22" />
+    <path d="M14.85 17.55 C14.85 16.2 15.65 15.45 16.65 15.45 C17.65 15.45 18.45 16.2 18.45 17.55" />
+    {/* connections */}
+    <line x1="12" y1="11.1" x2="12" y2="12.9" opacity="0.7" />
+    <line x1="12" y1="12.4" x2="7.8" y2="13.4" opacity="0.5" />
+    <line x1="12" y1="12.4" x2="16.2" y2="13.4" opacity="0.5" />
+  </svg>
+)
+
+export const IconModeInfinity = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M7.1 12 C7.1 8.7 9.35 7.9 12 12 C14.65 16.1 16.9 15.3 16.9 12 C16.9 8.7 14.65 7.9 12 12 C9.35 16.1 7.1 15.3 7.1 12 Z" />
+    {/* preview badge */}
+    <rect x="14.7" y="4.7" width="5.1" height="3.6" rx="0.85" />
+    <line x1="15.55" y1="6.15" x2="18.95" y2="6.15" strokeWidth={1.1} opacity={0.85} />
+    <line x1="15.55" y1="7.15" x2="17.8" y2="7.15" strokeWidth={1.1} opacity={0.55} />
+    {/* play triangle */}
+    <path d="M17.15 6.05 L17.15 6.95 L17.95 6.5 Z" fill="currentColor" stroke="none" />
+  </svg>
+)
