@@ -221,14 +221,15 @@ function resolveShell(): string {
 function getOrCreatePty(terminalId: string, projectPath: string, projectId: string, cols = 80, rows = 24): PtySession {
   const existing = ptySessions.get(terminalId)
   if (existing) return existing
-  // ensure cwd exists; fallback to homedir if missing
-  let cwd = projectPath
+  // ensure cwd exists (always absolute — relative project paths resolve against server cwd); fallback to homedir if missing
+  const absProjectPath = path.resolve(projectPath)
+  let cwd = absProjectPath
   try {
-    const st = fs.statSync(projectPath)
+    const st = fs.statSync(absProjectPath)
     if (!st.isDirectory()) cwd = os.homedir()
   } catch {
-    try { fs.mkdirSync(projectPath, { recursive: true }) } catch {}
-    cwd = fs.existsSync(projectPath) ? projectPath : os.homedir()
+    try { fs.mkdirSync(absProjectPath, { recursive: true }) } catch {}
+    cwd = fs.existsSync(absProjectPath) ? absProjectPath : os.homedir()
   }
   // Optional Docker Jail for PTY: when KS_DOCKER_JAIL=1, spawn docker container with interactive PTY (defense in depth: project mount only, no network, no privileged)
   if (isDockerJailEnabled() && isDockerAvailableSync()) {
@@ -1375,13 +1376,13 @@ app.post('/api/chats/:id/messages', async (c) => {
         const planIncompleteForPure = isPlanIncomplete(existingPlanForPure)
         let history: LLMMessage[]
         {
-          const prefix: LLMMessage[] = [
-            { role: 'system', content: modelSystemPrompt },
-            ...(project ? [{ role: 'system' as const, content: `Active project "${sanitizePromptField(project.name)}" at ${sanitizePromptField(project.path)} — PRIMARY WORKSPACE (your CWD is already \${projectfolder} at this path; stay strictly inside it — NEVER use literal "\${projectfolder}" or "$projectfolder" in any path or shell command; use "" for project root and relative paths like "src/file.ts"; never create a folder named "\${projectfolder}"). Only leave for /tmp or when explicitly requested to go inside KS Agent (the agent codebase).` }] : []),
-            ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-            ...skillMessages,
-            ...cleanMessagesForHistory(chat.id)
-          ]
+      const prefix: LLMMessage[] = [
+        { role: 'system', content: modelSystemPrompt },
+        ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+        ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+        ...skillMessages,
+        ...cleanMessagesForHistory(chat.id)
+      ]
           const continueInstruction: LLMMessage = {
             role: 'user',
             content:
@@ -1476,12 +1477,12 @@ app.post('/api/chats/:id/messages', async (c) => {
   let history: LLMMessage[]
   {
     const base = cleanMessagesForHistory(chat.id)
-    const prefix: LLMMessage[] = [
-      { role: 'system', content: modelSystemPrompt },
-      ...(project ? [{ role: 'system' as const, content: `Active project "${project.name}" at ${project.path} — PRIMARY WORKSPACE (your CWD is already \${projectfolder} at this path; stay strictly inside it — NEVER use literal "\${projectfolder}" or "$projectfolder" in any path or shell command; use "" for root, relative paths like "src/file.ts"; never create a folder named "\${projectfolder}"). Only leave for /tmp or when explicitly requested to go inside KS Agent (the agent codebase).` }] : []),
-      ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-      ...skillMessages
-    ]
+      const prefix: LLMMessage[] = [
+        { role: 'system', content: modelSystemPrompt },
+        ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+        ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+        ...skillMessages
+      ]
     if (planIncompleteBeforeClear && existingPlanBeforeClear) {
       const resume = planResumeContext(existingPlanBeforeClear)
       if (base.length > 0 && base[base.length - 1].role === 'user') {
@@ -1581,7 +1582,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     {
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
-        ...(project ? [{ role: 'system' as const, content: `Active project "${project.name}" at ${project.path} — PRIMARY WORKSPACE (your CWD is already \${projectfolder} at this path; stay strictly inside it — NEVER use literal "\${projectfolder}" or "$projectfolder" in any path or shell command; use "" for root, relative paths like "src/file.ts"; never create a folder named "\${projectfolder}"). Only leave for /tmp or when explicitly requested to go inside KS Agent (the agent codebase).` }] : []),
+        ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
         ...skillMessages,
         ...cleanMessagesForHistory(chat.id)
@@ -1670,7 +1671,7 @@ app.post('/api/chats/:id/continue', async (c) => {
       const base = cleanMessagesForHistory(chat.id)
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
-        ...(project ? [{ role: 'system' as const, content: `Active project "${project.name}" at ${project.path} — PRIMARY WORKSPACE (your CWD is already \${projectfolder} at this path; stay strictly inside it — NEVER use literal "\${projectfolder}" or "$projectfolder" in any path or shell command; use "" for root, relative paths like "src/file.ts"; never create a folder named "\${projectfolder}"). Only leave for /tmp or when explicitly requested to go inside KS Agent (the agent codebase).` }] : []),
+        ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
         ...skillMessages
       ]
