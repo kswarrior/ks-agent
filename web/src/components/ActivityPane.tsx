@@ -258,30 +258,6 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
   const [filter, setFilter] = useState<FilterKey>('all')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
-  const [skillOpen, setSkillOpen] = useState(false)
-  const skillRef = useRef<HTMLDivElement | null>(null)
-
-  // Derive skill activities and visible (non-skill) activities
-  const skillActivities = useMemo(() => activities.filter(isSkillReadActivity), [activities])
-
-  const distinctSkills = useMemo(() => {
-    const map = new Map<string, { display: string; raw: string; count: number; lastTs: string }>()
-    for (const a of skillActivities) {
-      const raw = String((a.args as any)?.path ?? '').trim()
-      const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').toLowerCase()
-      const key = norm || raw.toLowerCase()
-      const display = getSkillDisplayName(raw)
-      const existing = map.get(key)
-      if (existing) {
-        existing.count += 1
-        if (new Date(a.timestamp).getTime() > new Date(existing.lastTs).getTime()) existing.lastTs = a.timestamp
-      } else {
-        map.set(key, { display, raw: raw.replace(/^skills\//,''), count: 1, lastTs: a.timestamp })
-      }
-    }
-    // sort by lastTs desc
-    return Array.from(map.values()).sort((a,b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime())
-  }, [skillActivities])
 
   const visibleActivities = useMemo(() => {
     const sorted = [...activities].filter(a => !isSkillReadActivity(a)).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
@@ -340,75 +316,13 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
     }
   }, [dropdownOpen])
 
-  useEffect(() => {
-    if (!skillOpen) return
-    function onClickOutside(e: MouseEvent) {
-      if (skillRef.current && !skillRef.current.contains(e.target as Node)) {
-        setSkillOpen(false)
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setSkillOpen(false)
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onClickOutside)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [skillOpen])
-
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id))
   }
 
-  const skillButton = (
-    <div className="act-dropdown" ref={skillRef} style={{ position: 'relative' }}>
-      <button
-        className="btn btn-primary"
-        style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 999, lineHeight: 1 }}
-        aria-haspopup="menu"
-        aria-expanded={skillOpen}
-        onClick={() => setSkillOpen(v => !v)}
-      >
-        <span>Skills</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 18, height: 18, padding: '0 5px', background: 'rgba(255,255,255,0.22)', borderRadius: 99, fontSize: 11, fontWeight: 800 }}>{distinctSkills.length}</span>
-        <IconChevronDown size={12} style={{ transform: skillOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease', flexShrink: 0 }} />
-      </button>
-      {skillOpen && (
-        <div className="act-dropdown-menu" role="menu" aria-label="Skills used" style={{ minWidth: 220, right: 0 }}>
-          {distinctSkills.length === 0 ? (
-            <div style={{ padding: '12px 10px', fontSize: 13, color: 'var(--text-faint)', textAlign: 'center' }}>No skills used yet</div>
-          ) : (
-            distinctSkills.map((s) => (
-              <div key={s.raw} className="act-dropdown-item" style={{ cursor: 'default', justifyContent: 'space-between' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#86efac', flexShrink: 0, boxShadow: '0 0 6px rgba(134,239,172,0.6)' }} />
-                  <span className="act-dropdown-item-label" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.display}</span>
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-faint)' }} title={s.raw}>{s.raw}</span>
-                  <span className="act-dropdown-item-count">{s.count}</span>
-                </span>
-              </div>
-            ))
-          )}
-          {distinctSkills.length > 0 && (
-            <div style={{ padding: '6px 10px 4px', fontSize: 11, color: 'var(--text-faint)', borderTop: '1px solid var(--border)', marginTop: 4 }}>
-              {skillActivities.length} skill read{skillActivities.length !== 1 ? 's' : ''} total — hidden from activity list
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-
   if (sortedVisible.length === 0) {
     return (
       <div className="activity-pane">
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-          {skillButton}
-        </div>
         <div className="rsb-empty" style={{ flexDirection: 'column', gap: 10, padding: '24px 12px', textAlign: 'center' }}>
           <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
             <span className="act-empty-pill" style={{ background: '#60a5fa1a', color: '#60a5fa', border: '1px solid #60a5fa30' }}>Read</span>
@@ -431,7 +345,6 @@ export function ActivityPane({ activities }: { activities: Activity[] }) {
         </span>
 
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-          {skillButton}
           <div className="act-dropdown" ref={dropdownRef}>
             <button
               className="act-dropdown-btn"

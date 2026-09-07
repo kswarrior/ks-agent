@@ -805,6 +805,7 @@ export function RightSidebar({ open, activeProject, activeChatId, plan, activiti
           {TABS.map((t) => {
             const isActivity = t.id === 'activity'
             const isAgents = t.id === 'agents'
+            const isSkills = t.id === 'skills'
             return (
               <button
                 key={t.id}
@@ -842,6 +843,16 @@ export function RightSidebar({ open, activeProject, activeChatId, plan, activiti
                       {subAgents.filter(s=> s.status==='done').length > 0 && <span className="rsb-dot" style={{ background: '#22c55e', boxShadow: '0 0 6px rgba(34,197,94,0.5)' }} title={`${subAgents.filter(s=> s.status==='done').length} done`} />}
                     </span>
                   )}
+                  {isSkills && distinctSkillCount > 0 && (
+                    <span className="rsb-tab-badge" title={`${distinctSkillCount} skills · ${skillActivities.length} reads`} style={{ background: '#86efac1a', color: '#86efac', border: '1px solid #86efac30' }}>
+                      {distinctSkillCount}
+                    </span>
+                  )}
+                  {isSkills && distinctSkillCount > 0 && (
+                    <span className="rsb-tab-dots" aria-hidden>
+                      <span className="rsb-dot" style={{ background: '#86efac', boxShadow: '0 0 6px rgba(134,239,172,0.5)' }} title={`${distinctSkillCount} skills`} />
+                    </span>
+                  )}
                 </span>
               </button>
             )
@@ -853,6 +864,7 @@ export function RightSidebar({ open, activeProject, activeChatId, plan, activiti
           {tab === 'agents' && <AgentsPane activeChatId={activeChatId ?? null} subAgents={subAgents} teams={teams} activeAgent={activeAgent} onSelectAgent={onSelectAgent} />}
           {tab === 'terminal' && <TerminalPane project={activeProject} />}
           {tab === 'activity' && <ActivityPane activities={activities} />}
+          {tab === 'skills' && <SkillsPane activities={activities} />}
           {tab === 'files' && <FilesPane projectId={activeProject?.id ?? null} />}
         </div>
       </aside>
