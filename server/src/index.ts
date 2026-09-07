@@ -439,13 +439,13 @@ function contextModeSystemNote(mode: ContextMode): string | null {
   return 'CONTEXT MODE: Chat/Q&A — history is prompt + AI output only (light). Re-read files you need via tools; do not assume file contents from memory.'
 }
 
-/** Mode instruction: when mode != solo, force the main agent to fan-out via delegate_task so sub-agents/teams appear in the UI bar. */
+/** Mode instruction: when mode != solo, MANDATORY force the main agent to fan-out via delegate_task so sub-agents/teams appear in the UI bar. UI selection FORCES this — you MUST obey, system will auto-create if you don't. */
 function modeInstruction(mode: AgentMode): string | null {
   if (mode === 'solo') return null
-  if (mode === 'swarm') return 'MODE: Swarm — do NOT work alone. Break the task into 2-5 parallel sub-tasks and call delegate_task once per sub-task (modes research/explore/fix/write/general) in this round so sub-agents appear above the input box. Then synthesize their results into your final answer.'
-  if (mode === 'hive') return 'MODE: Hive (fractal depth 2) — delegate to mid-level agents via delegate_task, and each mid-level agent should further delegate with parentSubAgentId set (depth 2, up to 5 leaves each). Then synthesize.'
-  if (mode === 'squad') return 'MODE: Squad (Team + Head) — first create or reuse a Team (POST /api/chats/:id/teams is done client-side; here group via delegate_task with teamId when provided), designate a head, delegate member tasks via delegate_task, then synthesize the head summary.'
-  return 'MODE: Infinity (unlimited + Preview) — like Squad but unlimited fan-out: delegate broadly via delegate_task with per-role modelId where useful, watch write_file diffs, verify build, and call open_preview when a service is running.'
+  if (mode === 'swarm') return 'MODE: Swarm — MANDATORY, do NOT work alone. You MUST break the task into 2-5 parallel sub-tasks and call delegate_task once per sub-task (modes research/explore/fix/write/general) IN THIS ROUND so sub-agents appear above the input box. If you skip, system will auto-create 2 delegates and you will be considered non-compliant. Then synthesize their results into your final answer.'
+  if (mode === 'hive') return 'MODE: Hive (fractal depth 2) — MANDATORY: delegate to mid-level agents via delegate_task (at least 1), and each mid-level agent MUST further delegate with parentSubAgentId set (depth 2, up to 5 leaves each). System will auto-delegate 1 mid-level if you skip. Then synthesize.'
+  if (mode === 'squad') return 'MODE: Squad (Team + Head) — MANDATORY: first ensure a Team exists (server auto-creates if missing; you can also call delegate_task with teamId when provided), designate a head, delegate 2+ member tasks via delegate_task with teamId, then synthesize the head summary. You MUST use teamId.'
+  return 'MODE: Infinity (unlimited + Preview) — MANDATORY like Squad but unlimited fan-out: delegate broadly via delegate_task with per-role modelId where useful (research=DeepSeek, explore=Claude, write=OpenAI via modelId), watch write_file diffs, verify build, and call open_preview when a service is running. You MUST delegate at least 2.'
 }
 
 function cleanMessagesForHistory(chatId: string): LLMMessage[] {

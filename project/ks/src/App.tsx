@@ -1,29 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Server, BackendStatus, BackendConsole, ConsoleCommand, Player, PanelState } from './types'
-
-const SINGLE_SERVER: Server = {
-  id: 'minecraft-1',
-  name: 'Survival Hub',
-  host: 'localhost',
-  port: 25565,
-  rcon_port: 25575,
-  password: '••••••',
-  status: 'offline',
-  max_players: 100,
-  current_players: 0,
-  motd: '§a§lSurvival §7Hub',
-  version: '1.20.2',
-  gamemode: 'Survival',
-  difficulty: 'Hard',
-}
-
-const MOCK_PLAYERS: Player[] = [
-  { uuid: '1', name: 'Notch', rank: 'admin', score: 1250, joined_at: '2h ago' },
-  { uuid: '2', name: 'DanTDM', rank: 'mod', score: 980, joined_at: '3h ago' },
-  { uuid: '3', name: 'Technoblade', rank: 'admin', score: 875, joined_at: '4h ago' },
-  { uuid: '4', name: 'Dream', rank: 'mod', score: 720, joined_at: '5h ago' },
-  { uuid: '5', name: 'GeorgeNotFound', rank: 'player', score: 450, joined_at: '6h ago' },
-]
+import { Server, BackendStatus, BackendConsole, ConsoleCommand, PanelState } from './types'
+import { Servers } from './pages/Servers'
+import { Players } from './pages/Players'
+import { Console } from './pages/Console'
+import { Analytics } from './pages/Analytics'
+import { Security } from './pages/Security'
+import { Dashboard } from './pages/Dashboard'
 
 export function App() {
   const [server, setServer] = useState<Server>({ ...SINGLE_SERVER })

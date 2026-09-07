@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { addSubAgentMessage, createSubAgent, findSubAgent, subAgentsOf, updateSubAgent, findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
+import { addSubAgentMessage, createSubAgent, createTeam, findSubAgent, subAgentsOf, teamsOf, updateSubAgent, findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
@@ -109,6 +109,7 @@ export interface ToolExecResult {
   summary: string
 }
 
+export type AgentMode = 'solo' | 'swarm' | 'hive' | 'squad' | 'infinity'
 interface ToolContext {
   projectPath: string
   projectId?: string
@@ -118,6 +119,7 @@ interface ToolContext {
   toolCallId?: string
   providerOverride?: { baseUrl: string; apiKey: string; name?: string }
   modelOverride?: string
+  agentMode?: AgentMode
 }
 
 // Pending ask_question resolvers: questionId -> resolve(answer)
@@ -2568,6 +2570,8 @@ export interface AgentRunOptions {
   projectId?: string
   /** Maximum tokens for LLM response (optional). */
   maxTokens?: number
+  /** Forced mode from UI selection — when != solo, server guarantees delegation even if LLM ignores (manual select forces team). */
+  agentMode?: AgentMode
   /** Live text deltas for the UI. */
   onDelta: (text: string) => void
   /** Named SSE events forwarded verbatim to subscribed clients (tool, tool_result, plan). */
@@ -2670,7 +2674,7 @@ function truncateHistoryForModel(messages: LLMMessage[], budgetChars = 90000): L
 
 export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutcome> {
   let messages: LLMMessage[] = truncateHistoryForModel([...opts.history])
-  const ctx: ToolContext = { projectPath: opts.projectPath, projectId: opts.projectId, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal, providerOverride: { baseUrl: opts.baseUrl, apiKey: opts.apiKey }, modelOverride: opts.model }
+  const ctx: ToolContext = { projectPath: opts.projectPath, projectId: opts.projectId, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal, providerOverride: { baseUrl: opts.baseUrl, apiKey: opts.apiKey }, modelOverride: opts.model, agentMode: opts.agentMode ?? 'solo' }
   let content = ''
   // Build combined tool list including MCP tools scoped to project
   function combinedTools(): ToolDef[] {
@@ -2769,6 +2773,56 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       }
     }
     if (!outcome) break
+
+    // FORCE: if UI manually selected a non-solo mode, guarantee delegation even if LLM ignored — "force ai to create sub agent team that is selected"
+    if ((opts.agentMode ?? 'solo') !== 'solo' && round === 0) {
+      const mode = (opts.agentMode ?? 'solo') as AgentMode
+      const delegateCount = outcome.toolCalls.filter(c => c.name === 'delegate_task').length
+      const hasTeam = (() => { try { return teamsOf(ctx.chatId).length > 0 } catch { return false } })()
+      if ((mode === 'squad' || mode === 'infinity') && !hasTeam) {
+        try {
+          const team = createTeam(ctx.chatId, mode === 'squad' ? 'Squad Team' : 'Infinity Team')
+          try { ctx.onEvent('subagent', JSON.stringify({ id: team.id, teamCreated: true, chatId: ctx.chatId, name: team.name } as any)) } catch {}
+          console.log(`[mode ${mode}] auto-created team ${team.id} for chat ${ctx.chatId} (forced by UI)`)
+        } catch {}
+      }
+      const minDelegates = mode === 'swarm' ? 2 : mode === 'hive' ? 1 : mode === 'squad' ? 2 : mode === 'infinity' ? 2 : 0
+      if (delegateCount < minDelegates) {
+        const userContent = (opts.history[opts.history.length - 1]?.content ?? '').trim() || 'Task'
+        const rawParts = userContent.split(/(?:\n+|\. |; | and |, )/).map(s => s.trim()).filter(s => s.length > 8).slice(0, 5)
+        const baseTasks = rawParts.length >= 2 ? rawParts : [
+          `Research: ${userContent.slice(0, 120)}`,
+          `Explore: ${userContent.slice(0, 120)}`,
+          `Fix/Write: ${userContent.slice(0, 120)}`
+        ]
+        const teamForSquad = (mode === 'squad' || mode === 'infinity') ? (() => { try { const ts = teamsOf(ctx.chatId); return ts[0]?.id ?? null } catch { return null } })() : null
+        const needed = minDelegates - delegateCount
+        const autoModes: Record<string, string[]> = {
+          swarm: ['research','explore','fix','write','general'],
+          hive: ['research'],
+          squad: ['fix','write'],
+          infinity: ['write','research']
+        }
+        const pickModes = autoModes[mode] ?? ['general']
+        console.log(`[mode ${mode}] LLM delegated ${delegateCount}/${minDelegates} — forcing ${needed} delegate_task(s) (forced by UI selection)`)
+        for (let i = 0; i < needed; i++) {
+          const task = baseTasks[i % baseTasks.length] || `Sub-task ${i+1}: ${userContent.slice(0, 80)}`
+          const m = pickModes[i % pickModes.length] as any
+          const args: any = { task: `${task} [auto ${mode} ${i+1}/${needed}]`, mode: m }
+          if (teamForSquad) args.teamId = teamForSquad
+          if (mode === 'infinity') {
+            try { const dbM = getDb().models.find(mm => mm.model === opts.model); if (dbM) args.modelId = dbM.id } catch {}
+          }
+          const res = await executeTool('delegate_task', JSON.stringify(args), ctx)
+          const synthId = `forced_${Date.now()}_${i}_${Math.random().toString(36).slice(2,6)}`
+          messages.push({ role: 'assistant', content: outcome.text || `Delegated for ${mode}`, tool_calls: [{ id: synthId, type: 'function', function: { name: 'delegate_task', arguments: JSON.stringify(args) } }] })
+          messages.push({ role: 'tool', tool_call_id: synthId, content: res.result })
+          outcome.toolCalls.push({ id: synthId, name: 'delegate_task', args: JSON.stringify(args) } as any)
+          if (!outcome.text.trim()) outcome.text = `Delegated ${needed} sub-task(s) for ${mode} mode (forced).`
+        }
+        messages = truncateHistoryForModel(messages)
+      }
+    }
 
     // Prevent early stop: if model returns no tools on first round for a non-greeting task, force exploration
     if (outcome.toolCalls.length === 0) {
