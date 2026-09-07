@@ -371,6 +371,7 @@ function ensureDb(): Database.Database {
   initSchema(sqlite)
   migrateLspSchema(sqlite)
   migrateActivityIndex(sqlite)
+  migrateSkillRole(sqlite)
   // vector+hybrid chunk table migration — backward compatible, missing vec ≠ crash
   try { sqlite.exec(`
     CREATE TABLE IF NOT EXISTS embedding_chunks (
@@ -2177,6 +2178,22 @@ function migrateActivityIndex(s: Database.Database): void {
   } catch {}
 }
 
+function migrateSkillRole(s: Database.Database): void {
+  try {
+    const cols = s.prepare("PRAGMA table_info(skills)").all() as any[]
+    if (!cols.length) return
+    const names = new Set(cols.map((c: any) => c.name))
+    if (!names.has('role')) {
+      try { s.exec("ALTER TABLE skills ADD COLUMN role TEXT") } catch {}
+      console.log('[migrate] Added skills.role column')
+    }
+    if (!names.has('triggers')) {
+      try { s.exec("ALTER TABLE skills ADD COLUMN triggers TEXT") } catch {}
+      console.log('[migrate] Added skills.triggers column')
+    }
+  } catch {}
+}
+
 function titleFromFileName(base: string): string {
   return base
     .replace(/[-_]+/g, ' ')
@@ -2412,8 +2429,8 @@ function persistToSqlite(): void {
     const insActivity = s.prepare('INSERT INTO activities (id, chatId, toolType, toolCallId, args, summary, result, ok, timestamp, expanded) VALUES (?,?,?,?,?,?,?,?,?,?)')
     for (const a of db.activities) insActivity.run(a.id, a.chatId, a.toolType, a.toolCallId, JSON.stringify(a.args), a.summary, a.result ?? null, a.ok == null ? null : a.ok ? 1 : 0, a.timestamp, a.expanded ? 1 : null)
 
-    const insSkill = s.prepare('INSERT INTO skills (id, name, note, mainFile, files, projectId, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?)')
-    for (const sk of db.skills) insSkill.run(sk.id, sk.name, sk.note, sk.mainFile, JSON.stringify(sk.files), sk.projectId ?? null, sk.createdAt, sk.updatedAt ?? null)
+    const insSkill = s.prepare('INSERT INTO skills (id, name, note, mainFile, files, projectId, role, triggers, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    for (const sk of db.skills) insSkill.run(sk.id, sk.name, sk.note, sk.mainFile, JSON.stringify(sk.files), sk.projectId ?? null, (sk as any).role ?? null, (sk as any).triggers ?? null, sk.createdAt, sk.updatedAt ?? null)
 
     const insMcp = s.prepare('INSERT INTO mcpServers (id, name, transport, command, args, url, env, headers, projectId, enabled, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
     for (const m of db.mcpServers) insMcp.run(m.id, m.name, m.transport, m.command ?? null, m.args ? JSON.stringify(m.args) : null, m.url ?? null, m.env ? JSON.stringify(m.env) : null, m.headers ? JSON.stringify(m.headers) : null, m.projectId ?? null, m.enabled ? 1 : 0, m.createdAt, m.updatedAt)
@@ -2577,7 +2594,7 @@ function loadFromSqlite(s: Database.Database): DB | null {
       } catch (e) { console.warn('Skipping corrupted activity row', r.id, e) }
     }
 
-    const skillsRows = s.prepare('SELECT id, name, note, mainFile, files, projectId, createdAt, updatedAt FROM skills').all() as any[]
+    const skillsRows = s.prepare('SELECT id, name, note, mainFile, files, projectId, role, triggers, createdAt, updatedAt FROM skills').all() as any[]
     const skills: Skill[] = []
     for (const r of skillsRows) {
       try {
@@ -2593,6 +2610,8 @@ function loadFromSqlite(s: Database.Database): DB | null {
           mainFile: r.mainFile,
           files: parsedFiles,
           projectId: r.projectId ?? undefined,
+          role: r.role ?? undefined,
+          triggers: r.triggers ?? undefined,
           createdAt: r.createdAt,
           updatedAt: r.updatedAt ?? undefined
         })
