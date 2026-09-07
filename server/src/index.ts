@@ -101,6 +101,77 @@ import {
 } from './lsp.js'
 
 loadDb()
+// Cleanup buggy literal placeholder folders that LLMs created (e.g. project/ks/${projectfolder} literally) — move contents to project root and remove empty placeholder
+try {
+  const db0 = getDb()
+  for (const proj of [...db0.projects]) {
+    const literalNames = ['${projectfolder}', '$projectfolder', '%24%7Bprojectfolder%7D']
+    for (const lit of literalNames) {
+      const absProj = path.resolve(proj.path)
+      const literalPath = path.join(absProj, lit)
+      try {
+        if (!fs.existsSync(literalPath)) continue
+        const st = fs.statSync(literalPath)
+        if (!st.isDirectory()) continue
+        console.warn(`[startup] Found literal placeholder folder ${literalPath} — cleaning up (bug artifact)`)
+        const entries = fs.readdirSync(literalPath)
+        for (const ent of entries) {
+          const src = path.join(literalPath, ent)
+          const dest = path.join(absProj, ent)
+          try {
+            const srcStat = fs.statSync(src)
+            const destExists = fs.existsSync(dest)
+            if (destExists) {
+              const destStat = fs.statSync(dest)
+              if (srcStat.isDirectory() && destStat.isDirectory()) {
+                // Merge directory contents file-by-file (don't overwrite existing)
+                const subEntries = fs.readdirSync(src)
+                for (const sub of subEntries) {
+                  const s2 = path.join(src, sub)
+                  const d2 = path.join(dest, sub)
+                  if (fs.existsSync(d2)) {
+                    console.warn(`[startup] skip moving ${lit}/${ent}/${sub} — dest exists`)
+                    continue
+                  }
+                  try {
+                    fs.renameSync(s2, d2)
+                    console.log(`[startup] moved ${lit}/${ent}/${sub} -> ${ent}/${sub}`)
+                  } catch (e: any) {
+                    console.warn(`[startup] failed to move ${s2} -> ${d2}: ${e?.message || e}`)
+                  }
+                }
+                // Try to remove now-empty src subdir
+                try {
+                  if (fs.readdirSync(src).length === 0) fs.rmdirSync(src)
+                } catch {}
+                continue
+              }
+              console.warn(`[startup] skip moving ${ent} — dest already exists at project root`)
+              continue
+            }
+            fs.renameSync(src, dest)
+            console.log(`[startup] moved ${lit}/${ent} -> ${ent}`)
+          } catch (e: any) {
+            console.warn(`[startup] failed to move ${src} -> ${dest}: ${e?.message || e}`)
+          }
+        }
+        try {
+          const remaining = fs.readdirSync(literalPath)
+          if (remaining.length === 0) {
+            fs.rmdirSync(literalPath)
+            console.log(`[startup] removed empty literal placeholder folder ${literalPath}`)
+          } else {
+            console.warn(`[startup] literal placeholder folder ${literalPath} not empty after move, left with ${remaining.length} entries: ${remaining.join(', ')}`)
+          }
+        } catch (e: any) {
+          console.warn(`[startup] failed to remove literal placeholder folder ${literalPath}: ${e?.message || e}`)
+        }
+      } catch {}
+    }
+  }
+} catch (e) {
+  console.warn('[startup] literal placeholder cleanup failed', e)
+}
 // Fire-and-forget: connect enabled MCP/LSP servers in background
 void ensureMCPConnections().catch((e) => console.warn('[mcp] startup connect failed', e))
 void ensureLspConnections().catch((e) => console.warn('[lsp] startup connect failed', e))
