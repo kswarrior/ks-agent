@@ -1078,7 +1078,8 @@ function KsAgent() {
         return next
       })
       // remove optimistic tmp messages so phantom doesn't linger if refetch fails
-      setMessages((prev) => prev.filter((m) => !m.id.startsWith('tmp-')))
+      // (guarded: messages state holds the active chat — never strip another chat's optimistic bubble)
+      if (activeChatIdRef.current === chatId) setMessages((prev) => prev.filter((m) => !m.id.startsWith('tmp-')))
       try {
         const fresh = await api.listMessages(chatId)
         if (activeChatIdRef.current === chatId) setMessages(fresh)

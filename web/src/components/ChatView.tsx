@@ -276,8 +276,8 @@ function AnsweredQuestionsCard({ questions }: { questions: Question[] }) {
               </div>
               {q.options.length > 0 && (
                 <div className="q-answered-options">
-                  {q.options.map(opt => (
-                    <span key={opt} className={`q-answered-opt${q.answer === opt || q.selectedOption === opt ? ' chosen' : ''}`}>{opt}</span>
+                  {q.options.map((opt, idx) => (
+                    <span key={`${idx}:${opt}`} className={`q-answered-opt${q.answer === opt || q.selectedOption === opt ? ' chosen' : ''}`}>{opt}</span>
                   ))}
                 </div>
               )}
@@ -370,10 +370,11 @@ function SubAgentChat({ subAgentId, streaming }: { subAgentId: string; streaming
   }, [subAgentId])
   useEffect(() => {
     if (!streaming) return
+    let cancelled = false
     const id = setInterval(() => {
-      api.listSubAgentMessages(subAgentId).then((list) => setMsgs(list as any)).catch(() => {})
+      api.listSubAgentMessages(subAgentId).then((list) => { if (!cancelled) setMsgs(list as any) }).catch(() => {})
     }, 1500)
-    return () => clearInterval(id)
+    return () => { cancelled = true; clearInterval(id) }
   }, [subAgentId, streaming])
   if (loading) return <div style={{ padding: '10px 0', color: 'var(--text-faint)', fontSize: 12.5 }}>Loading sub-agent chat…</div>
   if (msgs.length === 0) return <p className="agent-empty-note">No messages yet — sub-agent will emit here when it starts. Try sending with Swarm mode to create sub-agents.</p>
@@ -385,7 +386,7 @@ function SubAgentChat({ subAgentId, streaming }: { subAgentId: string; streaming
           <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13.5, lineHeight: 1.55 }}>
             {m.role === 'tool' || m.role === 'system' ? <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5, color: 'var(--text-dim)' }}>{m.content.slice(0, 4000)}</span> : <Markdown content={m.content} />}
           </div>
-          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace' }}>{new Date(m.createdAt).toLocaleTimeString()}</div>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace' }}>{Number.isNaN(Date.parse(m.createdAt)) ? '' : new Date(m.createdAt).toLocaleTimeString()}</div>
         </div>
       ))}
     </div>
@@ -891,6 +892,7 @@ export function ChatView(props: Props) {
             ref={textareaRef}
             className="composer-input"
             rows={1}
+            aria-label="Message KS Agent"
             placeholder={!props.hasProject ? 'Select a project first' : isAgentFocused && activeSubAgent ? `Message ${activeSubAgent.mode} sub-agent… (sends to main chat)` : isAgentFocused && activeTeam ? `Message team ${activeTeam.name} head… (sends to main chat)` : 'Message KS Agent…'}
             disabled={!props.hasProject}
             value={input}
