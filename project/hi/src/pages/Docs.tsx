@@ -1,0 +1,1 @@
+export function Docs(){return <div className="card"><h2>Docs</h2><p>Getting started and API reference will go here.</p></div>}
