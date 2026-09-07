@@ -485,7 +485,7 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
             className="psb-iframe"
             src={iframeSrc}
             title="Preview"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox"
             onLoad={() => {
               // Only clear error if we were showing "not reachable" but now loaded
               // Keep error if iframe returned proxy JSON error (detected via content?)

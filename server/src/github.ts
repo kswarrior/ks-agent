@@ -165,14 +165,15 @@ export async function fetchGitHub(url: string, projectId?: string, opts?: { etag
   }
 
   let res: Response
+  const controller = new AbortController()
+  const t = setTimeout(() => controller.abort(), 60000)
   try {
-    const controller = new AbortController()
-    const t = setTimeout(() => controller.abort(), 60000)
     res = await fetch(url, { headers, signal: controller.signal } as any)
-    clearTimeout(t)
   } catch (e:any) {
     if (e?.name === 'AbortError') throw new Error('GitHub fetch timeout (60s)')
     throw e
+  } finally {
+    clearTimeout(t)
   }
 
   const resHeaders: Record<string,string> = {}

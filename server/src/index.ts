@@ -5316,7 +5316,7 @@ app.post('/api/projects/:id/terminals', async (c) => {
   const project = findProject(c.req.param('id'))
   if (!project) return c.json({ error: 'Project not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
-  const name = String(body.name ?? '').trim() || 'Terminal'
+  const name = String(body.name ?? '').trim().slice(0, 80) || 'Terminal'
   const now = new Date().toISOString()
   const terminal: Terminal = {
     id: newId(),
@@ -5337,6 +5337,7 @@ app.patch('/api/terminals/:id', async (c) => {
   if (body.name !== undefined) {
     const name = String(body.name).trim()
     if (!name) return c.json({ error: 'Name cannot be empty' }, 400)
+    if (name.length > 80) return c.json({ error: 'Name too long (max 80)' }, 400)
     terminal.name = name
   }
   terminal.updatedAt = new Date().toISOString()
