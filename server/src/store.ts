@@ -222,6 +222,17 @@ export interface TeamMember {
   createdAt: string
 }
 
+export interface SubAgentMessage {
+  id: string
+  subAgentId: string
+  parentChatId: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string
+  createdAt: string
+  toolCallId?: string | null
+  toolName?: string | null
+}
+
 export type ActivityToolType = 'read_file' | 'write_file' | 'edit_file' | 'run_shell' | 'list_files' | 'grep' | 'glob' | 'semantic_search' | 'create_plan' | 'complete_plan_step' | 'ask_question' | 'open_preview' | 'get_file_info' | 'delete_file' | 'move_file' | 'append_file' | 'apply_patch' | 'delegate_task'
 
 export interface Activity {
@@ -313,6 +324,7 @@ interface DB {
   subAgents: SubAgent[]
   teams: Team[]
   teamMembers: TeamMember[]
+  subAgentMessages: SubAgentMessage[]
 }
 
 // Backwards compat alias
@@ -336,7 +348,7 @@ const dbFile = process.env.KS_SQLITE_PATH
   ? path.resolve(process.env.KS_SQLITE_PATH)
   : path.join(storageDir, 'ksagent.db')
 
-let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
+let db: DB = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: { enabled: true, maxRetries: 5, baseDelayMs: 1200, maxDelayMs: 30000, retryOnStatusCodes: [429, 500, 502, 503], stopOnStatusCodes: [400, 401, 403, 404], alwaysRetry: false, autoContinueEnabled: false, autoContinueDelayMs: 1500, autoContinueMaxAttempts: 5, autoContinueOnPlanIncomplete: true }, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [], subAgentMessages: [] }
 
 let sqlite: Database.Database | null = null
 
@@ -442,6 +454,20 @@ function ensureDb(): Database.Database {
       FOREIGN KEY(subAgentId) REFERENCES subAgents(id) ON DELETE SET NULL
     );
     CREATE INDEX IF NOT EXISTS idx_teamMembers_teamId ON teamMembers(teamId);
+    CREATE TABLE IF NOT EXISTS subAgentMessages (
+      id TEXT PRIMARY KEY,
+      subAgentId TEXT NOT NULL,
+      parentChatId TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      toolCallId TEXT,
+      toolName TEXT,
+      FOREIGN KEY(subAgentId) REFERENCES subAgents(id) ON DELETE CASCADE,
+      FOREIGN KEY(parentChatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_subAgentMessages_subAgentId ON subAgentMessages(subAgentId);
+    CREATE INDEX IF NOT EXISTS idx_subAgentMessages_parentChatId ON subAgentMessages(parentChatId);
   `) } catch {}
   // Harden DB file permissions — secrets at rest (apiKeys) must be 600
   try { fs.chmodSync(dbFile, 0o600) } catch {}
@@ -769,6 +795,55 @@ export function createTeam(chatId: string, name: string, headId?: string | null)
   try { db.teams.push(t) } catch {}
   return t
 }
+export function createTeam(chatId: string, name: string, headId?: string | null): Team {
+  const cid = String(chatId ?? '').trim()
+  if (!cid) throw new Error('chatId required')
+  const n = String(name ?? '').trim().slice(0,80) || 'Team'
+  const id = randomUUID()
+  const now = new Date().toISOString()
+  const t: Team = { id, name: n, chatId: cid, headId: headId ?? null, createdAt: now, updatedAt: now }
+  try {
+    const s = ensureDb()
+    s.prepare('INSERT INTO teams (id, name, chatId, headId, createdAt, updatedAt) VALUES (?,?,?,?,?,?)').run(id, n, cid, t.headId, now, now)
+  } catch {}
+  try { db.teams.push(t) } catch {}
+  return t
+}
+// ---------------- SubAgent Messages — per sub-agent chat (so frontend can see sub-agent chat) ----------------
+export function addSubAgentMessage(subAgentId: string, parentChatId: string, role: SubAgentMessage['role'], content: string, extra?: { toolCallId?: string | null; toolName?: string | null }): SubAgentMessage {
+  const sid = String(subAgentId ?? '').trim()
+  const pid = String(parentChatId ?? '').trim()
+  if (!sid) throw new Error('subAgentId required')
+  if (!pid) throw new Error('parentChatId required')
+  const msg: SubAgentMessage = { id: randomUUID(), subAgentId: sid, parentChatId: pid, role, content: String(content ?? ''), createdAt: new Date().toISOString(), toolCallId: extra?.toolCallId ?? null, toolName: extra?.toolName ?? null }
+  try {
+    const s = ensureDb()
+    s.prepare('INSERT INTO subAgentMessages (id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName) VALUES (?,?,?,?,?,?,?,?)').run(msg.id, msg.subAgentId, msg.parentChatId, msg.role, msg.content, msg.createdAt, msg.toolCallId, msg.toolName)
+  } catch {}
+  try { db.subAgentMessages.push(msg) } catch {}
+  return msg
+}
+export function messagesOfSubAgent(subAgentId: string): SubAgentMessage[] {
+  const sid = String(subAgentId ?? '').trim()
+  if (!sid) return []
+  try {
+    const s = ensureDb()
+    const rows = s.prepare('SELECT id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName FROM subAgentMessages WHERE subAgentId=? ORDER BY createdAt').all(sid) as any[]
+    if (rows.length) return rows as SubAgentMessage[]
+  } catch {}
+  return (db.subAgentMessages || []).filter((m) => m.subAgentId === sid).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+export function messagesOfSubAgentsForChat(parentChatId: string): SubAgentMessage[] {
+  const pid = String(parentChatId ?? '').trim()
+  if (!pid) return []
+  try {
+    const s = ensureDb()
+    const rows = s.prepare('SELECT id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName FROM subAgentMessages WHERE parentChatId=? ORDER BY createdAt').all(pid) as any[]
+    if (rows.length) return rows as SubAgentMessage[]
+  } catch {}
+  return (db.subAgentMessages || []).filter((m) => m.parentChatId === pid).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
 export function teamsOf(chatId: string): Team[] {
   const cid = String(chatId ?? '').trim()
   if (!cid) return []
@@ -1019,6 +1094,20 @@ function initSchema(s: Database.Database): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS subAgentMessages (
+      id TEXT PRIMARY KEY,
+      subAgentId TEXT NOT NULL,
+      parentChatId TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      toolCallId TEXT,
+      toolName TEXT,
+      FOREIGN KEY(subAgentId) REFERENCES subAgents(id) ON DELETE CASCADE,
+      FOREIGN KEY(parentChatId) REFERENCES chats(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_subAgentMessages_subAgentId ON subAgentMessages(subAgentId);
+    CREATE INDEX IF NOT EXISTS idx_subAgentMessages_parentChatId ON subAgentMessages(parentChatId);
   `)
 }
 
@@ -2273,8 +2362,21 @@ function persistToSqlite(): void {
     preservedGithubKv = s.prepare("SELECT key, value FROM kv WHERE key IN ('githubToken','githubPollSettings') OR key LIKE 'githubPollSettings:%' OR key LIKE 'github:%'").all() as any
   } catch {}
   // Also preserve github_cache? not needed (ephemeral)
+  // Preserve sub-agents/teams/messages across bulk replace (they live in separate tables not covered by legacy db.json)
+  let preservedSubAgents: any[] = []
+  let preservedTeams: any[] = []
+  let preservedTeamMembers: any[] = []
+  let preservedSubAgentMessages: any[] = []
+  try { preservedSubAgents = s.prepare('SELECT * FROM subAgents').all() as any[] } catch {}
+  try { preservedTeams = s.prepare('SELECT * FROM teams').all() as any[] } catch {}
+  try { preservedTeamMembers = s.prepare('SELECT * FROM teamMembers').all() as any[] } catch {}
+  try { preservedSubAgentMessages = s.prepare('SELECT * FROM subAgentMessages').all() as any[] } catch {}
   try { s.pragma('foreign_keys = OFF') } catch {}
   const txn = s.transaction(() => {
+    s.prepare('DELETE FROM subAgentMessages').run()
+    s.prepare('DELETE FROM teamMembers').run()
+    s.prepare('DELETE FROM teams').run()
+    s.prepare('DELETE FROM subAgents').run()
     s.prepare('DELETE FROM activities').run()
     s.prepare('DELETE FROM previews').run()
     s.prepare('DELETE FROM questions').run()
@@ -2332,6 +2434,28 @@ function persistToSqlite(): void {
 
     const insPreview = s.prepare('INSERT INTO previews (id, chatId, port, createdAt, updatedAt) VALUES (?,?,?,?,?)')
     for (const p of db.previews) insPreview.run(p.id, p.chatId, p.port, p.createdAt, p.updatedAt)
+
+    // sub-agents/teams: prefer in-memory db values if present, else restore preserved sqlite rows (covers restart after direct inserts)
+    const subAgentsToPersist = (db.subAgents && db.subAgents.length) ? db.subAgents : preservedSubAgents.map((r: any) => ({ id: r.id, parentChatId: r.parentChatId, parentSubAgentId: r.parentSubAgentId ?? null, teamId: r.teamId ?? null, task: r.task, mode: r.mode, status: r.status, worktreePath: r.worktreePath ?? null, modelId: r.modelId ?? null, result: r.result ?? null, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+    const teamsToPersist = (db.teams && db.teams.length) ? db.teams : preservedTeams.map((r: any) => ({ id: r.id, name: r.name, chatId: r.chatId, headId: r.headId ?? null, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+    const teamMembersToPersist = (db.teamMembers && db.teamMembers.length) ? db.teamMembers : preservedTeamMembers.map((r: any) => ({ id: r.id, teamId: r.teamId, role: r.role, subAgentId: r.subAgentId ?? null, createdAt: r.createdAt }))
+    const subMsgsToPersist = (db.subAgentMessages && db.subAgentMessages.length) ? db.subAgentMessages : preservedSubAgentMessages.map((r: any) => ({ id: r.id, subAgentId: r.subAgentId, parentChatId: r.parentChatId, role: r.role, content: r.content, createdAt: r.createdAt, toolCallId: r.toolCallId ?? null, toolName: r.toolName ?? null }))
+    try {
+      const insSub = s.prepare('INSERT INTO subAgents (id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      for (const a of subAgentsToPersist) insSub.run(a.id, a.parentChatId, a.parentSubAgentId ?? null, a.teamId ?? null, a.task, a.mode, a.status, a.worktreePath ?? null, a.modelId ?? null, a.result ?? null, a.createdAt, a.updatedAt)
+    } catch {}
+    try {
+      const insTeam = s.prepare('INSERT INTO teams (id, name, chatId, headId, createdAt, updatedAt) VALUES (?,?,?,?,?,?)')
+      for (const t2 of teamsToPersist) insTeam.run(t2.id, t2.name, t2.chatId, t2.headId ?? null, t2.createdAt, t2.updatedAt)
+    } catch {}
+    try {
+      const insMember = s.prepare('INSERT INTO teamMembers (id, teamId, role, subAgentId, createdAt) VALUES (?,?,?,?,?)')
+      for (const m of teamMembersToPersist) insMember.run(m.id, m.teamId, m.role, m.subAgentId ?? null, m.createdAt)
+    } catch {}
+    try {
+      const insSubMsg = s.prepare('INSERT INTO subAgentMessages (id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName) VALUES (?,?,?,?,?,?,?,?)')
+      for (const sm of subMsgsToPersist) insSubMsg.run(sm.id, sm.subAgentId, sm.parentChatId, sm.role, sm.content, sm.createdAt, sm.toolCallId ?? null, sm.toolName ?? null)
+    } catch {}
 
     const insKv = s.prepare('INSERT INTO kv (key, value) VALUES (?,?)')
     insKv.run('systemPrompt', db.systemPrompt)
@@ -2622,7 +2746,29 @@ function loadFromSqlite(s: Database.Database): DB | null {
       themeSettings = { ...DEFAULT_THEME }
     }
 
-    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, themeSettings, skills, previews, mcpServers, lspServers, plugins, subAgents: [], teams: [], teamMembers: [] }
+    // Load sub-agents/teams/messages for persistence
+    let subAgents: SubAgent[] = []
+    try {
+      const rows = s.prepare('SELECT id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt FROM subAgents ORDER BY createdAt').all() as any[]
+      subAgents = rows.map((r: any) => ({ id: r.id, parentChatId: r.parentChatId, parentSubAgentId: r.parentSubAgentId ?? null, teamId: r.teamId ?? null, task: r.task, mode: r.mode as SubAgentMode, status: r.status as SubAgentStatus, worktreePath: r.worktreePath ?? null, modelId: r.modelId ?? null, result: r.result ?? null, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+    } catch {}
+    let teams: Team[] = []
+    try {
+      const rows = s.prepare('SELECT id, name, chatId, headId, createdAt, updatedAt FROM teams ORDER BY createdAt').all() as any[]
+      teams = rows as Team[]
+    } catch {}
+    let teamMembers: TeamMember[] = []
+    try {
+      const rows = s.prepare('SELECT id, teamId, role, subAgentId, createdAt FROM teamMembers ORDER BY createdAt').all() as any[]
+      teamMembers = rows as TeamMember[]
+    } catch {}
+    let subAgentMessages: SubAgentMessage[] = []
+    try {
+      const rows = s.prepare('SELECT id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName FROM subAgentMessages ORDER BY createdAt').all() as any[]
+      subAgentMessages = rows as SubAgentMessage[]
+    } catch {}
+
+    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, themeSettings, skills, previews, mcpServers, lspServers, plugins, subAgents, teams, teamMembers, subAgentMessages }
   } catch (e) {
     console.error('Failed to load from sqlite:', e)
     return null

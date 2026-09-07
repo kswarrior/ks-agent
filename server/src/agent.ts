@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { createSubAgent, findSubAgent, subAgentsOf, updateSubAgent, findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
+import { addSubAgentMessage, createSubAgent, findSubAgent, subAgentsOf, updateSubAgent, findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
@@ -116,6 +116,8 @@ interface ToolContext {
   onEvent: (event: string, data: string) => void
   signal: AbortSignal
   toolCallId?: string
+  providerOverride?: { baseUrl: string; apiKey: string; name?: string }
+  modelOverride?: string
 }
 
 // Pending ask_question resolvers: questionId -> resolve(answer)
@@ -2427,53 +2429,125 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       const modelId = typeof (args as any).modelId === 'string' ? String((args as any).modelId).trim().slice(0,100) || null : null
       const teamId = typeof (args as any).teamId === 'string' ? String((args as any).teamId).trim().slice(0,100) || null : null
       const parentSubAgentId = typeof (args as any).parentSubAgentId === 'string' ? String((args as any).parentSubAgentId).trim().slice(0,100) || null : null
-      // Validate teamId / parentSubAgentId exist if provided
-      if (teamId) {
-        try {
-          const s = getDb()
-          const exists = (s.teams || []).some((t: any) => t.id === teamId) || (() => { try { return !!require('node:fs').existsSync(s as any) } catch { return false } })()
-          // also check via DB query — if not found but SQLite has it, allow; otherwise warn but still create
-        } catch {}
-      }
       if (parentSubAgentId && !findSubAgent(parentSubAgentId)) return err(`parentSubAgentId not found: ${parentSubAgentId}`)
-      // Create sub-agent record (M2 Swarm, M3 Hive nested, M4 Squad team, M5 Infinity per-model)
       let sa: any
       try {
         sa = createSubAgent({ parentChatId: ctx.chatId, task, mode, parentSubAgentId, teamId, worktreePath: null, modelId })
       } catch (e: any) {
         return err(String(e?.message || 'cannot create sub-agent').slice(0,300))
       }
-      // Optionally create worktree if requested and inside git repo
       let worktreeNote = ''
       if (worktree) {
         try {
           const projRoot = ctx.projectPath
-          // Only attempt if git repo
           const isGit = fs.existsSync(path.join(projRoot, '.git'))
           if (isGit) {
             const wtBase = path.join(projRoot, '.ks-wt')
             try { fs.mkdirSync(wtBase, { recursive: true }) } catch {}
             const wtPath = path.join(wtBase, `wt-${sa.id.slice(0,8)}`)
-            // Use git worktree add -b wt/<id> <path> (best effort, don't fail creation if git fails)
             const branch = `wt/${sa.id.slice(0,8)}`
-            // We use execSync-like via exec wrapper but here just note path; actual worktree will be created lazily by orchestrator
-            // For now store intended path
             sa.worktreePath = wtPath
-            try {
-              const s2 = getDb()
-              // update in-memory and sqlite
-              updateSubAgent(sa.id, { worktreePath: wtPath })
-            } catch {}
+            try { updateSubAgent(sa.id, { worktreePath: wtPath }) } catch {}
             worktreeNote = ` worktree → ${wtPath} (branch ${branch}, pending git worktree add on first run)`
           } else {
             worktreeNote = ' (worktree requested but not a git repo — using same dir)'
           }
         } catch {}
       }
-      // Emit event for UI (RightSidebar sub-agents timeline)
-      try { ctx.onEvent('subagent', JSON.stringify({ id: sa.id, task: sa.task, mode: sa.mode, status: sa.status, teamId: sa.teamId, parentSubAgentId: sa.parentSubAgentId, worktreePath: sa.worktreePath, modelId: sa.modelId })) } catch {}
+      try { addSubAgentMessage(sa.id, ctx.chatId, 'user', task) } catch {}
+      try { updateSubAgent(sa.id, { status: 'working' }) } catch {}
+      sa.status = 'working'
+      try { ctx.onEvent('subagent', JSON.stringify({ id: sa.id, parentChatId: sa.parentChatId, parentSubAgentId: sa.parentSubAgentId, teamId: sa.teamId, task: sa.task, mode: sa.mode, status: sa.status, worktreePath: sa.worktreePath, modelId: sa.modelId, createdAt: sa.createdAt, updatedAt: sa.updatedAt })) } catch {}
+      void (async () => {
+        const subId = sa.id
+        const chatId = ctx.chatId
+        const projPath = sa.worktreePath && fs.existsSync(sa.worktreePath) ? sa.worktreePath : ctx.projectPath
+        const onEvent = ctx.onEvent
+        let provider: { baseUrl: string; apiKey: string; name?: string } | null = ctx.providerOverride ?? null
+        let modelName: string | null = ctx.modelOverride ?? null
+        try {
+          const db = getDb()
+          if (!provider) {
+            if (modelId) {
+              const m = db.models.find((x: any) => x.id === modelId)
+              if (m) {
+                const p = db.providers.find((pp: any) => pp.id === m.providerId)
+                if (p) { provider = { baseUrl: p.baseUrl, apiKey: p.apiKey, name: p.name }; modelName = m.model }
+              }
+            }
+            if (!provider && db.models.length && db.providers.length) {
+              const m0 = db.models[0]
+              const p0 = db.providers.find((pp: any) => pp.id === m0.providerId) || db.providers[0]
+              if (p0) { provider = { baseUrl: p0.baseUrl, apiKey: p0.apiKey, name: p0.name }; modelName = m0.model }
+            }
+          }
+        } catch {}
+        if (!provider || !modelName) {
+          await new Promise(r => setTimeout(r, 900))
+          const mockResult = `[${mode}] ${task.slice(0, 120)} — mock completed (no provider configured, add one in Settings). ${worktreeNote}`
+          try { addSubAgentMessage(subId, chatId, 'assistant', mockResult) } catch {}
+          try { updateSubAgent(subId, { status: 'done', result: mockResult }) } catch {}
+          try { onEvent('subagent', JSON.stringify({ id: subId, parentChatId: chatId, task, mode, status: 'done', result: mockResult, teamId, parentSubAgentId, worktreePath: sa.worktreePath, modelId })) } catch {}
+          return
+        }
+        const modeTools = (() => {
+          const readOnly = new Set(['list_files','read_file','grep','glob','semantic_search','get_file_info'])
+          const writeExtra = new Set(['write_file','edit_file','apply_patch','delete_file','move_file','append_file'])
+          if (mode === 'research' || mode === 'explore') {
+            return AGENT_TOOLS.filter(t => readOnly.has(t.function.name) || t.function.name === 'delegate_task')
+          }
+          if (mode === 'fix' || mode === 'write') {
+            return AGENT_TOOLS.filter(t => readOnly.has(t.function.name) || writeExtra.has(t.function.name) || t.function.name === 'run_shell' || t.function.name === 'delegate_task' || t.function.name === 'create_plan' || t.function.name === 'complete_plan_step')
+          }
+          return AGENT_TOOLS
+        })()
+        const subHistory: LLMMessage[] = [
+          { role: 'system', content: `You are a ${mode} sub-agent. Task: ${task}. Work inside the project folder. Be concise and produce tool calls as needed. Your parent chat is ${chatId}${teamId ? ` team ${teamId}` : ''}${parentSubAgentId ? ` parent ${parentSubAgentId}` : ''}. Stay focused on this single task.` },
+          { role: 'user', content: task }
+        ]
+        const retrySettings = getRetrySettings()
+        const subCtx: ToolContext = { projectPath: projPath, projectId: ctx.projectId, chatId, onEvent, signal: ctx.signal }
+        let acc = ''
+        try {
+          const result = await streamChatWithTools(provider.baseUrl, provider.apiKey, modelName, subHistory, modeTools, (delta) => {
+            acc += delta
+            try { onEvent('subagent_delta', JSON.stringify({ subAgentId: subId, delta })) } catch {}
+          }, ctx.signal, retrySettings, undefined, (thinking) => { try { onEvent('subagent_thinking', JSON.stringify({ subAgentId: subId, text: thinking })) } catch {} })
+          let finalContent = result.text || acc
+          if (!finalContent.trim()) finalContent = `[${mode}] completed task: ${task.slice(0, 80)}`
+          let toolOutputs: string[] = []
+          for (const call of result.toolCalls) {
+            try {
+              const toolRes = await executeTool(call.name, call.args, subCtx)
+              const out = toolRes.result || toolRes.summary
+              toolOutputs.push(`${call.name}: ${out.slice(0, 600)}`)
+              try { addSubAgentMessage(subId, chatId, 'tool', out, { toolCallId: call.id, toolName: call.name }) } catch {}
+              try { onEvent('subagent_tool', JSON.stringify({ subAgentId: subId, callId: call.id, name: call.name, args: call.args })) } catch {}
+              try { onEvent('subagent_tool_result', JSON.stringify({ subAgentId: subId, callId: call.id, ok: toolRes.ok, summary: toolRes.summary })) } catch {}
+            } catch (e: any) {
+              toolOutputs.push(`${call.name} error: ${String(e?.message||e).slice(0, 200)}`)
+            }
+          }
+          if (toolOutputs.length) finalContent += "\n\nTool results:\n" + toolOutputs.join("\n")
+          if (result.toolCalls.length === 0 && !finalContent.trim()) finalContent = `[${mode}] ${task} — done (no tools needed)`
+          try { addSubAgentMessage(subId, chatId, 'assistant', finalContent) } catch {}
+          try { updateSubAgent(subId, { status: 'done', result: finalContent }) } catch {}
+          try { onEvent('subagent', JSON.stringify({ id: subId, parentChatId: chatId, parentSubAgentId, teamId, task, mode, status: 'done', result: finalContent, worktreePath: sa.worktreePath, modelId })) } catch {}
+        } catch (e: any) {
+          if (e?.name === 'AbortError') {
+            try { addSubAgentMessage(subId, chatId, 'assistant', `[aborted] ${String(e?.message||'aborted')}`) } catch {}
+            try { updateSubAgent(subId, { status: 'error', result: `[aborted] ${String(e?.message||'aborted')}` }) } catch {}
+            try { onEvent('subagent', JSON.stringify({ id: subId, parentChatId: chatId, task, mode, status: 'error', result: `[aborted]` })) } catch {}
+            return
+          }
+          const msg = String(e?.message || e).slice(0, 600)
+          try { addSubAgentMessage(subId, chatId, 'assistant', `[error] ${msg}`) } catch {}
+          try { updateSubAgent(subId, { status: 'error', result: `[error] ${msg}` }) } catch {}
+          try { onEvent('subagent', JSON.stringify({ id: subId, parentChatId: chatId, task, mode, status: 'error', result: msg })) } catch {}
+        }
+      })().catch(() => {})
       const summary = `delegate_task ${sa.id.slice(0,8)} [${sa.mode}]${teamId ? ` team:${teamId.slice(0,6)}` : ''}${parentSubAgentId ? ` parent:${parentSubAgentId.slice(0,6)}` : ''}${modelId ? ` model:${modelId.slice(0,20)}` : ''}`
-      const result = `Sub-agent created: id=${sa.id} mode=${sa.mode} status=${sa.status} chat=${ctx.chatId}${teamId ? ` team=${teamId}` : ''}${parentSubAgentId ? ` parent=${parentSubAgentId}` : ''}${modelId ? ` model=${modelId}` : ''}${worktreeNote}\nTask: ${task}\n\nNote: M2 Swarm fan-out ready (2-5 parallel in one round). For M3 Hive, this sub-agent can itself call delegate_task with parentSubAgentId=${sa.id} (depth 2). For M4 Squad, use teamId to group. For M5 Infinity, preview team watches writes + per-role modelId. Sub-agent runs as separate generation — poll via subAgentsOf or GET /api/chats/${ctx.chatId}/subagents. Current stub: recorded, orchestrator will execute next round (full parallel LLM loop in lane).`
+      const result = `Sub-agent created and running: id=${sa.id} mode=${sa.mode} status=working chat=${ctx.chatId}${teamId ? ` team=${teamId}` : ''}${parentSubAgentId ? ` parent=${parentSubAgentId}` : ''}${modelId ? ` model=${modelId}` : ''}${worktreeNote}\nTask: ${task}\nLive: status will update to done/error via SSE subagent events; chat at GET /api/chats/${ctx.chatId}/subagents/${sa.id}/messages`
       return ok(result, summary)
     }
 
@@ -2596,7 +2670,7 @@ function truncateHistoryForModel(messages: LLMMessage[], budgetChars = 90000): L
 
 export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutcome> {
   let messages: LLMMessage[] = truncateHistoryForModel([...opts.history])
-  const ctx: ToolContext = { projectPath: opts.projectPath, projectId: opts.projectId, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal }
+  const ctx: ToolContext = { projectPath: opts.projectPath, projectId: opts.projectId, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal, providerOverride: { baseUrl: opts.baseUrl, apiKey: opts.apiKey }, modelOverride: opts.model }
   let content = ''
   // Build combined tool list including MCP tools scoped to project
   function combinedTools(): ToolDef[] {
