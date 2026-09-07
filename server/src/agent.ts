@@ -2129,7 +2129,11 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
     case 'run_shell': {
       const rawCommand = typeof args.command === 'string' ? args.command.trim() : ''
       if (!rawCommand) return err('command is required')
-      const command = containsLiteralProjectFolderPlaceholder(rawCommand) ? sanitizeShellPlaceholder(rawCommand) : rawCommand
+      // Normalize: strip "$" prompt, "${projectfolder}" placeholder, redundant "cd ... &&", manual "&"/sleep/nohup — CWD is already the real root
+      const normalized = normalizeShellCommand(rawCommand, ctx.projectPath)
+      const command = normalized.command
+      if (!command) return err('command is empty after normalization — send a bare command like "pwd" or "npm run dev" (no cd, no "$" prefix, no "&"/sleep)')
+      const normNote = normalized.notes.length ? `[normalized: ${normalized.notes.join('; ')}]\n` : ''
       const danger = isDangerousCommand(command)
       if (danger) {
         // Force approval before executing any dangerous command.
@@ -2199,7 +2203,8 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       {
         const outsideReason = isOutsideScopeCommand(command, ctx.projectPath, ctx.chatId)
         if (outsideReason) {
-          return err(`Outside access blocked. ${outsideReason}. Your primary workspace is \${projectfolder} (\`${ctx.projectPath}\`) — inside is FULL permission (all subfolders/files under it), outside is ZERO permission and FORBIDDEN. Only inside \${projectfolder} is allowed.`)
+          const absRoot = path.resolve(ctx.projectPath)
+          return err(`Outside access blocked. ${outsideReason}. Your primary workspace is \${projectfolder} (relative \`${ctx.projectPath}\`, real absolute \`${absRoot}\` — you are ALREADY there, CWD is correct). Inside is FULL permission (all subfolders/files under it), outside is ZERO permission and FORBIDDEN. Retry WITHOUT cd, WITHOUT absolute paths, WITHOUT "$" prefix: e.g. \`pwd\` then \`npm run dev\`. Only inside \${projectfolder} is allowed.`)
         }
       }
 
@@ -2230,10 +2235,11 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       // Background shell with .log for long-running servers like `node index.js` — run in background and give a .log file to check ok or not
       if (isLongRunningCommand(command)) {
         const cleanCmd = command.replace(/\s*&\s*$/, '').trim()
+        const absProj = path.resolve(ctx.projectPath)
         const ts = Date.now()
         const logFileName = `.ks-shell-${ts}.log`
-        const logAbs = path.join(ctx.projectPath, logFileName)
-        const latestLogAbs = path.join(ctx.projectPath, '.ks-shell.log')
+        const logAbs = path.join(absProj, logFileName)
+        const latestLogAbs = path.join(absProj, '.ks-shell.log')
         const escapedCmd = cleanCmd.replace(/'/g, `'\\''`)
         const bgWrapper = `nohup sh -c '${escapedCmd}' > "${logAbs}" 2>&1 & pid=$!; echo "BACKGROUND_PID:$pid LOG:${logFileName}"; sleep 0.6; echo "---LOG-HEAD---"; head -n 80 "${logAbs}" 2>/dev/null || echo "(log empty / still starting)"; echo "---LOG-STATUS---"; if ps -p $pid > /dev/null 2>&1; then echo "RUNNING pid $pid"; else echo "EXITED pid $pid (check log)"; wait $pid 2>/dev/null; echo "exit:$?"; fi; ln -sf "${logFileName}" "${latestLogAbs}" 2>/dev/null || cp "${logAbs}" "${latestLogAbs}" 2>/dev/null || true`
         try {
@@ -2254,14 +2260,15 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
           const isRunning = out.includes('RUNNING pid')
           const statusLine = isRunning ? 'RUNNING (background)' : 'EXITED — check log for errors'
           const logHint = `Log: ${logFileName} (also .ks-shell.log) — check via read_file "${logFileName}" or run_shell "tail -n 100 ${logFileName}" or "cat ${logFileName}"`
-          return ok(`Background shell started: \`${cleanCmd}\`\n${logHint}\n${out}\n\nStatus: ${statusLine}\nTip: use read_file to view full log, or run_shell "ps -p <pid>" to check process.`, `bg shell ${cleanCmd.slice(0, 50)} → ${logFileName} ${statusLine}`)
+          return ok(`${normNote}Background shell started: \`${cleanCmd}\` (CWD \`${absProj}\`)\n${logHint}\n${out}\n\nStatus: ${statusLine}\nTip: use read_file to view full log, or run_shell "ps -p <pid>" to check process.`, `bg shell ${cleanCmd.slice(0, 50)} → ${logFileName} ${statusLine}`)
         } catch (e: any) {
           // fallback to normal exec below if background wrapper fails
         }
       }
 
-      const { code, output } = await execShell(command, ctx.projectPath)
-      return ok(`exit ${code}\n${output || '(no output)'}`, `$ ${command.slice(0, 80)} → exit ${code}`)
+      const absCwd = path.resolve(ctx.projectPath)
+      const { code, output } = await execShell(command, absCwd)
+      return ok(`${normNote}exit ${code} (CWD \`${absCwd}\`)\n${output || '(no output)'}`, `$ ${command.slice(0, 80)} → exit ${code}`)
     }
 
     case 'create_plan': {
