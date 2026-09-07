@@ -2433,6 +2433,20 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       const modelId = typeof (args as any).modelId === 'string' ? String((args as any).modelId).trim().slice(0,100) || null : null
       const teamId = typeof (args as any).teamId === 'string' ? String((args as any).teamId).trim().slice(0,100) || null : null
       const parentSubAgentId = typeof (args as any).parentSubAgentId === 'string' ? String((args as any).parentSubAgentId).trim().slice(0,100) || null : null
+      // Forced-mode deduplication: if UI already forced delegates for this chat, don't allow LLM to create duplicates beyond min (would make 4 instead of 2)
+      // Exception: Hive leaves (parentSubAgentId != null) are allowed even after forced
+      if (!parentSubAgentId && forcedModeChats.has(ctx.chatId)) {
+        const mForLimit = (ctx.agentMode as AgentMode) ?? 'solo'
+        const minForMode = mForLimit === 'swarm' ? 2 : mForLimit === 'hive' ? 1 : mForLimit === 'squad' ? 2 : mForLimit === 'infinity' ? 2 : 99
+        if (minForMode !== 99) {
+          try {
+            const existingTop = subAgentsOf(ctx.chatId).filter(s => !s.parentSubAgentId).length
+            if (existingTop >= minForMode) {
+              return ok(`Delegates already satisfied for ${mForLimit} mode (${existingTop} sub-agents, need ${minForMode}) — forced delegates already created, do not create more. Synthesize results instead.`, `already have ${existingTop} delegates, skipping duplicate`)
+            }
+          } catch {}
+        }
+      }
       if (parentSubAgentId && !findSubAgent(parentSubAgentId)) return err(`parentSubAgentId not found: ${parentSubAgentId}`)
       let sa: any
       try {
