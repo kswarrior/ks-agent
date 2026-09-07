@@ -133,7 +133,7 @@ function SingleQuestionCard({ question, index, total, canGoBack, onBack, onConfi
 }
 
 export function QuestionList({ questions, onAnswer }: { questions: Question[]; onAnswer: (id: string, answer: string) => Promise<void> }) {
-  const sorted = [...questions].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const sorted = useMemo(() => [...questions].sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [questions])
   const total = sorted.length
   if (total === 0) return null
 

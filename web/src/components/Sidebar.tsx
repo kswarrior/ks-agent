@@ -323,7 +323,7 @@ export function Sidebar(props: SidebarProps) {
                     </div>
                     <div className="semantic-list">
                       {semanticHits.map((hit, idx) => (
-                        <div key={idx} className="semantic-hit" title={hit.snippet ?? hit.path}>
+                        <div key={`${hit.path}:${idx}`} className="semantic-hit" title={hit.snippet ?? hit.path}>
                           <div className="semantic-hit-path" style={{ display:'flex', alignItems:'center', gap:6 }}>
                             <span className="semantic-hit-score" style={{ minWidth:36, fontWeight:600 }}>{hit.score.toFixed(2)}</span>
                             <span className={`semantic-hit-source badge-${hit.source}`} style={{ fontSize:10, padding:'2px 6px', borderRadius:4, background: hit.source==='vector' ? '#2563eb' : hit.source==='hybrid' ? '#0ea5e9' : hit.source==='bm25' ? '#8b5cf6' : hit.source==='grep' ? '#64748b' : '#475569', color:'#fff', textTransform:'uppercase' }}>{hit.source==='vector' ? 'VECTOR' : hit.source==='hybrid' ? 'HYBRID' : hit.source.toUpperCase()}</span>

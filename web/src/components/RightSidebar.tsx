@@ -290,11 +290,13 @@ function AgentsPane({ activeChatId, subAgents, teams, activeAgent, onSelectAgent
   useEffect(() => {
     if (!activeChatId) { setMessagesBySub({}); return }
     // initial load for all sub-agents (first 3 eagerly, rest on expand)
+    // dep is the ID set (not length) so a same-length ID swap refetches instead of showing stale chats
     const eager = subAgents.slice(0, 3)
     eager.forEach(s => {
       api.listSubAgentMessages(s.id).then(list => setMessagesBySub(prev => ({ ...prev, [s.id]: list }))).catch(() => {})
     })
-  }, [activeChatId, subAgents.length])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChatId, subAgents.map((s) => s.id).join(',')])
   function toggleExpand(id: string) {
     setExpanded(prev => {
       const next = { ...prev, [id]: !prev[id] }

@@ -1265,7 +1265,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                 {s.tools.map((t, idx) => (
-                                  <div key={idx} style={{ padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                                  <div key={`${t.name}:${idx}`} style={{ padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
                                     <div style={{ fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
                                       <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12, color: 'var(--text)' }}>{t.name}</span>
                                       <span style={{ fontSize: 10, color: 'var(--text-faint)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '1px 6px' }}>mcp_{s.name}_{t.name}</span>
