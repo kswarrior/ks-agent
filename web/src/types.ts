@@ -104,6 +104,8 @@ export interface ThemeSettings {
   radius: number
 }
 
+export type SkillRole = 'must' | 'recommended' | 'optional'
+
 export interface Skill {
   id: string
   name: string
@@ -111,6 +113,8 @@ export interface Skill {
   mainFile: string
   files: string[]
   projectId?: string
+  role?: SkillRole
+  triggers?: string
   createdAt: string
   updatedAt?: string
 }
