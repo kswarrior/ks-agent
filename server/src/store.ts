@@ -2891,7 +2891,8 @@ function tryMigrateFromJson(): boolean {
       })) : [],
       subAgents: Array.isArray((parsed as any).subAgents) ? (parsed as any).subAgents : [],
       teams: Array.isArray((parsed as any).teams) ? (parsed as any).teams : [],
-      teamMembers: Array.isArray((parsed as any).teamMembers) ? (parsed as any).teamMembers : []
+      teamMembers: Array.isArray((parsed as any).teamMembers) ? (parsed as any).teamMembers : [],
+      subAgentMessages: Array.isArray((parsed as any).subAgentMessages) ? (parsed as any).subAgentMessages : []
     }
     // Migrate old skills missing updatedAt / projectId
     let migrated = false
