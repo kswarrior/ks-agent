@@ -3,7 +3,7 @@ import { playerRoutes } from "./routes/player";
 import { serverRoutes } from "./routes/server";
 import { cors } from "hono/cors";
 
-export const app = new Hono();
+const app = new Hono();
 
 app.use(
   cors({
@@ -15,3 +15,5 @@ app.use(
 
 app.route("/api/players", playerRoutes);
 app.route("/api/servers", serverRoutes);
+
+export { app };
