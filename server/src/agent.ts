@@ -2826,6 +2826,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           outcome.toolCalls.push({ id: synthId, name: 'delegate_task', args: JSON.stringify(args) } as any)
           if (!outcome.text.trim()) outcome.text = `Delegated ${needed} sub-task(s) for ${mode} mode (forced).`
         }
+        messages.push({ role: 'system', content: `System: ${mode} mode delegates already created (${needed} sub-agent(s) forced by UI selection). Do NOT call delegate_task again — ${mode} requirement satisfied (${minDelegates} delegates). Now wait for sub-agents to complete and synthesize their results. Sub-agents will appear in UI bar and Agents tab.` })
         messages = truncateHistoryForModel(messages)
       }
       } // end else (not greeting) — forced delegation
