@@ -272,9 +272,9 @@ Browser (React + Vite, xterm.js, Markdown)
   ↕ REST + SSE + WebSocket
 Hono (Node) ── OpenAI-compatible API (any provider)
   ↕ SQLite (WAL, transactions) ── projects / chats / messages / plans / activities
-  ↕ PTY (per project) ── WebSocket bridge to xterm (native or Docker `KS_DOCKER_JAIL=1` `server/src/index.ts:147`)
-  ↕ FS sandbox ── project/<name>/ (strict via server/src/fsx.ts:10 + server/src/agent.ts:714 + optional Docker `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `docker run --network none -v project:/workspace:rw`)
-  ↕ Preview ── dual-stack proxy 127.0.0.1→[::1]→localhost fallback (index.ts:4971 isPortReachable, 4993 fetchPreviewWithFallback, 5339 proxyPreview) + Vite host 0.0.0.0 (project/ks/vite.config.ts:7) + base href injection
+  ↕ PTY (per project) ── WebSocket bridge to xterm (native or Docker `KS_DOCKER_JAIL=1` `server/src/index.ts:243`)
+  ↕ FS sandbox ── project/<name>/ (strict via server/src/fsx.ts:10 + server/src/agent.ts:1168 + optional Docker `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `docker run --network none -v project:/workspace:rw`)
+  ↕ Preview ── dual-stack proxy 127.0.0.1→[::1]→localhost fallback (index.ts:5431 isPortReachable, 5453 fetchPreviewWithFallback, 5588 proxyPreview) + base href injection (no `server.host:'0.0.0.0'` in project vite configs — bind `--host 0.0.0.0` yourself on LAN)
   ↕ Parallelism ── generations Map per chatId (index.ts:1075) + PTY per project (index.ts:219) + intra-chat `delegate_task` fan-out (agent.ts:1033/2733); multi-chat concurrency with 409 guard per chat (index.ts:1485); full-mode preserves activities (index.ts:1488)
 ```
 Single-process app. `npm run build` then `npm start` serves both API and UI on one port. Ideal for VPS, home lab, or single Docker container. SQLite survives restarts; WAL mode handles concurrent chat streams (`store.ts:377` `busy_timeout 10000`, `index.ts:1485` 409 guard per chat). Latest 2026-09-07: **preview dual-stack fallback** (`index.ts:5431`/`5453`/`5588`) + **context-mode full preserves 25 activities ×1200×15k** (`index.ts:1546`/`1614`/`web/src/App.tsx:39`) + **vector+hybrid (20k vector+BM25+grep sqlite-vec/HNSW)** `FLOAT32[384/768]` per CHUNK (`store.ts:390` `embedding_chunks` + `store.ts:1233` + `store.ts:1270` `localEmbed` + `store.ts:1458` `embedMany` + `store.ts:1919` `semanticSearch` `0.5*vector+0.3*BM25+0.2*grep`) + `vec_chunks` `vec0` + history truncation 90k (`agent.ts:2959`) for 200-file repos — `95` > Cody `85` (benchmark `bench_vector` `10/10` `0.733`).
@@ -386,7 +386,7 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 | **Big refactor on 200-file repo, need deep plan first** | **KS Agent 96 / Claude Code 98** | OpenHands 88 — KS now **96** parity `server/src/agent.ts:915` `server/src/store.ts:390` `web/src/components/Sidebar.tsx:62` |
 | **Fan-out 3 parallel sub-agents (swarm)** | **Claude 92 / KS Agent 88 = Opencode 88** | Cline 85 — KS `delegate_task` e2e-proven (`agent.ts:1033`/`2733`) |
 | **Cheapest strong model for daily coding** | DeepSeek (via KS Agent / Aider / Continue) | KS Agent + Ollama (free) |
-| **Untrusted / student code, must sandbox** | **KS Agent 98 / OpenHands 98** | — (KS `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147` parity) |
+| **Untrusted / student code, must sandbox** | **KS Agent 98 / OpenHands 98** | — (KS `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:243` parity) |
 | **Stay in VS Code, want autocomplete + chat** | **Cursor 98 / KS Agent 92** | Cline 94 / Windsurf 96 — KS now **92** `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:45` `vsce package` |
 | **Enterprise monorepo with powerful code search** | **KS Agent 95 / Cody 85** | Cursor 85 — KS **✅ vector+hybrid 95 > Cody 85** `server/src/store.ts:390` `embedding_chunks` `FLOAT32[384/768]` per CHUNK `server/src/store.ts:1233` `store.ts:1919` `0.5*vector+0.3*BM25+0.2*grep` + `sqlite-vec/HNSW` `vec0` `cosine` + `OpenAI text-embedding-3-small`/`Ollama nomic-embed-text`/`local MiniLM` fallback + `web/src/components/Sidebar.tsx:62` vector badge + score bar, benchmark `project/bench_vector` (200 files) `user auth` `10/10` `0.733` `hybrid` vs `grep` `0/10`, `needleTokenAlpha_5` `0.61` top1, `extraUniqueToken999` `0.753` — honest **95 beats 85** |
 | **Git-heavy workflow (commit-per-change, review diff)** | **Aider (98)** | KS Agent 75 = Opencode 75 — native `git_status/diff/log/commit/branch/push` + `git_create_pr` (`server/src/git.ts`, 9 REST routes), no auto-commit daemon |
@@ -430,7 +430,7 @@ Environment overrides (optional):
 PORT=8787 npm start
 KS_SQLITE_PATH=/data/ksagent.db   # custom SQLite path
 KS_DATA_DIR=/custom/dir           # custom data directory
-KS_DOCKER_JAIL=1                  # optional kernel isolation — route run_shell + PTY through docker (`server/src/docker.ts:10` `server/src/index.ts:147`)
+KS_DOCKER_JAIL=1                  # optional kernel isolation — route run_shell + PTY through docker (`server/src/docker.ts:10` `server/src/index.ts:243`)
 KS_DOCKER_IMAGE=node:20-alpine    # image for jail (default node:20-alpine, or alpine) — see README.md Docker Jail
 ```
 
