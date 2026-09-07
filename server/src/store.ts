@@ -3044,7 +3044,7 @@ export function loadDb(): void {
       autoContinueMaxAttempts: 5,
       autoContinueOnPlanIncomplete: true
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [], subAgentMessages: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     } else {
@@ -3066,7 +3066,7 @@ export function loadDb(): void {
       autoContinueMaxAttempts: 5,
       autoContinueOnPlanIncomplete: true
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [], subAgentMessages: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     }

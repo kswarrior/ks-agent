@@ -61,6 +61,9 @@ import {
   subAgentsOf,
   createTeam,
   teamsOf,
+  findSubAgent,
+  messagesOfSubAgent,
+  messagesOfSubAgentsForChat,
   getEmbeddingSettings,
   updateEmbeddingSettings
 } from './store.js'
@@ -755,6 +758,29 @@ app.post('/api/chats/:id/teams', async (c) => {
     const t = createTeam(chat.id, name, body.headId ?? null)
     return c.json(t, 201)
   } catch (e: any) { return c.json({ error: String(e?.message||'cannot create team').slice(0,300) }, 400) }
+})
+// Sub-agent chat: per sub-agent messages so frontend can see their chat (all flows)
+app.get('/api/chats/:id/subagents/:subId/messages', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  const sub = findSubAgent(c.req.param('subId'))
+  if (!sub || sub.parentChatId !== chat.id) return c.json({ error: 'Sub-agent not found' }, 404)
+  try { return c.json(messagesOfSubAgent(sub.id)) } catch { return c.json([]) }
+})
+app.get('/api/subagents/:subId/messages', (c) => {
+  const sub = findSubAgent(c.req.param('subId'))
+  if (!sub) return c.json({ error: 'Sub-agent not found' }, 404)
+  try { return c.json(messagesOfSubAgent(sub.id)) } catch { return c.json([]) }
+})
+app.get('/api/subagents/:subId', (c) => {
+  const sub = findSubAgent(c.req.param('subId'))
+  if (!sub) return c.json({ error: 'Sub-agent not found' }, 404)
+  return c.json(sub)
+})
+app.get('/api/chats/:id/subagents/messages', (c) => {
+  const chat = findChat(c.req.param('id'))
+  if (!chat) return c.json({ error: 'Chat not found' }, 404)
+  try { return c.json(messagesOfSubAgentsForChat(chat.id)) } catch { return c.json([]) }
 })
 
 // ---------------- Activities ----------------
