@@ -3043,6 +3043,7 @@ app.post('/api/ide/complete', async (c) => {
   if (suffix.length > 8000) return c.json({ error: 'suffix too long (max 8000)' }, 400)
   if (filePath && filePath.length > 500) return c.json({ error: 'filePath too long' }, 400)
   if (filePath && filePath.includes('\0')) return c.json({ error: 'Invalid filePath' }, 400)
+  if (modelId && !getDb().models.some((m) => m.id === modelId)) return c.json({ error: 'Selected model not found' }, 400)
 
   let project: Project | undefined
   if (projectId) {
@@ -3130,6 +3131,7 @@ app.post('/api/ide/inline-chat', async (c) => {
   if (surroundingContext.length > 8000) return c.json({ error: 'surroundingContext too long' }, 400)
   if (filePath && filePath.length > 500) return c.json({ error: 'filePath too long' }, 400)
 
+  if (modelId && !getDb().models.some((m) => m.id === modelId)) return c.json({ error: 'Selected model not found' }, 400)
   let project: Project | undefined
   if (projectId) {
     project = findProject(projectId)
