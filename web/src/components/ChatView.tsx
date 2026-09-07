@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { ActiveAgentView, Activity, Chat, Message, ModelEntry, Plan, Question, SubAgent, Team } from '../types'
+import type { ActiveAgentView, Activity, Chat, Message, ModelEntry, Plan, Question, SubAgent, SubAgentMessage, Team } from '../types'
+import * as api from '../api'
 import { Markdown } from './Markdown'
 import { IconChevronDown, IconChevronLeft, IconRotate, IconSearch, IconStop, IconCopy, IconCheck, IconModeSolo, IconModeSwarm, IconModeHive, IconModeSquad, IconModeInfinity, IconSliders, IconLayers, IconMessageSquare, IconCoins } from '../icons'
 import { QuestionList } from './QuestionCard'
@@ -355,6 +356,42 @@ function AssistantMeta({ message }: { message: Message }) {
   )
 }
 
+function SubAgentChat({ subAgentId, streaming }: { subAgentId: string; streaming: boolean }) {
+  const [msgs, setMsgs] = useState<SubAgentMessage[]>([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    api.listSubAgentMessages(subAgentId)
+      .then((list) => { if (!cancelled) setMsgs(list as any) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [subAgentId])
+  useEffect(() => {
+    if (!streaming) return
+    const id = setInterval(() => {
+      api.listSubAgentMessages(subAgentId).then((list) => setMsgs(list as any)).catch(() => {})
+    }, 1500)
+    return () => clearInterval(id)
+  }, [subAgentId, streaming])
+  if (loading) return <div style={{ padding: '10px 0', color: 'var(--text-faint)', fontSize: 12.5 }}>Loading sub-agent chat…</div>
+  if (msgs.length === 0) return <p className="agent-empty-note">No messages yet — sub-agent will emit here when it starts. Try sending with Swarm mode to create sub-agents.</p>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+      {msgs.map((m) => (
+        <div key={m.id} className={m.role === 'user' ? 'msg-user' : 'msg-assistant'} style={m.role === 'tool' ? { background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' } : undefined}>
+          {m.role !== 'user' && <div className="role-tag">{m.role === 'assistant' ? 'Sub-agent' : m.role === 'tool' ? `Tool · ${m.toolName ?? 'tool'}` : m.role}</div>}
+          <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13.5, lineHeight: 1.55 }}>
+            {m.role === 'tool' || m.role === 'system' ? <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5, color: 'var(--text-dim)' }}>{m.content.slice(0, 4000)}</span> : <Markdown content={m.content} />}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace' }}>{new Date(m.createdAt).toLocaleTimeString()}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const MODES = [
   { id: 'solo', label: 'Solo', desc: 'Single session', Icon: IconModeSolo },
   { id: 'swarm', label: 'Swarm', desc: 'Main → 5 sub-agents', Icon: IconModeSwarm },
@@ -600,12 +637,12 @@ export function ChatView(props: Props) {
   const isPlanIncomplete = !props.streaming && !!plan && totalSteps > 0 && !isPlanDone
   const showContinue = !props.streaming && !!props.onContinue && (isInterrupted || isPlanIncomplete)
 
-  // Sub-agents / Teams bar — visible only when mode != solo and items exist
+  // Sub-agents / Teams bar — always visible when items exist so user can see sub agents/teams and their chat (any mode)
   const subAgents = props.subAgents ?? []
   const teams = props.teams ?? []
   const activeAgent: ActiveAgentView = props.activeAgent ?? { kind: 'main' }
   const hasAgentItems = subAgents.length > 0 || teams.length > 0
-  const showAgentBar = selectedMode !== 'solo' && hasAgentItems && !!props.chat
+  const showAgentBar = hasAgentItems && !!props.chat
   const activeSubAgent = activeAgent.kind === 'subagent' ? subAgents.find((s) => s.id === activeAgent.id) ?? null : null
   const activeTeam = activeAgent.kind === 'team' ? teams.find((t) => t.id === activeAgent.id) ?? null : null
   const isAgentFocused = (activeAgent.kind === 'subagent' && !!activeSubAgent) || (activeAgent.kind === 'team' && !!activeTeam)
@@ -650,9 +687,15 @@ export function ChatView(props: Props) {
               </div>
               {activeSubAgent && (
                 <div className="msg-assistant">
-                  <div className="role-tag">{activeSubAgent.mode} sub-agent</div>
+                  <div className="role-tag">{activeSubAgent.mode} sub-agent · {activeSubAgent.status}</div>
                   <div className="agent-task-label">Task</div>
                   <div className="agent-task">{activeSubAgent.task}</div>
+                  <div className="agent-meta">
+                    {activeSubAgent.teamId && <span className="agent-meta-chip" title={`Team ${activeSubAgent.teamId}`}>team:{activeSubAgent.teamId.slice(0, 6)}</span>}
+                    {activeSubAgent.modelId && <span className="agent-meta-chip" title={activeSubAgent.modelId}>model:{activeSubAgent.modelId.slice(0, 18)}</span>}
+                    {activeSubAgent.worktreePath && <span className="agent-meta-chip" title={activeSubAgent.worktreePath}>worktree</span>}
+                    {activeSubAgent.parentSubAgentId && <span className="agent-meta-chip" title={activeSubAgent.parentSubAgentId}>parent:{activeSubAgent.parentSubAgentId.slice(0, 6)}</span>}
+                  </div>
                   {activeSubAgent.result ? (
                     <>
                       <div className="agent-task-label" style={{ marginTop: 10 }}>Result</div>
@@ -661,13 +704,10 @@ export function ChatView(props: Props) {
                       </ClampedContent>
                     </>
                   ) : (
-                    <p className="agent-empty-note">{props.streaming ? 'Working — result will appear here when done.' : 'No result yet — the main agent is still working on this sub-task.'}</p>
+                    <p className="agent-empty-note">{props.streaming || activeSubAgent.status === 'working' ? 'Working — result will appear here when done.' : 'No result yet — sub-agent chat below shows live progress.'}</p>
                   )}
-                  <div className="agent-meta">
-                    {activeSubAgent.teamId && <span className="agent-meta-chip" title={`Team ${activeSubAgent.teamId}`}>team:{activeSubAgent.teamId.slice(0, 6)}</span>}
-                    {activeSubAgent.modelId && <span className="agent-meta-chip" title={activeSubAgent.modelId}>model:{activeSubAgent.modelId.slice(0, 18)}</span>}
-                    {activeSubAgent.worktreePath && <span className="agent-meta-chip" title={activeSubAgent.worktreePath}>worktree</span>}
-                  </div>
+                  <div className="agent-task-label" style={{ marginTop: 14 }}>Chat — sub-agent conversation</div>
+                  <SubAgentChat subAgentId={activeSubAgent.id} streaming={props.streaming || activeSubAgent.status === 'working'} />
                 </div>
               )}
               {activeTeam && (
