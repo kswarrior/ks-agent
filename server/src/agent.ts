@@ -2693,16 +2693,30 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
   const ctx: ToolContext = { projectPath: opts.projectPath, projectId: opts.projectId, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal, providerOverride: { baseUrl: opts.baseUrl, apiKey: opts.apiKey }, modelOverride: opts.model, agentMode: opts.agentMode ?? 'solo' }
   let content = ''
   // Build combined tool list including MCP tools scoped to project
+  // In swarm/hive/squad/infinity first round, restrict main to delegate_task only so it acts as head (just says what to do, sub-agents work)
+  let _roundForTools = 0
   function combinedTools(): ToolDef[] {
     try {
       const mcpDefs = getMCPToolDefs(opts.projectId)
-      if (mcpDefs.length) return [...AGENT_TOOLS, ...mcpDefs]
+      const base = mcpDefs.length ? [...AGENT_TOOLS, ...mcpDefs] : AGENT_TOOLS
+      const mode = opts.agentMode ?? 'solo'
+      if (mode !== 'solo' && _roundForTools === 0) {
+        // First round: force delegation — only allow delegate_task (plus create_plan for squad head if needed)
+        // This makes main a head that just delegates, sub-agents do the work
+        const filtered = base.filter(t => t.function.name === 'delegate_task' || t.function.name === 'create_plan')
+        // Always keep delegate_task, if filtered would be empty keep at least delegate_task
+        const hasDelegate = filtered.some(t => t.function.name === 'delegate_task')
+        if (hasDelegate && filtered.length >= 1) return filtered
+        return base.filter(t => t.function.name === 'delegate_task')
+      }
+      return base
     } catch {}
     return AGENT_TOOLS
   }
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      _roundForTools = round
       if (opts.signal.aborted) throw abortError()
       markWorkingStep(ctx)
 
