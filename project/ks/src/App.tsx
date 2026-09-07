@@ -290,39 +290,37 @@ export function App() {
         </div>
       </section>
 
-      </section>
-
-          {showSettings && (
-            <section>
-              <div className="card">
-                <h2>Server Configuration</h2>
-                <div className="table">
-                  <div className="table-header">
-                    <span>Property</span>
-                    <span>Value</span>
-                  </div>
-                  <div className="table-row">
-                    <span>Host</span>
-                    <span>{server.host}:{server.port}</span>
-                  </div>
-                  <div className="table-row">
-                    <span>RCON Port</span>
-                    <span>{server.rcon_port}</span>
-                  </div>
-                  <div className="table-row">
-                    <span>Game Mode</span>
-                    <span>{server.gamemode}</span>
-                  </div>
-                  <div className="table-row">
-                    <span>Difficulty</span>
-                    <span>{server.difficulty}</span>
-                  </div>
-                </div>
+      {showSettings && (
+        <section>
+          <div className="card">
+            <h2>Server Configuration</h2>
+            <div className="table">
+              <div className="table-header">
+                <span>Property</span>
+                <span>Value</span>
               </div>
-            </section>
-          )}
-        </>
+              <div className="table-row">
+                <span>Host</span>
+                <span>{server.host}:{server.port}</span>
+              </div>
+              <div className="table-row">
+                <span>RCON Port</span>
+                <span>{server.rcon_port}</span>
+              </div>
+              <div className="table-row">
+                <span>Game Mode</span>
+                <span>{server.gamemode}</span>
+              </div>
+              <div className="table-row">
+                <span>Difficulty</span>
+                <span>{server.difficulty}</span>
+              </div>
+            </div>
+          </div>
+        </section>
       )}
+    </>
+  )}
 
       {active === 'todo' && <TodoApp />}
       {active === 'players' && <div className="page"><Players /></div>}
