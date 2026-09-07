@@ -2777,6 +2777,12 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
     // FORCE: if UI manually selected a non-solo mode, guarantee delegation even if LLM ignored — "force ai to create sub agent team that is selected"
     if ((opts.agentMode ?? 'solo') !== 'solo' && round === 0) {
       const mode = (opts.agentMode ?? 'solo') as AgentMode
+      // Don't force for pure greetings/small talk — keep those as single-message replies
+      const userContentForForce = (opts.history[opts.history.length - 1]?.content ?? '').trim()
+      const isGreetingForForce = /^\s*(hello(\s+there)?|hi(\s+there)?|hey(\s+there)?|greetings|howdy|good\s*(morning|afternoon|evening|night)|thanks(\s+a\s+lot)?|thank\s*you(\s+so\s+much)?|how\s+are\s+you(\s+doing)?(\s+today)?|how[’']s\s+it\s+going|how\s+is\s+it\s+going|what[’']s\s+up|whats\s+up|what\s+up|who\s+are\s+you|bye|goodbye|good\s*bye|yo|sup|hiya)\s*[.!?]*\s*$/i.test(userContentForForce)
+      if (isGreetingForForce) {
+        // skip forcing for greetings — Solo-like behavior even if mode is swarm etc, user just said hi
+      } else {
       const delegateCount = outcome.toolCalls.filter(c => c.name === 'delegate_task').length
       const hasTeam = (() => { try { return teamsOf(ctx.chatId).length > 0 } catch { return false } })()
       if ((mode === 'squad' || mode === 'infinity') && !hasTeam) {
@@ -2822,6 +2828,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
         }
         messages = truncateHistoryForModel(messages)
       }
+      } // end else (not greeting) — forced delegation
     }
 
     // Prevent early stop: if model returns no tools on first round for a non-greeting task, force exploration

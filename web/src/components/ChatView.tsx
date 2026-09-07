@@ -983,7 +983,7 @@ export function ChatView(props: Props) {
                       ))}
                     </div>
                     <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.4, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 7px' }}>
-                      Solo=1 agent · Swarm=main→5 · Hive=nested · Squad=Team+Head · Infinity=unlimited+Preview
+                      <span style={{ fontWeight: 700, color: selectedMode !== 'solo' ? 'var(--primary)' : 'var(--text-faint)' }}>{selectedMode !== 'solo' ? 'FORCED: ' : ''}</span>Solo=1 · Swarm=2-5 · Hive=nested · Squad=2+Team · Infinity=unlimited+Preview{selectedMode !== 'solo' ? ' — AI must delegate' : ''}
                     </div>
                   </div>
 
