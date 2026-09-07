@@ -1,2 +1,0 @@
-import { NavLink } from 'react-router-dom'
-export function Sidebar(){return <aside className="sidebar"><h1>Acme</h1><nav className="nav"><NavLink to="/" end className={({isActive})=>isActive?'active':''}>Dashboard</NavLink><NavLink to="/about" className={({isActive})=>isActive?'active':''}>About</NavLink><NavLink to="/docs" className={({isActive})=>isActive?'active':''}>Docs</NavLink></nav></aside>}

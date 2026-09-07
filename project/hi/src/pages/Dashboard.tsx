@@ -1,1 +1,0 @@
-export function Dashboard(){return <div><h1>KS Warrior Website</h1><h2>Dashboard</h2><div className="grid"><div className="card">Visits<br/><span>12,340</span></div><div className="card">Revenue<br/><span>$8,900</span></div><div className="card">Users<br/><span>2,104</span></div></div></div>}

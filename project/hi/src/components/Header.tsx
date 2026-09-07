@@ -1,1 +1,0 @@
-export function Header(){return <header className="header"><div>Dashboard Site</div><div><button className="btn">Profile</button></div></header>}

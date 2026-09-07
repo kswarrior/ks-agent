@@ -86,7 +86,7 @@ Build clean, modern, fast, and responsive sites. Default to light, readable UI u
 - Header `64px`, cards `border:1px solid var(--border)` + `border-radius: var(--radius)` + subtle border (NOT heavy box-shadow — see §5.10).
 - Spacing 8pt scale (4,8,12,16,24,32). Cards padding `20px`, sections `48px` vertical.
 - Typography: `Inter, ui-sans-serif, system-ui` — body `15px/1.6`, headings `600`, labels `13px/600`.
-- Motion `0.15s ease`, respect `prefers-reduced-motion`.
+- Motion `0.15s ease` default, `220ms var(--ease)` for entrances — all `transform`/`opacity` only, respect `prefers-reduced-motion` (see §5.12).
 - Responsive: mobile-first, `max-width: 1200px` container, grid stacks to 1 column under `768px`, no horizontal scroll.
 - Use semantic HTML (`header`, `nav`, `main`, `section`, `footer`), `alt` on images, `aria-label` on icon buttons.
 
@@ -119,6 +119,7 @@ Build clean, modern, fast, and responsive sites. Default to light, readable UI u
 - [ ] No fake/demo data left behind — all features fully functional (see §5.5).
 - [ ] No secrets/API keys in frontend code (see §5.3).
 - [ ] Icons are SVG, not emoji/images (see §5.1).
+- [ ] Smooth micro-animations: hover/active/fadeUp 150-220ms, transform/opacity only, respects reduced-motion (see §5.12).
 - [ ] Lag-free on low-end devices: no heavy shadows/blur/animations (see §5.10).
 
 ---
@@ -232,6 +233,45 @@ When the user is vague, underspecified, or just says "build me a dashboard / lan
   - Error + retry: if fetch fails, replace skeleton/spinner with error banner + `Retry` button — never leave spinner stuck.
   - Avoid: full-screen overlay spinner for a small card update; `Loading...` text alone for a whole dashboard; multiple competing spinners on one page.
 
+### 5.12 Smooth Animations — Polished, Subtle, Lag-Free
+- **Goal:** every interaction feels responsive and premium — not flashy. Animations are `150–250ms`, `ease-out`, `transform` + `opacity` only (GPU). Never animate `width`/`height`/`top`/`box-shadow`/`background` heavily.
+- **Tokens — add to `styles.css`:**
+  ```css
+  :root {
+    --ease: cubic-bezier(0.16, 1, 0.3, 1); /* smooth ease-out */
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --duration-fast: 150ms;
+    --duration-normal: 220ms;
+    --duration-slow: 350ms;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+  ```
+- **Use everywhere by default (unless user says no motion):**
+  - **Buttons/links:** `transition: transform var(--duration-fast) var(--ease), background var(--duration-fast) ease, opacity var(--duration-fast) ease;` hover `transform: translateY(-1px)`, active `scale(0.98)`, focus ring fade in.
+  - **Cards/list items:** hover `transform: translateY(-2px)` + `border-color` shift (no shadow jump). Stagger lists: `animation: fadeUp var(--duration-normal) var(--ease) both; animation-delay: calc(index * 40ms)` for first 6 items max.
+  - **Modals/drawers/dropdowns:** overlay `opacity 0→1 (150ms)`, dialog `opacity + transform: scale(0.98) translateY(4px) → scale(1) translateY(0) (220ms var(--ease))`. Drawer slides via `transform: translateX` only. Close on same curve reversed.
+  - **Tabs/pills/content switch:** content `fade + slideUp 200ms`; tab indicator slides with `transform` spring (`--ease-spring`).
+  - **Toasts/banners:** enter `slideIn from top/right + fade`, exit `fadeOut 150ms`, auto-dismiss with progress bar shrinking via `transform: scaleX`.
+  - **Page/route change:** root `<main>` `animation: fadeUp 220ms var(--ease)` on mount (once), plus top loading bar (§5.11). No full-page spin.
+- **Micro-feedback (makes it feel polished):**
+  - Button click ripple or `scale(0.97)` 120ms, input focus `border-color` + `box-shadow: 0 0 0 3px var(--primary-ring)` 150ms, checkbox/toggle `transform` 180ms, skeleton shimmer already in §5.11.
+  - Success: checkmark `scale + draw` 220ms; error: `shake 250ms` (translateX 2px) only on invalid field, not whole page.
+- **Keyframes (plain CSS, no lib):**
+  ```css
+  @keyframes fadeUp { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+  @keyframes scaleIn { from { opacity:0; transform: scale(0.96); } to { opacity:1; transform: scale(1); } }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  ```
+  Apply with `animation: fadeUp var(--duration-normal) var(--ease) both` — respects reduced-motion via token above.
+- **Rules to stay lag-free:**
+  - Only `transform` and `opacity` are compositor-friendly. Never `filter:blur`, large `box-shadow`, or `backdrop-filter` animated.
+  - Keep `will-change` off by default; add only during animation if needed and remove after.
+  - Limit simultaneous animating elements to ~6; debounce scroll-triggered animations with `IntersectionObserver`, not `onscroll`.
+  - No heavy animation libraries (framer-motion okay only if already used, otherwise plain CSS). No `transition: all`.
+
 ---
 
 ## 6) Common AI Mistakes — Do NOT Do These
@@ -283,7 +323,7 @@ Learn from what AI generators repeatedly get wrong. If you catch yourself doing 
 Apply to every site, especially for low-end phones:
 
 - [ ] No heavy `box-shadow` or `backdrop-filter` on large areas (see §5.10).
-- [ ] Animations use `transform`/`opacity` only, `0.15s ease`, respects `prefers-reduced-motion`.
+- [ ] Animations use `transform`/`opacity` only, `0.15s-0.22s var(--ease)`, respects `prefers-reduced-motion` (§5.12).
 - [ ] Images optimized, `loading="lazy"` below fold, explicit dimensions to avoid CLS.
 - [ ] No unused JS/CSS — tree-shake icons, remove dead components.
 - [ ] Tested at 375px and 1280px, no overflow, touch targets ≥44px.

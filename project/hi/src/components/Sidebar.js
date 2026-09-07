@@ -1,3 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { NavLink } from 'react-router-dom';
-export function Sidebar() { return _jsxs("aside", { className: "sidebar", children: [_jsx("h1", { children: "Acme" }), _jsxs("nav", { className: "nav", children: [_jsx(NavLink, { to: "/", end: true, className: ({ isActive }) => isActive ? 'active' : '', children: "Dashboard" }), _jsx(NavLink, { to: "/about", className: ({ isActive }) => isActive ? 'active' : '', children: "About" }), _jsx(NavLink, { to: "/docs", className: ({ isActive }) => isActive ? 'active' : '', children: "Docs" })] })] }); }
