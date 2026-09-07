@@ -65,7 +65,7 @@ import {
   updateEmbeddingSettings
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
-import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
+import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, normalizeShellCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 import { getDockerImage, isDockerAvailableSync, isDockerJailEnabled } from './docker.js'
 import {
@@ -4719,12 +4719,16 @@ app.post('/api/terminals/:id/exec', async (c) => {
   const project = findProject(terminal.projectId)
   if (!project) return c.json({ error: 'Project not found' }, 404)
   const body = await c.req.json().catch(() => ({}))
-  const command = String(body.command ?? '').trim()
-  if (!command) return c.json({ error: 'Command is required' }, 400)
-  if (command.length > 4000) return c.json({ error: 'Command too long' }, 400)
+  const rawCommand = String(body.command ?? '').trim()
+  if (!rawCommand) return c.json({ error: 'Command is required' }, 400)
+  if (rawCommand.length > 4000) return c.json({ error: 'Command too long' }, 400)
+  // Same normalization + jail as agent run_shell (strip "$" prompt, redundant cd, &/sleep) with absolute CWD
+  const { command } = normalizeShellCommand(rawCommand, project.path)
+  if (!command) return c.json({ error: 'Command is empty after normalization — send a bare command like "pwd" (no cd, no "$" prefix)' }, 400)
+  const absCwd = path.resolve(project.path)
   // Enforce same workspace jail & dangerous guards as agent tools (prevent escape via terminal API)
   {
-    const outside = isOutsideScopeCommand(command, project.path, '')
+    const outside = isOutsideScopeCommand(command, absCwd, '')
     if (outside) return c.json({ error: `Blocked: ${outside}` }, 403)
     const danger = isDangerousCommand(command)
     if (danger) return c.json({ error: `Dangerous command blocked: ${danger} — confirm via PTY if needed` }, 403)
@@ -4732,7 +4736,7 @@ app.post('/api/terminals/:id/exec', async (c) => {
   const { code, output } = await new Promise<{ code: number; output: string }>((resolve) => {
     exec(
       command,
-      { cwd: project.path, timeout: 30_000, maxBuffer: 1024 * 1024, shell: '/bin/bash', windowsHide: true },
+      { cwd: absCwd, timeout: 30_000, maxBuffer: 1024 * 1024, shell: '/bin/bash', windowsHide: true },
       (error, stdout, stderr) => {
         const code = error && typeof (error as any).code === 'number' ? (error as any).code : error ? 1 : 0
         const raw = `${stdout}${stderr}`
@@ -4742,7 +4746,7 @@ app.post('/api/terminals/:id/exec', async (c) => {
       }
     )
   })
-  return c.json({ output, exitCode: code, cwd: project.path })
+  return c.json({ output, exitCode: code, cwd: absCwd })
 })
 
 // PTY resize via HTTP (also supported via WS JSON message)
