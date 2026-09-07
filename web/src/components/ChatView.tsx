@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Activity, Chat, Message, ModelEntry, Plan, Question } from '../types'
+import type { ActiveAgentView, Activity, Chat, Message, ModelEntry, Plan, Question, SubAgent, Team } from '../types'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconRotate, IconSearch, IconStop, IconCopy, IconCheck, IconModeSolo, IconModeSwarm, IconModeHive, IconModeSquad, IconModeInfinity } from '../icons'
+import { IconChevronDown, IconChevronLeft, IconRotate, IconSearch, IconStop, IconCopy, IconCheck, IconModeSolo, IconModeSwarm, IconModeHive, IconModeSquad, IconModeInfinity } from '../icons'
 import { QuestionList } from './QuestionCard'
 import { useToast } from '../toast'
 
@@ -385,6 +385,10 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string } | null
   selectedMode?: ModeId | null
   onSelectMode?: (id: ModeId) => void
+  subAgents?: SubAgent[]
+  teams?: Team[]
+  activeAgent?: ActiveAgentView | null
+  onSelectAgent?: (view: ActiveAgentView) => void
 }
 
 export function ChatView(props: Props) {
@@ -551,6 +555,21 @@ export function ChatView(props: Props) {
   const isInterrupted = !props.streaming && !!lastAssistantMsg && lastAssistantMsg.role === 'assistant' && (!!lastAssistantMsg.error || /\n\n_\[stopped\]_\s*$/.test(lastAssistantMsg.content) || /\n\n_\[stream interrupted:/.test(lastAssistantMsg.content) || /\n\n_\[truncated/.test(lastAssistantMsg.content))
   const isPlanIncomplete = !props.streaming && !!plan && totalSteps > 0 && !isPlanDone
   const showContinue = !props.streaming && !!props.onContinue && (isInterrupted || isPlanIncomplete)
+
+  // Sub-agents / Teams bar — visible only when mode != solo and items exist
+  const subAgents = props.subAgents ?? []
+  const teams = props.teams ?? []
+  const activeAgent: ActiveAgentView = props.activeAgent ?? { kind: 'main' }
+  const hasAgentItems = subAgents.length > 0 || teams.length > 0
+  const showAgentBar = selectedMode !== 'solo' && hasAgentItems && !!props.chat
+  const activeSubAgent = activeAgent.kind === 'subagent' ? subAgents.find((s) => s.id === activeAgent.id) ?? null : null
+  const activeTeam = activeAgent.kind === 'team' ? teams.find((t) => t.id === activeAgent.id) ?? null : null
+  const isAgentFocused = (activeAgent.kind === 'subagent' && !!activeSubAgent) || (activeAgent.kind === 'team' && !!activeTeam)
+  function agentDisplayName(s: SubAgent): string {
+    const task = s.task.replace(/\s+/g, ' ').trim()
+    const short = task.length > 28 ? task.slice(0, 27) + '…' : task || s.mode
+    return `${s.mode} · ${short}`
+  }
 
   return (
     <>

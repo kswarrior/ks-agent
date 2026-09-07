@@ -209,6 +209,12 @@ export const listGenerations = () => req<string[]>('/api/generations')
 export const stopGeneration = (chatId: string) =>
   req<{ ok: true }>(`/api/chats/${chatId}/stop`, json('POST', {}))
 
+// Sub-agents / Teams — 5 Modes Solo/Swarm/Hive/Squad/Infinity
+export const listSubAgents = (chatId: string) => req<import('./types').SubAgent[]>(`/api/chats/${chatId}/subagents`)
+export const listTeams = (chatId: string) => req<import('./types').Team[]>(`/api/chats/${chatId}/teams`)
+export const createTeam = (chatId: string, name: string, headId?: string | null) =>
+  req<import('./types').Team>(`/api/chats/${chatId}/teams`, json('POST', { name, headId: headId ?? null }))
+
 // Activities
 export const listActivities = (chatId: string) => req<Activity[]>(`/api/chats/${chatId}/activities`)
 export const getSkillStatus = (chatId: string) => req<{ hasAnyRead: boolean; status: Record<string, boolean>; detailed: Array<{ id: string; name: string; mainFile: string; files: string[]; read: boolean; filesRead: Array<{ file: string; read: boolean }> }> }>(`/api/chats/${chatId}/skill-status`)
