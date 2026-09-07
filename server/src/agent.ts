@@ -1587,6 +1587,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         try { entries = fs.readdirSync(cur, { withFileTypes: true }) } catch { continue }
         for (const ent of entries) {
           if (collected.length >= maxCollect) break
+          if (isLiteralPlaceholderDirName(ent.name)) continue
           if (isIgnoredDir(ent.name)) continue
           const full = path.join(cur, ent.name)
           const relFromBase = path.relative(baseAbs, full).split(path.sep).join('/')
