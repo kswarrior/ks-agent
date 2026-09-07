@@ -2861,6 +2861,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       const hasPlanningDelegate = outcome.toolCalls.some(c => {
         try { const a = JSON.parse(c.args); const t = String(a.task ?? '').toLowerCase(); return t.includes('plan') || t.includes('design') || t.includes('architecture') || t.includes('data model') } catch { return false }
       }) || (() => { try { return subAgentsOf(ctx.chatId).some(s => { const t = s.task.toLowerCase(); return t.includes('plan') || t.includes('design') || t.includes('architecture') || t.includes('data model') }) } catch { return false } })()
+      console.log(`[mode ${mode}] planning check: isNonTrivial=${isNonTrivialForPlanning} hasPlanning=${hasPlanningDelegate} forcedPlanExists=${forcedModeChats.has(ctx.chatId + ':plan')} userLen=${userContentForForce.length}`)
       if (isNonTrivialForPlanning && !hasPlanningDelegate && !forcedModeChats.has(ctx.chatId + ':plan')) {
         const teamForPlanning = (mode === 'squad' || mode === 'infinity') ? (() => { try { const ts = teamsOf(ctx.chatId); return ts[0]?.id ?? null } catch { return null } })() : null
         const planningTask = `Planning: Create a detailed execution plan (3-10 steps) for: ${userContentForForce.slice(0, 200)} — analyze project, list files, propose steps, call create_plan`
