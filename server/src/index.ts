@@ -4505,7 +4505,7 @@ app.get('/api/projects/:id/archive', (c) => {
   )
 
   const child = spawn('zip', ['-r', '-q', '-', '.'], {
-    cwd: project.path,
+    cwd: path.resolve(project.path),
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
@@ -4913,7 +4913,7 @@ app.post('/api/projects/:id/preview/start', async (c) => {
   if (hasDevScript && !previewProcs.get(project.id)?.child) {
     try {
       const child = spawn('npm', ['run', 'dev', '--', '--host', '0.0.0.0', '--port', String(detectedPort)], {
-        cwd: project.path,
+        cwd: path.resolve(project.path),
         shell: false,
         detached: false,
         stdio: ['ignore', 'ignore', 'ignore'],
