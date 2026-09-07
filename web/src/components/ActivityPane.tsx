@@ -234,25 +234,6 @@ function isSkillReadActivity(a: Activity): boolean {
   return false
 }
 
-function getSkillDisplayName(rawPath: string): string {
-  const raw = String(rawPath ?? '').trim()
-  const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').toLowerCase()
-  if (norm === 'frontend/skill.md') return 'Frontend'
-  if (norm === 'frontend/react.md') return 'Frontend React'
-  if (norm === 'frontend/ts.md') return 'Frontend TS'
-  if (norm === 'frontend/ejs.md') return 'Frontend EJS'
-  if (norm === 'testing.md') return 'Testing'
-  if (norm === 'debugging.md') return 'Debugging'
-  if (norm === 'refactoring.md') return 'Refactoring'
-  if (norm === 'code-review.md') return 'Code Review'
-  if (norm.endsWith('skill.md')) {
-    const base = norm.split('/').pop()?.replace('.md','') || norm
-    return base.charAt(0).toUpperCase() + base.slice(1)
-  }
-  // fallback: show normalized path
-  return raw.replace(/^skills\//,'').replace(/^\.\//,'')
-}
-
 export function ActivityPane({ activities }: { activities: Activity[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filter, setFilter] = useState<FilterKey>('all')
