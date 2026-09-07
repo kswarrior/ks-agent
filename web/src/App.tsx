@@ -892,13 +892,16 @@ function KsAgent() {
         const wasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
         const planForContinueAny = plans[chatId] ?? null
         const planIncompleteForContinueAny = !!(planForContinueAny && planForContinueAny.steps.some((s) => s.status !== 'done'))
-        const shouldPreserve = wasInterrupted || planIncompleteForContinueAny
-        if (!shouldPreserve) {
+        const shouldPreservePlan = wasInterrupted || planIncompleteForContinueAny
+        const shouldPreserveActivities = shouldPreservePlan || selectedContextModeRef.current === 'full'
+        if (!shouldPreservePlan) {
           setPlans((prev) => {
             const n = { ...prev }
             delete n[chatId]
             return n
           })
+        }
+        if (!shouldPreserveActivities) {
           setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
         }
       }
@@ -1035,16 +1038,25 @@ function KsAgent() {
           delete n[chatId]
           return n
         })
-      }
-      if (!shouldPreserveActivities) {
-        setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
         // new task → reset auto-continue attempts for this chat
         autoContinueAttemptsRef.current.delete(chatId!)
         const t = autoContinueTimersRef.current.get(chatId!)
         if (t) { clearTimeout(t); autoContinueTimersRef.current.delete(chatId!) }
         manualStopRef.current.delete(chatId!)
-      } else {
+      }
+      if (!shouldPreserveActivities) {
+        setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
+      }
+      if (shouldPreserveForSend) {
         // Clean stale stopped marker from displayed message optimistically (also clears incomplete plan's lingering marker if any)
+        if (prevAssistantForSend) {
+          const cleaned = stripInterrupted(prevAssistantForSend.content)
+          if (cleaned !== prevAssistantForSend.content) {
+            setMessages((prev) => prev.map((m) => (m.id === prevAssistantForSend.id ? { ...m, content: cleaned, error: undefined } : m)))
+          }
+        }
+      } else if (shouldPreserveActivities) {
+        // Full mode: activities preserved but plan was fresh — still clean stale marker if any (harmless)
         if (prevAssistantForSend) {
           const cleaned = stripInterrupted(prevAssistantForSend.content)
           if (cleaned !== prevAssistantForSend.content) {

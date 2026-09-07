@@ -1485,6 +1485,8 @@ app.post('/api/chats/:id/messages', async (c) => {
   const existingPlanBeforeClear = findPlanForChat(chat.id)
   const planIncompleteBeforeClear = isPlanIncomplete(existingPlanBeforeClear)
   const shouldPreservePlan = prevWasInterrupted || planIncompleteBeforeClear
+  // Full context mode: ALWAYS preserve activities (tool reads/logs) so AI doesn't re-read same files
+  const shouldPreserveActivities = shouldPreservePlan || contextMode === 'full'
   // Clean interrupted marker from DB so history is seamless even for "any other" input
   if (prevWasInterrupted && prevAssistantForNormal) {
     const cleaned = stripInterruptedSuffix(prevAssistantForNormal.content)
@@ -1511,10 +1513,13 @@ app.post('/api/chats/:id/messages', async (c) => {
   // Clear previous activities/plans for this chat so next run starts fresh (like client does)
   // Persisted per chat, so refresh after sending shows empty until new activity arrives
   // But if previous was interrupted OR plan is still incomplete, preserve for seamless continue (user said any input should pick up where ended)
+  // Full mode preserves activities regardless so history injection has data.
   if (!shouldPreservePlan) {
+    db.plans = db.plans.filter((p) => p.chatId !== chat.id)
+  }
+  if (!shouldPreserveActivities) {
     // @ts-ignore
     db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
-    db.plans = db.plans.filter((p) => p.chatId !== chat.id)
   }
   saveDb()
 
@@ -1722,7 +1727,9 @@ app.post('/api/chats/:id/continue', async (c) => {
     const originalWasInterrupted = /\n\n_\[stopped\]_\s*$/.test(lastAssistant.content) || /\n\n_\[stream interrupted:/.test(lastAssistant.content) || /\n\n_\[truncated/.test(lastAssistant.content) || !!(lastAssistant as any).error
     const existingPlanBeforeClear2 = findPlanForChat(chat.id)
     const planIncompleteBeforeClear2 = isPlanIncomplete(existingPlanBeforeClear2)
-    const shouldPreserve2 = originalWasInterrupted || planIncompleteBeforeClear2
+    const shouldPreservePlan2 = originalWasInterrupted || planIncompleteBeforeClear2
+    const shouldPreserve2 = shouldPreservePlan2
+    const shouldPreserveActivities2 = shouldPreservePlan2 || contextMode === 'full'
     const stripped = stripInterruptedSuffix(lastAssistant.content)
     if (lastAssistant.content !== stripped) {
       lastAssistant.content = stripped
@@ -1743,10 +1750,13 @@ app.post('/api/chats/:id/continue', async (c) => {
     }
     touchChat(chat)
     // For "any other" we still want seamless pickup, so do NOT clear activities/plans if last was interrupted OR plan is still incomplete
-    if (!shouldPreserve2) {
+    // Full mode preserves activities even for fresh tasks.
+    if (!shouldPreservePlan2) {
+      db.plans = db.plans.filter((p) => p.chatId !== chat.id)
+    }
+    if (!shouldPreserveActivities2) {
       // @ts-ignore
       db.activities = (db.activities || []).filter((a: any) => a.chatId !== chat.id)
-      db.plans = db.plans.filter((p) => p.chatId !== chat.id)
     }
     saveDb()
     const modelSystemPrompt =
