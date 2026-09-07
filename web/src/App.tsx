@@ -141,6 +141,16 @@ function KsAgent() {
     try { localStorage.setItem(LS_MODE, selectedMode) } catch {}
   }, [selectedMode])
 
+  // keep focused agent view valid — fall back to main when id disappears
+  useEffect(() => {
+    setActiveAgent((prev) => {
+      if (prev.kind === 'subagent' && !subAgents.some((s) => s.id === prev.id)) return { kind: 'main' }
+      if (prev.kind === 'team' && !teams.some((t) => t.id === prev.id)) return { kind: 'main' }
+      return prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subAgents.length, teams.length])
+
   // load chats when project changes
   useEffect(() => {
     if (!activeProjectId) {
