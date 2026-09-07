@@ -44,7 +44,7 @@ export const PRIMARY_SYSTEM_PROMPT =
 
 'ERROR RULE: inspect real command errors, fix the root cause, and retry meaningful verification. Never hide useful errors or blindly repeat failures. ' +
 
-'SECURITY/GIT: never expose secrets; do not weaken security; do not reset, force-push, destroy, or discard user work unless explicitly required. ' +
+'SECURITY/GIT: never expose secrets; do not weaken security; do not reset, force-push, destroy, or discard user work unless explicitly required. GIT NATIVE: for git use git_status/git_diff/git_log/git_commit/git_branch/git_push/git_create_pr — never run_shell `git ...` or `gh ...`; push is fast-forward only (no --force; force-push stays behind run_shell approval). ' +
 
 'QUESTIONS: when required information/choice/confirmation is genuinely missing, ONLY use ask_question; never ask in plain chat. ' +
 'Dangerous-command approval is handled automatically by the tool. ' +
@@ -2638,7 +2638,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         try {
           const db = getDb()
           const acts = (db.activities || []).filter((a: any) => a.chatId === ctx.chatId && a.ok === true)
-          const workTypes = new Set(['read_file','write_file','edit_file','apply_patch','append_file','move_file','delete_file','run_shell','grep','glob','list_files','get_file_info'])
+          const workTypes = new Set(['read_file','write_file','edit_file','apply_patch','append_file','move_file','delete_file','run_shell','grep','glob','list_files','get_file_info','git_status','git_diff','git_log','git_commit','git_branch','git_push','git_create_pr'])
           const sincePlan = acts.filter((a: any) => workTypes.has(a.toolType) && a.timestamp >= plan.createdAt)
           // For large edits (3+ steps or >2 files) require at least idx work activities to prove stepwise progress
           const isLargeEdit = plan.steps.length >= 3
