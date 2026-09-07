@@ -448,6 +448,17 @@ function modeInstruction(mode: AgentMode): string | null {
   return 'MODE: Infinity (unlimited + Preview) — MANDATORY like Squad but unlimited fan-out: delegate broadly via delegate_task with per-role modelId where useful (research=DeepSeek, explore=Claude, write=OpenAI via modelId), watch write_file diffs, verify build, and call open_preview when a service is running. You MUST delegate at least 2.'
 }
 
+function ensureTeamForMode(chatId: string, mode: AgentMode): string | null {
+  if (mode !== 'squad' && mode !== 'infinity') return null
+  try {
+    const existing = teamsOf(chatId)
+    if (existing.length > 0) return existing[0].id
+    const team = createTeam(chatId, mode === 'squad' ? 'Squad Team' : 'Infinity Team')
+    console.log(`[mode ${mode}] auto-created team ${team.id} for chat ${chatId} (forced by UI selection)`)
+    return team.id
+  } catch { return null }
+}
+
 function cleanMessagesForHistory(chatId: string): LLMMessage[] {
   return messagesOf(chatId).map((m) => ({
     role: m.role as LLMMessage['role'],
@@ -1187,7 +1198,8 @@ async function runGeneration(
   model: string,
   history: LLMMessage[],
   agent: AgentSpec | null,
-  maxTokens?: number
+  maxTokens?: number,
+  agentMode?: AgentMode
 ): Promise<void> {
   const retrySettings = getRetrySettings()
   try {
@@ -1202,6 +1214,7 @@ async function runGeneration(
         chatId: job.chatId,
         signal: job.controller.signal,
         maxTokens,
+        agentMode: agentMode ?? 'solo',
         onDelta: (text) => {
           job.content += text
           emitTo(job, 'delta', JSON.stringify(text))
@@ -1402,6 +1415,8 @@ app.post('/api/chats/:id/messages', async (c) => {
   }
 
   const project = findProject(chat.projectId)
+  // FORCE: if UI selected squad/infinity, ensure team exists immediately so frontend sees it (force ai to create team that is selected)
+  try { if (agentMode === 'squad' || agentMode === 'infinity') ensureTeamForMode(chat.id, agentMode) } catch {}
 
   // ---- "continue" keyword: resume exactly where previous assistant left off ----
   // If the user just typed "continue" (or resume/proceed) and the last assistant message
@@ -1502,7 +1517,7 @@ app.post('/api/chats/:id/messages', async (c) => {
         }
         generations.set(chat.id, job)
         const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-        void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens).finally(() => {
+        void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
           job.finishedAt = new Date().toISOString()
         })
         return c.json({ userMsgId: lastAssistant.id, assistantId: job.assistantId, model: job.model, continued: true })
@@ -1629,7 +1644,7 @@ app.post('/api/chats/:id/messages', async (c) => {
 
   const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
 
-  void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens).finally(() => {
+  void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
     job.finishedAt = new Date().toISOString()
   })
 
@@ -1665,6 +1680,7 @@ app.post('/api/chats/:id/continue', async (c) => {
   const runningJob = generations.get(chat.id)
   if (runningJob && runningJob.status === 'running') return c.json({ error: 'This chat is already generating a reply' }, 409)
   const project = findProject(chat.projectId)
+  try { if (agentMode === 'squad' || agentMode === 'infinity') ensureTeamForMode(chat.id, agentMode) } catch {}
   const msgs = messagesOf(chat.id)
   const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant')
   if (!lastAssistant) return c.json({ error: 'No assistant message to continue from' }, 400)
@@ -1755,7 +1771,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     }
     generations.set(chat.id, job)
     const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens).finally(() => {
+    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
       job.finishedAt = new Date().toISOString()
     })
     return c.json({ assistantId: job.assistantId, model: job.model, continued: true, content: stripped })
@@ -1855,7 +1871,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     generations.set(chat.id, job)
     void generateAndPersistTitle(chat, rawContent, provider, resolvedModel.model).catch(() => {})
     const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens).finally(() => {
+    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
       job.finishedAt = new Date().toISOString()
     })
     return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })

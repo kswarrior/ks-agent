@@ -8,10 +8,23 @@ import { Security } from './pages/Security'
 import { Dashboard } from './pages/Dashboard'
 
 export function App() {
-  const [server, setServer] = useState<Server>({ ...SINGLE_SERVER })
+  const [active, setActive] = useState('dashboard')
+  const [server, setServer] = useState<Server>({
+    id: 'minecraft-1',
+    name: 'Survival Hub',
+    host: 'localhost',
+    port: 25565,
+    rcon_port: 25575,
+    password: '••••••',
+    status: 'offline',
+    max_players: 100,
+    current_players: 0,
+    motd: '§a§lSurvival §7Hub',
+    version: '1.20.2',
+    gamemode: 'Survival',
+    difficulty: 'Hard',
+  })
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
-  const [consoleOutput, setConsoleOutput] = useState<string[]>([])
-  const [players, setPlayers] = useState<Player[]>(MOCK_PLAYERS)
   const [panelState, setPanelState] = useState<PanelState>({
     consoleInput: '',
     history: [],
