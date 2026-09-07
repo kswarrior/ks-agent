@@ -795,20 +795,6 @@ export function createTeam(chatId: string, name: string, headId?: string | null)
   try { db.teams.push(t) } catch {}
   return t
 }
-export function createTeam(chatId: string, name: string, headId?: string | null): Team {
-  const cid = String(chatId ?? '').trim()
-  if (!cid) throw new Error('chatId required')
-  const n = String(name ?? '').trim().slice(0,80) || 'Team'
-  const id = randomUUID()
-  const now = new Date().toISOString()
-  const t: Team = { id, name: n, chatId: cid, headId: headId ?? null, createdAt: now, updatedAt: now }
-  try {
-    const s = ensureDb()
-    s.prepare('INSERT INTO teams (id, name, chatId, headId, createdAt, updatedAt) VALUES (?,?,?,?,?,?)').run(id, n, cid, t.headId, now, now)
-  } catch {}
-  try { db.teams.push(t) } catch {}
-  return t
-}
 // ---------------- SubAgent Messages — per sub-agent chat (so frontend can see sub-agent chat) ----------------
 export function addSubAgentMessage(subAgentId: string, parentChatId: string, role: SubAgentMessage['role'], content: string, extra?: { toolCallId?: string | null; toolName?: string | null }): SubAgentMessage {
   const sid = String(subAgentId ?? '').trim()
@@ -3057,7 +3043,7 @@ export function loadDb(): void {
       autoContinueMaxAttempts: 5,
       autoContinueOnPlanIncomplete: true
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [], subAgentMessages: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     } else {
@@ -3079,7 +3065,7 @@ export function loadDb(): void {
       autoContinueMaxAttempts: 5,
       autoContinueOnPlanIncomplete: true
     }
-    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [] }
+    db = { projects: [], chats: [], messages: [], providers: [], models: [], systemPrompt: '', planPrompt: '', plans: [], terminals: [], questions: [], activities: [], retrySettings: defaultRetrySettings, themeSettings: { ...DEFAULT_THEME }, skills: [], previews: [], mcpServers: [], lspServers: [], plugins: [], subAgents: [], teams: [], teamMembers: [], subAgentMessages: [] }
     if (seedDefaultSkills()) {
       try { persistToSqlite() } catch {}
     }
