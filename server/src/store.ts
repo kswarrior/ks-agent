@@ -193,6 +193,19 @@ export interface Preview {
   updatedAt: string
 }
 
+export interface ProjectData {
+  projectId: string
+  enabled: boolean
+  overview: string
+  build: string
+  backend: string
+  frontend: string
+  notes: string
+  updatedAt: string
+}
+
+export const PROJECT_DATA_MAX_FIELD = 20000
+
 // ---------------- Sub-agents / Teams — 5 Modes: Solo/Swarm/Hive/Squad/Infinity (vs.md:96, vs.md:3.1) ----------------
 export type SubAgentMode = 'research' | 'explore' | 'fix' | 'write' | 'general'
 export type SubAgentStatus = 'pending' | 'working' | 'done' | 'error'
@@ -415,6 +428,20 @@ function ensureDb(): Database.Database {
       data TEXT NOT NULL,
       headers TEXT,
       fetchedAt TEXT NOT NULL
+    );
+  `) } catch {}
+  // Project Data Center — per-project editable knowledge (overview/build/backend/frontend/notes) + enabled toggle
+  try { sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS project_data (
+      projectId TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL,
+      overview TEXT NOT NULL DEFAULT '',
+      build TEXT NOT NULL DEFAULT '',
+      backend TEXT NOT NULL DEFAULT '',
+      frontend TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
   `) } catch {}
   // Sub-agents / Teams — 5 Modes: Solo/Swarm/Hive/Squad/Infinity (vs.md:3.1, vs.md:96)
