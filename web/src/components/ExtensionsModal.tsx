@@ -2009,6 +2009,19 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     }} title="Browse files">{skillFileBrowserOpen ? 'Hide' : 'Browse'}</button>
                   </div>
                   {skillEditForm.mainFile && !skillEditForm.mainFile.endsWith('.md') && <p className="field-error">Main file must be .md</p>}
+
+                  <label className="field-label">Enforcement role <span style={{ fontWeight: 400 }}>(when must AI read it)</span></label>
+                  <select className="input" value={skillEditForm.role} onChange={e => setSkillEditForm({ ...skillEditForm, role: e.target.value as Skill['role'] })}>
+                    <option value="optional">Optional — no enforcement</option>
+                    <option value="recommended">Recommended — AI should read it (soft)</option>
+                    <option value="must">Must — AI must read it (hard block)</option>
+                  </select>
+                  <p className="hint" style={{ marginTop: 4 }}>{skillEditForm.role === 'must' ? 'Must: AI will be blocked from writing until it reads this skill.' : skillEditForm.role === 'recommended' ? 'Recommended: AI warned to read but still can write (soft).' : 'Optional: never blocks.'} Example: Frontend → <b>Must</b> + <code>web/**/*</code></p>
+
+                  <label className="field-label">Enforce triggers <span style={{ fontWeight: 400 }}>(comma-separated, optional)</span></label>
+                  <input className="input" placeholder="e.g. web/**/*, react, frontend" value={skillEditForm.triggers} onChange={e => setSkillEditForm({ ...skillEditForm, triggers: e.target.value })} />
+                  <p className="hint" style={{ marginTop: 4 }}>{skillEditForm.role === 'optional' ? 'No enforcement — triggers ignored.' : skillEditForm.triggers.trim() ? `Enforced only when edited path matches triggers.` : skillEditForm.role === 'must' ? 'No triggers = global Must (any write requires this skill).' : 'No triggers = only when history mentions skill.'}</p>
+
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                       <label className="field-label" style={{ margin: 0 }}>Files</label>
@@ -2115,7 +2128,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
               {showSkillForm && !skillEdit && (
                 <>
                   <div className="fp-subhead">
-                    <button className="icon-btn" aria-label="Back to skills" onClick={() => { setShowSkillForm(false); setSkillFileBrowserOpen(false); setSkillCreateOpen(false); setSkillCreateFolder(''); setSkillCreateFileName(''); setSkillCreateContent(''); setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '' }); setSkillPickerDir(''); setError(null) }}>
+                    <button className="icon-btn" aria-label="Back to skills" onClick={() => { setShowSkillForm(false); setSkillFileBrowserOpen(false); setSkillCreateOpen(false); setSkillCreateFolder(''); setSkillCreateFileName(''); setSkillCreateContent(''); setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '', role: 'optional', triggers: '' }); setSkillPickerDir(''); setError(null) }}>
                       <IconChevronLeft size={17} />
                     </button>
                     <span>Add skill</span>
@@ -2145,6 +2158,18 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     }} title="Browse files">{skillFileBrowserOpen ? 'Hide' : 'Browse'}</button>
                   </div>
                   {skillForm.mainFile && !skillForm.mainFile.endsWith('.md') && <p className="field-error">Main file must be .md</p>}
+
+                  <label className="field-label">Enforcement role <span style={{ fontWeight: 400 }}>(when must AI read it)</span></label>
+                  <select className="input" value={skillForm.role} onChange={e => setSkillForm({ ...skillForm, role: e.target.value as Skill['role'] })}>
+                    <option value="optional">Optional — no enforcement</option>
+                    <option value="recommended">Recommended — AI should read it (soft)</option>
+                    <option value="must">Must — AI must read it (hard block)</option>
+                  </select>
+                  <p className="hint" style={{ marginTop: 4 }}>{skillForm.role === 'must' ? 'Must: AI will be blocked from writing until it reads this skill (via read_file).' : skillForm.role === 'recommended' ? 'Recommended: AI warned to read but still can write (soft).' : 'Optional: never blocks, only suggest via prompt.'} Example: set Frontend skill to <b>Must</b> + triggers <code>web/**/*</code> so any frontend edit requires reading <code>frontend/skill.md</code>.</p>
+
+                  <label className="field-label">Enforce triggers <span style={{ fontWeight: 400 }}>(comma-separated, optional)</span></label>
+                  <input className="input" placeholder="e.g. web/**/*, react, frontend" value={skillForm.triggers} onChange={e => setSkillForm({ ...skillForm, triggers: e.target.value })} />
+                  <p className="hint" style={{ marginTop: 4 }}>{skillForm.role === 'optional' ? 'No enforcement — triggers ignored for Optional.' : skillForm.triggers.trim() ? `Enforced only when edited path matches triggers.` : skillForm.role === 'must' ? 'No triggers = global Must (any write requires this skill).' : 'No triggers = only when history mentions skill.'} {skillForm.role !== 'optional' && 'Leave empty for global or heuristic (Frontend → web/**/*).'}</p>
 
                   <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -2240,7 +2265,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                   </div>
 
                   <div className="dialog-actions" style={{ marginTop: 16 }}>
-                    <button className="btn" onClick={() => { setShowSkillForm(false); setSkillFileBrowserOpen(false); setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '' }); setSkillPickerDir(''); setError(null) }}>Cancel</button>
+                    <button className="btn" onClick={() => { setShowSkillForm(false); setSkillFileBrowserOpen(false); setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '', role: 'optional', triggers: '' }); setSkillPickerDir(''); setError(null) }}>Cancel</button>
                     <button className="btn btn-primary" onClick={submitSkill}>Add skill</button>
                   </div>
                 </div>
