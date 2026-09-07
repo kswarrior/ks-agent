@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ActiveAgentView, Activity, Chat, Message, ModelEntry, Plan, Question, SubAgent, Team } from '../types'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconChevronLeft, IconRotate, IconSearch, IconStop, IconCopy, IconCheck, IconModeSolo, IconModeSwarm, IconModeHive, IconModeSquad, IconModeInfinity } from '../icons'
+import { IconChevronDown, IconChevronLeft, IconRotate, IconSearch, IconStop, IconCopy, IconCheck, IconModeSolo, IconModeSwarm, IconModeHive, IconModeSquad, IconModeInfinity, IconSliders, IconLayers, IconMessageSquare, IconCoins } from '../icons'
 import { QuestionList } from './QuestionCard'
 import { useToast } from '../toast'
 
@@ -364,6 +364,12 @@ const MODES = [
 ] as const
 type ModeId = typeof MODES[number]['id']
 
+const CONTEXT_MODES = [
+  { id: 'qa' as const, label: 'Chat / Q&A', desc: 'Prompt + AI output', Icon: IconMessageSquare },
+  { id: 'full' as const, label: 'Full Context', desc: 'Prompt + AI + file reads/logs', Icon: IconLayers },
+] as const
+type ContextModeId = typeof CONTEXT_MODES[number]['id']
+
 interface Props {
   chat: Chat | null
   hasProject: boolean
@@ -374,7 +380,7 @@ interface Props {
   models: ModelEntry[]
   selectedModelId: string | null
   onSelectModel: (id: string) => void
-  onSend: (content: string) => void
+  onSend: (content: string, opts?: { contextMode?: ContextModeId; maxTokens?: number | null }) => void
   onStop: () => void
   onRequestSettings: () => void
   questions: Question[]
@@ -385,6 +391,10 @@ interface Props {
   retryInfo?: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string } | null
   selectedMode?: ModeId | null
   onSelectMode?: (id: ModeId) => void
+  selectedContextMode?: ContextModeId | null
+  onSelectContextMode?: (id: ContextModeId) => void
+  maxTokens?: number | null
+  onSelectMaxTokens?: (v: number | null) => void
   subAgents?: SubAgent[]
   teams?: Team[]
   activeAgent?: ActiveAgentView | null

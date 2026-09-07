@@ -584,3 +584,36 @@ export const IconModeInfinity = ({ size, className, style }: IconProps) => (
     <path d="M17.15 6.05 L17.15 6.95 L17.95 6.5 Z" fill="currentColor" stroke="none" />
   </svg>
 )
+
+export const IconSliders = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <line x1="4" y1="7.5" x2="20" y2="7.5" />
+    <line x1="4" y1="16.5" x2="20" y2="16.5" />
+    <circle cx="9" cy="7.5" r="2.3" fill="var(--surface)" stroke="currentColor" />
+    <circle cx="15" cy="16.5" r="2.3" fill="var(--surface)" stroke="currentColor" />
+  </svg>
+)
+
+export const IconLayers = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <polygon points="12 3 3 8.5 12 14 21 8.5 12 3" fill="none" />
+    <polyline points="3 12 12 17.5 21 12" fill="none" />
+    <polyline points="3 15.5 12 21 21 15.5" fill="none" />
+  </svg>
+)
+
+export const IconMessageSquare = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    <line x1="8" y1="10" x2="16" y2="10" />
+    <line x1="8" y1="13" x2="13" y2="13" />
+  </svg>
+)
+
+export const IconCoins = ({ size, className, style }: IconProps) => (
+  <svg {...base(size, style)} className={className}>
+    <ellipse cx="12" cy="5.5" rx="7" ry="3.5" />
+    <path d="M5 5.5v6c0 1.93 3.13 3.5 7 3.5s7-1.57 7-3.5v-6" />
+    <path d="M5 11.5v4.2c0 1.93 3.13 3.5 7 3.5s7-1.57 7-3.5v-4.2" />
+  </svg>
+)
