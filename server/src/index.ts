@@ -75,6 +75,7 @@ import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, normalizeShellCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 import { getDockerImage, isDockerAvailableSync, isDockerJailEnabled } from './docker.js'
+import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDiff, gitLog, gitPull, gitPush, githubCreatePr, gitStatus, isGitRepo, isValidBranchName, parseRepoFromRemote } from './git.js'
 import {
   fetchGitHub,
   getRateLimitState,
@@ -2719,6 +2720,145 @@ app.post('/api/github/webhook/:projectId', async (c) => {
   // webhook disables polling but triggers immediate pollNow (event)
   try { await pollNow(project.id, true) } catch {}
   return c.json({ ok: true, received: true })
+})
+
+// ---------------- Native Git — local status/diff/log/branch/commit/push/pull + PR create (no shell, no gh CLI) ----------------
+
+app.get('/api/projects/:id/git/status', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (!isGitRepo(project.path)) return c.json({ error: 'Not a git repo (no .git)', isRepo: false }, 400)
+  try {
+    const status = await gitStatus(project.path)
+    return c.json({ projectId: project.id, isRepo: true, status })
+  } catch (e: any) { return c.json({ error: String(e?.message || 'git status failed').slice(0, 500) }, 500) }
+})
+
+app.get('/api/projects/:id/git/diff', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (!isGitRepo(project.path)) return c.json({ error: 'Not a git repo (no .git)', isRepo: false }, 400)
+  try {
+    const staged = c.req.query('staged') === '1' || c.req.query('staged') === 'true'
+    const ref = c.req.query('ref') ? String(c.req.query('ref')).trim().slice(0, 100) || undefined : undefined
+    const file = c.req.query('file') ? String(c.req.query('file')).trim().slice(0, 500) || undefined : undefined
+    const statOnly = c.req.query('statOnly') === '1' || c.req.query('statOnly') === 'true'
+    if (file && (file.includes('\0') || file.includes('..'))) return c.json({ error: 'invalid file (no "..")' }, 400)
+    const diff = await gitDiff(project.path, { staged, ref, file, statOnly })
+    return c.json({ projectId: project.id, diff })
+  } catch (e: any) { return c.json({ error: String(e?.message || 'git diff failed').slice(0, 500) }, 400) }
+})
+
+app.get('/api/projects/:id/git/log', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (!isGitRepo(project.path)) return c.json({ error: 'Not a git repo (no .git)', isRepo: false }, 400)
+  try {
+    const limit = Math.max(1, Math.min(100, Math.floor(Number(c.req.query('limit') || 20) || 20)))
+    const log = await gitLog(project.path, limit)
+    return c.json({ projectId: project.id, log })
+  } catch (e: any) { return c.json({ error: String(e?.message || 'git log failed').slice(0, 500) }, 400) }
+})
+
+app.get('/api/projects/:id/git/branches', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (!isGitRepo(project.path)) return c.json({ error: 'Not a git repo (no .git)', isRepo: false }, 400)
+  try {
+    const branches = await gitBranches(project.path)
+    return c.json({ projectId: project.id, branches })
+  } catch (e: any) { return c.json({ error: String(e?.message || 'git branch failed').slice(0, 500) }, 400) }
+})
+
+app.post('/api/projects/:id/git/branch', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (!isGitRepo(project.path)) return c.json({ error: 'Not a git repo (no .git)' }, 400)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const action = String(body.action ?? 'create').trim().toLowerCase()
+  const name = String(body.name ?? body.branch ?? '').trim()
+  if (!name) return c.json({ error: 'name is required' }, 400)
+  if (!isValidBranchName(name)) return c.json({ error: 'invalid branch name (1-100 chars, a-z 0-9 . _ / -; no .. @{ // leading -)' }, 400)
+  try {
+    if (action === 'checkout') return c.json({ ok: true, result: await gitCheckout(project.path, name) })
+    if (action !== 'create' && action !== '') return c.json({ error: 'action must be create|checkout' }, 400)
+    return c.json({ ok: true, result: await gitCreateBranch(project.path, name, true) }, 201)
+  } catch (e: any) { return c.json({ error: String(e?.message || 'branch failed').slice(0, 500) }, 400) }
+})
+
+app.post('/api/projects/:id/git/commit', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (!isGitRepo(project.path)) return c.json({ error: 'Not a git repo (no .git)' }, 400)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const message = String(body.message ?? '').trim()
+  if (!message) return c.json({ error: 'message is required' }, 400)
+  if (message.includes('\0')) return c.json({ error: 'invalid message' }, 400)
+  if (message.length > 2000) return c.json({ error: 'message too long (max 2000)' }, 400)
+  try {
+    const result = await gitCommit(project.path, message, body.files)
+    return c.json({ ok: true, result }, 201)
+  } catch (e: any) { return c.json({ error: String(e?.message || 'commit failed').slice(0, 600) }, 400) }
+})
+
+app.post('/api/projects/:id/git/push', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (!isGitRepo(project.path)) return c.json({ error: 'Not a git repo (no .git)' }, 400)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const remote = body.remote != null ? String(body.remote).trim().slice(0, 100) || 'origin' : 'origin'
+  const branch = body.branch != null && String(body.branch).trim() ? String(body.branch).trim().slice(0, 100) : undefined
+  if (!/^[A-Za-z0-9._-]+$/.test(remote) || remote.startsWith('-')) return c.json({ error: 'invalid remote' }, 400)
+  if (branch && !isValidBranchName(branch)) return c.json({ error: 'invalid branch name' }, 400)
+  try {
+    const result = await gitPush(project.path, remote, branch)
+    return c.json({ ok: true, result })
+  } catch (e: any) { return c.json({ error: String(e?.message || 'push failed').slice(0, 600) }, 400) }
+})
+
+app.post('/api/projects/:id/git/pull', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  if (!isGitRepo(project.path)) return c.json({ error: 'Not a git repo (no .git)' }, 400)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const remote = body.remote != null ? String(body.remote).trim().slice(0, 100) || 'origin' : 'origin'
+  const branch = body.branch != null && String(body.branch).trim() ? String(body.branch).trim().slice(0, 100) : undefined
+  if (!/^[A-Za-z0-9._-]+$/.test(remote) || remote.startsWith('-')) return c.json({ error: 'invalid remote' }, 400)
+  if (branch && !isValidBranchName(branch)) return c.json({ error: 'invalid branch name' }, 400)
+  try {
+    const result = await gitPull(project.path, remote, branch)
+    return c.json({ ok: true, result })
+  } catch (e: any) { return c.json({ error: String(e?.message || 'pull failed').slice(0, 600) }, 400) }
+})
+
+app.post('/api/projects/:id/git/pr', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const title = String(body.title ?? '').trim()
+  const head = String(body.head ?? '').trim()
+  const base = String(body.base ?? '').trim()
+  const prBody = typeof body.body === 'string' ? String(body.body).slice(0, 5000) : ''
+  let repo = typeof body.repo === 'string' ? String(body.repo).trim().slice(0, 200) : ''
+  if (!title) return c.json({ error: 'title is required' }, 400)
+  if (!head) return c.json({ error: 'head is required' }, 400)
+  if (!base) return c.json({ error: 'base is required' }, 400)
+  if (!repo) {
+    const auto = parseRepoFromRemote(project.path)
+    if (!auto) return c.json({ error: 'Repo not found (pass repo: owner/name or set git remote)' }, 400)
+    repo = auto
+  }
+  const token = getGithubTokenStore(project.id) || getGithubTokenStore() || ''
+  if (!token) return c.json({ error: 'No GitHub token configured' }, 401)
+  try {
+    const pr = await githubCreatePr({ repo, head, base, title, body: prBody, token })
+    return c.json({ ok: true, ...pr, repo }, 201)
+  } catch (e: any) { return c.json({ error: String(e?.message || 'PR create failed').slice(0, 600) }, 502) }
 })
 
 // ---------------- Settings: embeddings (vector provider) — OpenAI-compatible + Ollama + local MiniLM fallback ----------------
