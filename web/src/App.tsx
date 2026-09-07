@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from './api'
-import type { Chat, Message, ModelEntry, Plan, Preview, Project, Activity, Question } from './types'
+import type { ActiveAgentView, Chat, Message, ModelEntry, Plan, Preview, Project, Activity, Question, SubAgent, Team } from './types'
 import { DialogsProvider, useDialogs } from './dialogs'
 import { ToastProvider, useToast } from './toast'
 import { Header } from './components/Header'
@@ -59,6 +59,9 @@ function KsAgent() {
   const [streams, setStreams] = useState<Record<string, string>>({})
   const [thinkings, setThinkings] = useState<Record<string, string>>({})
   const [activities, setActivities] = useState<Activity[]>([])
+  const [subAgents, setSubAgents] = useState<SubAgent[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
+  const [activeAgent, setActiveAgent] = useState<ActiveAgentView>({ kind: 'main' })
   const [retries, setRetries] = useState<Record<string, { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }>>({})
   const subsRef = useRef(new Map<string, AbortController>())
   const activeChatIdRef = useRef<string | null>(null)
@@ -85,6 +88,11 @@ function KsAgent() {
   useEffect(() => {
     selectedModelIdRef.current = selectedModelId
   }, [selectedModelId])
+
+  const selectedModeRef = useRef<string>(selectedMode)
+  useEffect(() => {
+    selectedModeRef.current = selectedMode
+  }, [selectedMode])
 
   // ---- initial load ----
   useEffect(() => {

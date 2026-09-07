@@ -574,7 +574,82 @@ export function ChatView(props: Props) {
   return (
     <>
       <div className="messages" ref={scrollRef} onScroll={onScroll}>
-        {(!props.chat || props.messages.length === 0) && !props.streaming ? (
+        {isAgentFocused ? (
+          <div className="msg-col">
+            <div className="agent-focus">
+              <div className="agent-focus-head">
+                <button
+                  className="agent-back"
+                  onClick={() => props.onSelectAgent?.({ kind: 'main' })}
+                  aria-label="Back to main agent"
+                  title="Back to main agent"
+                >
+                  <IconChevronLeft size={14} />
+                  <span>Main</span>
+                </button>
+                {activeSubAgent && (
+                  <span className="agent-focus-title" title={activeSubAgent.task}>
+                    Sub-agent · {activeSubAgent.mode}
+                  </span>
+                )}
+                {activeTeam && (
+                  <span className="agent-focus-title" title={activeTeam.name}>
+                    Team · {activeTeam.name}
+                  </span>
+                )}
+                {activeSubAgent && (
+                  <span className={`agent-status agent-status-${activeSubAgent.status}`} title={`Status: ${activeSubAgent.status}`}>
+                    <span className="agent-dot" aria-hidden />
+                    {activeSubAgent.status}
+                  </span>
+                )}
+              </div>
+              {activeSubAgent && (
+                <div className="msg-assistant">
+                  <div className="role-tag">{activeSubAgent.mode} sub-agent</div>
+                  <div className="agent-task-label">Task</div>
+                  <div className="agent-task">{activeSubAgent.task}</div>
+                  {activeSubAgent.result ? (
+                    <>
+                      <div className="agent-task-label" style={{ marginTop: 10 }}>Result</div>
+                      <ClampedContent>
+                        <Markdown content={activeSubAgent.result} />
+                      </ClampedContent>
+                    </>
+                  ) : (
+                    <p className="agent-empty-note">{props.streaming ? 'Working — result will appear here when done.' : 'No result yet — the main agent is still working on this sub-task.'}</p>
+                  )}
+                  <div className="agent-meta">
+                    {activeSubAgent.teamId && <span className="agent-meta-chip" title={`Team ${activeSubAgent.teamId}`}>team:{activeSubAgent.teamId.slice(0, 6)}</span>}
+                    {activeSubAgent.modelId && <span className="agent-meta-chip" title={activeSubAgent.modelId}>model:{activeSubAgent.modelId.slice(0, 18)}</span>}
+                    {activeSubAgent.worktreePath && <span className="agent-meta-chip" title={activeSubAgent.worktreePath}>worktree</span>}
+                  </div>
+                </div>
+              )}
+              {activeTeam && (
+                <div className="msg-assistant">
+                  <div className="role-tag">Team head chat · {activeTeam.name}</div>
+                  <div className="agent-task-label">Head</div>
+                  <div className="agent-task">{activeTeam.headId ? `Head: ${activeTeam.headId.slice(0, 8)}` : 'Head: main agent'}</div>
+                  <div className="agent-task-label" style={{ marginTop: 10 }}>Members ({subAgents.filter((s) => s.teamId === activeTeam.id).length})</div>
+                  {subAgents.filter((s) => s.teamId === activeTeam.id).length === 0 ? (
+                    <p className="agent-empty-note">No members yet — the main agent will add sub-agents to this team.</p>
+                  ) : (
+                    <div className="agent-member-list">
+                      {subAgents.filter((s) => s.teamId === activeTeam.id).map((m) => (
+                        <button key={m.id} className="agent-box" onClick={() => props.onSelectAgent?.({ kind: 'subagent', id: m.id })} title={m.task}>
+                          <span className={`agent-dot agent-status-${m.status}`} aria-hidden />
+                          <span className="agent-box-name">{agentDisplayName(m)}</span>
+                          <span className="agent-box-status">{m.status}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (!props.chat || props.messages.length === 0) && !props.streaming ? (
           <div className="empty" style={{ height: '100%' }}>
             <div className="empty-logo">KS</div>
             <h2>
@@ -687,11 +762,52 @@ export function ChatView(props: Props) {
       )}
       <footer className="composer">
         <div className="composer-inner">
+          {showAgentBar && (
+            <div className="agent-bar" role="list" aria-label="Sub-agents and teams">
+              <button
+                className={`agent-box${activeAgent.kind === 'main' ? ' active' : ''}`}
+                onClick={() => props.onSelectAgent?.({ kind: 'main' })}
+                title="Main agent chat"
+                aria-label="Main agent chat"
+                role="listitem"
+              >
+                <span className="agent-dot agent-status-done" aria-hidden />
+                <span className="agent-box-name">Main</span>
+              </button>
+              {teams.map((t) => (
+                <button
+                  key={t.id}
+                  className={`agent-box agent-box-team${activeAgent.kind === 'team' && activeAgent.id === t.id ? ' active' : ''}`}
+                  onClick={() => props.onSelectAgent?.({ kind: 'team', id: t.id })}
+                  title={`Team: ${t.name} — open team head chat`}
+                  aria-label={`Team ${t.name}`}
+                  role="listitem"
+                >
+                  <span className="agent-dot agent-status-working" aria-hidden />
+                  <span className="agent-box-name">Team · {t.name}</span>
+                </button>
+              ))}
+              {subAgents.map((s) => (
+                <button
+                  key={s.id}
+                  className={`agent-box${activeAgent.kind === 'subagent' && activeAgent.id === s.id ? ' active' : ''}`}
+                  onClick={() => props.onSelectAgent?.({ kind: 'subagent', id: s.id })}
+                  title={`${s.mode} sub-agent: ${s.task} — open sub-agent chat`}
+                  aria-label={`Sub-agent ${s.mode}: ${s.task.slice(0, 60)}`}
+                  role="listitem"
+                >
+                  <span className={`agent-dot agent-status-${s.status}`} aria-hidden />
+                  <span className="agent-box-name">{agentDisplayName(s)}</span>
+                  <span className="agent-box-status">{s.status}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             className="composer-input"
             rows={1}
-            placeholder={!props.hasProject ? 'Select a project first' : 'Message KS Agent…'}
+            placeholder={!props.hasProject ? 'Select a project first' : isAgentFocused && activeSubAgent ? `Message ${activeSubAgent.mode} sub-agent… (sends to main chat)` : isAgentFocused && activeTeam ? `Message team ${activeTeam.name} head… (sends to main chat)` : 'Message KS Agent…'}
             disabled={!props.hasProject}
             value={input}
             onChange={(e) => {
