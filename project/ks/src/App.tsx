@@ -119,7 +119,7 @@ export function App() {
       <header className="header">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h1>🛡️ Minecraft Panel</h1>
+            <h1>🛡️ KS Panel</h1>
             <p>Single Server Management</p>
           </div>
           <button className="btn" onClick={() => setShowSettings(!showSettings)}>
