@@ -28,7 +28,6 @@ const MOCK_PLAYERS: Player[] = [
 export function App() {
   const [server, setServer] = useState<Server>({ ...SINGLE_SERVER })
   const [backendStatus, setBackendStatus] = useState<BackendStatus | null>(null)
-  const [consoleHistory, setConsoleHistory] = useState<ConsoleCommand[]>([])
   const [consoleOutput, setConsoleOutput] = useState<string[]>([])
   const [players, setPlayers] = useState<Player[]>(MOCK_PLAYERS)
   const [panelState, setPanelState] = useState<PanelState>({
