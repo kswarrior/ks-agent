@@ -334,10 +334,10 @@ All IDE-centric. They win when you want inline completions while typing. They lo
 *   **Strict jail + optional Docker (C9 92→98):** `fsx.ts:10` realpath+symlink + `agent.ts:1168` dual guard + `chmod 600` + WAL + **optional kernel isolation** `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:243` `docker run --network none -v project:/workspace:rw`, parity with OpenHands 96+.
 *   **Vector+hybrid search (C2/H 86/55→96/95 — beats Cody 85):** `grep`+`glob` (20k) + **vector+BM25+grep** `store.ts:390` `embedding_chunks` `FLOAT32[384/768]` per CHUNK (400-600 tokens 100 overlap, 500KB cap, 5k indexed/20k scanned) + `sqlite-vec/HNSW` `vec0` `cosine` + `store.ts:1270` `localEmbed` 384-d + `store.ts:1458` `embedMany` (`text-embedding-3-small`/`nomic-embed-text`/`local` 384-d, batch `64` retry `llm.ts:125`) + `store.ts:1919` `semanticSearch` `0.5*vector+0.3*BM25+0.2*grep` → top 20 + `server/src/agent.ts:658` `AGENT_TOOLS` `{query,limit,include?}` (`agent.ts:15` prefers `semantic_search` first) + `server/src/index.ts:890` `POST /api/projects/:id/search/semantic` + `server/src/index.ts:958` async index + `web/src/components/Sidebar.tsx:62` toggle + score bar + `VECTOR` badge + lifecycle `write_file`/`edit_file`/`apply_patch`/`delete_file` (`server/src/agent.ts:2027` `upsertEmbedding` `contentHash` incremental) + `server/src/store.ts:377` WAL `busy_timeout 10000` + `3168` `saveLock` + `server/src/fsx.ts:10` `resolveInProject` guard, `storage/ksagent.db` `95` honest > Cody `85` (benchmark `bench_vector` `10/10` `0.733` `hybrid` vs `grep` `0`).
 
-### KS Agent — weaknesses (honest, what keeps it from #1 on K only)
-*   **No intra-chat `task` sub-agents yet** — you get multi-chat parallelism (K 68) but not Opencode/Claude-style fan-out inside one chat (`task` → General/Explore) — need to open N chats or use MCP swarm. Roadmap: `task` delegate + worktree isolation (like Opencode `#34216`). Pair with Opencode/Claude for fan-out today (vs K 88–92) — **only remaining gap after 5 lanes**.
+### KS Agent — weaknesses (honest, what keeps it from sweeping K outright)
+*   **Fan-out polish gaps** — intra-chat `delegate_task` works (K 88 = Opencode) but real `git worktree add` per sub-agent is still pending (`agent.ts:2783`, same caveat as Opencode `#34216`), and there is no Aider-style auto-commit-per-change (G 75). Claude 92 still tops pure orchestration.
 *   Single-tenant by default (add Caddy/Nginx/Tailscale for multi-user).
-*   No built-in git PR automation (use `gh pr create`); **Docker jail now available for E 98 via `KS_DOCKER_JAIL=1`** (`server/src/docker.ts:10` `server/src/index.ts:147`).
+*   No built-in cloud PR worker (use native `git_create_pr` + REST `/api/projects/:id/git/pr` locally, or `gh pr create`); **Docker jail now available for E 98 via `KS_DOCKER_JAIL=1`** (`server/src/docker.ts:10` `server/src/index.ts:243`).
 
 ### Opencode — strengths
 Terminal-purist delight, instant start, tiny footprint, great keyboard flow. Ideal if you never leave the terminal.
@@ -383,18 +383,18 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 |---|---|---|
 | **Self-host on VPS, use from laptop + phone, any model** | **KS Agent** | Opencode + SSH |
 | **Live terminal all day, want lowest latency** | Opencode | Aider |
-| **Big refactor on 200-file repo, need deep plan first** | **KS Agent 96 / Claude Code 98** | OpenHands 88 — KS now **96** parity `server/src/agent.ts:602` `server/src/store.ts:491` `web/src/components/Sidebar.tsx:62` |
-| **Fan-out 3 parallel sub-agents (swarm)** | **Claude 92 / Opencode 88** | **KS Agent 68 multi-chat** (no intra-chat `task` yet, C13 68→88 roadmap) / Cline 85 |
+| **Big refactor on 200-file repo, need deep plan first** | **KS Agent 96 / Claude Code 98** | OpenHands 88 — KS now **96** parity `server/src/agent.ts:915` `server/src/store.ts:390` `web/src/components/Sidebar.tsx:62` |
+| **Fan-out 3 parallel sub-agents (swarm)** | **Claude 92 / KS Agent 88 = Opencode 88** | Cline 85 — KS `delegate_task` e2e-proven (`agent.ts:1033`/`2733`) |
 | **Cheapest strong model for daily coding** | DeepSeek (via KS Agent / Aider / Continue) | KS Agent + Ollama (free) |
 | **Untrusted / student code, must sandbox** | **KS Agent 98 / OpenHands 98** | — (KS `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:147` parity) |
-| **Stay in VS Code, want autocomplete + chat** | **Cursor 98 / KS Agent 92** | Cline 94 / Windsurf 96 — KS now **92** `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:43` `vsce package` |
-| **Enterprise monorepo with powerful code search** | **KS Agent 95 / Cody 85** | Cursor 85 — KS **✅ vector+hybrid 95 > Cody 85** `server/src/store.ts:491` `embedding_chunks` `FLOAT32[384/768]` per CHUNK `server/src/store.ts:750` `store.ts:1300` `0.5*vector+0.3*BM25+0.2*grep` + `sqlite-vec/HNSW` `vec0` `cosine` + `OpenAI text-embedding-3-small`/`Ollama nomic-embed-text`/`local MiniLM` fallback + `web/src/components/Sidebar.tsx:62` vector badge + score bar, benchmark `project/bench_vector` 200 files `user auth` `10/10` `0.733` `hybrid` vs `grep` `0/10`, `needleTokenAlpha_5` `0.61` top1, `extraUniqueToken999` `0.753` — honest **95 beats 85** |
-| **Git-heavy workflow (commit-per-change, review diff)** | **Aider (98)** | KS Agent shell + `gh` (70) |
+| **Stay in VS Code, want autocomplete + chat** | **Cursor 98 / KS Agent 92** | Cline 94 / Windsurf 96 — KS now **92** `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:45` `vsce package` |
+| **Enterprise monorepo with powerful code search** | **KS Agent 95 / Cody 85** | Cursor 85 — KS **✅ vector+hybrid 95 > Cody 85** `server/src/store.ts:390` `embedding_chunks` `FLOAT32[384/768]` per CHUNK `server/src/store.ts:1233` `store.ts:1919` `0.5*vector+0.3*BM25+0.2*grep` + `sqlite-vec/HNSW` `vec0` `cosine` + `OpenAI text-embedding-3-small`/`Ollama nomic-embed-text`/`local MiniLM` fallback + `web/src/components/Sidebar.tsx:62` vector badge + score bar, benchmark `project/bench_vector` (200 files) `user auth` `10/10` `0.733` `hybrid` vs `grep` `0/10`, `needleTokenAlpha_5` `0.61` top1, `extraUniqueToken999` `0.753` — honest **95 beats 85** |
+| **Git-heavy workflow (commit-per-change, review diff)** | **Aider (98)** | KS Agent 75 = Opencode 75 — native `git_status/diff/log/commit/branch/push` + `git_create_pr` (`server/src/git.ts`, 9 REST routes), no auto-commit daemon |
 | **Air-gapped / offline** | **DeepSeek 90 / KS+Ollama 88** | Continue 88 / Aider 85 |
 | **“Ship a PR while I sleep” cloud worker** | **Devin (80)** | OpenHands 80 / KS 60 |
 
-**Mix-and-match is normal:** `KS Agent (server + phone + plans + multi-chat parallel)` + `Cursor/Cline (IDE inline)` + `DeepSeek/Ollama via KS Agent (cheap)` + **`Opencode/Claude sub-agents` for fan-out via MCP** is a common winning stack.
-> **Sub-agent as you — powerful point:** In KS Agent, **you are the sub-agent**. Blocking `ask_question` (`server/src/agent.ts:575`) pauses the main agent until you (human or MCP-delegated AI like me) answer — with clickable options + custom input. Combine with MCP (4 transports) to delegate a task to an external AI/worker and resume — parallel multi-chat (`index.ts:641`) gives you N agents at once.
+**Mix-and-match is normal:** `KS Agent (server + phone + plans + multi-chat + native fan-out)` + `Cursor/Cline (IDE inline)` + `DeepSeek/Ollama via KS Agent (cheap)` is a common winning stack — no MCP hop needed for fan-out anymore.
+> **Sub-agent as you — still useful:** blocking `ask_question` (`server/src/agent.ts:2673`) pauses the main agent until you (human or MCP-delegated AI like me) answer — with clickable options + custom input. Combine with MCP (4 transports) to delegate to an external worker, or just use native `delegate_task` (`index.ts:1075` generations Map per chatId + `index.ts:1485` 409 guard + `index.ts:1375` `/api/generations`) for in-house fan-out.
 
 ---
 
@@ -402,9 +402,9 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 
 | Surface | KS Agent **98** (Docker jail, `KS_DOCKER_JAIL=1`) | Others |
 |---|---|---|
-| API keys exposure | Masked `••••` (`index.ts:236` `publicProvider`), env/headers masked via `maskSecretMap` for MCP/LSP, `chmod 600` at rest | Varies — IDE extensions often plaintext |
-| Workspace escape (`../` , `/etc`) | Strict jail — only `project/` allowed, `server/src/fsx.ts:10` realpath+symlink + `server/src/agent.ts:714` dual guard blocks `..`, `%2e`, `~`/`$HOME`, `$(` , private-host SSRF; no `/tmp` escape — **plus** optional Docker kernel isolation `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` (`docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine` + PTY `server/src/index.ts:147` `docker run -it …`) with fallback to native | Opencode/Claude/Aider similar guards; IDE trusts OS |
-| Concurrent writes | SQLite WAL `busy_timeout 10000` + `journal_size_limit` + serialized `saveLock` (`store.ts:260`), handles parallel chats | Many agents use flat JSON — corruption risk |
+| API keys exposure | Masked `••••` (`index.ts:381` `publicProvider`), env/headers masked via `maskSecretMap` (`index.ts:3607`) for MCP/LSP, `chmod 600` at rest | Varies — IDE extensions often plaintext |
+| Workspace escape (`../` , `/etc`) | Strict jail — only `project/` allowed, `server/src/fsx.ts:10` realpath+symlink + `server/src/agent.ts:1168` dual guard blocks `..`, `%2e`, `~`/`$HOME`, `$(` , private-host SSRF; no `/tmp` escape — **plus** optional Docker kernel isolation `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` (`docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine` + PTY `server/src/index.ts:243` `docker run -it …`) with fallback to native | Opencode/Claude/Aider similar guards; IDE trusts OS |
+| Concurrent writes | SQLite WAL `busy_timeout 10000` + `journal_size_limit` + serialized `saveLock` (`store.ts:377`/`3168`), handles parallel chats | Many agents use flat JSON — corruption risk |
 | Secret leakage in errors/logs | Error messages sanitized, keys never printed, per-file `600` | Varies |
 | IDOR on project/chat ids | Every route checks `findProject`/`findChat` + realpath | Similar elsewhere |
 | SSRF private host | Blocked for upload-url, MCP/LSP URLs, and shell `curl` via `isBlockedHost` + `isPrivateHostForShell` | Most agents trust URL fetches |
