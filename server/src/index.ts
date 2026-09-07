@@ -156,13 +156,9 @@ try {
           }
         }
         try {
-          const remaining = fs.readdirSync(literalPath)
-          if (remaining.length === 0) {
-            fs.rmdirSync(literalPath)
-            console.log(`[startup] removed empty literal placeholder folder ${literalPath}`)
-          } else {
-            console.warn(`[startup] literal placeholder folder ${literalPath} not empty after move, left with ${remaining.length} entries: ${remaining.join(', ')}`)
-          }
+          // After moving non-conflicting entries, force-remove the placeholder folder and any remaining duplicates (they are stale bug artifacts; project root versions are kept)
+          fs.rmSync(literalPath, { recursive: true, force: true })
+          console.log(`[startup] removed literal placeholder folder ${literalPath} (duplicates discarded)`)
         } catch (e: any) {
           console.warn(`[startup] failed to remove literal placeholder folder ${literalPath}: ${e?.message || e}`)
         }
