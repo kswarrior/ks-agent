@@ -351,7 +351,7 @@ export const updateThemeSettings = (patch: Partial<ThemeSettings>) =>
 
 // Skills
 export const listSkills = () => req<Skill[]>('/api/settings/skills')
-export const createSkill = (s: { name: string; note: string; mainFile: string; files: string[]; projectId?: string }) =>
+export const createSkill = (s: { name: string; note: string; mainFile: string; files: string[]; projectId?: string; role?: string; triggers?: string }) =>
   req<Skill>('/api/settings/skills', json('POST', s))
 export const deleteSkill = (id: string) => req<{ ok: true }>(`/api/settings/skills/${id}`, { method: 'DELETE' })
 
@@ -375,7 +375,7 @@ export const updateEmbeddingSettings = (patch: Partial<{ provider: string; baseU
 
 export const getSemanticStatus = (projectId: string) =>
   req<{ projectId: string; embeddingCount: number; hasEmbeddings: boolean }>(`/api/projects/${projectId}/search/status`)
-export const updateSkill = (id: string, patch: Partial<{ name: string; note: string; mainFile: string; files: string[]; projectId?: string }>) =>
+export const updateSkill = (id: string, patch: Partial<{ name: string; note: string; mainFile: string; files: string[]; projectId?: string; role?: string; triggers?: string }>) =>
   req<Skill>(`/api/settings/skills/${id}`, json('PATCH', patch))
 export const createSkillFile = (path: string, content: string) =>
   req<{ ok: true; path: string }>('/api/settings/skills/files', json('POST', { path, content }))

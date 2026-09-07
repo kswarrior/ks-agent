@@ -967,6 +967,8 @@ function initSchema(s: Database.Database): void {
       mainFile TEXT NOT NULL,
       files TEXT NOT NULL,
       projectId TEXT,
+      role TEXT,
+      triggers TEXT,
       createdAt TEXT NOT NULL,
       updatedAt TEXT,
       FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE SET NULL
