@@ -4959,16 +4959,43 @@ function detectPreviewPort(projectPath: string): number {
 }
 
 async function isPortReachable(port: number, timeoutMs = 1500): Promise<boolean> {
+  for (const host of ['127.0.0.1', '[::1]']) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), timeoutMs)
+      const res = await fetch(`http://${host}:${port}/`, { signal: ctrl.signal, redirect: 'manual' } as any)
+      clearTimeout(t)
+      if (res) return true
+    } catch {}
+  }
+  // fallback: try localhost which may resolve to either stack
   try {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), timeoutMs)
-    const res = await fetch(`http://127.0.0.1:${port}/`, { signal: ctrl.signal, redirect: 'manual' } as any)
+    const res = await fetch(`http://localhost:${port}/`, { signal: ctrl.signal, redirect: 'manual' } as any)
     clearTimeout(t)
-    // any response (even 404) means port is listening
     return !!res
   } catch {
     return false
   }
+}
+
+async function fetchPreviewWithFallback(port: number, targetPath: string, init: RequestInit): Promise<{ res: Response; usedHost: string }> {
+  const hosts = ['127.0.0.1', '[::1]', 'localhost']
+  let lastErr: any = null
+  for (const host of hosts) {
+    const target = `http://${host}:${port}${targetPath}`
+    try {
+      const res = await fetch(target, init as any)
+      return { res, usedHost: host }
+    } catch (e: any) {
+      lastErr = e
+      const msg = String(e?.message || e)
+      // only fallback on connection errors, not on successful HTTP errors
+      if (!/ECONNREFUSED|fetch failed|Connection refused|ECONNRESET|connect/i.test(msg)) throw e
+    }
+  }
+  throw lastErr || new Error('Preview fetch failed')
 }
 
 const previewProcs = new Map<string, { port: number; child: ReturnType<typeof spawn> | null; startedAt: number }>()
@@ -5297,11 +5324,10 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
   const [pathPart, queryPart] = targetPath.split('?')
   targetPath = pathPart.replace(/\/\//g, '/') + (queryPart ? '?' + queryPart : '')
   if (!targetPath.startsWith('/')) targetPath = '/' + targetPath
-  const target = `http://127.0.0.1:${port}${targetPath}`
 
-  // Quick reachability check to give helpful error instead of hanging
+  // Quick reachability check to give helpful error instead of hanging (supports IPv4 + IPv6)
   if (!(await isPortReachable(port, 800))) {
-    return c.json({ error: `Preview not reachable on port ${port}. Run "npm run dev" in ${project.path}` }, 502)
+    return c.json({ error: `Preview not reachable on port ${port}. Run "npm run dev -- --host 0.0.0.0 --port ${port}" in ${project.path} (or ensure vite server.host="0.0.0.0")` }, 502)
   }
 
   try {
@@ -5318,12 +5344,14 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
     if (!['GET', 'HEAD'].includes(method)) {
       try { body = await c.req.arrayBuffer() as any } catch {}
     }
-    const proxied = await fetch(target, {
+    const { res: proxied, usedHost } = await fetchPreviewWithFallback(port, targetPath, {
       method,
       headers,
       body,
       redirect: 'manual'
     } as any)
+    // use the actual host we connected to for location rewriting base
+    const target = `http://${usedHost}:${port}${targetPath}`
 
     // Build response headers, filter hop-by-hop and security headers that break iframe embedding
     const outHeaders = new Headers()
@@ -5337,12 +5365,12 @@ async function proxyPreview(c: any, suffix: string): Promise<Response> {
     // Ensure we allow framing from same origin
     outHeaders.set('X-Frame-Options', 'ALLOWALL')
 
-    // Handle redirect location rewriting: map absolute localhost:port redirects back to proxied path
+    // Handle redirect location rewriting: map absolute localhost:port redirects back to proxied path (cover 127.0.0.1, ::1, localhost)
     const location = proxied.headers.get('location')
     if (location) {
       try {
         const locUrl = new URL(location, target)
-        if (locUrl.hostname === '127.0.0.1' && String(locUrl.port) === String(port)) {
+        if ((locUrl.hostname === '127.0.0.1' || locUrl.hostname === '::1' || locUrl.hostname === 'localhost') && String(locUrl.port) === String(port)) {
           const newLoc = `/api/projects/${project.id}/preview/proxy${locUrl.pathname}${locUrl.search}`
           outHeaders.set('location', newLoc)
         }
