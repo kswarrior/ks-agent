@@ -10,7 +10,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@vitejs/plugin-react": "^6.1.1",
     "hono": "^4.13.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "zod": "^4.5.4"
   }
 }
