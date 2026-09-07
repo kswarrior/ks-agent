@@ -1547,14 +1547,28 @@ app.post('/api/chats/:id/messages', async (c) => {
   let history: LLMMessage[]
   {
     const base = cleanMessagesForHistory(chat.id)
-      const modeMsg = modeInstruction(agentMode)
-      const prefix: LLMMessage[] = [
-        { role: 'system', content: modelSystemPrompt },
-        ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
-        ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-        ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
-        ...skillMessages
-      ]
+    const modeMsg = modeInstruction(agentMode)
+    const contextNote = contextModeSystemNote(contextMode)
+    // Full context: inject recent tool results as system context after prefix (avoids re-reading)
+    let toolContext: LLMMessage[] = []
+    if (contextMode === 'full') {
+      try {
+        const acts = activitiesOf(chat.id).slice(-18)
+        if (acts.length) {
+          const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+          if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (avoid re-reading unless verification needed):\n${snippet}` }]
+        }
+      } catch {}
+    }
+    const prefix: LLMMessage[] = [
+      { role: 'system', content: modelSystemPrompt },
+      ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+      ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+      ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
+      ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
+      ...skillMessages,
+      ...toolContext
+    ]
     if (planIncompleteBeforeClear && existingPlanBeforeClear) {
       const resume = planResumeContext(existingPlanBeforeClear)
       if (base.length > 0 && base[base.length - 1].role === 'user') {
@@ -1588,7 +1602,7 @@ app.post('/api/chats/:id/messages', async (c) => {
 
   const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
 
-  void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
+  void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens).finally(() => {
     job.finishedAt = new Date().toISOString()
   })
 
@@ -1613,12 +1627,14 @@ app.post('/api/chats/:id/continue', async (c) => {
   if (rawContent.length > 50000) return c.json({ error: 'Content too long (max 50000 chars)' }, 400)
   const modelId = body.modelId ? String(body.modelId) : ''
   const agentMode = parseAgentMode((body as any).mode)
+  const contextMode = parseContextMode((body as any).contextMode)
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
   const resolvedModel = modelEntry ?? db.models[0]
   if (!resolvedModel) return c.json({ error: 'No model configured. Add a provider and model in Settings.' }, 400)
   const provider = db.providers.find((p) => p.id === resolvedModel.providerId)
   if (!provider) return c.json({ error: 'Model has no valid provider' }, 400)
+  const effectiveMaxTokens = parseMaxTokens((body as any).maxTokens, resolvedModel.maxTokens)
   const runningJob = generations.get(chat.id)
   if (runningJob && runningJob.status === 'running') return c.json({ error: 'This chat is already generating a reply' }, 409)
   const project = findProject(chat.projectId)
@@ -1654,13 +1670,27 @@ app.post('/api/chats/:id/continue', async (c) => {
     let history: LLMMessage[]
     {
       const modeMsg = modeInstruction(agentMode)
+      const contextNote = contextModeSystemNote(contextMode)
+      let toolContext: LLMMessage[] = []
+      if (contextMode === 'full') {
+        try {
+          const acts = activitiesOf(chat.id).slice(-18)
+          if (acts.length) {
+            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+            if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference:\n${snippet}` }]
+          }
+        } catch {}
+      }
+      const clean = cleanMessagesForHistory(chat.id)
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
         ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
         ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
+        ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
         ...skillMessages,
-        ...cleanMessagesForHistory(chat.id)
+        ...toolContext,
+        ...clean
       ]
       let continueInstruction: LLMMessage
       if (!wasInterruptedPure && planIncompleteForPure2 && existingPlanForPure2) {
@@ -1698,7 +1728,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     }
     generations.set(chat.id, job)
     const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-    void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
+    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens).finally(() => {
       job.finishedAt = new Date().toISOString()
     })
     return c.json({ assistantId: job.assistantId, model: job.model, continued: true, content: stripped })
@@ -1745,12 +1775,25 @@ app.post('/api/chats/:id/continue', async (c) => {
     {
       const base = cleanMessagesForHistory(chat.id)
       const modeMsg2 = modeInstruction(agentMode)
+      const contextNote2 = contextModeSystemNote(contextMode)
+      let toolContext2: LLMMessage[] = []
+      if (contextMode === 'full') {
+        try {
+          const acts = activitiesOf(chat.id).slice(-18)
+          if (acts.length) {
+            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+            if (snippet.trim()) toolContext2 = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference:\n${snippet}` }]
+          }
+        } catch {}
+      }
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
         ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
         ...(modeMsg2 ? [{ role: 'system' as const, content: modeMsg2 }] : []),
-        ...skillMessages
+        ...(contextNote2 ? [{ role: 'system' as const, content: contextNote2 }] : []),
+        ...skillMessages,
+        ...toolContext2
       ]
       if (planIncompleteBeforeClear2 && existingPlanBeforeClear2) {
         const resume = planResumeContext(existingPlanBeforeClear2)
@@ -1780,7 +1823,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     generations.set(chat.id, job)
     void generateAndPersistTitle(chat, rawContent, provider, resolvedModel.model).catch(() => {})
     const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-    void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
+    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens).finally(() => {
       job.finishedAt = new Date().toISOString()
     })
     return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
