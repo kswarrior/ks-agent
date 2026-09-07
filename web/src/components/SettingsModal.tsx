@@ -40,9 +40,11 @@ const PROVIDER_PRESETS = [
 
 interface ProviderForm {
   editingId: string | null
+  editingKeyPreview?: string
   name: string
   baseUrl: string
   apiKey: string
+  clearSavedKey?: boolean
 }
 
 export function SettingsModal({ open, onClose, onDataChanged }: Props) {
@@ -51,6 +53,12 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [models, setModels] = useState<ModelEntry[]>([])
   const [providerForm, setProviderForm] = useState<ProviderForm | null>(null)
   const [providerPicker, setProviderPicker] = useState(false)
+  // Offline / air-gapped: local reachability probe + Ollama model discovery (no key sent).
+  const [localCheck, setLocalCheck] = useState<{ reachable: boolean; isLocal: boolean; status?: number; models?: number; error?: string } | null>(null)
+  const [localCheckBusy, setLocalCheckBusy] = useState(false)
+  const [ollamaModels, setOllamaModels] = useState<string[] | null>(null)
+  const [ollamaModelsBusy, setOllamaModelsBusy] = useState(false)
+  const [ollamaModelsError, setOllamaModelsError] = useState<string | null>(null)
   const [showModelForm, setShowModelForm] = useState(false)
   const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '', maxTokens: '', systemPrompt: '' })
   const [modelEdit, setModelEdit] = useState<ModelEntry | null>(null)
@@ -529,6 +537,60 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   function chooseProvider(name: string, baseUrl: string) {
     setProviderForm({ editingId: null, name, baseUrl, apiKey: '' })
     setProviderPicker(false)
+    setLocalCheck(null)
+    setOllamaModels(null)
+    setOllamaModelsError(null)
+  }
+
+  function isLocalProviderUrl(u: string): boolean {
+    const t = String(u || '').trim().toLowerCase()
+    if (!t) return false
+    if (t.includes('localhost') || t.includes('127.0.0.1') || t.includes('[::1]')) return true
+    if (/ollama|lm studio|vllm|llama\.cpp/i.test(t)) return true
+    if (/https?:\/\/(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(t)) return true
+    return false
+  }
+
+  function isOllamaProviderUrl(u: string, name?: string): boolean {
+    const t = `${String(u || '')} ${String(name || '')}`.toLowerCase()
+    return t.includes('11434') || t.includes('ollama')
+  }
+
+  async function testLocalConnection() {
+    if (!providerForm?.baseUrl.trim()) return setError('Base URL is required')
+    setError(null)
+    setLocalCheckBusy(true)
+    try {
+      const r = await api.checkLocalProvider(providerForm.baseUrl.trim())
+      setLocalCheck({ reachable: r.reachable, isLocal: r.isLocal, status: r.status, models: r.models, error: r.error })
+      toast(r.reachable ? 'Local endpoint reachable' : 'Local endpoint unreachable', r.reachable ? 'success' : 'error')
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLocalCheckBusy(false)
+    }
+  }
+
+  async function loadOllamaModels() {
+    if (!providerForm?.baseUrl.trim()) return setError('Base URL is required')
+    setError(null)
+    setOllamaModelsBusy(true)
+    setOllamaModelsError(null)
+    try {
+      const r = await api.listOllamaModels(providerForm.baseUrl.trim())
+      if (r.ok) {
+        setOllamaModels(r.models)
+        if (!r.models.length) setOllamaModelsError('No models installed — run `ollama pull <model>` on the host.')
+      } else {
+        setOllamaModels(null)
+        setOllamaModelsError(r.error || 'Ollama not reachable')
+      }
+    } catch (e: any) {
+      setOllamaModels(null)
+      setOllamaModelsError(e.message)
+    } finally {
+      setOllamaModelsBusy(false)
+    }
   }
 
   async function submitProvider() {
@@ -542,7 +604,11 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
         await api.updateProvider(providerForm.editingId, {
           name: providerForm.name.trim(),
           baseUrl: providerForm.baseUrl.trim(),
-          ...(providerForm.apiKey.trim() ? { apiKey: providerForm.apiKey.trim() } : {})
+          ...(providerForm.apiKey.trim()
+            ? { apiKey: providerForm.apiKey.trim() }
+            : providerForm.clearSavedKey
+              ? { apiKey: '', clearApiKey: true }
+              : {})
         })
         toast('Provider updated', 'success')
       } else {
@@ -814,15 +880,50 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   value={providerForm.baseUrl}
                   onChange={(e) => setProviderForm({ ...providerForm, baseUrl: e.target.value })}
                 />
-                <label className="field-label">API key {providerForm.editingId ? <span style={{ fontWeight: 400 }}>(leave blank to keep current)</span> : <span style={{ fontWeight: 400 }}>(leave blank for local Ollama / LM Studio — air-gapped)</span>}</label>
+                <label className="field-label">API key {providerForm.editingId ? <span style={{ fontWeight: 400 }}>(leave blank to keep current)</span> : <span style={{ fontWeight: 400 }}>(leave blank for local Ollama / LM Studio / vLLM — air-gapped)</span>}</label>
                 <input
                   className="input"
                   type="password"
-                  placeholder={providerForm.baseUrl.includes('localhost') || providerForm.baseUrl.includes('127.0.0.1') ? 'no key needed (local) — leave blank' : 'sk-… (leave blank for local Ollama/LM Studio)'}
+                  placeholder={providerForm.baseUrl.includes('localhost') || providerForm.baseUrl.includes('127.0.0.1') ? 'no key needed (local) — leave blank' : 'sk-… (leave blank for local Ollama/LM Studio/vLLM)'}
                   value={providerForm.apiKey}
-                  onChange={(e) => setProviderForm({ ...providerForm, apiKey: e.target.value })}
+                  onChange={(e) => setProviderForm({ ...providerForm, apiKey: e.target.value, clearSavedKey: false })}
                 />
-                {(providerForm.baseUrl.includes('localhost') || providerForm.baseUrl.includes('127.0.0.1') || /ollama|lm studio/i.test(providerForm.name)) && <p className="hint" style={{ marginTop: 4 }}>Local endpoint — no internet required after model pull. Fully air-gapped, runs on LAN.</p>}
+                {providerForm.editingId && providerForm.editingKeyPreview ? (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={!!providerForm.clearSavedKey}
+                      onChange={(e) => setProviderForm({ ...providerForm, clearSavedKey: e.target.checked, apiKey: '' })}
+                    />
+                    Clear saved key ({providerForm.editingKeyPreview}) — go offline / air-gapped
+                  </label>
+                ) : null}
+                {(providerForm.baseUrl.includes('localhost') || providerForm.baseUrl.includes('127.0.0.1') || /ollama|lm studio|vllm/i.test(providerForm.name)) && <p className="hint" style={{ marginTop: 4 }}>Local endpoint — no internet required after model pull. Fully air-gapped, runs on LAN.</p>}
+                {isLocalProviderUrl(providerForm.baseUrl) && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn" disabled={localCheckBusy} onClick={testLocalConnection}>
+                      {localCheckBusy ? 'Testing…' : 'Test local connection'}
+                    </button>
+                    {isOllamaProviderUrl(providerForm.baseUrl, providerForm.name) && (
+                      <button type="button" className="btn" disabled={ollamaModelsBusy} onClick={loadOllamaModels}>
+                        {ollamaModelsBusy ? 'Loading…' : 'List Ollama models'}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {localCheck && (
+                  <p className="hint" style={{ marginTop: 4 }}>
+                    {localCheck.reachable
+                      ? `Reachable${localCheck.isLocal ? ' (local)' : ''}${localCheck.models !== undefined ? ` — ${localCheck.models} model(s) listed` : ''}.`
+                      : `Unreachable${localCheck.isLocal ? ' (local)' : ''}${localCheck.error ? ` — ${localCheck.error}` : ''}. Check the host is running.`}
+                  </p>
+                )}
+                {ollamaModels && ollamaModels.length > 0 && (
+                  <p className="hint" style={{ marginTop: 4 }}>Installed: {ollamaModels.join(', ')}</p>
+                )}
+                {ollamaModelsError && (
+                  <p className="hint" style={{ marginTop: 4 }}>{ollamaModelsError}</p>
+                )}
                 <div className="dialog-actions">
                   <button className="btn" onClick={() => { setProviderForm(null); setError(null) }}>
                     Cancel
