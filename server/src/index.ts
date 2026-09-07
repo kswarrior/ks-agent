@@ -5425,10 +5425,9 @@ async function proxyChatPreview(c: any, suffix: string): Promise<Response> {
   const [pathPart, queryPart] = targetPath.split('?')
   targetPath = pathPart.replace(/\/\//g, '/') + (queryPart ? '?' + queryPart : '')
   if (!targetPath.startsWith('/')) targetPath = '/' + targetPath
-  const target = `http://127.0.0.1:${port}${targetPath}`
 
   if (!(await isPortReachable(port, 800))) {
-    return c.json({ error: `Preview not reachable on port ${port}. Ensure the dev server is running.` }, 502)
+    return c.json({ error: `Preview not reachable on port ${port}. Ensure the dev server is running with --host 0.0.0.0.` }, 502)
   }
 
   try {
@@ -5443,12 +5442,13 @@ async function proxyChatPreview(c: any, suffix: string): Promise<Response> {
     if (!['GET', 'HEAD'].includes(method)) {
       try { body = await c.req.arrayBuffer() as any } catch {}
     }
-    const proxied = await fetch(target, {
+    const { res: proxied, usedHost } = await fetchPreviewWithFallback(port, targetPath, {
       method,
       headers,
       body,
       redirect: 'manual'
     } as any)
+    const target = `http://${usedHost}:${port}${targetPath}`
 
     const outHeaders = new Headers()
     proxied.headers.forEach((v: string, k: string) => {
@@ -5464,7 +5464,7 @@ async function proxyChatPreview(c: any, suffix: string): Promise<Response> {
     if (location) {
       try {
         const locUrl = new URL(location, target)
-        if (locUrl.hostname === '127.0.0.1' && String(locUrl.port) === String(port)) {
+        if ((locUrl.hostname === '127.0.0.1' || locUrl.hostname === '::1' || locUrl.hostname === 'localhost') && String(locUrl.port) === String(port)) {
           const newLoc = `/api/chats/${chat.id}/preview/proxy${locUrl.pathname}${locUrl.search}`
           outHeaders.set('location', newLoc)
         }
