@@ -388,6 +388,26 @@ function publicProvider(p: { id: string; name: string; baseUrl: string; apiKey: 
   }
 }
 
+// Offline / air-gapped helpers — no cloud, LAN-only detection for local providers (Ollama/LM Studio/vLLM).
+function isLocalBaseUrl(raw: string): boolean {
+  try {
+    const u = new URL(String(raw ?? '').trim())
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false
+    const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true
+    if (h.endsWith('.local') || h.endsWith('.lan') || h.endsWith('.internal')) return true
+    if (/^10\./.test(h) || /^192\.168\./.test(h)) return true
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true
+    if (/^169\.254\./.test(h)) return true
+    return false
+  } catch { return false }
+}
+
+function ollamaRootFromChatUrl(raw: string): string {
+  const clean = String(raw ?? '').trim().replace(/\/+$/, '')
+  return clean.replace(/\/v1(\/.*)?$/, '') || clean
+}
+
 function stripInterruptedSuffix(content: string): string {
   // Remove trailing interruption markers appended by persistAssistantSafe
   // e.g. "\n\n_[stopped]_" or "\n\n_[stream interrupted: ...]_"
@@ -2134,9 +2154,10 @@ app.patch('/api/settings/providers/:id', async (c) => {
     provider.baseUrl = baseUrl
   }
   if (body.apiKey !== undefined) {
-    const apiKey = String(body.apiKey).trim()
+    const apiKey = String(body.apiKey ?? '').trim()
     if (apiKey) provider.apiKey = apiKey
-    // empty apiKey means keep current — do not clear
+    else if ((body as any).clearApiKey === true) provider.apiKey = ''
+    // empty apiKey without clearApiKey means keep current — do not clear
   }
   saveDb()
   return c.json(publicProvider(provider))
