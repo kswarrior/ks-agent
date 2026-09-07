@@ -1,4 +1,2 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.About = About;
-function About() { return <div className="card"><h2>About</h2><p>Modern dashboard site with sidebar, header, dashboard, and docs pages.</p></div>; }
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export function About() { return _jsxs("div", { className: "card", children: [_jsx("h2", { children: "About" }), _jsx("p", { children: "Modern dashboard site with sidebar, header, dashboard, and docs pages." })] }); }

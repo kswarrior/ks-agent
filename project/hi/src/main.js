@@ -1,8 +1,7 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-var react_1 = require("react");
-var client_1 = require("react-dom/client");
-var react_router_dom_1 = require("react-router-dom");
-var App_1 = require("./App");
-require("./styles.css");
-(0, client_1.createRoot)(document.getElementById('root')).render(<react_1.default.StrictMode><react_router_dom_1.BrowserRouter><App_1.default /></react_router_dom_1.BrowserRouter></react_1.default.StrictMode>);
+import { jsx as _jsx } from "react/jsx-runtime";
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
+import App from './App';
+import './styles.css';
+createRoot(document.getElementById('root')).render(_jsx(React.StrictMode, { children: _jsx(BrowserRouter, { children: _jsx(App, {}) }) }));

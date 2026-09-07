@@ -1,10 +1,8 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.default = App;
-var react_router_dom_1 = require("react-router-dom");
-var Sidebar_1 = require("./components/Sidebar");
-var Header_1 = require("./components/Header");
-var Dashboard_1 = require("./pages/Dashboard");
-var About_1 = require("./pages/About");
-var Docs_1 = require("./pages/Docs");
-function App() { return <div className="app"><Sidebar_1.Sidebar /><div className="main"><Header_1.Header /><div className="content"><react_router_dom_1.Routes><react_router_dom_1.Route path="/" element={<Dashboard_1.Dashboard />}/><react_router_dom_1.Route path="/about" element={<About_1.About />}/><react_router_dom_1.Route path="/docs" element={<Docs_1.Docs />}/></react_router_dom_1.Routes></div></div></div>; }
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { Routes, Route } from 'react-router-dom';
+import { Sidebar } from './components/Sidebar';
+import { Header } from './components/Header';
+import { Dashboard } from './pages/Dashboard';
+import { About } from './pages/About';
+import { Docs } from './pages/Docs';
+export default function App() { return _jsxs("div", { className: "app", children: [_jsx(Sidebar, {}), _jsxs("div", { className: "main", children: [_jsx(Header, {}), _jsx("div", { className: "content", children: _jsxs(Routes, { children: [_jsx(Route, { path: "/", element: _jsx(Dashboard, {}) }), _jsx(Route, { path: "/about", element: _jsx(About, {}) }), _jsx(Route, { path: "/docs", element: _jsx(Docs, {}) })] }) })] })] }); }

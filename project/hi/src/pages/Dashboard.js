@@ -1,0 +1,2 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+export function Dashboard() { return _jsxs("div", { children: [_jsx("h2", { children: "Dashboard" }), _jsxs("div", { className: "grid", children: [_jsxs("div", { className: "card", children: ["Visits", _jsx("br", {}), _jsx("span", { children: "12,340" })] }), _jsxs("div", { className: "card", children: ["Revenue", _jsx("br", {}), _jsx("span", { children: "$8,900" })] }), _jsxs("div", { className: "card", children: ["Users", _jsx("br", {}), _jsx("span", { children: "2,104" })] })] })] }); }
