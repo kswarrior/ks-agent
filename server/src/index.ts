@@ -1419,9 +1419,9 @@ app.post('/api/chats/:id/messages', async (c) => {
           let toolContext: LLMMessage[] = []
           if (contextMode === 'full') {
             try {
-              const acts = activitiesOf(chat.id).slice(-18)
+              const acts = activitiesOf(chat.id).slice(-25)
               if (acts.length) {
-                const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+                const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
                 if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (avoid re-reading unless verification needed):\n${snippet}` }]
               }
             } catch {}
@@ -1542,9 +1542,9 @@ app.post('/api/chats/:id/messages', async (c) => {
     let toolContext: LLMMessage[] = []
     if (contextMode === 'full') {
       try {
-        const acts = activitiesOf(chat.id).slice(-18)
+        const acts = activitiesOf(chat.id).slice(-25)
         if (acts.length) {
-          const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+          const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
           if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (avoid re-reading unless verification needed):\n${snippet}` }]
         }
       } catch {}
@@ -1663,9 +1663,9 @@ app.post('/api/chats/:id/continue', async (c) => {
       let toolContext: LLMMessage[] = []
       if (contextMode === 'full') {
         try {
-          const acts = activitiesOf(chat.id).slice(-18)
+          const acts = activitiesOf(chat.id).slice(-25)
           if (acts.length) {
-            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
             if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference:\n${snippet}` }]
           }
         } catch {}
@@ -1773,9 +1773,9 @@ app.post('/api/chats/:id/continue', async (c) => {
       let toolContext2: LLMMessage[] = []
       if (contextMode === 'full') {
         try {
-          const acts = activitiesOf(chat.id).slice(-18)
+          const acts = activitiesOf(chat.id).slice(-25)
           if (acts.length) {
-            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
             if (snippet.trim()) toolContext2 = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference:\n${snippet}` }]
           }
         } catch {}
