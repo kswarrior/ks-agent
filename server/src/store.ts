@@ -1128,6 +1128,17 @@ function initSchema(s: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_subAgentMessages_subAgentId ON subAgentMessages(subAgentId);
     CREATE INDEX IF NOT EXISTS idx_subAgentMessages_parentChatId ON subAgentMessages(parentChatId);
+    CREATE TABLE IF NOT EXISTS project_data (
+      projectId TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL,
+      overview TEXT NOT NULL DEFAULT '',
+      build TEXT NOT NULL DEFAULT '',
+      backend TEXT NOT NULL DEFAULT '',
+      frontend TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      updatedAt TEXT NOT NULL,
+      FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+    );
   `)
 }
 
@@ -3334,4 +3345,141 @@ export function getPlugins(): Plugin[] {
 
 export function findPlugin(id: string): Plugin | undefined {
   return (db.plugins ?? []).find((p) => p.id === id)
+}
+
+// ---------------- Project Data Center — per-project editable knowledge ----------------
+// Tabs: overview / build / backend / frontend / notes. Fully editable, enable toggle + reset.
+// Injection rule: only when enabled + non-empty + NOT a greeting/small-talk message.
+
+function ensureProjectDataTable(): void {
+  try {
+    const s = ensureDb()
+    s.exec(`
+      CREATE TABLE IF NOT EXISTS project_data (
+        projectId TEXT PRIMARY KEY,
+        enabled INTEGER NOT NULL,
+        overview TEXT NOT NULL DEFAULT '',
+        build TEXT NOT NULL DEFAULT '',
+        backend TEXT NOT NULL DEFAULT '',
+        frontend TEXT NOT NULL DEFAULT '',
+        notes TEXT NOT NULL DEFAULT '',
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY(projectId) REFERENCES projects(id) ON DELETE CASCADE
+      );
+    `)
+  } catch {}
+}
+
+function emptyProjectData(projectId: string): ProjectData {
+  return { projectId, enabled: true, overview: '', build: '', backend: '', frontend: '', notes: '', updatedAt: new Date().toISOString() }
+}
+
+function sanitizeDataField(v: unknown): string {
+  if (typeof v !== 'string') return ''
+  // keep newlines (user notes), strip NUL, cap length
+  return v.replace(/\0/g, '').slice(0, PROJECT_DATA_MAX_FIELD)
+}
+
+export function getProjectData(projectId: string): ProjectData {
+  const pid = String(projectId ?? '').trim()
+  if (!pid) throw new Error('projectId required')
+  ensureProjectDataTable()
+  try {
+    const s = ensureDb()
+    const row = s.prepare('SELECT projectId, enabled, overview, build, backend, frontend, notes, updatedAt FROM project_data WHERE projectId=?').get(pid) as any
+    if (row) {
+      return {
+        projectId: row.projectId,
+        enabled: !!row.enabled,
+        overview: String(row.overview ?? ''),
+        build: String(row.build ?? ''),
+        backend: String(row.backend ?? ''),
+        frontend: String(row.frontend ?? ''),
+        notes: String(row.notes ?? ''),
+        updatedAt: String(row.updatedAt ?? new Date().toISOString())
+      }
+    }
+  } catch {}
+  return emptyProjectData(pid)
+}
+
+export function updateProjectData(projectId: string, patch: Partial<Pick<ProjectData, 'enabled' | 'overview' | 'build' | 'backend' | 'frontend' | 'notes'>>): ProjectData {
+  const pid = String(projectId ?? '').trim()
+  if (!pid) throw new Error('projectId required')
+  if (!findProject(pid)) throw new Error('Project not found')
+  ensureProjectDataTable()
+  const cur = getProjectData(pid)
+  const next: ProjectData = {
+    projectId: pid,
+    enabled: patch.enabled !== undefined ? Boolean(patch.enabled) : cur.enabled,
+    overview: patch.overview !== undefined ? sanitizeDataField(patch.overview) : cur.overview,
+    build: patch.build !== undefined ? sanitizeDataField(patch.build) : cur.build,
+    backend: patch.backend !== undefined ? sanitizeDataField(patch.backend) : cur.backend,
+    frontend: patch.frontend !== undefined ? sanitizeDataField(patch.frontend) : cur.frontend,
+    notes: patch.notes !== undefined ? sanitizeDataField(patch.notes) : cur.notes,
+    updatedAt: new Date().toISOString()
+  }
+  try {
+    const s = ensureDb()
+    s.prepare('INSERT INTO project_data (projectId, enabled, overview, build, backend, frontend, notes, updatedAt) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(projectId) DO UPDATE SET enabled=excluded.enabled, overview=excluded.overview, build=excluded.build, backend=excluded.backend, frontend=excluded.frontend, notes=excluded.notes, updatedAt=excluded.updatedAt').run(next.projectId, next.enabled ? 1 : 0, next.overview, next.build, next.backend, next.frontend, next.notes, next.updatedAt)
+  } catch (e: any) {
+    throw new Error(String(e?.message || 'Failed to save project data').slice(0, 300))
+  }
+  return next
+}
+
+export function resetProjectData(projectId: string): ProjectData {
+  const pid = String(projectId ?? '').trim()
+  if (!pid) throw new Error('projectId required')
+  if (!findProject(pid)) throw new Error('Project not found')
+  ensureProjectDataTable()
+  const next = emptyProjectData(pid)
+  try {
+    const s = ensureDb()
+    s.prepare('INSERT INTO project_data (projectId, enabled, overview, build, backend, frontend, notes, updatedAt) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(projectId) DO UPDATE SET enabled=excluded.enabled, overview=excluded.overview, build=excluded.build, backend=excluded.backend, frontend=excluded.frontend, notes=excluded.notes, updatedAt=excluded.updatedAt').run(next.projectId, 1, '', '', '', '', '', next.updatedAt)
+  } catch {}
+  return next
+}
+
+/** True for pure greetings/small-talk (hi/hello/hey/how are you/thanks/bye/...) — data center must stay silent there. */
+export function isGreetingOnly(text: string): boolean {
+  const t = String(text ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+  if (!t) return false
+  const stripped = t.replace(/[!.,?~\-—_]+$/g, '').trim()
+  if (!stripped) return false
+  // very long messages are never pure greetings
+  if (stripped.length > 60) return false
+  if (/^(hi+|hii+|hello+|hey+|heyy+|yo|hola|greetings?|salam|salaam|assalam[o ]*u? ?alaikum|satsriakal|namaste)(\s+(there|buddy|friend|ai|agent|ks|ks agent))?$/.test(stripped)) return true
+  if (/^(good\s(morning|afternoon|evening|night|day))(\s+(ai|agent|everyone|all|there|buddy))?$/.test(stripped)) return true
+  if (/^how\s+are\s+you(\s+(doing|today))?$/.test(stripped)) return true
+  if (/^(how'?s\s+it\s+going|what'?s\s+up|howdy)(\s.*)?$/.test(stripped) && stripped.length < 30) return true
+  if (/^(who\s+are\s+you|what\s+are\s+you)(\?)?$/.test(stripped)) return true
+  if (/^(thanks?|thank\s+you(\s+(so\s+much|very\s+much))?|shukriya|dhanyavad)(\s.*)?$/.test(stripped) && stripped.length < 30) return true
+  if (/^(bye+|goodbye|see\s+you|good\s+night)(\s.*)?$/.test(stripped) && stripped.length < 25) return true
+  if (/^(ok|okay|cool|nice|great|awesome)(\s*!*)?$/.test(stripped)) return true
+  return false
+}
+
+/** Build the system-prompt block for project data. Returns null when disabled/empty/greeting. */
+export function buildProjectDataSystemMessage(projectId: string, lastUserContent?: string): string | null {
+  const pid = String(projectId ?? '').trim()
+  if (!pid) return null
+  if (lastUserContent != null && isGreetingOnly(lastUserContent)) return null
+  let data: ProjectData
+  try {
+    data = getProjectData(pid)
+  } catch { return null }
+  if (!data.enabled) return null
+  const parts: string[] = []
+  const push = (label: string, v: string) => {
+    const t = String(v ?? '').trim()
+    if (t) parts.push(`${label}: ${t.slice(0, 6000)}`)
+  }
+  push('Overview (project summary/theme)', data.overview)
+  push('Build & Run (how to build/run)', data.build)
+  push('Backend (main summary only)', data.backend)
+  push('Frontend (main summary only)', data.frontend)
+  push('Extra notes', data.notes)
+  if (parts.length === 0) return null
+  return `PROJECT DATA CENTER — user-saved per-project knowledge (summary-level only, NOT every file path). Use ONLY when relevant to the user's task (build/run/backend/frontend questions). For pure greetings/small-talk (hi/hello/how are you/thanks/bye) say NOTHING about this data — reply with a brief greeting only. Never dump all sections unasked; apply silently.\n${parts.join('\n---\n')}`
 }

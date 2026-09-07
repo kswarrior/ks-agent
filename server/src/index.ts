@@ -65,7 +65,11 @@ import {
   messagesOfSubAgent,
   messagesOfSubAgentsForChat,
   getEmbeddingSettings,
-  updateEmbeddingSettings
+  updateEmbeddingSettings,
+  getProjectData,
+  updateProjectData,
+  resetProjectData,
+  buildProjectDataSystemMessage
 } from './store.js'
 import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, normalizeShellCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
