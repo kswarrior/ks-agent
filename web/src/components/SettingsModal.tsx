@@ -620,6 +620,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
         toast('Provider added', 'success')
       }
       setProviderForm(null)
+      setLocalCheck(null)
+      setOllamaModels(null)
+      setOllamaModelsError(null)
       await refresh()
       onDataChanged()
     } catch (e: any) {
@@ -859,7 +862,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 <button
                   className="icon-btn"
                   aria-label="Back to providers"
-                  onClick={() => { setProviderForm(null); setError(null) }}
+                  onClick={() => { setProviderForm(null); setError(null); setLocalCheck(null); setOllamaModels(null); setOllamaModelsError(null) }}
                 >
                   <IconChevronLeft size={16} />
                 </button>
@@ -925,7 +928,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   <p className="hint" style={{ marginTop: 4 }}>{ollamaModelsError}</p>
                 )}
                 <div className="dialog-actions">
-                  <button className="btn" onClick={() => { setProviderForm(null); setError(null) }}>
+                  <button className="btn" onClick={() => { setProviderForm(null); setError(null); setLocalCheck(null); setOllamaModels(null); setOllamaModelsError(null) }}>
                     Cancel
                   </button>
                   <button className="btn btn-primary" onClick={submitProvider}>
@@ -962,14 +965,19 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                       className="icon-btn"
                       style={{ width: 30, height: 30 }}
                       aria-label={`Edit ${p.name}`}
-                      onClick={() =>
+                      onClick={() => {
                         setProviderForm({
                           editingId: p.id,
+                          editingKeyPreview: (p as Provider).keyPreview || '',
                           name: p.name,
                           baseUrl: p.baseUrl,
                           apiKey: ''
                         })
-                      }
+                        setLocalCheck(null)
+                        setOllamaModels(null)
+                        setOllamaModelsError(null)
+                        setError(null)
+                      }}
                     >
                       <IconPencil size={15} />
                     </button>
