@@ -30,14 +30,29 @@ export function PreviewSidebar({ open, onClose, activeProject, activeChatId = nu
   const [iframeKey, setIframeKey] = useState(0)
   const prevProjectIdRef = useRef<string | null>(null)
   const prevChatIdRef = useRef<string | null>(null)
-  // VS Code-like resizable width
+  // VS Code-like resizable width — clamp to viewport so narrow phones never overflow
+  const clampWidth = (n: number) => {
+    const maxVw = typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.95) : n
+    return Math.max(280, Math.min(900, n, maxVw))
+  }
   const [psbWidth, setPsbWidth] = useState<number>(() => {
     try {
       const v = localStorage.getItem('ks.psb.width')
       const n = v ? parseInt(v, 10) : 480
-      return Number.isFinite(n) && n >= 320 && n <= 900 ? n : 480
+      if (!Number.isFinite(n)) return 480
+      return clampWidth(n)
     } catch { return 480 }
   })
+  // Re-clamp when viewport shrinks (e.g. rotate phone) while panel is open
+  useEffect(() => {
+    if (!open) return
+    function onResize() {
+      setPsbWidth((prev) => clampWidth(prev))
+    }
+    window.addEventListener('resize', onResize)
+    onResize()
+    return () => window.removeEventListener('resize', onResize)
+  }, [open])
   const psbResizingRef = useRef<{ startX: number; startW: number } | null>(null)
   const [isPsbResizing, setIsPsbResizing] = useState(false)
 

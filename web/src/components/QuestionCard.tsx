@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Question } from '../types'
 import { IconChevronLeft } from '../icons'
 
@@ -85,11 +85,11 @@ function SingleQuestionCard({ question, index, total, canGoBack, onBack, onConfi
 
       {question.options.length > 0 && (
         <div className="q-options">
-          {question.options.map((opt) => {
+          {question.options.map((opt, idx) => {
             const isSelected = selected === opt
             return (
               <button
-                key={opt}
+                key={`${idx}:${opt}`}
                 className={`q-opt${isSelected ? ' selected' : ''}`}
                 onClick={() => { setSelected(opt); setError(null) }}
                 disabled={busy}
