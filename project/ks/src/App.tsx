@@ -115,18 +115,47 @@ export function App() {
   const isOnline = server.status === 'online'
 
   return (
-    <div className="page">
-      <header className="header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h1>🛡️ KS Panel</h1>
-            <p>Single Server Management</p>
-          </div>
-          <button className="btn" onClick={() => setShowSettings(!showSettings)}>
-            Settings
-          </button>
+    <div className="layout">
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="sidebar-logo">🛡️ KS Panel</div>
         </div>
-      </header>
+        <nav className="sidebar-nav">
+          <a href="#" className="sidebar-item active">
+            <span>🏠</span> Dashboard
+          </a>
+          <a href="#" className="sidebar-item">
+            <span>🖥️</span> Servers
+          </a>
+          <a href="#" className="sidebar-item">
+            <span>👥</span> Players
+          </a>
+          <a href="#" className="sidebar-item">
+            <span>⚙️</span> Console
+          </a>
+          <a href="#" className="sidebar-item">
+            <span>📊</span> Analytics
+          </a>
+          <a href="#" className="sidebar-item">
+            <span>🔒</span> Security
+          </a>
+        </nav>
+      </aside>
+      
+      <main className="main-content">
+        <header className="header">
+          <div className="header-left">
+            <div>
+              <h1 className="header-title">{server.name}</h1>
+              <p className="header-subtitle">Single Server Management • {server.host}:{server.port}</p>
+            </div>
+          </div>
+          <div className="header-actions">
+            <button className="btn" onClick={() => setShowSettings(!showSettings)}>
+              Settings
+            </button>
+          </div>
+        </header>
 
       <section>
         <div className="card">
@@ -257,6 +286,7 @@ export function App() {
           </div>
         </div>
       </section>
+    </main>
     </div>
   )
 }
