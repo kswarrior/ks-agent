@@ -377,7 +377,6 @@ interface Props {
   onSend: (content: string) => void
   onStop: () => void
   onRequestSettings: () => void
-  onRequestOnboarding?: () => void
   questions: Question[]
   onAnswerQuestion: (questionId: string, answer: string) => Promise<void>
   plan?: Plan | null
@@ -586,27 +585,12 @@ export function ChatView(props: Props) {
                 </span>
                 {props.models.length === 0 && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    <button className="btn btn-primary" onClick={() => props.onRequestOnboarding?.() ?? props.onRequestSettings()} style={{ padding: '10px 18px', fontSize: 14 }}>
-                      Quick Setup — 60s
-                    </button>
-                    <button className="btn" onClick={() => props.onRequestSettings()} style={{ padding: '10px 14px' }}>
+                    <button className="btn btn-primary" onClick={() => props.onRequestSettings()} style={{ padding: '10px 18px', fontSize: 14 }}>
                       Open Settings
                     </button>
                   </div>
                 )}
-                {props.models.length === 0 && (
-                  <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-faint)', maxWidth: 420, textAlign: 'center', lineHeight: 1.5 }}>
-                    Paste one API key (OpenAI, DeepSeek, Groq…) or use Ollama locally — no signup, keys stay on your server. <span style={{ color: 'var(--text-dim)' }}>Takes ~30s offline, ~60s with API.</span>
-                  </div>
-                )}
               </>
-            )}
-            {!props.chat && !props.hasProject && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <button className="btn btn-primary" onClick={() => props.onRequestOnboarding?.() ?? props.onRequestSettings()} style={{ padding: '10px 18px' }}>
-                  Quick Setup
-                </button>
-              </div>
             )}
           </div>
         ) : (
