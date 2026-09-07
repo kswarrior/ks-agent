@@ -213,11 +213,15 @@ export const listGenerations = () => req<string[]>('/api/generations')
 export const stopGeneration = (chatId: string) =>
   req<{ ok: true }>(`/api/chats/${chatId}/stop`, json('POST', {}))
 
-// Sub-agents / Teams — 5 Modes Solo/Swarm/Hive/Squad/Infinity
+// Sub-agents / Teams — 5 Modes Solo/Swarm/Hive/Squad/Infinity — with per sub-agent chat
 export const listSubAgents = (chatId: string) => req<import('./types').SubAgent[]>(`/api/chats/${chatId}/subagents`)
 export const listTeams = (chatId: string) => req<import('./types').Team[]>(`/api/chats/${chatId}/teams`)
 export const createTeam = (chatId: string, name: string, headId?: string | null) =>
   req<import('./types').Team>(`/api/chats/${chatId}/teams`, json('POST', { name, headId: headId ?? null }))
+export const getSubAgent = (subId: string) => req<import('./types').SubAgent>(`/api/subagents/${subId}`)
+export const listSubAgentMessages = (subId: string) => req<import('./types').SubAgentMessage[]>(`/api/subagents/${subId}/messages`)
+export const listSubAgentMessagesByChat = (chatId: string, subId: string) => req<import('./types').SubAgentMessage[]>(`/api/chats/${chatId}/subagents/${subId}/messages`)
+export const listAllSubAgentMessagesForChat = (chatId: string) => req<import('./types').SubAgentMessage[]>(`/api/chats/${chatId}/subagents/messages`)
 
 // Activities
 export const listActivities = (chatId: string) => req<Activity[]>(`/api/chats/${chatId}/activities`)
