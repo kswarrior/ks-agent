@@ -432,43 +432,8 @@ function parseMaxTokens(raw: unknown, fallback?: number): number | undefined {
   return Math.max(256, Math.min(128000, Math.floor(n)))
 }
 function contextModeSystemNote(mode: ContextMode): string | null {
-  if (mode === 'full') return 'CONTEXT MODE: Full — history includes recent tool outputs (file reads, grep, logs) as RECENT TOOL CONTEXT. Do NOT re-read files already present there; treat those snippets as authoritative current view. Only call list_files/read_file again if you need a file NOT listed there, or you must verify disk after you edited. Prefer reasoning and editing directly from the provided context to save tokens and avoid redundant reads.'
+  if (mode === 'full') return 'CONTEXT MODE: Full — history includes recent tool outputs (file reads, grep, logs). Use this rich context to avoid re-reading files you already inspected; prefer reasoning from provided file snippets and only re-read when you need fresh verification.'
   return 'CONTEXT MODE: Chat/Q&A — history is prompt + AI output only (light). Re-read files you need via tools; do not assume file contents from memory.'
-}
-function buildFullToolContext(chatId: string, projectPath?: string | null): LLMMessage[] {
-  try {
-    const acts = activitiesOf(chatId).slice(-25)
-    if (!acts.length) return []
-    const parts: string[] = []
-    for (const a of acts) {
-      const argPath = String((a.args as any)?.path ?? (a.args as any)?.command ?? (a.args as any)?.pattern ?? '').slice(0,80)
-      let snippet = String(a.result ?? a.summary ?? '')
-      // For read_file, try to inject CURRENT file content from disk (fresh) instead of stale truncated result
-      if (a.toolType === 'read_file' && projectPath && argPath) {
-        try {
-          const abs = resolveInProject(projectPath, argPath)
-          if (abs) {
-            const st = fs.statSync(abs)
-            if (st.isFile() && st.size < 300000) {
-              let content = fs.readFileSync(abs, 'utf8')
-              if (content.includes('\0')) content = snippet // binary fallback
-              else {
-                // trim to 3500 chars per file to bound tokens but keep useful content
-                if (content.length > 3500) content = content.slice(0, 3500) + '\n…[truncated]'
-                snippet = `File "${argPath}" — current content (${st.size} bytes, ${content.split('\n').length} lines):\n${content}`
-              }
-            }
-          }
-        } catch {}
-      }
-      const line = `[${a.toolType} ${argPath}]: ${String(snippet).slice(0, 1400)}`
-      parts.push(line)
-      if (parts.join('\n---\n').length > 15000) break
-    }
-    const joined = parts.join('\n---\n').slice(0, 15000)
-    if (!joined.trim()) return []
-    return [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (DO NOT re-read these files unless verification needed):\n${joined}` }]
-  } catch { return [] }
 }
 
 /** Mode instruction: when mode != solo, force the main agent to fan-out via delegate_task so sub-agents/teams appear in the UI bar. */
@@ -1451,7 +1416,16 @@ app.post('/api/chats/:id/messages', async (c) => {
         {
           const modeMsg = modeInstruction(agentMode)
           const contextNote = contextModeSystemNote(contextMode)
-          const toolContext = contextMode === 'full' ? buildFullToolContext(chat.id, project?.path) : []
+          let toolContext: LLMMessage[] = []
+          if (contextMode === 'full') {
+            try {
+              const acts = activitiesOf(chat.id).slice(-25)
+              if (acts.length) {
+                const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
+                if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (avoid re-reading unless verification needed):\n${snippet}` }]
+              }
+            } catch {}
+          }
           const clean = cleanMessagesForHistory(chat.id)
           const basePrefix: LLMMessage[] = [
             { role: 'system', content: modelSystemPrompt },
@@ -1564,7 +1538,17 @@ app.post('/api/chats/:id/messages', async (c) => {
     const base = cleanMessagesForHistory(chat.id)
     const modeMsg = modeInstruction(agentMode)
     const contextNote = contextModeSystemNote(contextMode)
-    const toolContext = contextMode === 'full' ? buildFullToolContext(chat.id, project?.path) : []
+    // Full context: inject recent tool results as system context after prefix (avoids re-reading)
+    let toolContext: LLMMessage[] = []
+    if (contextMode === 'full') {
+      try {
+        const acts = activitiesOf(chat.id).slice(-25)
+        if (acts.length) {
+          const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
+          if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (avoid re-reading unless verification needed):\n${snippet}` }]
+        }
+      } catch {}
+    }
     const prefix: LLMMessage[] = [
       { role: 'system', content: modelSystemPrompt },
       ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
@@ -1676,7 +1660,16 @@ app.post('/api/chats/:id/continue', async (c) => {
     {
       const modeMsg = modeInstruction(agentMode)
       const contextNote = contextModeSystemNote(contextMode)
-      const toolContext = contextMode === 'full' ? buildFullToolContext(chat.id, project?.path) : []
+      let toolContext: LLMMessage[] = []
+      if (contextMode === 'full') {
+        try {
+          const acts = activitiesOf(chat.id).slice(-25)
+          if (acts.length) {
+            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
+            if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference:\n${snippet}` }]
+          }
+        } catch {}
+      }
       const clean = cleanMessagesForHistory(chat.id)
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
@@ -1777,7 +1770,16 @@ app.post('/api/chats/:id/continue', async (c) => {
       const base = cleanMessagesForHistory(chat.id)
       const modeMsg2 = modeInstruction(agentMode)
       const contextNote2 = contextModeSystemNote(contextMode)
-      const toolContext2 = contextMode === 'full' ? buildFullToolContext(chat.id, project?.path) : []
+      let toolContext2: LLMMessage[] = []
+      if (contextMode === 'full') {
+        try {
+          const acts = activitiesOf(chat.id).slice(-25)
+          if (acts.length) {
+            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,1200)}`).join('\n---\n').slice(0, 15000)
+            if (snippet.trim()) toolContext2 = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference:\n${snippet}` }]
+          }
+        } catch {}
+      }
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
         ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
