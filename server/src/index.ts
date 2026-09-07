@@ -2283,7 +2283,8 @@ app.patch('/api/settings/models/:id', async (c) => {
     }
   }
   saveDb()
-  return c.json({ ok: true, model })
+  const providerName = getDb().providers.find((p) => p.id === model.providerId)?.name ?? 'Unknown'
+  return c.json({ ok: true, model: { ...model, providerName } })
 })
 
 app.delete('/api/settings/models/:id', (c) => {
@@ -2959,6 +2960,7 @@ app.patch('/api/settings/embeddings', async (c) => {
 function resolveIdeProvider(modelId?: string): { provider: { baseUrl: string; apiKey: string; name: string }; model: string; maxTokens?: number } | { error: string } {
   const db = getDb()
   const modelEntry = modelId ? db.models.find((m) => m.id === modelId) : undefined
+  if (modelId && !modelEntry) return { error: 'Selected model not found' }
   const resolved = modelEntry ?? db.models[0]
   if (!resolved) return { error: 'No model configured. Add a provider and model in Settings.' }
   const provider = db.providers.find((p) => p.id === resolved.providerId)
