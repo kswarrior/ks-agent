@@ -410,6 +410,23 @@ function isContinueKeyword(text: string): boolean {
   return /^(continue|resume|proceed|keep going|go on|cont\.?|continue please|please continue)[.!?]*$/.test(t)
 }
 
+type AgentMode = 'solo' | 'swarm' | 'hive' | 'squad' | 'infinity'
+
+function parseAgentMode(raw: unknown): AgentMode {
+  const v = String(raw ?? 'solo').trim().toLowerCase()
+  if (v === 'swarm' || v === 'hive' || v === 'squad' || v === 'infinity' || v === 'solo') return v
+  return 'solo'
+}
+
+/** Mode instruction: when mode != solo, force the main agent to fan-out via delegate_task so sub-agents/teams appear in the UI bar. */
+function modeInstruction(mode: AgentMode): string | null {
+  if (mode === 'solo') return null
+  if (mode === 'swarm') return 'MODE: Swarm — do NOT work alone. Break the task into 2-5 parallel sub-tasks and call delegate_task once per sub-task (modes research/explore/fix/write/general) in this round so sub-agents appear above the input box. Then synthesize their results into your final answer.'
+  if (mode === 'hive') return 'MODE: Hive (fractal depth 2) — delegate to mid-level agents via delegate_task, and each mid-level agent should further delegate with parentSubAgentId set (depth 2, up to 5 leaves each). Then synthesize.'
+  if (mode === 'squad') return 'MODE: Squad (Team + Head) — first create or reuse a Team (POST /api/chats/:id/teams is done client-side; here group via delegate_task with teamId when provided), designate a head, delegate member tasks via delegate_task, then synthesize the head summary.'
+  return 'MODE: Infinity (unlimited + Preview) — like Squad but unlimited fan-out: delegate broadly via delegate_task with per-role modelId where useful, watch write_file diffs, verify build, and call open_preview when a service is running.'
+}
+
 function cleanMessagesForHistory(chatId: string): LLMMessage[] {
   return messagesOf(chatId).map((m) => ({
     role: m.role as LLMMessage['role'],
@@ -1303,6 +1320,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const content = String(body.content ?? '').trim()
   const modelId = body.modelId ? String(body.modelId) : ''
+  const agentMode = parseAgentMode((body as any).mode)
 
   if (!content) return c.json({ error: 'Message cannot be empty' }, 400)
   if (content.length > 50000) return c.json({ error: 'Message too long (max 50000 chars)' }, 400)
@@ -1376,10 +1394,12 @@ app.post('/api/chats/:id/messages', async (c) => {
         const planIncompleteForPure = isPlanIncomplete(existingPlanForPure)
         let history: LLMMessage[]
         {
+      const modeMsg = modeInstruction(agentMode)
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
         ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+        ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
         ...skillMessages,
         ...cleanMessagesForHistory(chat.id)
       ]
@@ -1477,10 +1497,12 @@ app.post('/api/chats/:id/messages', async (c) => {
   let history: LLMMessage[]
   {
     const base = cleanMessagesForHistory(chat.id)
+      const modeMsg = modeInstruction(agentMode)
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
         ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+        ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
         ...skillMessages
       ]
     if (planIncompleteBeforeClear && existingPlanBeforeClear) {
