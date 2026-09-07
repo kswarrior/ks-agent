@@ -141,11 +141,11 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **C7** | **Terminal & Preview & Sandbox** — real PTY + live preview | **92** | 75 | 70 | 20 | 88 | 70 | 60 |
 | **C8** | **Persistence & Project Management** — multi-project, per-chat plans/activities | **94** | 70 | 75 | 40 | 78 | 65 | 50 |
 | **C9** | **Security & Isolation** — workspace jail, secrets, concurrency | **98** | 80 | 75 | 60 | **96** | 55 | 82 |
-| **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **88** | 82 | 10 | **90** | 70 | 15 | 85 |
+| **C10** | **Offline / Air-Gapped** — local Ollama / weights, no cloud | **91** | 82 | 10 | **90** | 70 | 15 | 85 |
 | **C11** | **Onboarding & DX** — install → first chat in minutes | **94** | 80 | 85 | 65 | 55 | **92** | 70 |
 | **C12** | **Extensibility** — Skills / MCP / LSP / Plugins | **96** | 80 | 70 | 40 | 82 | 75 | 60 |
-| | **TOTAL (/1200)** | **1131** | **894** | **686** | **719** | **889** | **741** | **816** |
-| | **AVERAGE (/100)** | **94.3** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
+| | **TOTAL (/1200)** | **1134** | **894** | **686** | **719** | **889** | **741** | **816** |
+| | **AVERAGE (/100)** | **94.5** | **74.5** | **57.2** | **59.9** | **74.1** | **61.8** | **68.0** |
 | | **RANK (equal weight)** | **#1** | #2 | #7 | #6 | #3 | #5 | #4 |
 
 **Evidence for KS moves (why not 92-98):**
