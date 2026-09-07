@@ -1027,12 +1027,16 @@ function KsAgent() {
       // show stale "Executing 7/6" instead of the fresh flow.
       // Do it after send succeeds so a failed send doesn't lose the old plan.
       // But if previous was interrupted OR plan is still incomplete (user requested preserve), keep for seamless continuation and resume with old plan context.
+      // For Full context mode, ALWAYS preserve activities (tool reads/logs) so next prompt doesn't re-read same files.
+      const shouldPreserveActivities = shouldPreserveForSend || ctxMode === 'full'
       if (!shouldPreserveForSend) {
         setPlans((prev) => {
           const n = { ...prev }
           delete n[chatId]
           return n
         })
+      }
+      if (!shouldPreserveActivities) {
         setActivities((prev) => prev.filter((a) => a.chatId !== chatId))
         // new task → reset auto-continue attempts for this chat
         autoContinueAttemptsRef.current.delete(chatId!)
