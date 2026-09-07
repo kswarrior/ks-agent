@@ -1078,7 +1078,6 @@ function KsAgent() {
             onSend={send}
             onStop={stopStreaming}
             onRequestSettings={() => setSettingsOpen(true)}
-            onRequestOnboarding={() => setOnboardingOpen(true)}
             questions={activeChat ? questions[activeChat.id] ?? [] : []}
             onAnswerQuestion={handleAnswerQuestion}
             plan={activeChat ? plans[activeChat.id] ?? null : null}
@@ -1168,35 +1167,9 @@ function KsAgent() {
         </div>
       )}
 
-      <SettingsModal open={settingsOpen} onClose={() => { setSettingsOpen(false); refreshProviders(); refreshModels() }} onDataChanged={() => { refreshProviders(); refreshModels() }} />
+      <SettingsModal open={settingsOpen} onClose={() => { setSettingsOpen(false); refreshModels() }} onDataChanged={() => { refreshModels() }} />
       <ExtensionsModal open={extensionsOpen} onClose={() => setExtensionsOpen(false)} />
       <AddProjectModal open={addProjectOpen} onClose={() => setAddProjectOpen(false)} onCreated={submitAddProject} />
-      <OnboardingWizard
-        open={onboardingOpen}
-        onClose={() => setOnboardingOpen(false)}
-        projects={projects}
-        providers={providers}
-        models={models}
-        onProjectCreated={(p: Project) => {
-          setProjects((prev) => [...prev, p])
-          setActiveProjectId(p.id)
-          refreshProviders()
-        }}
-        onProviderModelCreated={() => {
-          refreshProviders()
-          refreshModels()
-        }}
-      />
-      {!onboardingOpen && (projects.length === 0 || providers.length === 0 || models.length === 0) && providersLoaded && modelsLoaded && (
-        <button
-          className="onboarding-fab"
-          onClick={() => setOnboardingOpen(true)}
-          title="Quick Setup — install → first chat in 60s"
-          aria-label="Open Quick Setup"
-        >
-          <IconSparkles size={16} /> Quick Setup
-        </button>
-      )}
     </div>
   )
 }

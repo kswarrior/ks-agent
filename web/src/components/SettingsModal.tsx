@@ -3,12 +3,8 @@ import * as api from '../api'
 import type { ModelEntry, Provider, RetrySettings, ThemeSettings } from '../types'
 import { useDialogs } from '../dialogs'
 import { useToast } from '../toast'
-import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate, IconCopy, IconExternalLink, IconLock } from '../icons'
+import { IconChevronLeft, IconPencil, IconPlus, IconTrash, IconX, IconRotate } from '../icons'
 import { applyTheme, DEFAULT_THEME } from '../theme'
-
-const EXT_INSTALL_CMD = 'code --install-extension ks-warrior.ks-agent-vscode'
-const OLLAMA_TAGS_URL = 'http://localhost:11434/api/tags'
-const OLLAMA_TIMEOUT_MS = 1500
 
 interface Props {
   open: boolean
@@ -16,7 +12,7 @@ interface Props {
   onDataChanged: () => void
 }
 
-type Tab = 'quick' | 'providers' | 'models' | 'prompt' | 'retry' | 'theme' | 'github'
+type Tab = 'providers' | 'models' | 'prompt' | 'retry' | 'theme' | 'github'
 
 const THEME_PRESETS: { name: string; primary: string; danger?: string; background?: string }[] = [
   { name: 'Blue', primary: '#2563eb' },
@@ -41,18 +37,6 @@ const PROVIDER_PRESETS = [
   { name: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1' }
 ]
 
-const QUICK_PRESETS: { name: string; baseUrl: string; models: string[]; needsKey: boolean; hint: string }[] = [
-  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o-mini', 'gpt-4o'], needsKey: true, hint: 'platform.openai.com → API keys' },
-  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner'], needsKey: true, hint: 'Cheapest frontier ~$0.14/1M' },
-  { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'], needsKey: true, hint: 'One key → 100+ models' },
-  { name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'], needsKey: true, hint: 'Ultra-fast inference' },
-  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'qwen2.5', 'mistral', 'deepseek-r1'], needsKey: false, hint: 'Offline · Air-gapped — no key, no cloud' },
-  { name: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1', models: ['llama-3.2-3b', 'qwen2.5-7b', 'mistral-7b'], needsKey: false, hint: 'Offline · LM Studio local server' },
-  { name: 'Together', baseUrl: 'https://api.together.xyz/v1', models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo'], needsKey: true, hint: 'together.ai' },
-  { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', models: ['mistral-large-latest'], needsKey: true, hint: 'console.mistral.ai' },
-  { name: 'NVIDIA', baseUrl: 'https://integrate.api.nvidia.com/v1', models: ['meta/llama3-70b-instruct'], needsKey: true, hint: 'integrate.api.nvidia.com' },
-]
-
 interface ProviderForm {
   editingId: string | null
   name: string
@@ -61,7 +45,7 @@ interface ProviderForm {
 }
 
 export function SettingsModal({ open, onClose, onDataChanged }: Props) {
-  const [tab, setTab] = useState<Tab>('quick')
+  const [tab, setTab] = useState<Tab>('providers')
   const [providers, setProviders] = useState<Provider[]>([])
   const [models, setModels] = useState<ModelEntry[]>([])
   const [providerForm, setProviderForm] = useState<ProviderForm | null>(null)
@@ -153,20 +137,6 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
   }
 
-  // quick setup state
-  const [quickIdx, setQuickIdx] = useState(1)
-  const [quickKey, setQuickKey] = useState('')
-  const [quickModel, setQuickModel] = useState(QUICK_PRESETS[1].models[0])
-  const [quickDisplay, setQuickDisplay] = useState('')
-  const [quickBusy, setQuickBusy] = useState(false)
-  const [quickOllamaStatus, setQuickOllamaStatus] = useState<'idle' | 'checking' | 'running' | 'offline'>('idle')
-  const [quickOllamaModels, setQuickOllamaModels] = useState<string[]>([])
-  const [quickExtCopied, setQuickExtCopied] = useState(false)
-
-  useEffect(() => {
-    setQuickModel(QUICK_PRESETS[quickIdx].models[0])
-  }, [quickIdx])
-
   useEffect(() => {
     if (open) {
       refresh()
@@ -182,10 +152,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       setModelEdit(null)
       setError(null)
       setGithubTestResult(null)
-      // auto-select quick tab when setup incomplete, otherwise providers
-      // we need providers/models length, but they are stale at open time — decide after refresh
-      // default to quick for first-time feel
-      setTab('quick')
+      setTab('providers')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -235,84 +202,6 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }).catch(()=>{})
     if (pid) api.getGithubRateLimit(pid).then(setGithubRate).catch(()=>{})
   }, [githubPollProjectId])
-
-  // Auto-detect Ollama running via http://localhost:11434/api/tags with timeout, fail gracefully
-  useEffect(() => {
-    if (!open) return
-    setQuickOllamaStatus('checking')
-    setQuickOllamaModels([])
-    const controller = new AbortController()
-    const t = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS)
-    fetch(OLLAMA_TAGS_URL, { signal: controller.signal })
-      .then(async (res) => {
-        clearTimeout(t)
-        if (!res.ok) throw new Error('not ok')
-        const data: any = await res.json().catch(() => null)
-        const models: string[] = []
-        if (data && Array.isArray(data.models)) {
-          for (const m of data.models) {
-            const raw = typeof m.name === 'string' ? m.name : typeof m.model === 'string' ? m.model : ''
-            if (raw) {
-              const base = raw.split(':')[0].trim()
-              if (base) models.push(base)
-            }
-          }
-        }
-        const uniq = Array.from(new Set(models))
-        if (uniq.length) {
-          setQuickOllamaModels(uniq)
-          setQuickOllamaStatus('running')
-          // auto-select Ollama preset and pre-fill first model, keep 60s flow intact
-          setQuickIdx(4)
-          setQuickModel(uniq[0])
-        } else {
-          setQuickOllamaStatus('running')
-          setQuickIdx(4)
-        }
-      })
-      .catch(() => {
-        clearTimeout(t)
-        setQuickOllamaStatus('offline')
-      })
-    return () => {
-      clearTimeout(t)
-      controller.abort()
-    }
-  }, [open])
-
-  async function handleCopyQuickExt() {
-    try {
-      await navigator.clipboard.writeText(EXT_INSTALL_CMD)
-      toast('Copied: ' + EXT_INSTALL_CMD, 'success')
-      setQuickExtCopied(true)
-      setTimeout(() => setQuickExtCopied(false), 2000)
-    } catch {
-      toast(EXT_INSTALL_CMD, 'success')
-    }
-  }
-
-  async function submitQuickSetup() {
-    const preset = QUICK_PRESETS[quickIdx]
-    setError(null)
-    if (preset.needsKey && !quickKey.trim()) return setError(`API key is required for ${preset.name}`)
-    if (!quickModel.trim()) return setError('Model id is required')
-    const keyToSend = quickKey.trim()
-    setQuickBusy(true)
-    try {
-      const provider = await api.createProvider({ name: preset.name, baseUrl: preset.baseUrl, apiKey: keyToSend })
-      await api.createModel({ providerId: provider.id, model: quickModel.trim(), ...(quickDisplay.trim() ? { displayName: quickDisplay.trim() } : {}) })
-      setQuickKey('')
-      setQuickDisplay('')
-      toast(`Quick Setup done — ${preset.name} · ${quickModel.trim()}`, 'success')
-      await refresh()
-      onDataChanged()
-      setTab('models')
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setQuickBusy(false)
-    }
-  }
 
   async function refresh() {
     try {
@@ -797,17 +686,6 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
           onPointerUp={handleTabsPointerUp}
           onPointerLeave={handleTabsPointerUp}
         >
-          <button
-            className={`tab${tab === 'quick' ? ' active' : ''}`}
-            onClick={(e) => {
-              if (dragMovedRef.current) { dragMovedRef.current = false; return }
-              setTab('quick')
-              setError(null)
-              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-            }}
-          >
-            Quick Setup
-          </button>
           <button
             className={`tab${tab === 'providers' ? ' active' : ''}`}
             onClick={(e) => {
