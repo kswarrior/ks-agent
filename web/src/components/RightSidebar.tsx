@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import type { Plan, Project, Terminal, Activity, SubAgent, Team, SubAgentMessage } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
@@ -8,7 +8,7 @@ import { ActivityPane } from './ActivityPane'
 import { XTermTerminal } from './XTermTerminal'
 import { useDialogs } from '../dialogs'
 
-type RsTab = 'plan' | 'files' | 'terminal' | 'activity' | 'agents'
+type RsTab = 'plan' | 'files' | 'terminal' | 'activity' | 'agents' | 'skills'
 
 interface RightSidebarProps {
   open: boolean
@@ -29,7 +29,8 @@ const TABS: Array<{ id: RsTab; label: string }> = [
   { id: 'agents', label: 'Agents' },
   { id: 'files', label: 'Files' },
   { id: 'terminal', label: 'Terminal' },
-  { id: 'activity', label: 'Activity' }
+  { id: 'activity', label: 'Activity' },
+  { id: 'skills', label: 'Skills' }
 ]
 
 function isSkillRead(a: Activity): boolean {
@@ -45,6 +46,88 @@ function isSkillRead(a: Activity): boolean {
   if (norm.startsWith('frontend/') && norm.endsWith('.md')) return true
   if (raw.includes('frontend/skill.md') || raw.includes('frontend/react.md') || raw.includes('frontend/ts.md') || raw.includes('frontend/ejs.md')) return true
   return false
+}
+
+function getSkillDisplayName(rawPath: string): string {
+  const raw = String(rawPath ?? '').trim()
+  const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').toLowerCase()
+  if (norm === 'frontend/skill.md') return 'Frontend'
+  if (norm === 'frontend/react.md') return 'Frontend React'
+  if (norm === 'frontend/ts.md') return 'Frontend TS'
+  if (norm === 'frontend/ejs.md') return 'Frontend EJS'
+  if (norm === 'testing.md') return 'Testing'
+  if (norm === 'debugging.md') return 'Debugging'
+  if (norm === 'refactoring.md') return 'Refactoring'
+  if (norm === 'code-review.md') return 'Code Review'
+  if (norm.endsWith('skill.md')) {
+    const base = norm.split('/').pop()?.replace('.md','') || norm
+    return base.charAt(0).toUpperCase() + base.slice(1)
+  }
+  return raw.replace(/^skills\//,'').replace(/^\.\//,'')
+}
+
+function SkillsPane({ activities }: { activities: Activity[] }) {
+  const skillActivities = useMemo(() => activities.filter(isSkillRead), [activities])
+  const distinctSkills = useMemo(() => {
+    const map = new Map<string, { display: string; raw: string; count: number; lastTs: string }>()
+    for (const a of skillActivities) {
+      const raw = String((a.args as any)?.path ?? '').trim()
+      const norm = raw.replace(/^\.\//, '').replace(/^\//, '').replace(/^skills\//, '').toLowerCase()
+      const key = norm || raw.toLowerCase()
+      const display = getSkillDisplayName(raw)
+      const existing = map.get(key)
+      if (existing) {
+        existing.count += 1
+        if (new Date(a.timestamp).getTime() > new Date(existing.lastTs).getTime()) existing.lastTs = a.timestamp
+      } else {
+        map.set(key, { display, raw: raw.replace(/^skills\//,''), count: 1, lastTs: a.timestamp })
+      }
+    }
+    return Array.from(map.values()).sort((a,b) => new Date(b.lastTs).getTime() - new Date(a.lastTs).getTime())
+  }, [skillActivities])
+
+  if (skillActivities.length === 0) {
+    return (
+      <div className="activity-pane">
+        <div className="rsb-empty" style={{ flexDirection: 'column', gap: 10, padding: '28px 14px', textAlign: 'center' }}>
+          <span style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)' }}>
+            <IconActivity size={16} />
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-dim)' }}>No skills used yet</span>
+          <span style={{ fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.5 }}>When the agent reads <code style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px', fontSize: 11 }}>skills/*.md</code> they appear here<br/>Hidden from Activity to keep it clean</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="activity-pane">
+      <div className="activity-summary" style={{ marginBottom: 10 }}>
+        <span className="activity-summary-count">{distinctSkills.length} skill{distinctSkills.length !== 1 ? 's' : ''} · {skillActivities.length} read{skillActivities.length !== 1 ? 's' : ''}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 8px' }}>{skillActivities.length} total</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {distinctSkills.map(s => (
+          <div key={s.raw} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, borderLeft: '3px solid #86efac' }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: '#86efac1a', border: '1px solid #86efac30', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#86efac', boxShadow: '0 0 6px rgba(134,239,172,0.6)' }} />
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 650, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.display}</span>
+              <span style={{ display: 'block', fontSize: 11, color: 'var(--text-faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'ui-monospace, monospace' }} title={s.raw}>{s.raw}</span>
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 7px', color: 'var(--text-dim)' }}>×{s.count}</span>
+              <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{new Date(s.lastTs).toLocaleTimeString()}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 12, padding: '8px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5 }}>
+        Skill reads are <code style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px' }}>read_file</code> on <code style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px' }}>skills/*.md</code> — excluded from Activity counts.
+      </div>
+    </div>
+  )
 }
 
 function PlanView({ plan, activities, streaming }: { plan: Plan | null; activities: Activity[]; streaming: boolean }) {
@@ -581,7 +664,7 @@ function TerminalPane({ project }: { project: Project | null }) {
 
 export function RightSidebar({ open, activeProject, activeChatId, plan, activities, streaming, subAgents = [], teams = [], activeAgent, onSelectAgent, onClose }: RightSidebarProps) {
   const [tab, setTab] = useState<RsTab>('plan')
-  // Hide skill reads from activity counts/badge — they live only in Skills dropdown
+  // Hide skill reads from activity counts/badge — they live only in Skills tab
   const visibleActivities = activities.filter(a => !isSkillRead(a))
   const activityCount = visibleActivities.length
   const writeCount = visibleActivities.filter(a => a.toolType === 'write_file').length
@@ -590,6 +673,11 @@ export function RightSidebar({ open, activeProject, activeChatId, plan, activiti
   const hasRunning = visibleActivities.some(a => a.ok === undefined)
   const agentCount = (subAgents?.length ?? 0) + (teams?.length ?? 0)
   const hasAgentRunning = (subAgents ?? []).some(s => s.status === 'working' || s.status === 'pending')
+  const skillActivities = useMemo(() => activities.filter(isSkillRead), [activities])
+  const distinctSkillCount = useMemo(() => {
+    const s = new Set(skillActivities.map(a => String((a.args as any)?.path ?? '').toLowerCase().trim().replace(/^\.\//,'').replace(/^\//,'').replace(/^skills\//,'')))
+    return s.size
+  }, [skillActivities])
   const tabsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
   const dragMovedRef = useRef(false)

@@ -2434,11 +2434,12 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       const teamId = typeof (args as any).teamId === 'string' ? String((args as any).teamId).trim().slice(0,100) || null : null
       const parentSubAgentId = typeof (args as any).parentSubAgentId === 'string' ? String((args as any).parentSubAgentId).trim().slice(0,100) || null : null
       // Forced-mode deduplication: if UI already forced delegates for this chat, don't allow LLM to create duplicates beyond min (would make 4 instead of 2)
-      // Exception: Hive leaves (parentSubAgentId != null) are allowed even after forced
+      // Exception: Hive leaves (parentSubAgentId != null) are allowed even after forced; also planning delegates (task contains plan) are allowed as extra
       if (!parentSubAgentId && forcedModeChats.has(ctx.chatId)) {
         const mForLimit = (ctx.agentMode as AgentMode) ?? 'solo'
         const minForMode = mForLimit === 'swarm' ? 2 : mForLimit === 'hive' ? 1 : mForLimit === 'squad' ? 2 : mForLimit === 'infinity' ? 2 : 99
-        if (minForMode !== 99) {
+        const isPlanningTask = task.toLowerCase().includes('plan')
+        if (minForMode !== 99 && !isPlanningTask) {
           try {
             const existingTop = subAgentsOf(ctx.chatId).filter(s => !s.parentSubAgentId).length
             if (existingTop >= minForMode) {
