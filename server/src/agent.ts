@@ -331,6 +331,12 @@ function err(message: string): ToolExecResult {
   return { ok: false, result: `Error: ${message}`, summary: message.slice(0, 160) }
 }
 
+/** Scope-escape error with the REAL absolute root so the model stops guessing wrong paths (e.g. /home/runner/project/ks). */
+function escapeErr(ctx: ToolContext): ToolExecResult {
+  const absRoot = path.resolve(ctx.projectPath)
+  return err(`path escapes the project root — primary workspace is \${projectfolder} ONLY (relative \`${ctx.projectPath}\`, real absolute \`${absRoot}\` — you are ALREADY there, CWD is correct). Outside is FORBIDDEN. Use relative paths only (e.g. "src/file.ts", "" for root) — NEVER absolute paths, NEVER cd, NEVER "$" prefix.`)
+}
+
 function ok(resultText: string, summary: string): ToolExecResult {
   return { ok: true, result: resultText, summary }
 }
@@ -1243,7 +1249,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
     case 'list_files': {
       const rel = typeof args.path === 'string' ? args.path : ''
       const abs = rel.trim() ? safeJoin(ctx, rel) : resolveInProject(ctx.projectPath, '.')
-      if (!abs) return err('path escapes the project root — primary workspace is ${projectfolder} ONLY (e.g. project/ks) — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!abs) return escapeErr(ctx)
       // Parse pagination & options (new: offset/limit/recursive/pattern for large dirs)
       let offset = 0
       if (args.offset !== undefined) {
@@ -1370,7 +1376,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
 
     case 'read_file': {
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!abs) return escapeErr(ctx)
       // Parse pagination params (supports large files up to 50 MB with streaming)
       let offsetNum = 1
       if (args.offset !== undefined) {
@@ -1563,7 +1569,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       if (!pattern) return err('pattern is required — provide a regex or text to search for')
       const relDir = typeof args.path === 'string' ? args.path : (typeof args.dir === 'string' ? args.dir : '')
       const dirAbs = relDir.trim() ? safeJoin(ctx, relDir) : resolveInProject(ctx.projectPath, '.')
-      if (!dirAbs) return err('path escapes the project root — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!dirAbs) return escapeErr(ctx)
       let dirStat: fs.Stats | null = null
       try { dirStat = fs.statSync(dirAbs) } catch { return err(`directory not found: ${relDir || '.'}`) }
       if (!dirStat.isDirectory()) return err(`not a directory: ${relDir}`)
@@ -1667,7 +1673,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       if (!pattern) return err('pattern is required — provide a glob like "**/*.ts", "*.json", "src/**/*"')
       const relBase = typeof args.path === 'string' ? args.path : (typeof args.dir === 'string' ? args.dir : '')
       const baseAbs = relBase.trim() ? safeJoin(ctx, relBase) : resolveInProject(ctx.projectPath, '.')
-      if (!baseAbs) return err('path escapes the project root — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!baseAbs) return escapeErr(ctx)
       let baseStat: fs.Stats | null = null
       try { baseStat = fs.statSync(baseAbs) } catch { return err(`directory not found: ${relBase || '.'}`) }
       if (!baseStat.isDirectory()) return err(`not a directory: ${relBase}`)
@@ -1791,7 +1797,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         }
       }
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!abs) return escapeErr(ctx)
       const content = typeof args.content === 'string' ? args.content : ''
       if (Buffer.byteLength(content, 'utf8') > WRITE_MAX_BYTES) return err(`content exceeds ${WRITE_MAX_BYTES / 1024} KB limit (2 MB)`)
       try {
@@ -1817,7 +1823,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         }
       }
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!abs) return escapeErr(ctx)
       const oldStr = args.old_string
       const newStr = typeof args.new_string === 'string' ? args.new_string : ''
       const replaceAll = args.replace_all === true || args.replaceAll === true
@@ -1853,7 +1859,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       const rel = String(args.path ?? '').trim()
       if (!rel) return err('path is required')
       const abs = safeJoin(ctx, rel)
-      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!abs) return escapeErr(ctx)
       let stat: fs.Stats
       try { stat = fs.statSync(abs) } catch { return err(`file not found: ${rel}`) }
       if (stat.isDirectory()) {
@@ -1926,7 +1932,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       if (!rel) return err('path is required')
       const recursive = args.recursive === true || args.recursive === 'true'
       const abs = safeJoin(ctx, rel)
-      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!abs) return escapeErr(ctx)
       let stat: fs.Stats | null = null
       try { stat = fs.statSync(abs) } catch { return err(`file not found: ${rel}`) }
       if (stat.isDirectory() && !recursive) {
@@ -1953,7 +1959,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       if (!destRel) return err('destination is required')
       const srcAbs = safeJoin(ctx, srcRel)
       const destAbs = safeJoin(ctx, destRel)
-      if (!srcAbs || !destAbs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!srcAbs || !destAbs) return escapeErr(ctx)
       let srcStat: fs.Stats
       try { srcStat = fs.statSync(srcAbs) } catch { return err(`source not found: ${srcRel}`) }
       if (fs.existsSync(destAbs) && !overwrite) return err(`destination already exists: ${destRel} — use overwrite:true to replace`)
@@ -1995,7 +2001,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         }
       }
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!abs) return escapeErr(ctx)
       const content = typeof args.content === 'string' ? args.content : ''
       if (!content) return err('content is required')
       if (Buffer.byteLength(content, 'utf8') > WRITE_MAX_BYTES) return err(`append content exceeds ${WRITE_MAX_BYTES / 1024} KB limit`)
@@ -2023,7 +2029,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         }
       }
       const abs = safeJoin(ctx, args.path)
-      if (!abs) return err('path escapes project — primary workspace is ${projectfolder} ONLY — outside is FORBIDDEN. Only inside ${projectfolder} is allowed')
+      if (!abs) return escapeErr(ctx)
       const patch = typeof args.patch === 'string' ? args.patch : ''
       if (!patch) return err('patch is required')
       // If patch does not look like unified diff (no @@), treat as full content write

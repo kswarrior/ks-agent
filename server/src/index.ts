@@ -394,6 +394,14 @@ function sanitizePromptField(s: string): string {
   return s.replace(/[\r\n\t]+/g, ' ').replace(/[\x00-\x1F\x7F]+/g, '').slice(0, 120)
 }
 
+/** Per-request workspace message: BOTH relative + REAL absolute CWD plus hard shell rules (no cd/abs/$/&). Single source for all 4 history injections. */
+function projectContextMessage(project: { name: string; path: string }): string {
+  const rel = project.path
+  let abs = rel
+  try { abs = path.resolve(rel) } catch {}
+  return `Active project "${sanitizePromptField(project.name)}" — PRIMARY WORKSPACE (relative \`${rel}\`, real absolute CWD \`${abs}\` — you are ALREADY in this directory, it EXISTS, do NOT guess other paths like \`/home/runner/project/ks\`). Stay strictly inside it — NEVER use literal "\${projectfolder}" or "$projectfolder" in any path or shell command; use "" for project root and relative paths like "src/file.ts"; never create a folder named "\${projectfolder}". SHELL: NEVER "cd" (run "npm run dev", NOT "cd /home/... && npm run dev"); NEVER absolute paths (relative only); NEVER prefix "$"/">"/"#" (run "npm run dev", NOT "$ npm run dev"); NEVER "&"/"sleep"/"nohup" (run plain "npm run dev" — system auto-backgrounds + logs). Only leave for /tmp or when explicitly requested to go inside KS Agent (the agent codebase).`
+}
+
 function isContinueKeyword(text: string): boolean {
   const t = text.trim().toLowerCase()
   if (!t) return false
