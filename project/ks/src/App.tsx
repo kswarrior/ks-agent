@@ -261,7 +261,7 @@ export function App() {
             {consoleOutput.map((line, i) => (
               <div key={i} style={{ color: 'var(--text)' }}>&gt; {line}</div>
             ))}
-            {consoleHistory.map((cmd, i) => (
+            {panelState.history.map((cmd, i) => (
               <div key={`cmd-${i}`} style={{ color: 'var(--primary)' }}>
                 [{cmd.timestamp.split('T')[1].split('.')[0]}] {cmd.command}
               </div>
