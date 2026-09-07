@@ -175,6 +175,7 @@ export function Sidebar(props: SidebarProps) {
                   <input
                     className="search-input"
                     placeholder="Search projects…"
+                    aria-label="Search projects"
                     value={projQuery}
                     onChange={(e) => setProjQuery(e.target.value)}
                   />
@@ -228,6 +229,7 @@ export function Sidebar(props: SidebarProps) {
                 <input
                   className="search-input"
                   placeholder="Search chats…"
+                  aria-label="Search chats"
                   value={chatQuery}
                   onChange={(e) => setChatQuery(e.target.value)}
                 />
@@ -286,6 +288,7 @@ export function Sidebar(props: SidebarProps) {
               <input
                 className="search-input"
                 placeholder={semanticEnabled ? 'Semantic: e.g. auth logic, payment…' : 'Enable Semantic to search codebase…'}
+                aria-label="Semantic code search"
                 value={semanticQuery}
                 onChange={(e) => setSemanticQuery(e.target.value)}
                 disabled={!props.activeProject || !semanticEnabled}

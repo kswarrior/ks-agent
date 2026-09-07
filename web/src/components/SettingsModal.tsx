@@ -199,7 +199,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
     }
   }, [open, githubPollProjectId])
 
-  useEffect(() => { if (open) loadGithubSettings(githubProjectId || undefined) }, [githubProjectId])
+  useEffect(() => { if (open) loadGithubSettings(githubProjectId || undefined) }, [open, githubProjectId])
   useEffect(() => {
     if (!open) return
     const pid = githubPollProjectId || undefined
@@ -210,7 +210,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       setGithubCronInput(p.cronExpr || '')
     }).catch(()=>{})
     if (pid) api.getGithubRateLimit(pid).then(setGithubRate).catch(()=>{})
-  }, [githubPollProjectId])
+  }, [open, githubPollProjectId])
 
   async function refresh() {
     try {
