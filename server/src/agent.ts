@@ -364,6 +364,12 @@ export function stripLiteralProjectFolderPrefix(rel: string): string {
   return t
 }
 
+/** Check if a single directory/file name is exactly the literal placeholder folder (e.g. "${projectfolder}" or "$projectfolder") — those are buggy artifacts to hide. */
+export function isLiteralPlaceholderDirName(name: string): boolean {
+  const t = name.trim()
+  return /^\$\{projectfolder\}$/i.test(t) || /^\$projectfolder$/i.test(t) || /^%24%7Bprojectfolder%7D$/i.test(t)
+}
+
 /** Sanitize shell command containing literal "${projectfolder}" placeholder — replace with "." or subpath so it stays inside project root and never creates a literal folder. */
 export function sanitizeShellPlaceholder(command: string): string {
   let out = command
@@ -1086,6 +1092,7 @@ function collectFilesForGrep(root: string, includePattern: string | null, maxFil
     }
     for (const ent of entries) {
       const full = path.join(cur, ent.name)
+      if (isLiteralPlaceholderDirName(ent.name)) continue
       if (ent.isDirectory()) {
         if (isIgnoredDir(ent.name)) continue
         // skip hidden dirs like .git already handled, but allow others
@@ -1154,6 +1161,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
             try { ents = fs.readdirSync(cur, { withFileTypes: true }) } catch { return }
             for (const ent of ents) {
               if (all.length >= LIST_HARD_LIMIT + offset) break
+              if (isLiteralPlaceholderDirName(ent.name)) continue
               if (isIgnoredDir(ent.name)) continue
               const full = path.join(cur, ent.name)
               const relPath = baseRel ? `${baseRel}/${ent.name}` : ent.name
@@ -1227,6 +1235,11 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       let lines = dirents
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((d) => (d.isDirectory() ? `[dir] ${d.name}` : d.name))
+      // Hide buggy literal placeholder folder from listing — prevents LLM from thinking it's a valid project subdirectory
+      lines = lines.filter((l) => {
+        const name = l.startsWith('[dir] ') ? l.slice(6) : l
+        return !isLiteralPlaceholderDirName(name)
+      })
       if (patternRe) {
         lines = lines.filter((l) => {
           const name = l.startsWith('[dir] ') ? l.slice(6) : l
