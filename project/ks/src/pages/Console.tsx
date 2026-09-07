@@ -4,9 +4,14 @@ export function Console() {
   const [output, setOutput] = useState<string[]>([])
 
   useEffect(() => {
-    fetch('http://127.0.0.1:3000/api/server/console')
-      .then(r => r.json())
-      .then(d => setOutput(d.output || []))
+    const fetchOutput = () => {
+      fetch('http://127.0.0.1:3000/api/server/console')
+        .then(r => r.json())
+        .then(d => setOutput(d.output || []))
+    }
+    fetchOutput()
+    const id = setInterval(fetchOutput, 5000)
+    return () => clearInterval(id)
   }, [])
 
   return (

@@ -5,10 +5,15 @@ export function Players() {
   const [players, setPlayers] = useState<Player[]>([])
 
   useEffect(() => {
-    fetch('http://127.0.0.1:3000/api/players')
-      .then(r => r.json())
-      .then(setPlayers)
-      .catch(() => setPlayers([]))
+    const fetchPlayers = () => {
+      fetch('http://127.0.0.1:3000/api/players')
+        .then(r => r.json())
+        .then(setPlayers)
+        .catch(() => setPlayers([]))
+    }
+    fetchPlayers()
+    const id = setInterval(fetchPlayers, 5000)
+    return () => clearInterval(id)
   }, [])
 
   return (
