@@ -6,6 +6,15 @@ const app = new Hono()
 let serverProcess: any = null
 let serverReady = false
 let consoleOutput: string[] = []
+let servers = [
+  { id: 'minecraft-1', name: 'Survival Hub', host: 'localhost', port: 25565, rcon_port: 25575, password: '••••••', status: 'online', max_players: 100, current_players: 67, motd: '§a§lSurvival §7Hub', version: '1.20.2', gamemode: 'Survival', difficulty: 'Hard' },
+  { id: 'minecraft-2', name: 'Creative World', host: 'localhost', port: 25566, rcon_port: 25576, password: '••••••', status: 'offline', max_players: 50, current_players: 0, motd: '§eCreative', version: '1.19.3', gamemode: 'Creative', difficulty: 'Peaceful' },
+]
+let players = [
+  { uuid: '1', name: 'Notch', rank: 'admin', score: 4200, joined_at: '2024-01-10' },
+  { uuid: '2', name: 'Dinnerbone', rank: 'mod', score: 3100, joined_at: '2024-01-12' },
+  { uuid: '3', name: 'Jeb_', rank: 'player', score: 1800, joined_at: '2024-01-15' },
+]
 
 // Start server
 app.get('/api/server/start', (c) => {

@@ -124,6 +124,8 @@ interface ToolContext {
 
 // Pending ask_question resolvers: questionId -> resolve(answer)
 export const pendingQuestionResolvers = new Map<string, (answer: string) => void>()
+// Tracks chats where we already forced delegates for selected mode — prevents double-forcing within same generation (would create 4 instead of 2)
+const forcedModeChats = new Set<string>()
 
 export function resolvePendingQuestion(questionId: string, answer: string): boolean {
   const fn = pendingQuestionResolvers.get(questionId)
@@ -2775,7 +2777,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
     if (!outcome) break
 
     // FORCE: if UI manually selected a non-solo mode, guarantee delegation even if LLM ignored — "force ai to create sub agent team that is selected"
-    if ((opts.agentMode ?? 'solo') !== 'solo' && round === 0) {
+    if ((opts.agentMode ?? 'solo') !== 'solo' && round === 0 && !forcedModeChats.has(ctx.chatId)) {
       const mode = (opts.agentMode ?? 'solo') as AgentMode
       // Don't force for pure greetings/small talk — keep those as single-message replies
       const userContentForForce = (opts.history[opts.history.length - 1]?.content ?? '').trim()
@@ -2810,7 +2812,8 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           infinity: ['write','research']
         }
         const pickModes = autoModes[mode] ?? ['general']
-        console.log(`[mode ${mode}] LLM delegated ${delegateCount}/${minDelegates} — forcing ${needed} delegate_task(s) (forced by UI selection)`)
+        console.log(`[mode ${mode}] LLM delegated ${delegateCount}/${minDelegates} — forcing ${needed} delegate_task(s) for chat ${ctx.chatId} (forced by UI selection)`)
+        forcedModeChats.add(ctx.chatId)
         for (let i = 0; i < needed; i++) {
           const task = baseTasks[i % baseTasks.length] || `Sub-task ${i+1}: ${userContent.slice(0, 80)}`
           const m = pickModes[i % pickModes.length] as any
@@ -2931,6 +2934,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
     }
   }
   } catch (e: any) {
+    forcedModeChats.delete(ctx.chatId)
     if (e?.name === 'AbortError') {
       revertWorkingSteps(ctx)
       throw e
@@ -2946,6 +2950,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
   // so incomplete steps are not falsely shown as complete or still executing.
   // Steps only become 'done' via explicit complete_plan_step calls.
   revertWorkingSteps(ctx)
+  forcedModeChats.delete(ctx.chatId)
 
   return { content, stopped: false }
 }
