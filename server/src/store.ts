@@ -2427,12 +2427,12 @@ function persistToSqlite(): void {
     const teamMembersToPersist = (db.teamMembers && db.teamMembers.length) ? db.teamMembers : preservedTeamMembers.map((r: any) => ({ id: r.id, teamId: r.teamId, role: r.role, subAgentId: r.subAgentId ?? null, createdAt: r.createdAt }))
     const subMsgsToPersist = (db.subAgentMessages && db.subAgentMessages.length) ? db.subAgentMessages : preservedSubAgentMessages.map((r: any) => ({ id: r.id, subAgentId: r.subAgentId, parentChatId: r.parentChatId, role: r.role, content: r.content, createdAt: r.createdAt, toolCallId: r.toolCallId ?? null, toolName: r.toolName ?? null }))
     try {
-      const insSub = s.prepare('INSERT INTO subAgents (id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
-      for (const a of subAgentsToPersist) insSub.run(a.id, a.parentChatId, a.parentSubAgentId ?? null, a.teamId ?? null, a.task, a.mode, a.status, a.worktreePath ?? null, a.modelId ?? null, a.result ?? null, a.createdAt, a.updatedAt)
-    } catch {}
-    try {
       const insTeam = s.prepare('INSERT INTO teams (id, name, chatId, headId, createdAt, updatedAt) VALUES (?,?,?,?,?,?)')
       for (const t2 of teamsToPersist) insTeam.run(t2.id, t2.name, t2.chatId, t2.headId ?? null, t2.createdAt, t2.updatedAt)
+    } catch {}
+    try {
+      const insSub = s.prepare('INSERT INTO subAgents (id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      for (const a of subAgentsToPersist) insSub.run(a.id, a.parentChatId, a.parentSubAgentId ?? null, a.teamId ?? null, a.task, a.mode, a.status, a.worktreePath ?? null, a.modelId ?? null, a.result ?? null, a.createdAt, a.updatedAt)
     } catch {}
     try {
       const insMember = s.prepare('INSERT INTO teamMembers (id, teamId, role, subAgentId, createdAt) VALUES (?,?,?,?,?)')
