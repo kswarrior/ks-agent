@@ -1201,9 +1201,14 @@ function KsAgent() {
         <RightSidebar
           open={rsbOpen}
           activeProject={activeProject}
+          activeChatId={activeChat?.id ?? null}
           plan={activeChat ? plans[activeChat.id] ?? null : null}
           activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
           streaming={activeChat ? streams[activeChat.id] !== undefined : false}
+          subAgents={subAgents}
+          teams={teams}
+          activeAgent={activeAgent}
+          onSelectAgent={setActiveAgent}
           onClose={() => setRsbOpen(false)}
         />
         <PreviewSidebar

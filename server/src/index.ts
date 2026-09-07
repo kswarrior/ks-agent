@@ -61,9 +61,6 @@ import {
   subAgentsOf,
   createTeam,
   teamsOf,
-  findSubAgent,
-  messagesOfSubAgent,
-  messagesOfSubAgentsForChat,
   getEmbeddingSettings,
   updateEmbeddingSettings
 } from './store.js'
@@ -590,12 +587,6 @@ app.delete('/api/projects/:id', async (c) => {
   db.activities = (db.activities || []).filter((a: any) => !chatIds.has(a.chatId))
   // @ts-ignore - previews may not exist in old DB files
   db.previews = (db.previews || []).filter((p: any) => !chatIds.has(p.chatId))
-  // @ts-ignore - sub-agents/teams + messages per chat
-  db.subAgentMessages = (db.subAgentMessages || []).filter((m: any) => !chatIds.has(m.parentChatId))
-  // @ts-ignore
-  db.subAgents = (db.subAgents || []).filter((a: any) => !chatIds.has(a.parentChatId))
-  // @ts-ignore
-  db.teams = (db.teams || []).filter((t: any) => !chatIds.has(t.chatId))
   for (const cid of chatIds) {
     generations.get(cid)?.controller.abort()
     generations.delete(cid)
@@ -691,16 +682,6 @@ app.delete('/api/chats/:id', (c) => {
   db.activities = (db.activities || []).filter((a: any) => a.chatId !== id)
   // @ts-ignore
   db.previews = (db.previews || []).filter((p: any) => p.chatId !== id)
-  // @ts-ignore
-  db.subAgentMessages = (db.subAgentMessages || []).filter((m: any) => m.parentChatId !== id)
-  // @ts-ignore
-  db.subAgents = (db.subAgents || []).filter((a: any) => a.parentChatId !== id)
-  // @ts-ignore
-  db.teams = (db.teams || []).filter((t: any) => t.chatId !== id)
-  // @ts-ignore
-  db.teamMembers = (db.teamMembers || []).filter((tm: any) => {
-    try { return !db.teams.some((t: any) => t.id === tm.teamId) && tm.subAgentId ? !db.subAgents.some((sa: any) => sa.id === tm.subAgentId) : true } catch { return true }
-  })
   generations.get(id)?.controller.abort()
   generations.delete(id)
   try { clearSkillReadsForChat(id) } catch {}
@@ -774,29 +755,6 @@ app.post('/api/chats/:id/teams', async (c) => {
     const t = createTeam(chat.id, name, body.headId ?? null)
     return c.json(t, 201)
   } catch (e: any) { return c.json({ error: String(e?.message||'cannot create team').slice(0,300) }, 400) }
-})
-// Sub-agent chat: per sub-agent messages so frontend can see their chat (all flows)
-app.get('/api/chats/:id/subagents/:subId/messages', (c) => {
-  const chat = findChat(c.req.param('id'))
-  if (!chat) return c.json({ error: 'Chat not found' }, 404)
-  const sub = findSubAgent(c.req.param('subId'))
-  if (!sub || sub.parentChatId !== chat.id) return c.json({ error: 'Sub-agent not found' }, 404)
-  try { return c.json(messagesOfSubAgent(sub.id)) } catch { return c.json([]) }
-})
-app.get('/api/subagents/:subId/messages', (c) => {
-  const sub = findSubAgent(c.req.param('subId'))
-  if (!sub) return c.json({ error: 'Sub-agent not found' }, 404)
-  try { return c.json(messagesOfSubAgent(sub.id)) } catch { return c.json([]) }
-})
-app.get('/api/subagents/:subId', (c) => {
-  const sub = findSubAgent(c.req.param('subId'))
-  if (!sub) return c.json({ error: 'Sub-agent not found' }, 404)
-  return c.json(sub)
-})
-app.get('/api/chats/:id/subagents/messages', (c) => {
-  const chat = findChat(c.req.param('id'))
-  if (!chat) return c.json({ error: 'Chat not found' }, 404)
-  try { return c.json(messagesOfSubAgentsForChat(chat.id)) } catch { return c.json([]) }
 })
 
 // ---------------- Activities ----------------

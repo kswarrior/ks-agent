@@ -159,6 +159,142 @@ function PlanView({ plan, activities, streaming }: { plan: Plan | null; activiti
   )
 }
 
+function AgentsPane({ activeChatId, subAgents, teams, activeAgent, onSelectAgent }: { activeChatId: string | null; subAgents: SubAgent[]; teams: Team[]; activeAgent?: import('../types').ActiveAgentView | null; onSelectAgent?: (view: import('../types').ActiveAgentView) => void }) {
+  const [messagesBySub, setMessagesBySub] = useState<Record<string, SubAgentMessage[]>>({})
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const toast = useToast()
+  const total = subAgents.length + teams.length
+  // poll sub-agent messages every 2s while any working
+  useEffect(() => {
+    if (!activeChatId) return
+    let ids = subAgents.filter(s => s.status === 'working').map(s => s.id)
+    if (ids.length === 0) return
+    const t = setInterval(() => {
+      for (const sid of ids) {
+        api.listSubAgentMessages(sid).then(list => setMessagesBySub(prev => ({ ...prev, [sid]: list }))).catch(() => {})
+      }
+    }, 2000)
+    return () => clearInterval(t)
+  }, [activeChatId, subAgents])
+  useEffect(() => {
+    if (!activeChatId) { setMessagesBySub({}); return }
+    // initial load for all sub-agents (first 3 eagerly, rest on expand)
+    const eager = subAgents.slice(0, 3)
+    eager.forEach(s => {
+      api.listSubAgentMessages(s.id).then(list => setMessagesBySub(prev => ({ ...prev, [s.id]: list }))).catch(() => {})
+    })
+  }, [activeChatId, subAgents.length])
+  function toggleExpand(id: string) {
+    setExpanded(prev => {
+      const next = { ...prev, [id]: !prev[id] }
+      if (next[id] && !messagesBySub[id]) {
+        api.listSubAgentMessages(id).then(list => setMessagesBySub(p => ({ ...p, [id]: list }))).catch(() => {})
+      }
+      return next
+    })
+  }
+  if (!activeChatId) return <div className="rsb-empty">Select a chat to see agents</div>
+  if (total === 0) {
+    return (
+      <div className="rsb-empty" style={{ flexDirection: 'column', gap: 10, textAlign: 'center', padding: '24px 12px' }}>
+        <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>No sub-agents yet</span>
+        <span style={{ fontSize: 12, color: 'var(--text-faint)', lineHeight: 1.5 }}>Choose <b>Solo</b>=1 · <b>Swarm</b>=main→5 · <b>Hive</b>=nested · <b>Squad</b>=Team+Head · <b>Infinity</b>=unlimited+Preview<br/>in the composer menu, then send a task. They appear above the input and here.</span>
+        <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace' }}>Modes: solo/swarm/hive/squad/infinity</span>
+      </div>
+    )
+  }
+  const swarmCount = subAgents.filter(s => !s.parentSubAgentId && !s.teamId).length
+  const hiveNested = subAgents.filter(s => !!s.parentSubAgentId).length
+  const squadMembers = subAgents.filter(s => !!s.teamId).length
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-faint)' }}>
+        <span style={{ padding: '3px 7px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>{subAgents.length} sub-agents</span>
+        <span style={{ padding: '3px 7px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>{teams.length} teams</span>
+        {swarmCount > 0 && <span style={{ padding: '3px 7px', background: 'var(--primary-bg)', border: '1px solid var(--primary-border)', borderRadius: 6, color: 'var(--primary)' }}>{swarmCount} swarm</span>}
+        {hiveNested > 0 && <span style={{ padding: '3px 7px', background: '#fef3c71a', border: '1px solid #facc1530', borderRadius: 6, color: '#facc15' }}>{hiveNested} hive-nested</span>}
+        {squadMembers > 0 && <span style={{ padding: '3px 7px', background: '#22c55e1a', border: '1px solid #22c55e30', borderRadius: 6, color: '#22c55e' }}>{squadMembers} squad</span>}
+      </div>
+      {teams.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 }}>Teams (Squad/Infinity)</div>
+          {teams.map(t => {
+            const members = subAgents.filter(s => s.teamId === t.id)
+            const isActive = activeAgent?.kind === 'team' && activeAgent.id === t.id
+            return (
+              <div key={t.id} style={{ marginBottom: 8, border: `1px solid ${isActive ? 'var(--primary-border)' : 'var(--border)'}`, background: isActive ? 'var(--primary-bg)' : 'var(--surface)', borderLeft: '3px solid var(--primary)', borderRadius: 8, padding: '8px 10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 650, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Team · {t.name}</span>
+                  <button className="btn" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => onSelectAgent?.({ kind: 'team', id: t.id })}>{isActive ? 'Viewing' : 'View head chat'}</button>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>{members.length} member{members.length !== 1 ? 's' : ''} · head {t.headId ? t.headId.slice(0,6) : 'main'}</div>
+                {members.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+                    {members.map(m => (
+                      <button key={m.id} onClick={() => onSelectAgent?.({ kind: 'subagent', id: m.id })} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: activeAgent?.kind === 'subagent' && activeAgent.id === m.id ? 'var(--primary-bg)' : 'var(--surface-2)', border: `1px solid ${activeAgent?.kind === 'subagent' && activeAgent.id === m.id ? 'var(--primary-border)' : 'var(--border)'}`, borderRadius: 6, textAlign: 'left', cursor: 'pointer' }}>
+                        <span className={`agent-dot agent-status-${m.status}`} style={{ width: 7, height: 7 }} />
+                        <span style={{ fontSize: 12, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.mode} · {m.task.slice(0, 34)}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{m.status}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 0.06, marginBottom: 6 }}>Sub-agents — all modes</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {subAgents.map(s => {
+            const isActive = activeAgent?.kind === 'subagent' && activeAgent.id === s.id
+            const isExpanded = !!expanded[s.id]
+            const msgs = messagesBySub[s.id] ?? []
+            const depth = s.parentSubAgentId ? 1 : 0
+            return (
+              <div key={s.id} style={{ border: `1px solid ${isActive ? 'var(--primary-border)' : 'var(--border)'}`, background: isActive ? 'var(--primary-bg)' : 'var(--surface)', borderRadius: 8, padding: '8px 10px', marginLeft: depth ? 14 : 0, borderLeft: depth ? '2px solid #facc15' : undefined }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className={`agent-dot agent-status-${s.status}`} style={{ width: 8, height: 8, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: 0.04 }}>{s.mode}</span>
+                  <span style={{ fontSize: 11, color: s.status === 'working' ? '#eab308' : s.status === 'done' ? '#22c55e' : s.status === 'error' ? 'var(--danger)' : 'var(--text-faint)', fontWeight: 700, textTransform: 'uppercase' }}>{s.status}</span>
+                  {s.teamId && <span style={{ fontSize: 10, padding: '2px 5px', background: 'var(--btn)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text-faint)' }}>team:{s.teamId.slice(0,4)}</span>}
+                  {s.parentSubAgentId && <span style={{ fontSize: 10, padding: '2px 5px', background: '#fef3c71a', border: '1px solid #facc1530', borderRadius: 4, color: '#facc15' }}>hive↳ {s.parentSubAgentId.slice(0,4)}</span>}
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                    <button className="btn" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => onSelectAgent?.({ kind: 'subagent', id: s.id })}>{isActive ? 'Viewing' : 'View chat'}</button>
+                    <button className="btn" style={{ padding: '4px 7px', fontSize: 11 }} onClick={() => toggleExpand(s.id)} title={isExpanded ? 'Hide chat' : 'Show chat'}>{isExpanded ? 'Hide' : `Chat ${msgs.length || ''}`}</button>
+                  </span>
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginTop: 6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.45 }}>{s.task}</div>
+                {s.result && <div style={{ marginTop: 6, padding: '6px 8px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-dim)', maxHeight: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'pre-wrap' }}>{s.result.slice(0, 300)}{s.result.length > 300 ? '…' : ''}</div>}
+                {isExpanded && (
+                  <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 8, maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {msgs.length === 0 ? <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>No chat yet — expands to load GET /api/subagents/{s.id.slice(0,6)}/messages</span> : msgs.map(m => (
+                      <div key={m.id} style={{ padding: '6px 8px', background: m.role === 'user' ? 'var(--primary-bg)' : m.role === 'assistant' ? 'var(--surface-2)' : 'var(--input)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: 3 }}>{m.role}{m.toolName ? ` · ${m.toolName}` : ''} · {new Date(m.createdAt).toLocaleTimeString()}</div>
+                        <div style={{ fontSize: 12.5, color: 'var(--text-dim)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.5 }}>{m.content.slice(0, 800)}{m.content.length > 800 ? '…' : ''}</div>
+                      </div>
+                    ))}
+                    <button className="btn" style={{ marginTop: 4, padding: '4px 8px', fontSize: 11, alignSelf: 'flex-start' }} onClick={() => api.listSubAgentMessages(s.id).then(list => setMessagesBySub(prev => ({ ...prev, [s.id]: list }))).catch(() => toast('failed', 'error'))}>Refresh</button>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, fontSize: 11, color: 'var(--text-faint)', fontFamily: 'ui-monospace, monospace', flexWrap: 'wrap' }}>
+                  {s.modelId && <span>model:{s.modelId.slice(0, 16)}</span>}
+                  {s.worktreePath && <span title={s.worktreePath}>wt:{s.worktreePath.split('/').pop()}</span>}
+                  <span style={{ marginLeft: 'auto' }}>{new Date(s.createdAt).toLocaleTimeString()}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '7px 8px' }}>
+        <b style={{ color: 'var(--text-dim)' }}>Modes:</b> Solo=1 · Swarm=main→5 parallel · Hive=Main→Agent→5 (depth2, parentSubAgentId) · Squad=Team+Head (teamId) · Infinity=unlimited+Preview+per-role modelId
+      </div>
+    </div>
+  )
+}
+
 function TerminalPane({ project }: { project: Project | null }) {
   const projectId = project?.id ?? null
   const projectPath = project?.path ?? ''
@@ -443,7 +579,7 @@ function TerminalPane({ project }: { project: Project | null }) {
   )
 }
 
-export function RightSidebar({ open, activeProject, plan, activities, streaming, onClose }: RightSidebarProps) {
+export function RightSidebar({ open, activeProject, activeChatId, plan, activities, streaming, subAgents = [], teams = [], activeAgent, onSelectAgent, onClose }: RightSidebarProps) {
   const [tab, setTab] = useState<RsTab>('plan')
   // Hide skill reads from activity counts/badge — they live only in Skills dropdown
   const visibleActivities = activities.filter(a => !isSkillRead(a))
@@ -452,6 +588,8 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
   const editCount = visibleActivities.filter(a => a.toolType === 'edit_file').length
   const readCount = visibleActivities.filter(a => a.toolType === 'read_file').length
   const hasRunning = visibleActivities.some(a => a.ok === undefined)
+  const agentCount = (subAgents?.length ?? 0) + (teams?.length ?? 0)
+  const hasAgentRunning = (subAgents ?? []).some(s => s.status === 'working' || s.status === 'pending')
   const tabsRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null)
   const dragMovedRef = useRef(false)
@@ -578,12 +716,12 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
         >
           {TABS.map((t) => {
             const isActivity = t.id === 'activity'
+            const isAgents = t.id === 'agents'
             return (
               <button
                 key={t.id}
                 className={`tab${tab === t.id ? ' active' : ''}`}
                 onClick={(e) => {
-                  // ignore click if it was a drag (threshold 8px, see pointer handlers)
                   if (dragMovedRef.current) { dragMovedRef.current = false; return }
                   setTab(t.id)
                   e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
@@ -604,6 +742,18 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
                       {readCount > 0 && <span className="rsb-dot read" title={`${readCount} Read`} />}
                     </span>
                   )}
+                  {isAgents && agentCount > 0 && (
+                    <span className="rsb-tab-badge" title={`${subAgents.length} sub-agents · ${teams.length} teams`}>
+                      {agentCount}
+                      {hasAgentRunning && <span className="rsb-tab-pulse" style={{ background: '#22c55e', boxShadow: '0 0 6px rgba(34,197,94,0.5)' }} />}
+                    </span>
+                  )}
+                  {isAgents && agentCount > 0 && (
+                    <span className="rsb-tab-dots" aria-hidden>
+                      {subAgents.filter(s=> s.status==='working').length > 0 && <span className="rsb-dot" style={{ background: '#eab308', boxShadow: '0 0 6px rgba(234,179,8,0.5)' }} title={`${subAgents.filter(s=> s.status==='working').length} working`} />}
+                      {subAgents.filter(s=> s.status==='done').length > 0 && <span className="rsb-dot" style={{ background: '#22c55e', boxShadow: '0 0 6px rgba(34,197,94,0.5)' }} title={`${subAgents.filter(s=> s.status==='done').length} done`} />}
+                    </span>
+                  )}
                 </span>
               </button>
             )
@@ -612,6 +762,7 @@ export function RightSidebar({ open, activeProject, plan, activities, streaming,
 
         <div className="rsb-body">
           {tab === 'plan' && <PlanView plan={plan} activities={activities} streaming={streaming} />}
+          {tab === 'agents' && <AgentsPane activeChatId={activeChatId ?? null} subAgents={subAgents} teams={teams} activeAgent={activeAgent} onSelectAgent={onSelectAgent} />}
           {tab === 'terminal' && <TerminalPane project={activeProject} />}
           {tab === 'activity' && <ActivityPane activities={activities} />}
           {tab === 'files' && <FilesPane projectId={activeProject?.id ?? null} />}

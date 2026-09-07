@@ -269,17 +269,6 @@ export interface Team {
   updatedAt: string
 }
 
-export interface SubAgentMessage {
-  id: string
-  subAgentId: string
-  parentChatId: string
-  role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string
-  createdAt: string
-  toolCallId?: string | null
-  toolName?: string | null
-}
-
 export type ActiveAgentView =
   | { kind: 'main' }
   | { kind: 'subagent'; id: string }

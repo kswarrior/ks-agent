@@ -93,10 +93,6 @@ export interface StreamHandlers {
   onChatTitle?: (data: { chatId: string; title: string; seq?: number }) => void
   onPreview?: (preview: Preview) => void
   onSubAgent?: (sub: import('./types').SubAgent) => void
-  onSubAgentDelta?: (data: { subAgentId: string; delta: string }) => void
-  onSubAgentThinking?: (data: { subAgentId: string; text: string }) => void
-  onSubAgentTool?: (data: { subAgentId: string; callId: string; name: string; args: string }) => void
-  onSubAgentToolResult?: (data: { subAgentId: string; callId: string; ok: boolean; summary: string }) => void
   onRetry?: (info: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }) => void
   onError: (message: string) => void
   onDone: () => void
@@ -187,18 +183,6 @@ export async function streamChatEvents(
             case 'subagent':
               handlers.onSubAgent?.(parsed as import('./types').SubAgent)
               break
-            case 'subagent_delta':
-              handlers.onSubAgentDelta?.(parsed as { subAgentId: string; delta: string })
-              break
-            case 'subagent_thinking':
-              handlers.onSubAgentThinking?.(parsed as { subAgentId: string; text: string })
-              break
-            case 'subagent_tool':
-              handlers.onSubAgentTool?.(parsed as { subAgentId: string; callId: string; name: string; args: string })
-              break
-            case 'subagent_tool_result':
-              handlers.onSubAgentToolResult?.(parsed as { subAgentId: string; callId: string; ok: boolean; summary: string })
-              break
             case 'retry':
               handlers.onRetry?.(parsed as { attempt: number; maxAttempts: number; delay: number; reason: string; error: string })
               break
@@ -229,15 +213,11 @@ export const listGenerations = () => req<string[]>('/api/generations')
 export const stopGeneration = (chatId: string) =>
   req<{ ok: true }>(`/api/chats/${chatId}/stop`, json('POST', {}))
 
-// Sub-agents / Teams — 5 Modes Solo/Swarm/Hive/Squad/Infinity — with per sub-agent chat
+// Sub-agents / Teams — 5 Modes Solo/Swarm/Hive/Squad/Infinity
 export const listSubAgents = (chatId: string) => req<import('./types').SubAgent[]>(`/api/chats/${chatId}/subagents`)
 export const listTeams = (chatId: string) => req<import('./types').Team[]>(`/api/chats/${chatId}/teams`)
 export const createTeam = (chatId: string, name: string, headId?: string | null) =>
   req<import('./types').Team>(`/api/chats/${chatId}/teams`, json('POST', { name, headId: headId ?? null }))
-export const getSubAgent = (subId: string) => req<import('./types').SubAgent>(`/api/subagents/${subId}`)
-export const listSubAgentMessages = (subId: string) => req<import('./types').SubAgentMessage[]>(`/api/subagents/${subId}/messages`)
-export const listSubAgentMessagesByChat = (chatId: string, subId: string) => req<import('./types').SubAgentMessage[]>(`/api/chats/${chatId}/subagents/${subId}/messages`)
-export const listAllSubAgentMessagesForChat = (chatId: string) => req<import('./types').SubAgentMessage[]>(`/api/chats/${chatId}/subagents/messages`)
 
 // Activities
 export const listActivities = (chatId: string) => req<Activity[]>(`/api/chats/${chatId}/activities`)
