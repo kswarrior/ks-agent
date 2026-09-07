@@ -84,7 +84,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | **Streaming + stop / resume** | ✅ SSE + Continue + auto-retry | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ stream | ✅ | ✅ | ✅ | ✅ |
 | **Auto-retry + backoff on provider errors** | ✅ configurable | 🔶 | ✅ | ❌ | 🔶 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Plan mode (plan → steps → verify)** | ✅ first-class, persisted per chat | ✅ via skills | ✅ built-in | ❌ | ✅ planner | 🔶 | ❌ | ✅ plan/act | ❌ | 🔶 | 🔶 |
-| **Tool calls (read/write/edit/shell/grep/glob)** | ✅ 16 tools, shell up to 5 min | ✅ | ✅ | 🔶 | ✅ + browser | ✅ | ✅ | ✅ | 🔶 | ✅ | 🔶 |
+| **Tool calls (read/write/edit/shell/grep/glob)** | ✅ 25 tools (18 + 7 native git), shell up to 5 min | ✅ | ✅ | 🔶 | ✅ + browser | ✅ | ✅ | ✅ | 🔶 | ✅ | 🔶 |
 | **Ask question (blocks until human answers)** | ✅ blocking | 🔶 | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
 | **Live preview on port** | ✅ one per chat, iframe sidebar | ❌ | ❌ | ❌ | ✅ browser | ✅ preview | ❌ | ✅ browser | ❌ | ✅ | ❌ |
 | **Real PTY terminal** | ✅ real PTY + xterm + WS, per project | ✅ | ✅ bash | ❌ | ✅ Docker shell | ✅ | ✅ shell | ✅ | ❌ | ✅ | ❌ |
