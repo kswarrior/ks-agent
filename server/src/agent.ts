@@ -433,6 +433,15 @@ export function getEnforcedSkillsForWrite(rel: string, chatId: string): string[]
   return [...new Set([...direct, ...fromHistory, ...extra])]
 }
 
+export function getSkillRole(mainFile: string): string {
+  try {
+    const skills = getSkills() as { mainFile: string; role?: string }[]
+    const found = skills.find(s => s.mainFile.toLowerCase() === mainFile.toLowerCase() || s.mainFile.toLowerCase().endsWith('/' + mainFile.toLowerCase()) || mainFile.toLowerCase().endsWith(s.mainFile.toLowerCase()))
+    if (found) return String(found.role || 'must').toLowerCase()
+  } catch {}
+  return 'must'
+}
+
 function err(message: string): ToolExecResult {
   return { ok: false, result: `Error: ${message}`, summary: message.slice(0, 160) }
 }
@@ -1892,13 +1901,16 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
     }
 
     case 'write_file': {
-      // Skill enforcement: must have read relevant skill before editing
+      // Skill enforcement: role-based (Must/Recommended/Optional + triggers)
       {
         const rel = String(args.path ?? '')
         const enforced = getEnforcedSkillsForWrite(rel, ctx.chatId)
         for (const req of enforced) {
           if (!hasReadSkill(ctx.chatId, req)) {
-            return err(`Skill required: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first. For frontend work also read the matching sub-file (frontend/react.md, frontend/ts.md, frontend/ejs.md) if relevant.`)
+            const role = getSkillRole(req)
+            const prefix = role === 'must' ? 'Must - AI must read it' : role === 'recommended' ? 'Recommended - AI should read it' : 'Skill required'
+            const hint = req.toLowerCase().includes('frontend') ? ' For frontend work also read the matching sub-file (frontend/react.md, frontend/ts.md, frontend/ejs.md) if relevant.' : ''
+            return err(`${prefix}: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first.${hint}`)
           }
         }
       }
@@ -1918,13 +1930,16 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
     }
 
     case 'edit_file': {
-      // Skill enforcement: must have read relevant skill before editing
+      // Skill enforcement: role-based
       {
         const rel = String(args.path ?? '')
         const enforced = getEnforcedSkillsForWrite(rel, ctx.chatId)
         for (const req of enforced) {
           if (!hasReadSkill(ctx.chatId, req)) {
-            return err(`Skill required: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first. For frontend work also read the matching sub-file (frontend/react.md, frontend/ts.md, frontend/ejs.md) if relevant.`)
+            const role = getSkillRole(req)
+            const prefix = role === 'must' ? 'Must - AI must read it' : role === 'recommended' ? 'Recommended - AI should read it' : 'Skill required'
+            const hint = req.toLowerCase().includes('frontend') ? ' For frontend work also read the matching sub-file (frontend/react.md, frontend/ts.md, frontend/ejs.md) if relevant.' : ''
+            return err(`${prefix}: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first.${hint}`)
           }
         }
       }
@@ -2102,7 +2117,9 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         const enforced = getEnforcedSkillsForWrite(rel, ctx.chatId)
         for (const req of enforced) {
           if (!hasReadSkill(ctx.chatId, req)) {
-            return err(`Skill required: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first.`)
+            const role = getSkillRole(req)
+            const prefix = role === 'must' ? 'Must - AI must read it' : role === 'recommended' ? 'Recommended - AI should read it' : 'Skill required'
+            return err(`${prefix}: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first.`)
           }
         }
       }
@@ -2130,7 +2147,9 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
         const enforced = getEnforcedSkillsForWrite(rel, ctx.chatId)
         for (const req of enforced) {
           if (!hasReadSkill(ctx.chatId, req)) {
-            return err(`Skill required: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first.`)
+            const role = getSkillRole(req)
+            const prefix = role === 'must' ? 'Must - AI must read it' : role === 'recommended' ? 'Recommended - AI should read it' : 'Skill required'
+            return err(`${prefix}: You must read "${req}" via read_file before editing "${rel}". Call read_file with path "${req}" first.`)
           }
         }
       }

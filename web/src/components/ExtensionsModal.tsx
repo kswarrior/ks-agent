@@ -32,9 +32,9 @@ export function ExtensionsModal({ open, onClose }: Props) {
   const [skills, setSkills] = useState<Skill[]>([])
   const [skillsLoading, setSkillsLoading] = useState(false)
   const [showSkillForm, setShowSkillForm] = useState(false)
-  const [skillForm, setSkillForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[], projectId: '' })
+  const [skillForm, setSkillForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[], projectId: '', role: 'optional' as Skill['role'], triggers: '' })
   const [skillEdit, setSkillEdit] = useState<Skill | null>(null)
-  const [skillEditForm, setSkillEditForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[], projectId: '' })
+  const [skillEditForm, setSkillEditForm] = useState({ name: '', note: '', mainFile: '', files: [] as string[], projectId: '', role: 'optional' as Skill['role'], triggers: '' })
   const [skillFileBrowserOpen, setSkillFileBrowserOpen] = useState(false)
   const [skillFileBrowserProject, setSkillFileBrowserProject] = useState<string | null>(null)
   const [skillProjects, setSkillProjects] = useState<Project[]>([])
@@ -784,11 +784,11 @@ export function ExtensionsModal({ open, onClose }: Props) {
     if (!mainFile.endsWith('.md')) return setError('Main file must be .md')
     if (mainFile.length > 500) return setError('Main file path too long')
     try {
-      const payload: { name: string; note: string; mainFile: string; files: string[]; projectId?: string } = { name, note, mainFile, files: [...new Set(skillForm.files.map((f) => f.trim()).filter(Boolean))] }
+      const payload: { name: string; note: string; mainFile: string; files: string[]; projectId?: string; role?: string; triggers?: string } = { name, note, mainFile, files: [...new Set(skillForm.files.map((f) => f.trim()).filter(Boolean))], role: skillForm.role || 'optional', triggers: (skillForm.triggers || '').trim() }
       if (skillForm.projectId.trim()) payload.projectId = skillForm.projectId.trim()
       await api.createSkill(payload)
       toast('Skill added', 'success')
-      setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '' })
+      setSkillForm({ name: '', note: '', mainFile: '', files: [], projectId: '', role: 'optional', triggers: '' })
       setShowSkillForm(false)
       setSkillFileBrowserOpen(false)
       setSkillPickerDir('')
@@ -811,8 +811,8 @@ export function ExtensionsModal({ open, onClose }: Props) {
     if (!mainFile.endsWith('.md')) return setError('Main file must be .md')
     if (mainFile.length > 500) return setError('Main file path too long')
     try {
-      const payload: Partial<{ name: string; note: string; mainFile: string; files: string[]; projectId: string }> = {
-        name, note, mainFile, files: [...new Set(skillEditForm.files.map((f) => f.trim()).filter(Boolean))]
+      const payload: Partial<{ name: string; note: string; mainFile: string; files: string[]; projectId: string; role: string; triggers: string }> = {
+        name, note, mainFile, files: [...new Set(skillEditForm.files.map((f) => f.trim()).filter(Boolean))], role: skillEditForm.role || 'optional', triggers: (skillEditForm.triggers || '').trim()
       }
       if (skillEditForm.projectId.trim()) payload.projectId = skillEditForm.projectId.trim()
       else payload.projectId = ''
@@ -827,7 +827,7 @@ export function ExtensionsModal({ open, onClose }: Props) {
 
   function startEditSkill(s: Skill) {
     setSkillEdit(s)
-    setSkillEditForm({ name: s.name, note: s.note, mainFile: s.mainFile, files: [...s.files], projectId: s.projectId ?? '' })
+    setSkillEditForm({ name: s.name, note: s.note, mainFile: s.mainFile, files: [...s.files], projectId: s.projectId ?? '', role: s.role || 'optional', triggers: s.triggers || '' })
     setShowSkillForm(false)
     setError(null)
     setSkillFileBrowserOpen(false)
