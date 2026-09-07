@@ -202,11 +202,13 @@ function KsAgent() {
     const skipLoad = skipLoadForRef.current === activeChatId
     skipLoadForRef.current = null
     if (skipLoad) return
+    // Clear stale messages immediately so the previous chat's bubbles never render under the new chat's title
+    setMessages([])
     let cancelled = false
     api
       .listMessages(activeChatId)
       .then((list) => !cancelled && setMessages(list))
-      .catch((e) => !cancelled && toast(e.message, 'error'))
+      .catch((e) => { if (!cancelled) { setMessages([]); toast(e.message, 'error') } })
     return () => {
       cancelled = true
     }
@@ -915,7 +917,8 @@ function KsAgent() {
         delete next[chatId]
         return next
       })
-      // restore optimistically hidden message on failure
+      // restore optimistically hidden message on failure — only if user hasn't switched chats mid-flight
+      if (activeChatIdRef.current !== chatId) return
       if (isPure) {
         if (lastAssistant) setMessages((prev) => (prev.some((m) => m.id === lastAssistant!.id) ? prev : [...prev, lastAssistant!]))
       } else {
