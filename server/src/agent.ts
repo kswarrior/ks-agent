@@ -2693,7 +2693,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
   const ctx: ToolContext = { projectPath: opts.projectPath, projectId: opts.projectId, chatId: opts.chatId, onEvent: opts.onEvent, signal: opts.signal, providerOverride: { baseUrl: opts.baseUrl, apiKey: opts.apiKey }, modelOverride: opts.model, agentMode: opts.agentMode ?? 'solo' }
   let content = ''
   // Build combined tool list including MCP tools scoped to project
-  // In swarm/hive/squad/infinity first round, restrict main to delegate_task only so it acts as head (just says what to do, sub-agents work)
+  // In swarm/hive/squad/infinity first round, restrict main to delegate_task ONLY so it acts as head (just says what to do, sub-agents work — including planning)
   let _roundForTools = 0
   function combinedTools(): ToolDef[] {
     try {
@@ -2701,12 +2701,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       const base = mcpDefs.length ? [...AGENT_TOOLS, ...mcpDefs] : AGENT_TOOLS
       const mode = opts.agentMode ?? 'solo'
       if (mode !== 'solo' && _roundForTools === 0) {
-        // First round: force delegation — only allow delegate_task (plus create_plan for squad head if needed)
-        // This makes main a head that just delegates, sub-agents do the work
-        const filtered = base.filter(t => t.function.name === 'delegate_task' || t.function.name === 'create_plan')
-        // Always keep delegate_task, if filtered would be empty keep at least delegate_task
-        const hasDelegate = filtered.some(t => t.function.name === 'delegate_task')
-        if (hasDelegate && filtered.length >= 1) return filtered
+        // First round: force delegation — ONLY delegate_task, no create_plan — planning must be done by a sub-agent (user requested "also for planning, another sub agent also")
         return base.filter(t => t.function.name === 'delegate_task')
       }
       return base
@@ -2858,6 +2853,27 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           if (!outcome.text.trim()) outcome.text = `Delegated ${needed} sub-task(s) for ${mode} mode (forced).`
         }
         messages.push({ role: 'system', content: `System: ${mode} mode delegates already created (${needed} sub-agent(s) forced by UI selection). Do NOT call delegate_task again — ${mode} requirement satisfied (${minDelegates} delegates). Now wait for sub-agents to complete and synthesize their results. Sub-agents will appear in UI bar and Agents tab.` })
+        messages = truncateHistoryForModel(messages)
+      }
+      // Also for planning: dedicated planning sub-agent (user: "also for planning, another sub agent also")
+      // For non-trivial tasks, ensure at least one planning-focused delegate exists, even if minDelegates already satisfied
+      const isNonTrivialForPlanning = userContentForForce.length > 30 || /build|create|implement|app|feature|system|todo|panel|dashboard|refactor|migrate|design/i.test(userContentForForce)
+      const hasPlanningDelegate = outcome.toolCalls.some(c => {
+        try { const a = JSON.parse(c.args); return String(a.task ?? '').toLowerCase().includes('plan') } catch { return false }
+      }) || (() => { try { return subAgentsOf(ctx.chatId).some(s => s.task.toLowerCase().includes('plan')) } catch { return false } })()
+      if (isNonTrivialForPlanning && !hasPlanningDelegate && !forcedModeChats.has(ctx.chatId + ':plan')) {
+        const teamForPlanning = (mode === 'squad' || mode === 'infinity') ? (() => { try { const ts = teamsOf(ctx.chatId); return ts[0]?.id ?? null } catch { return null } })() : null
+        const planningTask = `Planning: Create a detailed execution plan (3-10 steps) for: ${userContentForForce.slice(0, 200)} — analyze project, list files, propose steps, call create_plan`
+        const planningArgs: any = { task: planningTask, mode: 'write' }
+        if (teamForPlanning) planningArgs.teamId = teamForPlanning
+        console.log(`[mode ${mode}] also forcing planning sub-agent for chat ${ctx.chatId} (also for planning)`)
+        forcedModeChats.add(ctx.chatId + ':plan')
+        const resPlan = await executeTool('delegate_task', JSON.stringify(planningArgs), ctx)
+        const synthIdPlan = `forced_plan_${Date.now()}_${Math.random().toString(36).slice(2,6)}`
+        messages.push({ role: 'assistant', content: outcome.text || `Planning for ${mode}`, tool_calls: [{ id: synthIdPlan, type: 'function', function: { name: 'delegate_task', arguments: JSON.stringify(planningArgs) } }] })
+        messages.push({ role: 'tool', tool_call_id: synthIdPlan, content: resPlan.result })
+        outcome.toolCalls.push({ id: synthIdPlan, name: 'delegate_task', args: JSON.stringify(planningArgs) } as any)
+        messages.push({ role: 'system', content: `System: Planning sub-agent created for ${mode} mode. Do not create another planning delegate.` })
         messages = truncateHistoryForModel(messages)
       }
       } // end else (not greeting) — forced delegation
