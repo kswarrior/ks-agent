@@ -2057,7 +2057,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {skillEditForm.files.map((f, idx) => (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                          <div key={`${f}:${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
                             <IconFile size={14} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
                             <span style={{ flex: 1, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f}</span>
                             <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => setSkillEditForm({ ...skillEditForm, files: skillEditForm.files.filter((_, i) => i !== idx) })} aria-label="Remove file"><IconTrash size={14} /></button>
@@ -2207,7 +2207,7 @@ X-Api-Key: xxx" value={mcpForm.headersText} onChange={e => setMcpForm({ ...mcpFo
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {skillForm.files.map((f, idx) => (
-                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                          <div key={`${f}:${idx}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
                             <IconFile size={14} style={{ flexShrink: 0, color: 'var(--text-faint)' }} />
                             <span style={{ flex: 1, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f}</span>
                             <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => setSkillForm({ ...skillForm, files: skillForm.files.filter((_, i) => i !== idx) })} aria-label="Remove file"><IconTrash size={14} /></button>
