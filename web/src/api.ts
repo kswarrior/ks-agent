@@ -317,10 +317,16 @@ export const createProvider = (p: { name: string; baseUrl: string; apiKey: strin
   req<Provider>('/api/settings/providers', json('POST', p))
 export const updateProvider = (
   id: string,
-  p: Partial<{ name: string; baseUrl: string; apiKey: string }>
+  p: Partial<{ name: string; baseUrl: string; apiKey: string; clearApiKey: boolean }>
 ) => req<Provider>(`/api/settings/providers/${id}`, json('PATCH', p))
 export const deleteProvider = (id: string) =>
   req<{ ok: true }>(`/api/settings/providers/${id}`, { method: 'DELETE' })
+
+// Offline / air-gapped: fast local reachability probe + Ollama model discovery (no key sent).
+export const checkLocalProvider = (baseUrl: string) =>
+  req<{ ok: boolean; reachable: boolean; isLocal: boolean; status?: number; models?: number; error?: string }>('/api/settings/providers/check', json('POST', { baseUrl }))
+export const listOllamaModels = (baseUrl: string) =>
+  req<{ ok: boolean; models: string[]; count?: number; isLocal?: boolean; error?: string }>('/api/settings/providers/ollama-models', json('POST', { baseUrl }))
 
 export const listModels = () => req<ModelEntry[]>('/api/settings/models')
 export const createModel = (m: { providerId: string; model: string; displayName?: string; maxTokens?: number; systemPrompt?: string }) =>

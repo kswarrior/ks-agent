@@ -1212,7 +1212,7 @@ async function generateAndPersistTitle(
   // Allow generation if count <= 5 to avoid overwriting later deliberate default
   if (count > 5) return
   let title: string | null = null
-  if (provider?.baseUrl && provider?.apiKey && model) {
+  if (provider?.baseUrl && model) {
     title = await generateChatTitleViaLLM(provider, model, userContent)
   }
   if (!title) title = heuristicTitle(userContent)
@@ -2172,6 +2172,51 @@ app.delete('/api/settings/providers/:id', (c) => {
   db.models = db.models.filter((m) => m.providerId !== id)
   saveDb()
   return c.json({ ok: true })
+})
+
+// Offline / air-gapped: fast local reachability probe (no key sent, 5s timeout, sanitized errors).
+app.post('/api/settings/providers/check', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const baseUrl = String((body as any).baseUrl ?? '').trim().replace(/\/+$/, '')
+  if (!/^https?:\/\/.+/.test(baseUrl)) return c.json({ error: 'Base URL must start with http(s)://' }, 400)
+  const isLocal = isLocalBaseUrl(baseUrl)
+  const clean = baseUrl.replace(/\/+$/, '')
+  const modelsUrl = /\/chat\/completions$/.test(clean) ? clean.replace(/\/chat\/completions$/, '/models') : clean + '/models'
+  try {
+    const res = await fetch(modelsUrl, { method: 'GET', signal: AbortSignal.timeout(5000) } as any)
+    let count: number | undefined
+    try {
+      const data: any = await res.json()
+      const arr = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : null
+      if (arr) count = arr.length
+    } catch {}
+    if (!res.ok) {
+      return c.json({ ok: true, reachable: false, isLocal, status: (res as any).status, models: count, error: `Provider responded ${(res as any).status}`.slice(0, 200) })
+    }
+    return c.json({ ok: true, reachable: true, isLocal, status: 200, ...(count !== undefined ? { models: count } : {}) })
+  } catch (e: any) {
+    const msg = String(e?.name === 'TimeoutError' ? 'Connection timed out (5s)' : e?.message || 'Unreachable').slice(0, 200)
+    return c.json({ ok: true, reachable: false, isLocal, error: msg })
+  }
+})
+
+// Offline / air-gapped: list locally installed Ollama models via /api/tags (no key, 5s timeout).
+app.post('/api/settings/providers/ollama-models', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const baseUrl = String((body as any).baseUrl ?? '').trim().replace(/\/+$/, '')
+  if (!/^https?:\/\/.+/.test(baseUrl)) return c.json({ error: 'Base URL must start with http(s)://' }, 400)
+  const root = ollamaRootFromChatUrl(baseUrl)
+  try {
+    const res = await fetch(root + '/api/tags', { method: 'GET', signal: AbortSignal.timeout(5000) } as any)
+    if (!res.ok) return c.json({ ok: false, models: [], error: `Ollama responded ${(res as any).status}`.slice(0, 200) })
+    const data: any = await res.json().catch(() => null)
+    const arr = Array.isArray(data?.models) ? data.models : []
+    const names = arr.map((m: any) => String(m?.name ?? m?.model ?? '')).filter(Boolean).slice(0, 100)
+    return c.json({ ok: true, models: names, count: names.length, isLocal: isLocalBaseUrl(baseUrl) })
+  } catch (e: any) {
+    const msg = String(e?.name === 'TimeoutError' ? 'Connection timed out (5s)' : e?.message || 'Unreachable').slice(0, 200)
+    return c.json({ ok: false, models: [], error: msg })
+  }
 })
 
 app.get('/api/settings/models', (c) => {
