@@ -77,4 +77,25 @@ app.post('/api/server/console/clear', (c) => {
   return c.json({ status: 'cleared' })
 })
 
+// Servers list
+app.get('/api/servers', (c) => {
+  return c.json(servers)
+})
+
+// Players list
+app.get('/api/players', (c) => {
+  return c.json(players)
+})
+
+// Analytics
+app.get('/api/analytics', (c) => {
+  return c.json({
+    total_players: 3421,
+    avg_uptime: '98.7%',
+    peak_players: 89,
+    cpu_usage: 42.5,
+    memory_usage: 67.3
+  })
+})
+
 export default app

@@ -31,6 +31,8 @@ export function App() {
     isRunning: false,
   })
   const [showSettings, setShowSettings] = useState(false)
+  const [consoleOutput, setConsoleOutput] = useState<string[]>([])
+  const [players, setPlayers] = useState<any[]>([])
 
   const API = 'http://127.0.0.1:3000'
 
@@ -53,7 +55,15 @@ export function App() {
     try {
       const res = await fetch(`${API}/api/server/console`)
       const data: BackendConsole = await res.json()
-      setConsoleOutput(data.output)
+      setConsoleOutput(data.output || [])
+    } catch {}
+  }, [])
+
+  const fetchPlayers = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/players`)
+      const data = await res.json()
+      setPlayers(data)
     } catch {}
   }, [])
 
