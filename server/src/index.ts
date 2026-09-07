@@ -1676,6 +1676,7 @@ app.post('/api/chats/:id/messages', async (c) => {
     const prefix: LLMMessage[] = [
       { role: 'system', content: modelSystemPrompt },
       ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+      ...projectDataMessages(project, chat.id),
       ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
       ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
       ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
