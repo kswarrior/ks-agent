@@ -1414,45 +1414,29 @@ app.post('/api/chats/:id/messages', async (c) => {
         const planIncompleteForPure = isPlanIncomplete(existingPlanForPure)
         let history: LLMMessage[]
         {
-      const modeMsg = modeInstruction(agentMode)
-      const contextNote = contextModeSystemNote(contextMode)
-      const toolContext: LLMMessage[] = []
-      if (contextMode === 'full') {
-        try {
-          const acts = activitiesOf(chat.id).slice(-18)
-          if (acts.length) {
-            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
-            if (snippet.trim()) toolContext.push({ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (avoid re-reading unless verification needed):\n${snippet}` })
+          const modeMsg = modeInstruction(agentMode)
+          const contextNote = contextModeSystemNote(contextMode)
+          let toolContext: LLMMessage[] = []
+          if (contextMode === 'full') {
+            try {
+              const acts = activitiesOf(chat.id).slice(-18)
+              if (acts.length) {
+                const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+                if (snippet.trim()) toolContext = [{ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (avoid re-reading unless verification needed):\n${snippet}` }]
+              }
+            } catch {}
           }
-        } catch {}
-      }
-      const prefix: LLMMessage[] = [
-        { role: 'system', content: modelSystemPrompt },
-        ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
-        ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-        ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
-        ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
-        ...skillMessages,
-        ...cleanMessagesForHistory(chat.id)
-      ]
-      const withTool = toolContext.length ? [...prefix.slice(0, prefix.length - cleanMessagesForHistory(chat.id).length), ...toolContext, ...cleanMessagesForHistory(chat.id)] : prefix
-      // if we injected toolContext we need to recompute prefix correctly — simpler: rebuild
-      let basePrefix: LLMMessage[]
-      if (toolContext.length) {
-        const clean = cleanMessagesForHistory(chat.id)
-        basePrefix = [
-          { role: 'system', content: modelSystemPrompt },
-          ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
-          ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
-          ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
-          ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
-          ...skillMessages,
-          ...toolContext,
-          ...clean
-        ]
-      } else {
-        basePrefix = prefix
-      }
+          const clean = cleanMessagesForHistory(chat.id)
+          const basePrefix: LLMMessage[] = [
+            { role: 'system', content: modelSystemPrompt },
+            ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+            ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+            ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
+            ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
+            ...skillMessages,
+            ...toolContext,
+            ...clean
+          ]
           const continueInstruction: LLMMessage = {
             role: 'user',
             content:
