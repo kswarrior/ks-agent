@@ -408,6 +408,112 @@ export function sanitizeShellPlaceholder(command: string): string {
   return out
 }
 
+/** Strip a leading shell-prompt echo ("$ npm ...", "> npm ...", "# npm ...") — "$" alone is a prompt, NOT an env var. "$HOME"/"${X}" (no space) are kept. */
+export function stripShellPromptPrefix(command: string): string {
+  let out = command.trim()
+  for (let i = 0; i < 3 && /^[$>＄﹩#%❯➜]\s+/.test(out); i++) {
+    out = out.replace(/^[$>＄﹩#%❯➜]\s+/, '').trim()
+  }
+  return out || command.trim()
+}
+
+/** True when a `cd` target means "project root itself" (redundant — CWD is already there). */
+function isRootEquivalentCdTarget(target: string, projectPath: string): boolean {
+  const t = target.trim().replace(/^["']|["']$/g, '').trim()
+  if (!t || t === '.' || t === './' || t === '/' || t === '~' || t === '~/') return true
+  if (containsLiteralProjectFolderPlaceholder(t)) return true
+  if (/^%24%7Bprojectfolder%7D/i.test(t)) return true
+  if (/^\$projectfolder/i.test(t)) return true
+  // $VAR / ${VAR} alone (e.g. cd $projectfolder, cd ${PROJECT}) — redundant by design since we export projectfolder env
+  if (/^\$[A-Za-z_][A-Za-z0-9_]*$/.test(t) || /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/.test(t)) return true
+  try {
+    const projRoot = path.resolve(projectPath)
+    if (path.isAbsolute(t)) {
+      const norm = path.normalize(t)
+      // Exact root, or trailing-slash root, or ANY absolute path that is NOT inside the real root
+      // (a wrong guess like /home/runner/project/ks) counts as root-equivalent: the intent was "go to project root"
+      if (norm === projRoot) return true
+      if (!norm.startsWith(projRoot + path.sep)) return true
+      return false
+    }
+  } catch {}
+  return false
+}
+
+/**
+ * Remove redundant leading `cd <root-ish> (&&|;|newline) REST` chains (max 3 levels, e.g. `cd /wrong && cd . && npm run dev`).
+ * Relative subdir cds (`cd src && ...`) are PRESERVED. Absolute cds inside the real root are rewritten to relative.
+ * Returns the normalized command plus whether anything was stripped.
+ */
+export function stripRedundantCdPrefix(command: string, projectPath: string): { command: string; stripped: string[] } {
+  let out = command.trim()
+  const stripped: string[] = []
+  for (let i = 0; i < 3; i++) {
+    const m = out.match(/^cd\s+((?:"[^"]*")|(?:'[^']*')|(?:[^\s;&|]+))\s*(?:&&|;|\n)\s*([\s\S]*)$/)
+    if (!m) break
+    const rawTarget = m[1]
+    const rest = (m[2] || '').trim()
+    if (!rest) break
+    const target = rawTarget.replace(/^["']|["']$/g, '')
+    if (isRootEquivalentCdTarget(target, projectPath)) {
+      stripped.push(rawTarget)
+      out = rest
+      continue
+    }
+    // Absolute target INSIDE the real root (e.g. cd /abs/project/ks/src && cat f): rewrite to relative cd so subdir intent is kept
+    try {
+      if (path.isAbsolute(target)) {
+        const projRoot = path.resolve(projectPath)
+        const norm = path.normalize(target)
+        if (norm.startsWith(projRoot + path.sep)) {
+          const rel = path.relative(projRoot, norm) || '.'
+          stripped.push(`${rawTarget}→${rel}`)
+          out = rel === '.' ? rest : `cd ${rel} && ${rest}`
+          break
+        }
+      }
+    } catch {}
+    break
+  }
+  return { command: out || command.trim(), stripped }
+}
+
+/** Remove manual backgrounding/noise the runner already handles (`&`, `2>&1 &`, `& sleep N`, `sleep N`, leading `nohup`). */
+export function stripManualBackgroundNoise(command: string): { command: string; stripped: boolean } {
+  let out = command.trim()
+  let stripped = false
+  out = out.replace(/^nohup\s+/i, () => { stripped = true; return '' }).trim()
+  // `... & sleep 5` / `... 2>&1 & sleep 5` / `...; sleep 5` / `... && sleep 5` at the end
+  const sleepSuffix = /\s*(?:&&|;|&)?\s*sleep\s+\d+(?:s|ms)?\s*$/i
+  if (sleepSuffix.test(out)) { out = out.replace(sleepSuffix, '').trim(); stripped = true }
+  // trailing `2>&1 &` / `&` (the bg wrapper adds its own background + log)
+  if (/\s*2>&1\s*&\s*$/.test(out)) { out = out.replace(/\s*2>&1\s*&\s*$/, '').trim(); stripped = true }
+  else if (/\s*&\s*$/.test(out)) { out = out.replace(/\s*&\s*$/, '').trim(); stripped = true }
+  return { command: out || command.trim(), stripped }
+}
+
+/**
+ * Full shell normalization for agent/terminal commands: prompt → placeholder → redundant-cd → background-noise.
+ * Never throws; always returns a runnable command. `notes` describes each rewrite for the model-facing result.
+ */
+export function normalizeShellCommand(command: string, projectPath: string): { command: string; notes: string[] } {
+  const notes: string[] = []
+  let out = (command ?? '').trim()
+  if (!out) return { command: out, notes }
+  const noPrompt = stripShellPromptPrefix(out)
+  if (noPrompt !== out) { notes.push('removed leading shell prompt ("$"/">"/"#") — send bare commands only'); out = noPrompt }
+  if (containsLiteralProjectFolderPlaceholder(out)) {
+    const before = out
+    out = sanitizeShellPlaceholder(out)
+    if (out !== before) notes.push('replaced literal "${projectfolder}" with project-root-relative path (CWD is already project root)')
+  }
+  const cd = stripRedundantCdPrefix(out, projectPath)
+  if (cd.stripped.length) { notes.push(`removed redundant 'cd ${cd.stripped.join(', ')}' — CWD is already the project root, retry ran in the real root`); out = cd.command }
+  const bg = stripManualBackgroundNoise(out)
+  if (bg.stripped) { notes.push('removed manual "&"/"sleep"/"nohup" — dev servers auto-background with a log file; run the command plainly'); out = bg.command }
+  return { command: out.trim() || (command ?? '').trim(), notes }
+}
+
 /** Resolves a tool-supplied relative path inside the project; null when invalid.
  *  STRICT: only paths inside ${projectfolder} (project/ks) are allowed — every subfolder/file under it is inside and allowed, everything outside (parent, siblings, agent codebase, /tmp, absolute paths) returns null and is blocked.
  *  Also handles literal "${projectfolder}" prefix by stripping it to project root.
@@ -840,8 +946,8 @@ function containsPrivateUrl(command: string): string | null {
  */
 export function isOutsideScopeCommand(command: string, projectPath: string, _chatId: string): string | null {
   const raw = command.trim()
-  // Sanitize literal "${projectfolder}" placeholder -> "." or subpath so scope checks run on the real intent and we never create a literal folder named "${projectfolder}"
-  const c = containsLiteralProjectFolderPlaceholder(raw) ? sanitizeShellPlaceholder(raw) : raw
+  // Normalize first (prompt → placeholder → redundant-cd → &/sleep) so scope checks run on real intent and never on a literal "${projectfolder}" folder or wrong-guess cd path
+  const c = normalizeShellCommand(raw, projectPath).command
   // STRICT: any ".." traversal is forbidden — outside is FORBIDDEN
   if (/(?:^|[\s\"'\/])\.\.(?:\/|[\s\"']|$)/.test(c)) {
     return 'Traverses outside ${projectfolder} via ".." — outside is FORBIDDEN. Stay strictly inside ${projectfolder}'
@@ -910,8 +1016,9 @@ export function isOutsideScopeCommand(command: string, projectPath: string, _cha
         if (p === '/bin/bash' || p === '/bin/sh' || p === '/usr/bin/env') continue
       }
     }
-    // Any other absolute path outside project is FORBIDDEN — no /tmp or KS Agent exception
-    return `Accesses outside \${projectfolder}: ${p} — outside is FORBIDDEN. Only inside \${projectfolder} is allowed`
+    // Any other absolute path outside project is FORBIDDEN — no /tmp or KS Agent exception.
+    // Include the REAL root so the model stops guessing (e.g. /home/runner/project/ks is wrong) and retries relatively.
+    return `Accesses outside \${projectfolder}: ${p} — outside is FORBIDDEN. Real project root is \`${projRoot}\` (you are ALREADY there — NEVER cd, NEVER use absolute paths). Retry relatively, e.g. \`pwd\` then \`npm run dev\` (no cd, no "$" prefix, no "&"/sleep)`
   }
   // Also block relative agent paths that would escape project (e.g. ks-agent, server/src from inside project)
   const lower = c.toLowerCase()
@@ -939,10 +1046,11 @@ function isLongRunningCommand(cmd: string): boolean {
 }
 
 async function execShell(command: string, cwd: string): Promise<{ code: number; output: string }> {
+  const absCwd = path.resolve(cwd)
   return await new Promise((resolve) => {
     exec(
       command,
-      { cwd, timeout: SHELL_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, shell: '/bin/bash', windowsHide: true, env: { ...process.env, projectfolder: cwd, PROJECTFOLDER: cwd, PROJECT_FOLDER: cwd, ProjectFolder: cwd } as any },
+      { cwd: absCwd, timeout: SHELL_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, shell: '/bin/bash', windowsHide: true, env: { ...process.env, projectfolder: absCwd, PROJECTFOLDER: absCwd, PROJECT_FOLDER: absCwd, ProjectFolder: absCwd } as any },
       (error, stdout, stderr) => {
         const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
         let output = `${stdout}${stderr}`.slice(0, SHELL_OUTPUT_CAP)
