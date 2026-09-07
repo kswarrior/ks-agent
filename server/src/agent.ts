@@ -4,7 +4,7 @@ import path from 'node:path'
 import { addSubAgentMessage, createSubAgent, createTeam, findSubAgent, subAgentsOf, teamsOf, updateSubAgent, findPlanForChat, getDb, getGithubToken, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
-import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDiff, gitLog, gitPull, gitPush, githubCreatePr, gitStatus, isGitRepo, isValidBranchName, parseRepoFromRemote } from './git.js'
+import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDiff, gitLog, gitPull, gitPush, githubCreatePr, gitStatus, parseRepoFromRemote } from './git.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
 import { dockerExecShell, getDockerImage, isDockerAvailable, isDockerJailEnabled } from './docker.js'
 
