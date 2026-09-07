@@ -265,12 +265,91 @@ export function clearSkillReadsForChats(chatIds: Iterable<string>): void {
   for (const id of chatIds) skillReads.delete(id)
 }
 
-function getRequiredSkillsForRel(rel: string): string[] {
-  // For now, frontend is the primary enforced skill for web edits
-  if (isFrontendEdit(rel)) {
-    return ['frontend/skill.md']
+function globToRegExpForSkill(pattern: string): RegExp | null {
+  try {
+    let s = pattern.trim().toLowerCase()
+    if (!s) return null
+    let re = ''
+    let i = 0
+    while (i < s.length) {
+      const c = s[i]
+      if (c === '*') {
+        if (s[i+1] === '*') {
+          if (s[i+2] === '/') { re += '(?:.*\\/)?'; i+=3 } else { re += '.*'; i+=2 }
+        } else { re += '[^\\/]*'; i++ }
+      } else if (c === '?') { re += '[^\\/]'; i++ }
+      else if (c === '{') {
+        const j = s.indexOf('}', i)
+        if (j > i) { const inner = s.slice(i+1, j); const parts = inner.split(',').map(p=>p.trim().replace(/[.*+^${}()|[\]\\]/g,'\\$&')); re += '(?:'+parts.join('|')+')'; i=j+1 } else { re += '\\{'; i++ }
+      } else if (c === '[') {
+        const j = s.indexOf(']', i)
+        if (j > i) { re += s.slice(i, j+1); i=j+1 } else { re += '\\['; i++ }
+      } else if (/[.+^${}()|[\]\\]/.test(c)) { re += '\\'+c; i++ } else { re += c; i++ }
+    }
+    return new RegExp('^'+re+'$')
+  } catch { return null }
+}
+
+function triggersMatchRel(rel: string, triggers: string): boolean {
+  const relLower = rel.trim().toLowerCase()
+  const parts = triggers.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)
+  if (parts.length === 0) return false
+  for (const pat of parts) {
+    if (!pat) continue
+    if (pat.includes('*') || pat.includes('?')) {
+      const re = globToRegExpForSkill(pat)
+      if (re && re.test(relLower)) return true
+      // also try matching without leading **/
+      const stripped = pat.replace(/^\*\*\//,'')
+      const re2 = globToRegExpForSkill(stripped)
+      if (re2 && re2.test(relLower)) return true
+    } else {
+      // substring / prefix / frontend alias
+      if (relLower.includes(pat)) return true
+      if (pat === 'frontend' && isFrontendEdit(rel)) return true
+      if (pat === 'web' && isFrontendEdit(rel)) return true
+      if (pat === 'backend' && (relLower.startsWith('server/') || relLower.includes('server/src'))) return true
+      // prefix match for folder-like triggers
+      const prefix = pat.replace(/\/\*.*$/,'').replace(/\/+$/,'')
+      if (prefix && relLower.startsWith(prefix + '/')) return true
+    }
   }
-  return []
+  return false
+}
+
+function getRequiredSkillsForRel(rel: string): string[] {
+  const skills = getSkills() as { name: string; mainFile: string; role?: string; triggers?: string }[]
+  const out: string[] = []
+  const lowerRel = rel.toLowerCase()
+  for (const sk of skills) {
+    const role = String(sk.role || '').toLowerCase()
+    if (!role || role === 'optional') continue
+    const triggersStr = String(sk.triggers || '').trim()
+    if (triggersStr) {
+      if (triggersMatchRel(rel, triggersStr)) out.push(sk.mainFile.toLowerCase())
+    } else {
+      // no triggers: heuristics
+      if (sk.name.toLowerCase() === 'frontend' || sk.mainFile.toLowerCase().includes('frontend')) {
+        if (isFrontendEdit(rel)) out.push(sk.mainFile.toLowerCase())
+      } else if (role === 'must') {
+        // global must (no triggers) → enforce on any write
+        out.push(sk.mainFile.toLowerCase())
+      } else {
+        // recommended without triggers → not auto-enforced (only via history)
+      }
+    }
+  }
+  // Backward compat: if no skill-driven rule but frontend edit and legacy frontend skill without role, enforce frontend/skill.md
+  if (out.length === 0 && isFrontendEdit(rel)) {
+    const legacy = skills.find(s => (s.name.toLowerCase() === 'frontend' || s.mainFile.toLowerCase() === 'frontend/skill.md') && !s.role)
+    if (legacy) return ['frontend/skill.md']
+    const fallback = skills.find(s => s.mainFile.toLowerCase() === 'frontend/skill.md' && String(s.role).toLowerCase() === 'must' && !String(s.triggers||'').trim())
+    if (fallback && !out.includes(fallback.mainFile.toLowerCase())) {
+      // already would have been added via heuristic above, but keep fallback for safety
+      return ['frontend/skill.md']
+    }
+  }
+  return [...new Set(out)]
 }
 
 function getRelevantSkillsFromHistory(chatId: string): string[] {
@@ -303,12 +382,12 @@ function getRelevantSkillsFromHistory(chatId: string): string[] {
 
 export function getEnforcedSkillsForWrite(rel: string, chatId: string): string[] {
   const direct = getRequiredSkillsForRel(rel)
-  const fromHistory = getRelevantSkillsFromHistory(chatId)
+  let fromHistory = getRelevantSkillsFromHistory(chatId)
   const extra: string[] = []
   try {
     const msgs = messagesOf(chatId) as { role: string; content: string }[]
     const text = ([...msgs].reverse().find((m) => m.role === 'user')?.content || '').toLowerCase()
-    const skills = getSkills() as { name: string; mainFile: string; files: string[] }[]
+    const skills = getSkills() as { name: string; mainFile: string; files: string[]; role?: string }[]
     const frontend = skills.find((s) => s.name.toLowerCase() === 'frontend')
     if (frontend && (direct.includes('frontend/skill.md') || fromHistory.includes(frontend.mainFile.toLowerCase()))) {
       if (text.includes('react')) {
@@ -329,6 +408,27 @@ export function getEnforcedSkillsForWrite(rel: string, chatId: string): string[]
         if (f && !extra.includes(f.toLowerCase())) extra.push(f.toLowerCase())
       }
     }
+  } catch {}
+  // Filter history to only must/recommended (optional never enforced)
+  try {
+    const skills = getSkills() as { mainFile: string; role?: string }[]
+    const byFile = new Map<string, string>()
+    for (const s of skills) byFile.set(s.mainFile.toLowerCase(), String(s.role||'optional').toLowerCase())
+    fromHistory = fromHistory.filter(mf => {
+      const r = byFile.get(mf.toLowerCase()) || 'optional'
+      return r === 'must' || r === 'recommended'
+    })
+  } catch {}
+  // Also filter extra to respect frontend role
+  try {
+    const skills = getSkills() as { mainFile: string; role?: string }[]
+    const byFile = new Map<string, string>()
+    for (const s of skills) byFile.set(s.mainFile.toLowerCase(), String(s.role||'optional').toLowerCase())
+    const filteredExtra = extra.filter(mf => {
+      const r = byFile.get(mf.toLowerCase()) || 'optional'
+      return r === 'must' || r === 'recommended'
+    })
+    return [...new Set([...direct, ...fromHistory, ...filteredExtra])]
   } catch {}
   return [...new Set([...direct, ...fromHistory, ...extra])]
 }
