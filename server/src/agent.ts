@@ -931,6 +931,105 @@ const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'git_status',
+      description: 'Native git status for ${projectfolder} — branch + porcelain + shortstat. Prefer over run_shell `git status`. Fails closed when not a git repo.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_diff',
+      description: 'Native git diff for ${projectfolder} — stat + capped unified diff. Prefer over run_shell `git diff`. Supports staged flag, ref, single file, statOnly.',
+      parameters: {
+        type: 'object',
+        properties: {
+          staged: { type: 'boolean', description: 'Show staged (--staged) diff (default false)' },
+          ref: { type: 'string', description: 'Optional ref to diff against (branch or SHA, max 100 chars)' },
+          file: { type: 'string', description: 'Optional single relative file to diff (stays inside project)' },
+          stat_only: { type: 'boolean', description: 'Only --stat, no full diff (default false)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_log',
+      description: 'Native git log for ${projectfolder} — last N commits (%h %ad %an %s). Prefer over run_shell `git log`.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', description: 'Commits to show 1-100 (default 20)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_branch',
+      description: 'Native git branch for ${projectfolder} — list, create, or checkout. Prefer over run_shell `git branch/checkout`.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', description: 'list|create|checkout (default list)', enum: ['list', 'create', 'checkout'] },
+          name: { type: 'string', description: 'Branch name for create/checkout (1-100 chars, no .. @{ // leading -)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_commit',
+      description: 'Native git commit for ${projectfolder} — stages (git add -A or listed files) then commits with bot identity. Prefer over run_shell `git commit`. Returns nothing-to-commit when clean.',
+      parameters: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'Commit message 1-2000 chars' },
+          files: { type: 'array', items: { type: 'string' }, description: 'Optional relative files to stage (max 100, inside project). Omit for -A.' }
+        },
+        required: ['message']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_push',
+      description: 'Native git push/pull for ${projectfolder} — push (fast-forward only, never --force) or pull --ff-only. Prefer over run_shell `git push/pull`. Force-push stays behind run_shell approval.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', description: 'push|pull (default push)', enum: ['push', 'pull'] },
+          remote: { type: 'string', description: 'Remote name (default origin)' },
+          branch: { type: 'string', description: 'Optional branch to push/pull' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_create_pr',
+      description: 'Native GitHub PR create for ${projectfolder} — POST repos/{owner}/{repo}/pulls via stored token (header-only, never logged). Prefer over run_shell `gh pr create`. Repo auto-detected from .git/config when omitted.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'PR title 2-120 chars' },
+          head: { type: 'string', description: 'Head branch (source)' },
+          base: { type: 'string', description: 'Base branch (target, e.g. main)' },
+          body: { type: 'string', description: 'Optional PR body max 5000 chars' },
+          repo: { type: 'string', description: 'Optional owner/name slug; auto-detected from git remote when omitted' }
+        },
+        required: ['title', 'head', 'base']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'delegate_task',
       description: 'Delegate a sub-task to a parallel sub-agent — 5 Modes: Solo/Swarm/Hive/Squad/Infinity (vs.md:3.1). Modes: research (deep grep+semantic + read), explore (read-only grep/glob/read), fix (edit + test), write (write/edit + verify), general (full tools). Main agent can fan-out 2-5 delegate_task in one round for Swarm/M2. Hive M3: sub-agent can itself delegate (depth 2 via parentSubAgentId). Squad M4: add teamId to group under Team+Head. Infinity M5: set modelId per role for multi-model (research=DeepSeek, explore=Claude, write=OpenAI via ModelEntry) + Preview Team watches writes. Worktree true creates isolated git worktree (git worktree add <tmp>/wt-<id> -b wt/<id>) or uses Docker jail KS_DOCKER_JAIL=1. Use for parallel research/explorer/fix/write.',
       parameters: {
@@ -2403,6 +2502,96 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
       return ok(`${normNote}exit ${code} (CWD \`${absCwd}\`)\n${output || '(no output)'}`, `$ ${command.slice(0, 80)} → exit ${code}`)
     }
 
+    case 'git_status': {
+      try {
+        const out = await gitStatus(ctx.projectPath)
+        return ok(out, `git status: ${out.split('\n')[0].slice(0, 80)}`)
+      } catch (e: any) { return err(String(e?.message || 'git status failed').slice(0, 500)) }
+    }
+
+    case 'git_diff': {
+      try {
+        const staged = Boolean((args as any).staged)
+        const ref = typeof (args as any).ref === 'string' ? String((args as any).ref).trim().slice(0, 100) || undefined : undefined
+        const file = typeof (args as any).file === 'string' ? String((args as any).file).trim().slice(0, 500) || undefined : undefined
+        const statOnly = Boolean((args as any).stat_only ?? (args as any).statOnly)
+        const out = await gitDiff(ctx.projectPath, { staged, ref, file, statOnly })
+        return ok(out.slice(0, 8000), `git diff ${staged ? '--staged ' : ''}${(ref || file || '').slice(0, 60)}`.trim().slice(0, 80) || 'git diff')
+      } catch (e: any) { return err(String(e?.message || 'git diff failed').slice(0, 500)) }
+    }
+
+    case 'git_log': {
+      try {
+        const raw = (args as any).limit ?? (args as any).max_results ?? 20
+        const out = await gitLog(ctx.projectPath, Number(raw) || 20)
+        return ok(out.slice(0, 8000), `git log ${(String(Number(raw) || 20)).slice(0, 10)}`)
+      } catch (e: any) { return err(String(e?.message || 'git log failed').slice(0, 500)) }
+    }
+
+    case 'git_branch': {
+      try {
+        const action = String((args as any).action ?? 'list').trim().toLowerCase()
+        if (action === 'list' || !action) {
+          const out = await gitBranches(ctx.projectPath)
+          return ok(out.slice(0, 4000) || '(no branches)', 'git branch --list')
+        }
+        const name = String((args as any).name ?? '').trim()
+        if (!name) return err('name is required for create|checkout')
+        if (action === 'create') {
+          const out = await gitCreateBranch(ctx.projectPath, name, true)
+          return ok(out, out.slice(0, 80))
+        }
+        if (action === 'checkout') {
+          const out = await gitCheckout(ctx.projectPath, name)
+          return ok(out, out.slice(0, 80))
+        }
+        return err('action must be list|create|checkout')
+      } catch (e: any) { return err(String(e?.message || 'git branch failed').slice(0, 500)) }
+    }
+
+    case 'git_commit': {
+      try {
+        const message = String((args as any).message ?? '')
+        const files = (args as any).files
+        const out = await gitCommit(ctx.projectPath, message, files)
+        return ok(out, out.slice(0, 80))
+      } catch (e: any) { return err(String(e?.message || 'git commit failed').slice(0, 500)) }
+    }
+
+    case 'git_push': {
+      try {
+        const action = String((args as any).action ?? 'push').trim().toLowerCase()
+        const remote = typeof (args as any).remote === 'string' && String((args as any).remote).trim() ? String((args as any).remote).trim().slice(0, 100) : 'origin'
+        const branch = typeof (args as any).branch === 'string' && String((args as any).branch).trim() ? String((args as any).branch).trim().slice(0, 100) : undefined
+        if (action === 'pull') {
+          const out = await gitPull(ctx.projectPath, remote, branch)
+          return ok(out.slice(0, 4000), `git pull ${remote}`.slice(0, 80))
+        }
+        if (action !== 'push' && action !== '') return err('action must be push|pull')
+        const out = await gitPush(ctx.projectPath, remote, branch)
+        return ok(out.slice(0, 4000), `git push ${remote}`.slice(0, 80))
+      } catch (e: any) { return err(String(e?.message || 'git push failed').slice(0, 600)) }
+    }
+
+    case 'git_create_pr': {
+      try {
+        const title = String((args as any).title ?? '').trim()
+        const head = String((args as any).head ?? '').trim()
+        const base = String((args as any).base ?? '').trim()
+        const body = typeof (args as any).body === 'string' ? String((args as any).body).slice(0, 5000) : ''
+        let repo = typeof (args as any).repo === 'string' ? String((args as any).repo).trim().slice(0, 200) : ''
+        if (!repo) {
+          const auto = parseRepoFromRemote(ctx.projectPath)
+          if (!auto) return err('repo not found (pass repo: owner/name or set git remote)')
+          repo = auto
+        }
+        const token = (ctx.projectId ? getGithubToken(ctx.projectId) : null) || getGithubToken() || ''
+        if (!token) return err('No GitHub token configured (Settings → GitHub)')
+        const pr = await githubCreatePr({ repo, head, base, title, body, token })
+        return ok(`PR #${pr.number} created: ${pr.url}`, `PR #${pr.number} ${repo}`)
+      } catch (e: any) { return err(String(e?.message || 'PR create failed').slice(0, 600)) }
+    }
+
     case 'create_plan': {
       const title = String(args.title ?? '').trim()
       const rawSteps = Array.isArray(args.steps) ? args.steps : []
@@ -2634,8 +2823,8 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
           return
         }
         const modeTools = (() => {
-          const readOnly = new Set(['list_files','read_file','grep','glob','semantic_search','get_file_info'])
-          const writeExtra = new Set(['write_file','edit_file','apply_patch','delete_file','move_file','append_file'])
+          const readOnly = new Set(['list_files','read_file','grep','glob','semantic_search','get_file_info','git_status','git_diff','git_log'])
+          const writeExtra = new Set(['write_file','edit_file','apply_patch','delete_file','move_file','append_file','git_commit','git_branch','git_push','git_create_pr'])
           if (mode === 'research' || mode === 'explore') {
             return AGENT_TOOLS.filter(t => readOnly.has(t.function.name) || t.function.name === 'delegate_task')
           }
