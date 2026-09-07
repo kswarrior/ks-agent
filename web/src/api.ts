@@ -187,6 +187,18 @@ export async function streamChatEvents(
             case 'subagent':
               handlers.onSubAgent?.(parsed as import('./types').SubAgent)
               break
+            case 'subagent_delta':
+              handlers.onSubAgentDelta?.(parsed as { subAgentId: string; delta: string })
+              break
+            case 'subagent_thinking':
+              handlers.onSubAgentThinking?.(parsed as { subAgentId: string; text: string })
+              break
+            case 'subagent_tool':
+              handlers.onSubAgentTool?.(parsed as { subAgentId: string; callId: string; name: string; args: string })
+              break
+            case 'subagent_tool_result':
+              handlers.onSubAgentToolResult?.(parsed as { subAgentId: string; callId: string; ok: boolean; summary: string })
+              break
             case 'retry':
               handlers.onRetry?.(parsed as { attempt: number; maxAttempts: number; delay: number; reason: string; error: string })
               break

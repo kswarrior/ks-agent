@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { Plan, Project, Terminal, Activity } from '../types'
+import type { Plan, Project, Terminal, Activity, SubAgent, Team, SubAgentMessage } from '../types'
 import * as api from '../api'
 import { useToast } from '../toast'
 import { IconCheck, IconPlus, IconSearch, IconActivity, IconRotate, IconChevronLeft, IconTerminal, IconTrash, IconPencil } from '../icons'
@@ -8,19 +8,25 @@ import { ActivityPane } from './ActivityPane'
 import { XTermTerminal } from './XTermTerminal'
 import { useDialogs } from '../dialogs'
 
-type RsTab = 'plan' | 'files' | 'terminal' | 'activity'
+type RsTab = 'plan' | 'files' | 'terminal' | 'activity' | 'agents'
 
 interface RightSidebarProps {
   open: boolean
   activeProject: Project | null
+  activeChatId?: string | null
   plan: Plan | null
   activities: Activity[]
   streaming: boolean
+  subAgents?: SubAgent[]
+  teams?: Team[]
+  activeAgent?: import('../types').ActiveAgentView | null
+  onSelectAgent?: (view: import('../types').ActiveAgentView) => void
   onClose: () => void
 }
 
 const TABS: Array<{ id: RsTab; label: string }> = [
   { id: 'plan', label: 'Plan' },
+  { id: 'agents', label: 'Agents' },
   { id: 'files', label: 'Files' },
   { id: 'terminal', label: 'Terminal' },
   { id: 'activity', label: 'Activity' }
