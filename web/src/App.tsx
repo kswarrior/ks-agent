@@ -17,6 +17,8 @@ const LS_PROJECT = 'ks.activeProject'
 const LS_CHAT = 'ks.activeChat'
 const LS_MODEL = 'ks.selectedModel'
 const LS_MODE = 'ks.selectedMode'
+const LS_CONTEXT = 'ks.contextMode'
+const LS_TOKENS = 'ks.maxTokens'
 
 function KsAgent() {
   const toast = useToast()

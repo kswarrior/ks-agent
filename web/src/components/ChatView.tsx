@@ -407,7 +407,7 @@ export function ChatView(props: Props) {
   const [modelQuery, setModelQuery] = useState('')
   const [provOpen, setProvOpen] = useState(false)
   const [provFilterId, setProvFilterId] = useState<string | null>(null)
-  const [modeOpen, setModeOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [localMode, setLocalMode] = useState<ModeId>(() => {
     try {
       const v = localStorage.getItem('ks.selectedMode') as ModeId | null
@@ -423,6 +423,40 @@ export function ChatView(props: Props) {
     }
   }
   const selectedModeObj = MODES.find(m => m.id === selectedMode) ?? MODES[0]
+  // Context mode (Chat/Q&A vs Full) + token settings — lifted to App if provided, else local
+  const [localContextMode, setLocalContextMode] = useState<ContextModeId>(() => {
+    try {
+      const v = localStorage.getItem('ks.contextMode') as ContextModeId | null
+      return v === 'full' || v === 'qa' ? v : 'qa'
+    } catch { return 'qa' }
+  })
+  const [localMaxTokens, setLocalMaxTokens] = useState<number | null>(() => {
+    try {
+      const v = localStorage.getItem('ks.maxTokens')
+      if (!v || v === '' || v === 'null') return null
+      const n = Number(v)
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : null
+    } catch { return null }
+  })
+  const selectedContextMode: ContextModeId = (props.selectedContextMode as ContextModeId) ?? localContextMode
+  const setSelectedContextMode = (id: ContextModeId) => {
+    if (props.onSelectContextMode) props.onSelectContextMode(id)
+    else {
+      setLocalContextMode(id)
+      try { localStorage.setItem('ks.contextMode', id) } catch {}
+    }
+  }
+  const selectedMaxTokens: number | null = props.maxTokens !== undefined ? (props.maxTokens as number | null) : localMaxTokens
+  const setSelectedMaxTokens = (v: number | null) => {
+    if (props.onSelectMaxTokens) props.onSelectMaxTokens(v)
+    else {
+      setLocalMaxTokens(v)
+      try {
+        if (v == null) localStorage.removeItem('ks.maxTokens')
+        else localStorage.setItem('ks.maxTokens', String(v))
+      } catch {}
+    }
+  }
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -459,7 +493,7 @@ export function ChatView(props: Props) {
       autoGrow()
       textareaRef.current?.focus()
     })
-    props.onSend(content)
+    props.onSend(content, { contextMode: selectedContextMode, maxTokens: selectedMaxTokens })
   }
 
   const selectedModel = props.models.find((m) => m.id === props.selectedModelId)
@@ -506,11 +540,11 @@ export function ChatView(props: Props) {
   }, [modelOpen])
 
   useEffect(() => {
-    if (!modeOpen) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setModeOpen(false) }
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false) }
     const onDown = (e: MouseEvent) => {
       const t = e.target as Element | null
-      if (!t || !t.closest('.mode-chip-wrap')) setModeOpen(false)
+      if (!t || !t.closest('.composer-menu-wrap')) setMenuOpen(false)
     }
     window.addEventListener('keydown', onKey)
     document.addEventListener('mousedown', onDown)
@@ -518,7 +552,7 @@ export function ChatView(props: Props) {
       window.removeEventListener('keydown', onKey)
       document.removeEventListener('mousedown', onDown)
     }
-  }, [modeOpen])
+  }, [menuOpen])
 
   // Flow status for chat (replaces rectangular while AI writes)
   const plan = (props as any).plan as Plan | null | undefined
@@ -832,70 +866,181 @@ export function ChatView(props: Props) {
             }}
           />
           <div className="composer-bar">
-            <div className="mode-chip-wrap" style={{ position: 'relative' }}>
+            <div className="composer-menu-wrap" style={{ position: 'relative' }}>
               <button
-                className="mode-chip"
-                onClick={() => setModeOpen((v) => !v)}
-                title={`Mode: ${selectedModeObj.label} — ${selectedModeObj.desc}`}
-                aria-label={`Mode: ${selectedModeObj.label}`}
+                className="menu-toggle"
+                onClick={() => setMenuOpen((v) => !v)}
+                title="Composer settings"
+                aria-label="Composer settings"
+                aria-expanded={menuOpen}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 3,
+                  gap: 4,
                   width: 36,
                   height: 36,
                   padding: 0,
-                  background: selectedMode === 'solo' ? 'var(--surface-2)' : 'var(--primary-bg)',
-                  border: `1px solid ${selectedMode === 'solo' ? 'var(--border)' : 'var(--primary-border)'}`,
+                  background: menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null ? 'var(--primary-bg)' : 'var(--surface-2)',
+                  border: `1px solid ${menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null ? 'var(--primary-border)' : 'var(--border)'}`,
                   borderRadius: 8,
-                  color: selectedMode === 'solo' ? 'var(--text-dim)' : 'var(--primary)',
+                  color: menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null ? 'var(--primary)' : 'var(--text-dim)',
                   cursor: 'pointer',
                   lineHeight: 1,
+                  position: 'relative',
                 }}
               >
-                <selectedModeObj.Icon size={16} />
-                <IconChevronDown size={10} style={{ opacity: 0.55, flexShrink: 0 } as any} />
+                <IconSliders size={16} />
+                {(selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null) && !menuOpen && (
+                  <span style={{ position: 'absolute', top: 5, right: 5, width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 6px var(--primary-ring)' }} />
+                )}
               </button>
-              {modeOpen && (
+              {menuOpen && (
                 <div
-                  className="mode-dd"
+                  className="composer-menu"
                   style={{
                     position: 'absolute',
                     bottom: 'calc(100% + 8px)',
                     left: 0,
-                    minWidth: 220,
+                    width: 320,
+                    maxWidth: 'min(340px, 88vw)',
+                    maxHeight: 'min(520px, 70vh)',
+                    overflowY: 'auto',
                     background: 'var(--surface)',
                     border: '1px solid var(--border)',
-                    borderRadius: 10,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                    borderRadius: 12,
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12)',
                     zIndex: 45,
-                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0,
                   }}
                 >
-                  <div style={{ padding: '6px 8px 4px', fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.4, textTransform: 'uppercase' }}>Mode — 5 Levels</div>
-                  {MODES.map((m) => (
-                    <button
-                      key={m.id}
-                      className={`dd-item${m.id === selectedMode ? ' active' : ''}`}
-                      onClick={() => {
-                        setSelectedMode(m.id as ModeId)
-                        setModeOpen(false)
-                      }}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', textAlign: 'left' }}
-                    >
-                      <span style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: m.id === selectedMode ? 'var(--primary)' : 'var(--text-dim)' }}>
-                        <m.Icon size={16} />
-                      </span>
-                      <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.label}</span>
-                        <small style={{ color: 'var(--text-faint)', fontSize: 11 }}>{m.desc}</small>
-                      </span>
-                      {m.id === selectedMode && <span style={{ color: 'var(--primary)', fontSize: 12 }}>✓</span>}
-                    </button>
-                  ))}
-                  <div style={{ padding: '6px 8px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.4 }}>
-                    Solo=1 agent · Swarm=main→5 · Hive=nested · Squad=Team+Head · Infinity=unlimited+Preview
+                  {/* Mode selection */}
+                  <div style={{ padding: '10px 10px 8px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', flexShrink: 0 }}><selectedModeObj.Icon size={14} /></span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.4, textTransform: 'uppercase', flex: 1 }}>Mode selection</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-bg)', border: '1px solid var(--primary-border)', borderRadius: 6, padding: '2px 6px' }}>{selectedModeObj.label}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {MODES.map((m) => (
+                        <button
+                          key={m.id}
+                          className={`dd-item${m.id === selectedMode ? ' active' : ''}`}
+                          onClick={() => setSelectedMode(m.id as ModeId)}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 9px', textAlign: 'left', borderRadius: 8 }}
+                        >
+                          <span style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: m.id === selectedMode ? 'var(--primary)' : 'var(--text-dim)' }}>
+                            <m.Icon size={15} />
+                          </span>
+                          <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.label}</span>
+                            <small style={{ color: 'var(--text-faint)', fontSize: 11 }}>{m.desc}</small>
+                          </span>
+                          {m.id === selectedMode && <span style={{ color: 'var(--primary)', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.4, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 7px' }}>
+                      Solo=1 agent · Swarm=main→5 · Hive=nested · Squad=Team+Head · Infinity=unlimited+Preview
+                    </div>
+                  </div>
+
+                  {/* Context selection */}
+                  <div style={{ padding: '10px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', flexShrink: 0 }}><IconLayers size={14} /></span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.4, textTransform: 'uppercase', flex: 1 }}>Chat context</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: selectedContextMode === 'qa' ? 'var(--text-faint)' : 'var(--primary)', background: selectedContextMode === 'qa' ? 'var(--btn)' : 'var(--primary-bg)', border: `1px solid ${selectedContextMode === 'qa' ? 'var(--border)' : 'var(--primary-border)'}`, borderRadius: 6, padding: '2px 6px' }}>{selectedContextMode === 'qa' ? 'Q&A' : 'Full'}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {CONTEXT_MODES.map((cm) => (
+                        <button
+                          key={cm.id}
+                          className={`dd-item${cm.id === selectedContextMode ? ' active' : ''}`}
+                          onClick={() => setSelectedContextMode(cm.id)}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', textAlign: 'left', borderRadius: 8 }}
+                        >
+                          <span style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: cm.id === selectedContextMode ? 'var(--primary)' : 'var(--text-dim)' }}>
+                            <cm.Icon size={14} />
+                          </span>
+                          <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{cm.label}</span>
+                            <small style={{ color: 'var(--text-faint)', fontSize: 11 }}>{cm.desc}</small>
+                          </span>
+                          {cm.id === selectedContextMode && <span style={{ color: 'var(--primary)', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.45 }}>
+                      <span style={{ color: selectedContextMode === 'qa' ? 'var(--text)' : 'var(--text-faint)', fontWeight: selectedContextMode === 'qa' ? 600 : 400 }}>Q&A</span> = prompt + AI output (light, cheap) · <span style={{ color: selectedContextMode === 'full' ? 'var(--text)' : 'var(--text-faint)', fontWeight: selectedContextMode === 'full' ? 600 : 400 }}>Full</span> = + file reads/logs (heavy, best for coding, uses more tokens)
+                    </div>
+                  </div>
+
+                  {/* Token settings */}
+                  <div style={{ padding: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', flexShrink: 0 }}><IconCoins size={14} /></span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.4, textTransform: 'uppercase', flex: 1 }}>Token settings</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: selectedMaxTokens == null ? 'var(--text-faint)' : 'var(--primary)', background: selectedMaxTokens == null ? 'var(--btn)' : 'var(--primary-bg)', border: `1px solid ${selectedMaxTokens == null ? 'var(--border)' : 'var(--primary-border)'}`, borderRadius: 6, padding: '2px 6px' }}>{selectedMaxTokens == null ? 'Auto' : selectedMaxTokens.toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={256}
+                        max={128000}
+                        step={256}
+                        placeholder="Auto"
+                        value={selectedMaxTokens ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value.trim()
+                          if (v === '') setSelectedMaxTokens(null)
+                          else {
+                            const n = Number(v)
+                            if (!Number.isFinite(n) || n <= 0) return
+                            setSelectedMaxTokens(Math.max(256, Math.min(128000, Math.floor(n))))
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          padding: '8px 10px',
+                          background: 'var(--input)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          color: 'var(--text)',
+                          fontSize: 13,
+                          outline: 'none',
+                        }}
+                      />
+                      {selectedMaxTokens != null && (
+                        <button
+                          className="btn"
+                          onClick={() => setSelectedMaxTokens(null)}
+                          title="Reset to Auto"
+                          style={{ padding: '7px 10px', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}
+                        >
+                          Auto
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, marginTop: 7, flexWrap: 'wrap' }}>
+                      {[null, 4096, 8192, 16384, 32000].map((v) => (
+                        <button
+                          key={String(v)}
+                          onClick={() => setSelectedMaxTokens(v)}
+                          className={`filter-chip${(v == null ? selectedMaxTokens == null : selectedMaxTokens === v) ? ' active' : ''}`}
+                          style={{ height: 26, padding: '0 8px', fontSize: 11, borderRadius: 6 }}
+                        >
+                          {v == null ? 'Auto' : v.toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.4 }}>
+                      Max tokens per reply. Auto = model default. Higher = longer replies but more cost.
+                    </div>
                   </div>
                 </div>
               )}
