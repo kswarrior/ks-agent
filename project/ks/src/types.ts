@@ -15,13 +15,14 @@ export interface Server {
   latency?: number
 }
 
-export interface ServerStatus {
-  online: boolean
-  players_online: number
-  players_max: number
-  motd: string
-  version: string
-  ping: number
+export interface BackendStatus {
+  status: 'online' | 'offline'
+  ready: boolean
+  message: string
+}
+
+export interface BackendConsole {
+  output: string[]
 }
 
 export interface ConsoleCommand {
@@ -38,7 +39,6 @@ export interface Player {
 }
 
 export interface PanelState {
-  selectedServer: string | null
   consoleInput: string
   history: ConsoleCommand[]
   isRunning: boolean
