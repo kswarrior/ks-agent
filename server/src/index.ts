@@ -651,6 +651,53 @@ app.delete('/api/projects/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// ---------------- Project Data Center ----------------
+
+app.get('/api/projects/:id/data', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  try {
+    return c.json(getProjectData(project.id))
+  } catch (e: any) {
+    return c.json({ error: String(e?.message || 'Failed to load project data').slice(0, 300) }, 500)
+  }
+})
+
+app.put('/api/projects/:id/data', async (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  let body: any = {}
+  try { body = await c.req.json() } catch {}
+  const patch: Record<string, unknown> = {}
+  if (body.enabled !== undefined) patch.enabled = Boolean(body.enabled)
+  for (const k of ['overview', 'build', 'backend', 'frontend', 'notes'] as const) {
+    if (body[k] !== undefined) {
+      if (typeof body[k] !== 'string') return c.json({ error: `${k} must be a string` }, 400)
+      if (body[k].includes('\0')) return c.json({ error: `${k} contains invalid character` }, 400)
+      if (body[k].length > 20000) return c.json({ error: `${k} too long (max 20000)` }, 400)
+      patch[k] = body[k]
+    }
+  }
+  if (Object.keys(patch).length === 0) return c.json({ error: 'No valid fields to update' }, 400)
+  try {
+    return c.json(updateProjectData(project.id, patch as any))
+  } catch (e: any) {
+    const msg = String(e?.message || 'Failed to save')
+    if (msg.includes('Project not found')) return c.json({ error: msg }, 404)
+    return c.json({ error: msg.slice(0, 300) }, 400)
+  }
+})
+
+app.post('/api/projects/:id/data/reset', (c) => {
+  const project = findProject(c.req.param('id'))
+  if (!project) return c.json({ error: 'Project not found' }, 404)
+  try {
+    return c.json(resetProjectData(project.id))
+  } catch (e: any) {
+    return c.json({ error: String(e?.message || 'Failed to reset').slice(0, 300) }, 500)
+  }
+})
+
 // ---------------- Chats ----------------
 
 app.get('/api/projects/:id/chats', (c) => {
