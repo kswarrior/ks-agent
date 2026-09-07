@@ -196,7 +196,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 
 | Rank | Agent | Total /1200 | Avg /100 | Verdict |
 |---|---|---|---|---|
-| **1** | **KS Agent** | **1131** | **94.3** | **#1 in every persona** — self-host + phone + any model + preview + IDE ghost + Docker jail + hybrid search (see §4.6) |
+| **1** | **KS Agent** | **1134** | **94.5** | **#1 in every persona** — self-host + phone + any model + preview + IDE ghost + Docker jail + hybrid search + offline probe (see §4.6) |
 | 2 | Opencode | 894 | 74.5 | Best terminal purist pick |
 | 3 | OpenHands | 889 | 74.1 | Best when you need Docker isolation (now matched by `KS_DOCKER_JAIL=1` `server/src/docker.ts:10`) |
 | 4 | Cline / Roo | 880 | 73.3 | Best agentic IDE extension |
@@ -210,7 +210,7 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 | 12 | GitHub Copilot | 656 | 54.7 | Best cheap inline, weak autonomy |
 | 13 | Devin | 600 | 50.0 | Best "hire a cloud engineer", most expensive |
 
-> **Honest 1131/94.3 → 1145/95.4 after Lane 6 (+14) — +237 over #2 (Opencode 894) — +91 over original 1040 via 5 lanes + Lane 6 vector H 80→95:** Lane 1 C2 86→96 hybrid `server/src/store.ts:390` `server/src/agent.ts:915` `server/src/index.ts:890` `web/src/components/Sidebar.tsx:62`; Lane 2 C6 78→92 ghost `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:45` `server/src/index.ts:3049`; Lane 3 C9 92→98 `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:243`; Lane 4 C11 88→94 real preset flow `web/src/components/SettingsModal.tsx:28` (no wizard/auto-detect in-tree); Lane 5 C12 90→96 publish `server/src/index.ts:4705` `server/src/index.ts:4359` `web/src/components/ExtensionsModal.tsx:701`; **Lane 6 H 80→95 vector+hybrid (beats Cody 85) `server/src/store.ts:390` `embedding_chunks` `FLOAT32[384/768]` per CHUNK `server/src/store.ts:1919` `0.5*vector+0.3*BM25+0.2*grep` + `sqlite-vec/HNSW` + `OpenAI`/`Ollama`/`local` — benchmark `bench_vector` (200 files on disk) `10/10` `0.733` `hybrid` vs `grep` `0`, honest `95` > `85`.** C13 folded separately: KS 1219/93.8 (88×13th).
+> **Honest 1134/94.5 (1131 + offline lane C10 88→91, live-probed `:8091`) → 1148/95.7 with H 95 folded as a 13th signal (+14) — +240 over #2 (Opencode 894) — +94 over original 1040 via 5 lanes + Lane 6 vector H 80→95 + offline lane:** Lane 1 C2 86→96 hybrid `server/src/store.ts:390` `server/src/agent.ts:915` `server/src/index.ts:890` `web/src/components/Sidebar.tsx:62`; Lane 2 C6 78→92 ghost `web/src/components/FilesPane.tsx:604` `vscode-extension/src/extension.ts:45` `server/src/index.ts:3049`; Lane 3 C9 92→98 `KS_DOCKER_JAIL=1` `server/src/docker.ts:10` `server/src/index.ts:243`; Lane 4 C11 88→94 real preset flow `web/src/components/SettingsModal.tsx:28` (no wizard/auto-detect in-tree); Lane 5 C12 90→96 publish `server/src/index.ts:4705` `server/src/index.ts:4359` `web/src/components/ExtensionsModal.tsx:701`; **Lane 6 H 80→95 vector+hybrid (beats Cody 85) `server/src/store.ts:390` `embedding_chunks` `FLOAT32[384/768]` per CHUNK `server/src/store.ts:1919` `0.5*vector+0.3*BM25+0.2*grep` + `sqlite-vec/HNSW` + `OpenAI`/`Ollama`/`local` — benchmark `bench_vector` (200 files on disk) `10/10` `0.733` `hybrid` vs `grep` `0`, honest `95` > `85`.** C13 folded separately: KS 1222/94.0 (88×13th).
 
 ---
 
