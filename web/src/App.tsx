@@ -264,6 +264,31 @@ function KsAgent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId])
 
+  // load sub-agents + teams for the chat (drives the agent bar above the input)
+  useEffect(() => {
+    if (!activeChatId) {
+      setSubAgents([])
+      setTeams([])
+      setActiveAgent({ kind: 'main' })
+      return
+    }
+    let cancelled = false
+    // reset focused view when switching chats
+    setActiveAgent({ kind: 'main' })
+    api
+      .listSubAgents(activeChatId)
+      .then((list) => { if (!cancelled) setSubAgents(list) })
+      .catch(() => {})
+    api
+      .listTeams(activeChatId)
+      .then((list) => { if (!cancelled) setTeams(list) })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeChatId])
+
   // load models (+ keep selection valid)
   const refreshModels = useCallback(async () => {
     try {
@@ -398,6 +423,19 @@ function KsAgent() {
                 setPreviewOpen(true)
               }
             },
+            onSubAgent: (sub) => {
+              // live-update the agent bar above the input when AI creates sub-agents
+              if (activeChatIdRef.current !== chatId) return
+              setSubAgents((prev) => {
+                const idx = prev.findIndex((s) => s.id === sub.id)
+                if (idx >= 0) {
+                  const next = [...prev]
+                  next[idx] = sub
+                  return next
+                }
+                return [...prev, sub]
+              })
+            },
             onRetry: (info) => {
               setRetries((prev) => ({ ...prev, [chatId]: info }))
               const reasonLabel = info.reason === 'timeout' ? 'timeout' : info.reason === 'resource_exhausted' ? 'capacity limit' : info.reason === 'rate_limit' ? 'rate limit' : 'provider error'
@@ -501,6 +539,16 @@ function KsAgent() {
               return next
             })
           } catch {}
+          try {
+            if (activeChatIdRef.current === chatId) {
+              const [freshSubs, freshTeams] = await Promise.all([
+                api.listSubAgents(chatId).catch(() => [] as SubAgent[]),
+                api.listTeams(chatId).catch(() => [] as Team[])
+              ])
+              setSubAgents(freshSubs)
+              setTeams(freshTeams)
+            }
+          } catch {}
           // ---- auto-continue: if enabled and plan incomplete, automatically resume ----
           try {
             const settings: any = await api.getRetrySettings().catch(() => null)
@@ -533,7 +581,7 @@ function KsAgent() {
                         if (sendingRef.current.has(chatId) || subsRef.current.has(chatId)) return
                         const modelId = selectedModelIdRef.current
                         try {
-                          await api.continueChat(chatId, '', modelId ?? null as any)
+                          await api.continueChat(chatId, '', modelId ?? null as any, selectedModeRef.current)
                           trackGeneration(chatId)
                         } catch (e: any) {
                           toast(e.message, 'error')
@@ -804,9 +852,9 @@ function KsAgent() {
     sendingRef.current.add(chatId)
     try {
       if (isPure) {
-        await api.continueChat(chatId, '', selectedModelId)
+        await api.continueChat(chatId, '', selectedModelId, selectedModeRef.current)
       } else {
-        await api.continueChat(chatId, extraContent, selectedModelId)
+        await api.continueChat(chatId, extraContent, selectedModelId, selectedModeRef.current)
       }
       // For pure continue preserve plan/activities so AI picks up where it left off
       if (!isPure) {
@@ -940,7 +988,7 @@ function KsAgent() {
     setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
 
     try {
-      await api.sendMessage(chatId, content, selectedModelId)
+      await api.sendMessage(chatId, content, selectedModelId, selectedModeRef.current)
       // Reset plan + activities for this chat so the next prompt starts
       // fresh from Understand → Explore → Planning → Executing.
       // Without this, hasExplore stays true and old plan (done) makes UI
@@ -1092,6 +1140,10 @@ function KsAgent() {
             activities={activeChat ? activities.filter((a) => a.chatId === activeChat.id) : []}
             onContinue={() => handleContinue()}
             retryInfo={activeChat ? retries[activeChat.id] ?? null : null}
+            subAgents={subAgents}
+            teams={teams}
+            activeAgent={activeAgent}
+            onSelectAgent={setActiveAgent}
           />
         </main>
         <RightSidebar
