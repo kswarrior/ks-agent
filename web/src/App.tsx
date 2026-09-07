@@ -11,6 +11,8 @@ import { ChatView } from './components/ChatView'
 import { SettingsModal } from './components/SettingsModal'
 import { ExtensionsModal } from './components/ExtensionsModal'
 import { AddProjectModal } from './components/AddProjectModal'
+import { OnboardingWizard, shouldAutoShowOnboarding } from './components/OnboardingWizard'
+import { IconSparkles } from './icons'
 import { applyTheme } from './theme'
 
 const LS_PROJECT = 'ks.activeProject'
@@ -43,6 +45,10 @@ function KsAgent() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showPreviewBanner, setShowPreviewBanner] = useState(false)
   const previewBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [providers, setProviders] = useState<import('./types').Provider[]>([])
+  const [providersLoaded, setProvidersLoaded] = useState(false)
+  const [modelsLoaded, setModelsLoaded] = useState(false)
 
   // Keep the right workspace panel always open whenever the screen is wide
   // enough for it to fit next to the left sidebar and the composer input.
@@ -264,12 +270,36 @@ function KsAgent() {
       setSelectedModelId((prev) => (prev && list.some((m) => m.id === prev) ? prev : list[0]?.id ?? null))
     } catch (e: any) {
       toast(e.message, 'error')
+    } finally {
+      setModelsLoaded(true)
+    }
+  }, [toast])
+
+  const refreshProviders = useCallback(async () => {
+    try {
+      const list = await api.listProviders()
+      setProviders(list)
+    } catch (e: any) {
+      toast(e.message, 'error')
+    } finally {
+      setProvidersLoaded(true)
     }
   }, [toast])
 
   useEffect(() => {
     refreshModels()
-  }, [refreshModels])
+    refreshProviders()
+  }, [refreshModels, refreshProviders])
+
+  // auto-show onboarding wizard when setup incomplete (install → first chat in 60s)
+  useEffect(() => {
+    if (!providersLoaded || !modelsLoaded) return
+    const needs = shouldAutoShowOnboarding(projects, providers, models)
+    if (needs) {
+      const t = setTimeout(() => setOnboardingOpen(true), 700)
+      return () => clearTimeout(t)
+    }
+  }, [projects, providers, models, providersLoaded, modelsLoaded])
 
   // ---- background generation tracking ----
   const trackGeneration = useCallback(
@@ -1078,6 +1108,7 @@ function KsAgent() {
             onSend={send}
             onStop={stopStreaming}
             onRequestSettings={() => setSettingsOpen(true)}
+            onRequestOnboarding={() => setOnboardingOpen(true)}
             questions={activeChat ? questions[activeChat.id] ?? [] : []}
             onAnswerQuestion={handleAnswerQuestion}
             plan={activeChat ? plans[activeChat.id] ?? null : null}
@@ -1167,9 +1198,35 @@ function KsAgent() {
         </div>
       )}
 
-      <SettingsModal open={settingsOpen} onClose={() => { setSettingsOpen(false); refreshModels() }} onDataChanged={() => { refreshModels() }} />
+      <SettingsModal open={settingsOpen} onClose={() => { setSettingsOpen(false); refreshProviders(); refreshModels() }} onDataChanged={() => { refreshProviders(); refreshModels() }} />
       <ExtensionsModal open={extensionsOpen} onClose={() => setExtensionsOpen(false)} />
       <AddProjectModal open={addProjectOpen} onClose={() => setAddProjectOpen(false)} onCreated={submitAddProject} />
+      <OnboardingWizard
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+        projects={projects}
+        providers={providers}
+        models={models}
+        onProjectCreated={(p: Project) => {
+          setProjects((prev) => [...prev, p])
+          setActiveProjectId(p.id)
+          refreshProviders()
+        }}
+        onProviderModelCreated={() => {
+          refreshProviders()
+          refreshModels()
+        }}
+      />
+      {!onboardingOpen && (projects.length === 0 || providers.length === 0 || models.length === 0) && providersLoaded && modelsLoaded && (
+        <button
+          className="onboarding-fab"
+          onClick={() => setOnboardingOpen(true)}
+          title="Quick Setup — install → first chat in 60s"
+          aria-label="Open Quick Setup"
+        >
+          <IconSparkles size={16} /> Quick Setup
+        </button>
+      )}
     </div>
   )
 }

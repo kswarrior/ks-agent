@@ -1,0 +1,525 @@
+import { useState, useEffect } from 'react'
+import * as api from '../api'
+import type { Project, Provider, ModelEntry } from '../types'
+import { IconX, IconChevronRight, IconChevronLeft, IconCheck, IconSparkles, IconPlus, IconCopy, IconExternalLink, IconLock } from '../icons'
+import { useToast } from '../toast'
+
+const EXT_INSTALL_CMD = 'code --install-extension ks-warrior.ks-agent-vscode'
+const OLLAMA_TAGS_URL = 'http://localhost:11434/api/tags'
+const OLLAMA_TIMEOUT_MS = 1500
+
+interface Props {
+  open: boolean
+  onClose: () => void
+  projects: Project[]
+  providers: Provider[]
+  models: ModelEntry[]
+  onProjectCreated: (p: Project) => void
+  onProviderModelCreated: () => void
+}
+
+type Step = 0 | 1 | 2 | 3
+
+const LS_DISMISSED = 'ks.onboarding.dismissed'
+
+const PRESETS: { name: string; baseUrl: string; models: string[]; needsKey: boolean; hint: string }[] = [
+  { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', models: ['gpt-4o-mini', 'gpt-4o'], needsKey: true, hint: 'Get key at platform.openai.com' },
+  { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', models: ['deepseek-chat', 'deepseek-reasoner'], needsKey: true, hint: 'Cheapest frontier — api.deepseek.com' },
+  { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', models: ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet'], needsKey: true, hint: 'One key for 100+ models' },
+  { name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'], needsKey: true, hint: 'Fast inference — console.groq.com' },
+  { name: 'Together', baseUrl: 'https://api.together.xyz/v1', models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo'], needsKey: true, hint: 'together.ai' },
+  { name: 'Mistral', baseUrl: 'https://api.mistral.ai/v1', models: ['mistral-large-latest', 'mistral-small-latest'], needsKey: true, hint: 'console.mistral.ai' },
+  { name: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', models: ['llama3.2', 'qwen2.5', 'mistral', 'deepseek-r1'], needsKey: false, hint: 'Offline · Air-gapped — no key, no cloud' },
+  { name: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1', models: ['llama-3.2-3b', 'qwen2.5-7b', 'mistral-7b'], needsKey: false, hint: 'Offline · LM Studio local server' },
+]
+
+export function shouldAutoShowOnboarding(projects: Project[], providers: Provider[], models: ModelEntry[]): boolean {
+  try {
+    if (localStorage.getItem(LS_DISMISSED) === '1') return false
+  } catch {}
+  if (projects.length === 0) return true
+  if (providers.length === 0) return true
+  if (models.length === 0) return true
+  return false
+}
+
+export function dismissOnboarding(): void {
+  try { localStorage.setItem(LS_DISMISSED, '1') } catch {}
+}
+
+export function OnboardingWizard({ open, onClose, projects, providers, models, onProjectCreated, onProviderModelCreated }: Props) {
+  const toast = useToast()
+  const [step, setStep] = useState<Step>(0)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [projName, setProjName] = useState('my-project')
+  const [projPath, setProjPath] = useState('my-project')
+  const [projMkdir, setProjMkdir] = useState(true)
+  const [presetIdx, setPresetIdx] = useState<number>(1)
+  const [apiKey, setApiKey] = useState('')
+  const [modelId, setModelId] = useState(PRESETS[1].models[0])
+  const [displayName, setDisplayName] = useState('')
+  const [ollamaStatus, setOllamaStatus] = useState<'idle' | 'checking' | 'running' | 'offline'>('idle')
+  const [ollamaModels, setOllamaModels] = useState<string[]>([])
+  const [extCopied, setExtCopied] = useState(false)
+  const preset = PRESETS[presetIdx]
+
+  useEffect(() => {
+    if (!open) return
+    setError(null)
+    setModelId(PRESETS[presetIdx].models[0])
+  }, [open, presetIdx])
+
+  useEffect(() => {
+    if (!open) return
+    if (projects.length === 0) setStep(0)
+    else if (providers.length === 0 || models.length === 0) setStep(2)
+    else setStep(0)
+  }, [open, projects.length, providers.length, models.length])
+
+  useEffect(() => {
+    setModelId(PRESETS[presetIdx].models[0])
+  }, [presetIdx])
+
+  // Auto-detect Ollama running via http://localhost:11434/api/tags with timeout, fail gracefully
+  useEffect(() => {
+    if (!open) return
+    setOllamaStatus('checking')
+    setOllamaModels([])
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS)
+    fetch(OLLAMA_TAGS_URL, { signal: controller.signal })
+      .then(async (res) => {
+        clearTimeout(t)
+        if (!res.ok) throw new Error('not ok')
+        const data: any = await res.json().catch(() => null)
+        const models: string[] = []
+        if (data && Array.isArray(data.models)) {
+          for (const m of data.models) {
+            const raw = typeof m.name === 'string' ? m.name : typeof m.model === 'string' ? m.model : ''
+            if (raw) {
+              const base = raw.split(':')[0].trim()
+              if (base) models.push(base)
+            }
+          }
+        }
+        const uniq = Array.from(new Set(models))
+        if (uniq.length) {
+          setOllamaModels(uniq)
+          setOllamaStatus('running')
+          setPresetIdx(6)
+          setModelId(uniq[0])
+        } else {
+          setOllamaStatus('running')
+          setPresetIdx(6)
+        }
+      })
+      .catch(() => {
+        clearTimeout(t)
+        setOllamaStatus('offline')
+      })
+    return () => {
+      clearTimeout(t)
+      controller.abort()
+    }
+  }, [open])
+
+  if (!open) return null
+
+  const hasProject = projects.length > 0
+  const hasProvider = providers.length > 0
+  const hasModel = models.length > 0
+  const allDone = hasProject && hasProvider && hasModel
+
+  const resolvedPreview = (() => {
+    const p = projPath.trim()
+    if (!p) return ''
+    if (p.startsWith('/') || p.startsWith('~/') || p === '~') return p
+    if (p === 'project' || p.startsWith('project/')) return p
+    return `project/${p.replace(/^\.\//, '')}`
+  })()
+
+  async function handleCreateProject() {
+    setError(null)
+    if (!projName.trim()) return setError('Project name is required')
+    if (!projPath.trim()) return setError('Project path is required')
+    setBusy(true)
+    try {
+      const project = await api.createProject({ name: projName.trim(), path: projPath.trim(), mkdir: projMkdir })
+      toast(`Project "${project.name}" created`, 'success')
+      onProjectCreated(project)
+      setStep(2)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleCreateProviderModel() {
+    setError(null)
+    if (preset.needsKey && !apiKey.trim()) return setError('API key is required for ' + preset.name)
+    if (!modelId.trim()) return setError('Model id is required')
+    const keyToSend = apiKey.trim()
+    if (preset.needsKey && !keyToSend) return setError('API key is required for ' + preset.name)
+    setBusy(true)
+    try {
+      const provider = await api.createProvider({ name: preset.name, baseUrl: preset.baseUrl, apiKey: keyToSend })
+      await api.createModel({
+        providerId: provider.id,
+        model: modelId.trim(),
+        ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
+      })
+      toast(`Provider + model ready — ${preset.name} · ${modelId.trim()}`, 'success')
+      onProviderModelCreated()
+      setStep(3)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function handleDismiss() {
+    dismissOnboarding()
+    onClose()
+  }
+
+  async function handleCopyExt() {
+    try {
+      await navigator.clipboard.writeText(EXT_INSTALL_CMD)
+      toast('Copied: ' + EXT_INSTALL_CMD, 'success')
+      setExtCopied(true)
+      setTimeout(() => setExtCopied(false), 2000)
+    } catch {
+      toast(EXT_INSTALL_CMD, 'success')
+    }
+  }
+
+  const ollamaBadge = ollamaStatus === 'running' ? 'Ollama running ✓' : ollamaStatus === 'checking' ? 'Checking Ollama…' : ollamaStatus === 'offline' ? 'Ollama offline' : null
+  const effectiveModels = presetIdx === 6 && ollamaModels.length > 0 ? ollamaModels : preset.models
+
+  return (
+    <div className="overlay" onMouseDown={onClose}>
+      <div className="wizard" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Quick Setup wizard">
+        <div className="wizard-head">
+          <div className="wizard-brand">
+            <span className="wizard-logo">KS</span>
+            <span className="wizard-title">Quick Setup — 60 seconds to first chat</span>
+          </div>
+          <button className="icon-btn" aria-label="Close wizard" onClick={onClose}>
+            <IconX size={18} />
+          </button>
+        </div>
+
+        <div className="wizard-steps" aria-label="Progress">
+          {(['Welcome', 'Project', 'Model', 'Done'] as const).map((label, idx) => {
+            const active = idx === step
+            const done = (idx === 1 && hasProject) || (idx === 2 && hasProvider && hasModel) || idx < step || (idx === 3 && allDone)
+            return (
+              <div key={label} className={`wiz-step${active ? ' active' : ''}${done ? ' done' : ''}`}>
+                <span className="wiz-dot">{done ? <IconCheck size={12} /> : idx + 1}</span>
+                <span className="wiz-label">{label}</span>
+                {idx < 3 && <span className="wiz-line" />}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="wizard-body">
+          {error && <p className="field-error" style={{ marginBottom: 12 }}>{error}</p>}
+
+          {step === 0 && (
+            <div className="wiz-panel">
+              <div className="wiz-hero">
+                <div className="wiz-hero-icon"><IconSparkles size={28} /></div>
+                <h2 className="wiz-hero-title">Install → first chat in 60 seconds</h2>
+                <p className="wiz-hero-sub">KS Agent beats Cursor on onboarding: no IDE install, no login, just paste a key and chat — even from your phone.</p>
+              </div>
+              <div className="wiz-cards">
+                <div className="wiz-card">
+                  <span className="wiz-card-num">1</span>
+                  <div className="wiz-card-body">
+                    <strong>Project</strong>
+                    <span>{hasProject ? '✓ Ready — ' + projects[0].name : 'Create your workspace folder'}</span>
+                  </div>
+                  {hasProject && <IconCheck size={16} style={{ color: '#22c55e' }} />}
+                </div>
+                <div className="wiz-card">
+                  <span className="wiz-card-num">2</span>
+                  <div className="wiz-card-body">
+                    <strong>Provider + Model</strong>
+                    <span>{hasProvider && hasModel ? `✓ ${providers[0].name} · ${models[0].model}` : 'Pick preset, paste key, choose model — one click'}</span>
+                  </div>
+                  {hasProvider && hasModel && <IconCheck size={16} style={{ color: '#22c55e' }} />}
+                </div>
+                <div className="wiz-card">
+                  <span className="wiz-card-num">3</span>
+                  <div className="wiz-card-body">
+                    <strong>Chat</strong>
+                    <span>Send your first message — streaming, plans, preview live</span>
+                  </div>
+                </div>
+              </div>
+              {ollamaBadge && (
+                <div className={`wiz-ollama-banner ${ollamaStatus}`} style={{ marginTop: 8 }}>
+                  <span style={{ fontWeight: 750, fontSize: 12, color: ollamaStatus === 'running' ? '#16a34a' : ollamaStatus === 'checking' ? 'var(--text-dim)' : 'var(--text-faint)' }}>{ollamaBadge}</span>
+                  {ollamaStatus === 'running' && ollamaModels.length > 0 && <span className="hint" style={{ marginLeft: 8 }}>{ollamaModels.slice(0, 3).join(', ')}{ollamaModels.length > 3 ? ' +' + (ollamaModels.length - 3) + ' more' : ''}</span>}
+                  {ollamaStatus === 'running' && ollamaModels.length === 0 && <span className="hint" style={{ marginLeft: 8 }}>no local models yet — try `ollama pull llama3.2`</span>}
+                </div>
+              )}
+              <div className="wiz-ext-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>Install VS Code Extension</span>
+                  <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)', textDecoration: 'none' }}><IconExternalLink size={12} /> vscode-extension/</a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <code className="wiz-ext-cmd">{EXT_INSTALL_CMD}</code>
+                  <button className="btn" style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }} onClick={handleCopyExt} aria-label="Copy install command"><IconCopy size={12} />{extCopied ? 'Copied!' : 'Copy'}</button>
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>One-click: copies <code>code --install-extension</code> command. See <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer">README</a> for <code>vsce package</code> → <code>.vsix</code> flow.</p>
+              </div>
+              <div className="wiz-keychain-hint">
+                <IconLock size={14} style={{ flexShrink: 0, color: 'var(--text-dim)' }} />
+                <span style={{ fontSize: 12, lineHeight: 1.4 }}><strong>Tip:</strong> store keys in OS keychain, not plaintext — <code>security</code> (macOS), <code>secret-tool</code>/<code>pass</code> (Linux), Credential Manager (Windows). Keys stay server-side, masked <code>••••</code>.</span>
+              </div>
+              <div className="wizard-actions">
+                <button className="btn" onClick={handleDismiss}>Skip</button>
+                <button className="btn btn-primary" onClick={() => setStep(hasProject ? 2 : 1)}>
+                  {allDone ? 'Open chat' : 'Start Quick Setup'} <IconChevronRight size={16} />
+                </button>
+              </div>
+              <p className="hint" style={{ marginTop: 12, textAlign: 'center' }}>
+                Takes ~30s with Ollama (no key) or ~60s with any API. You can also open <code>Settings → Quick Setup</code> anytime.
+              </p>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="wiz-panel">
+              <h3 className="wiz-section-title">Create your first project</h3>
+              <p className="hint" style={{ marginTop: 0, marginBottom: 14 }}>Your agent works strictly inside this folder. You can add more projects later.</p>
+
+              {hasProject && (
+                <div style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-dim)' }}>Existing projects: </span>
+                  <strong>{projects.map(p => p.name).join(', ')}</strong>
+                  <span style={{ color: 'var(--text-faint)', marginLeft: 8 }}>— you can skip or make another</span>
+                </div>
+              )}
+
+              <label className="field-label">Name</label>
+              <input className="input" placeholder="my-project" value={projName} onChange={(e) => setProjName(e.target.value)} />
+
+              <label className="field-label">Path</label>
+              <input
+                className="input"
+                placeholder="my-project  or  /my-project"
+                value={projPath}
+                onChange={(e) => setProjPath(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !busy && handleCreateProject()}
+              />
+              <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>Relative: <code>my-project</code> → <code>project/my-project</code></div>
+              {resolvedPreview && <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>→ <code>{resolvedPreview}</code></div>}
+
+              <label className="checkbox-row">
+                <input type="checkbox" checked={projMkdir} onChange={(e) => setProjMkdir(e.target.checked)} />
+                Create directory if it does not exist
+              </label>
+
+              <div className="wizard-actions">
+                <button className="btn" onClick={() => setStep(0)} disabled={busy}>
+                  <IconChevronLeft size={16} /> Back
+                </button>
+                <button className="btn" onClick={() => setStep(2)} disabled={busy}>
+                  Skip
+                </button>
+                <button className="btn btn-primary" onClick={handleCreateProject} disabled={busy}>
+                  {busy ? 'Creating…' : hasProject ? 'Create another' : 'Create project'} <IconPlus size={15} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="wiz-panel">
+              <h3 className="wiz-section-title">Add provider + model — one step</h3>
+              <p className="hint" style={{ marginTop: 0, marginBottom: 12 }}>Pick a preset, paste your key, choose a model. This creates both at once — beats Cursor’s multi-step flow.</p>
+              {ollamaStatus === 'running' && (
+                <div className="wiz-ollama-banner running">
+                  <span style={{ fontWeight: 750, fontSize: 13, color: '#16a34a' }}>● Ollama running ✓</span>
+                  <span className="hint" style={{ marginLeft: 8 }}>{ollamaModels.length > 0 ? `detected ${ollamaModels.length} model${ollamaModels.length === 1 ? '' : 's'}: ${ollamaModels.slice(0, 4).join(', ')}${ollamaModels.length > 4 ? ' +' + (ollamaModels.length - 4) + ' more' : ''}` : 'no local models — `ollama pull llama3.2` to add'}</span>
+                </div>
+              )}
+              {ollamaStatus === 'checking' && (
+                <div className="wiz-ollama-banner checking">
+                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-dim)' }}>Checking Ollama…</span>
+                  <span className="hint" style={{ marginLeft: 8 }}>fetching http://localhost:11434/api/tags</span>
+                </div>
+              )}
+              {ollamaStatus === 'offline' && presetIdx === 6 && (
+                <div className="wiz-ollama-banner offline">
+                  <span style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-faint)' }}>Ollama offline</span>
+                  <span className="hint" style={{ marginLeft: 8 }}>start with `ollama serve` — graceful fallback if not running</span>
+                </div>
+              )}
+
+              {hasProvider && hasModel && (
+                <div style={{ padding: '10px 12px', background: '#0a1a0a', border: '1px solid #1a3a1a', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>
+                  <span style={{ color: '#86efac' }}>✓ Already configured: </span>
+                  <strong style={{ color: '#dcfce7' }}>{providers[0].name} · {models[0].model}</strong>
+                  <span style={{ color: '#6b7280', marginLeft: 8 }}>— add another or skip</span>
+                </div>
+              )}
+
+              <div className="preset-grid" style={{ marginBottom: 14 }}>
+                {PRESETS.map((pr, idx) => {
+                  const isOllama = pr.name === 'Ollama (local)'
+                  const ollamaRunning = isOllama && ollamaStatus === 'running'
+                  return (
+                    <button
+                      key={pr.name}
+                      type="button"
+                      className={`preset-card${presetIdx === idx ? ' active' : ''}${ollamaRunning ? ' ollama-running' : ''}`}
+                      onClick={() => setPresetIdx(idx)}
+                      style={presetIdx === idx ? { borderColor: 'var(--primary)', background: 'var(--primary-bg)' } : ollamaRunning && presetIdx !== idx ? { borderColor: '#86efac', background: '#f0fdf4' } : undefined}
+                    >
+                      <span className="preset-name">{pr.name}{!pr.needsKey && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-faint)', marginLeft: 6 }}>no key</span>}{ollamaRunning && <span style={{ fontWeight: 700, fontSize: 11, color: '#16a34a', marginLeft: 6, border: '1px solid #86efac', background: '#dcfce7', padding: '1px 6px', borderRadius: 99 }}>Ollama running ✓</span>}</span>
+                      <span className="preset-url">{pr.baseUrl}</span>
+                      <span className="hint" style={{ marginTop: 2 }}>{pr.hint}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <label className="field-label">API key {preset.needsKey ? '' : <span style={{ fontWeight: 400 }}>(leave blank for Ollama)</span>}</label>
+              <input
+                className="input"
+                type="password"
+                placeholder={preset.needsKey ? 'sk-…' : 'ollama (no key needed)'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              <p className="hint" style={{ marginTop: 4 }}>{preset.hint} — key stays server-side, never sent to client</p>
+              <div className="wiz-keychain-hint">
+                <IconLock size={12} style={{ flexShrink: 0, color: '#d97706' }} />
+                <span style={{ fontSize: 11.5, lineHeight: 1.4 }}><strong>Tip:</strong> store keys in OS keychain, not plaintext — <code>security find-generic-password</code> (macOS) · <code>secret-tool</code>/<code>pass</code> (Linux) · Credential Manager (Windows). Keys never logged/returned.</span>
+              </div>
+
+              <label className="field-label">Model id {presetIdx === 6 && ollamaModels.length > 0 && <span style={{ fontWeight: 400, fontSize: 11, color: '#16a34a', marginLeft: 6 }}>auto-filled from Ollama</span>}</label>
+              <input
+                className="input"
+                placeholder={effectiveModels[0] ?? preset.models[0]}
+                value={modelId}
+                onChange={(e) => setModelId(e.target.value)}
+                list="wiz-model-suggestions"
+                onKeyDown={(e) => e.key === 'Enter' && !busy && handleCreateProviderModel()}
+              />
+              <datalist id="wiz-model-suggestions">
+                {effectiveModels.map((m) => <option key={m} value={m} />)}
+              </datalist>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                {effectiveModels.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="btn"
+                    style={{ padding: '4px 8px', fontSize: 12, background: modelId === m ? 'var(--primary-bg)' : undefined, borderColor: modelId === m ? 'var(--primary-border)' : undefined, color: modelId === m ? 'var(--primary)' : undefined }}
+                    onClick={() => setModelId(m)}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {presetIdx === 6 && ollamaModels.length > 0 && <p className="hint" style={{ marginTop: 6, color: '#16a34a' }}>✓ Suggestions from <code>http://localhost:11434/api/tags</code> (AbortController {OLLAMA_TIMEOUT_MS}ms, fail gracefully)</p>}
+              {presetIdx === 6 && ollamaStatus === 'offline' && <p className="hint" style={{ marginTop: 6 }}>Ollama not running — install via <code>ollama pull llama3.2</code> then start <code>ollama serve</code>. Graceful fallback.</p>}
+
+              <label className="field-label">Display name <span style={{ fontWeight: 400 }}>(optional)</span></label>
+              <input className="input" placeholder="e.g. DeepSeek Chat (optional)" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+
+              <div className="wiz-ext-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>Install VS Code Extension</span>
+                  <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)', textDecoration: 'none' }}><IconExternalLink size={12} /> vscode-extension/</a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <code className="wiz-ext-cmd">{EXT_INSTALL_CMD}</code>
+                  <button className="btn" style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }} onClick={handleCopyExt} aria-label="Copy install command"><IconCopy size={12} />{extCopied ? 'Copied!' : 'Copy'}</button>
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>One-click: copies <code>code --install-extension</code> command. See <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer">README</a> for <code>vsce package</code> → <code>.vsix</code>.</p>
+              </div>
+
+              <div className="wizard-actions">
+                <button className="btn" onClick={() => setStep(hasProject ? 0 : 1)} disabled={busy}>
+                  <IconChevronLeft size={16} /> Back
+                </button>
+                {hasProvider && hasModel && (
+                  <button className="btn" onClick={() => setStep(3)} disabled={busy}>
+                    Skip
+                  </button>
+                )}
+                <button className="btn btn-primary" onClick={handleCreateProviderModel} disabled={busy}>
+                  {busy ? 'Creating…' : 'Create & Continue'} <IconChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="wiz-panel" style={{ textAlign: 'center' }}>
+              <div className="wiz-hero-icon" style={{ margin: '0 auto 14px', background: '#dcfce7', borderColor: '#86efac', color: '#16a34a' }}>
+                <IconCheck size={28} />
+              </div>
+              <h3 className="wiz-section-title" style={{ textAlign: 'center' }}>You’re ready!</h3>
+              <p className="hint" style={{ textAlign: 'center', marginBottom: 16 }}>
+                {hasProject && hasProvider && hasModel ? 'Project, provider, and model are configured. Pick the model in the composer and send your first message.' : 'Setup saved. You can add more in Settings anytime.'}
+              </p>
+              <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 8, alignItems: 'stretch', minWidth: 260, textAlign: 'left', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-faint)' }}>Project</span>
+                  <strong>{projects[0]?.name ?? projName}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-faint)' }}>Provider</span>
+                  <strong>{providers[0]?.name ?? preset.name}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--text-faint)' }}>Model</span>
+                  <strong style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{models[0]?.model ?? modelId}</strong>
+                </div>
+              </div>
+              <div className="wiz-ext-card" style={{ textAlign: 'left', marginTop: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>Install VS Code Extension</span>
+                  <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)', textDecoration: 'none' }}><IconExternalLink size={12} /> vscode-extension/</a>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  <code className="wiz-ext-cmd">{EXT_INSTALL_CMD}</code>
+                  <button className="btn" style={{ padding: '4px 10px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }} onClick={handleCopyExt} aria-label="Copy install command"><IconCopy size={12} />{extCopied ? 'Copied!' : 'Copy'}</button>
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>One-click install via <code>code --install-extension</code>. See <a href="vscode-extension/README.md" target="_blank" rel="noopener noreferrer">README</a> for <code>.vsix</code> flow. {ollamaStatus === 'running' && ollamaModels.length > 0 ? `Ollama models ready: ${ollamaModels.slice(0,3).join(', ')}.` : ''}</p>
+              </div>
+              <div className="wizard-actions" style={{ justifyContent: 'center' }}>
+                <button className="btn btn-primary" onClick={() => { dismissOnboarding(); onClose() }} style={{ padding: '10px 22px', fontSize: 15 }}>
+                  Start chatting <IconChevronRight size={16} />
+                </button>
+              </div>
+              <p className="hint" style={{ textAlign: 'center', marginTop: 10 }}>
+                Tip: try <code>“build a todo app”</code> and watch plan → preview live. <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><IconLock size={10} /> store keys in OS keychain</span>
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="wizard-foot">
+          <span className="hint" style={{ margin: 0 }}>
+            {step === 0 ? 'No signup — self-hosted, keys never leave your server' : step === 2 ? 'Keys are masked and stored server-side only' : ''}
+          </span>
+          <button className="btn" style={{ padding: '6px 10px', fontSize: 12 }} onClick={handleDismiss}>
+            Don’t show again
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
