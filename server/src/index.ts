@@ -417,6 +417,25 @@ function isContinueKeyword(text: string): boolean {
   return /^(continue|resume|proceed|keep going|go on|cont\.?|continue please|please continue)[.!?]*$/.test(t)
 }
 
+/** Project Data Center messages: per-project editable knowledge, silent on greetings. */
+function projectDataMessages(project: { id: string } | null | undefined, chatId: string, explicitContent?: string): LLMMessage[] {
+  if (!project?.id) return []
+  try {
+    let effective = String(explicitContent ?? '').trim()
+    // pure "continue" carries no intent — fall back to last real user message for greeting check
+    if (!effective || isContinueKeyword(effective)) {
+      try {
+        const msgs = messagesOf(chatId)
+        const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
+        if (lastUser?.content?.trim()) effective = lastUser.content
+      } catch {}
+    }
+    const text = buildProjectDataSystemMessage(project.id, effective)
+    if (!text) return []
+    return [{ role: 'system', content: text }]
+  } catch { return [] }
+}
+
 type AgentMode = 'solo' | 'swarm' | 'hive' | 'squad' | 'infinity'
 
 function parseAgentMode(raw: unknown): AgentMode {
@@ -1534,6 +1553,7 @@ app.post('/api/chats/:id/messages', async (c) => {
           const basePrefix: LLMMessage[] = [
             { role: 'system', content: modelSystemPrompt },
             ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+            ...projectDataMessages(project, chat.id),
             ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
             ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
             ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
