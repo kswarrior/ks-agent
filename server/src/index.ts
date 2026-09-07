@@ -418,6 +418,24 @@ function parseAgentMode(raw: unknown): AgentMode {
   return 'solo'
 }
 
+type ContextMode = 'qa' | 'full'
+function parseContextMode(raw: unknown): ContextMode {
+  const v = String(raw ?? 'qa').trim().toLowerCase()
+  if (v === 'full' || v === 'context_full' || v === 'full_context' || v === 'full-context') return 'full'
+  if (v === 'qa' || v === 'chat' || v === 'q&a') return 'qa'
+  return 'qa'
+}
+function parseMaxTokens(raw: unknown, fallback?: number): number | undefined {
+  if (raw == null || raw === '') return fallback
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  return Math.max(256, Math.min(128000, Math.floor(n)))
+}
+function contextModeSystemNote(mode: ContextMode): string | null {
+  if (mode === 'full') return 'CONTEXT MODE: Full — history includes recent tool outputs (file reads, grep, logs). Use this rich context to avoid re-reading files you already inspected; prefer reasoning from provided file snippets and only re-read when you need fresh verification.'
+  return 'CONTEXT MODE: Chat/Q&A — history is prompt + AI output only (light). Re-read files you need via tools; do not assume file contents from memory.'
+}
+
 /** Mode instruction: when mode != solo, force the main agent to fan-out via delegate_task so sub-agents/teams appear in the UI bar. */
 function modeInstruction(mode: AgentMode): string | null {
   if (mode === 'solo') return null
@@ -1321,6 +1339,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   const content = String(body.content ?? '').trim()
   const modelId = body.modelId ? String(body.modelId) : ''
   const agentMode = parseAgentMode((body as any).mode)
+  const contextMode = parseContextMode((body as any).contextMode)
 
   if (!content) return c.json({ error: 'Message cannot be empty' }, 400)
   if (content.length > 50000) return c.json({ error: 'Message too long (max 50000 chars)' }, 400)
@@ -1335,6 +1354,7 @@ app.post('/api/chats/:id/messages', async (c) => {
   if (!provider) {
     return c.json({ error: 'Model has no valid provider' }, 400)
   }
+  const effectiveMaxTokens = parseMaxTokens((body as any).maxTokens, resolvedModel.maxTokens)
 
   // From here to the response there are no awaits, so two concurrent posts to the
   // same chat cannot both slip past this guard and register a job.
@@ -1395,14 +1415,44 @@ app.post('/api/chats/:id/messages', async (c) => {
         let history: LLMMessage[]
         {
       const modeMsg = modeInstruction(agentMode)
+      const contextNote = contextModeSystemNote(contextMode)
+      const toolContext: LLMMessage[] = []
+      if (contextMode === 'full') {
+        try {
+          const acts = activitiesOf(chat.id).slice(-18)
+          if (acts.length) {
+            const snippet = acts.map(a => `[${a.toolType} ${String(a.args?.path ?? a.args?.command ?? a.args?.pattern ?? '').slice(0,80)}]: ${String(a.result ?? a.summary ?? '').slice(0,700)}`).join('\n---\n').slice(0, 9000)
+            if (snippet.trim()) toolContext.push({ role: 'system', content: `RECENT TOOL CONTEXT (Full mode) — last ${acts.length} tool results for reference (avoid re-reading unless verification needed):\n${snippet}` })
+          }
+        } catch {}
+      }
       const prefix: LLMMessage[] = [
         { role: 'system', content: modelSystemPrompt },
         ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
         ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
         ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
+        ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
         ...skillMessages,
         ...cleanMessagesForHistory(chat.id)
       ]
+      const withTool = toolContext.length ? [...prefix.slice(0, prefix.length - cleanMessagesForHistory(chat.id).length), ...toolContext, ...cleanMessagesForHistory(chat.id)] : prefix
+      // if we injected toolContext we need to recompute prefix correctly — simpler: rebuild
+      let basePrefix: LLMMessage[]
+      if (toolContext.length) {
+        const clean = cleanMessagesForHistory(chat.id)
+        basePrefix = [
+          { role: 'system', content: modelSystemPrompt },
+          ...(project ? [{ role: 'system' as const, content: projectContextMessage(project) }] : []),
+          ...(project ? [{ role: 'system' as const, content: planPrompt }] : []),
+          ...(modeMsg ? [{ role: 'system' as const, content: modeMsg }] : []),
+          ...(contextNote ? [{ role: 'system' as const, content: contextNote }] : []),
+          ...skillMessages,
+          ...toolContext,
+          ...clean
+        ]
+      } else {
+        basePrefix = prefix
+      }
           const continueInstruction: LLMMessage = {
             role: 'user',
             content:
@@ -1410,9 +1460,9 @@ app.post('/api/chats/:id/messages', async (c) => {
           }
           if (planIncompleteForPure && existingPlanForPure) {
             const resume = planResumeContext(existingPlanForPure)
-            history = [...prefix, { role: 'system', content: resume }, continueInstruction]
+            history = [...basePrefix, { role: 'system', content: resume }, continueInstruction]
           } else {
-            history = [...prefix, continueInstruction]
+            history = [...basePrefix, continueInstruction]
           }
         }
         const job: GenerationJob = {
@@ -1430,7 +1480,7 @@ app.post('/api/chats/:id/messages', async (c) => {
         }
         generations.set(chat.id, job)
         const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-        void runGeneration(job, provider, resolvedModel.model, history, agent, resolvedModel.maxTokens).finally(() => {
+        void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens).finally(() => {
           job.finishedAt = new Date().toISOString()
         })
         return c.json({ userMsgId: lastAssistant.id, assistantId: job.assistantId, model: job.model, continued: true })
