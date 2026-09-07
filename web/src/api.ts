@@ -41,12 +41,14 @@ export async function sendMessage(
   chatId: string,
   content: string,
   modelId: string | null,
-  mode?: string | null
+  mode?: string | null,
+  contextMode?: string | null,
+  maxTokens?: number | null
 ): Promise<{ userMsgId: string; assistantId: string; model: string }> {
   const res = await fetch(`/api/chats/${chatId}/messages`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, modelId, ...(mode ? { mode } : {}) })
+    body: JSON.stringify({ content, modelId, ...(mode ? { mode } : {}), ...(contextMode ? { contextMode } : {}), ...(maxTokens != null ? { maxTokens } : {}) })
   })
   let data: any = null
   try {
@@ -60,12 +62,14 @@ export async function continueChat(
   chatId: string,
   content?: string,
   modelId?: string | null,
-  mode?: string | null
+  mode?: string | null,
+  contextMode?: string | null,
+  maxTokens?: number | null
 ): Promise<{ userMsgId?: string; assistantId: string; model: string; continued?: boolean; content?: string }> {
   const res = await fetch(`/api/chats/${chatId}/continue`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content: content ?? '', modelId: modelId ?? null, ...(mode ? { mode } : {}) })
+    body: JSON.stringify({ content: content ?? '', modelId: modelId ?? null, ...(mode ? { mode } : {}), ...(contextMode ? { contextMode } : {}), ...(maxTokens != null ? { maxTokens } : {}) })
   })
   let data: any = null
   try {

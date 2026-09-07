@@ -36,6 +36,8 @@ function KsAgent() {
   const [activeChatId, setActiveChatId] = useState<string | null>(() => { try { return localStorage.getItem(LS_CHAT) } catch { return null } })
   const [selectedModelId, setSelectedModelId] = useState<string | null>(() => { try { return localStorage.getItem(LS_MODEL) } catch { return null } })
   const [selectedMode, setSelectedMode] = useState<string>(() => { try { const v = localStorage.getItem(LS_MODE); return v && ['solo','swarm','hive','squad','infinity'].includes(v) ? v : 'solo' } catch { return 'solo' } })
+  const [selectedContextMode, setSelectedContextMode] = useState<string>(() => { try { const v = localStorage.getItem(LS_CONTEXT); return v === 'full' || v === 'qa' ? v : 'qa' } catch { return 'qa' } })
+  const [selectedMaxTokens, setSelectedMaxTokens] = useState<number | null>(() => { try { const v = localStorage.getItem(LS_TOKENS); if (!v || v === '' || v === 'null') return null; const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : null } catch { return null } })
 
   const [sidebarOpen, setSidebarOpen] = useState(() => { try { return window.matchMedia('(min-width: 900px)').matches } catch { return true } })
   const [rsbOpen, setRsbOpen] = useState(() => { try { return window.matchMedia('(min-width: 1200px)').matches } catch { return true } })
@@ -142,6 +144,22 @@ function KsAgent() {
   useEffect(() => {
     try { localStorage.setItem(LS_MODE, selectedMode) } catch {}
   }, [selectedMode])
+
+  useEffect(() => {
+    try { localStorage.setItem(LS_CONTEXT, selectedContextMode) } catch {}
+  }, [selectedContextMode])
+
+  useEffect(() => {
+    try {
+      if (selectedMaxTokens == null) localStorage.removeItem(LS_TOKENS)
+      else localStorage.setItem(LS_TOKENS, String(selectedMaxTokens))
+    } catch {}
+  }, [selectedMaxTokens])
+
+  const selectedContextModeRef = useRef<string>(selectedContextMode)
+  useEffect(() => { selectedContextModeRef.current = selectedContextMode }, [selectedContextMode])
+  const selectedMaxTokensRef = useRef<number | null>(selectedMaxTokens)
+  useEffect(() => { selectedMaxTokensRef.current = selectedMaxTokens }, [selectedMaxTokens])
 
   // keep focused agent view valid — fall back to main when id disappears
   useEffect(() => {
@@ -864,9 +882,9 @@ function KsAgent() {
     sendingRef.current.add(chatId)
     try {
       if (isPure) {
-        await api.continueChat(chatId, '', selectedModelId, selectedModeRef.current)
+        await api.continueChat(chatId, '', selectedModelId, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current)
       } else {
-        await api.continueChat(chatId, extraContent, selectedModelId, selectedModeRef.current)
+        await api.continueChat(chatId, extraContent, selectedModelId, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current)
       }
       // For pure continue preserve plan/activities so AI picks up where it left off
       if (!isPure) {
@@ -908,7 +926,7 @@ function KsAgent() {
   }
 
   // ---- sending ----
-  async function send(content: string) {
+  async function send(content: string, opts?: { contextMode?: string; maxTokens?: number | null }) {
     if (!selectedModelId) {
       toast('No model selected. Add one in Settings.', 'error')
       return
@@ -1000,7 +1018,9 @@ function KsAgent() {
     setStreams((prev) => ({ ...prev, [chatId]: prev[chatId] ?? '' }))
 
     try {
-      await api.sendMessage(chatId, content, selectedModelId, selectedModeRef.current)
+      const ctxMode = opts?.contextMode ?? selectedContextModeRef.current ?? 'qa'
+      const tok = opts?.maxTokens !== undefined ? opts.maxTokens : selectedMaxTokensRef.current
+      await api.sendMessage(chatId, content, selectedModelId, selectedModeRef.current, ctxMode, tok)
       // Reset plan + activities for this chat so the next prompt starts
       // fresh from Understand → Explore → Planning → Executing.
       // Without this, hasExplore stays true and old plan (done) makes UI
@@ -1143,6 +1163,10 @@ function KsAgent() {
             onSelectModel={setSelectedModelId}
             selectedMode={selectedMode as any}
             onSelectMode={setSelectedMode}
+            selectedContextMode={selectedContextMode as any}
+            onSelectContextMode={setSelectedContextMode}
+            maxTokens={selectedMaxTokens}
+            onSelectMaxTokens={setSelectedMaxTokens}
             onSend={send}
             onStop={stopStreaming}
             onRequestSettings={() => setSettingsOpen(true)}
