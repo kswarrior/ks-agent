@@ -47,8 +47,8 @@
 ```bash
 npm install
 npm run build
-npm start          # http://localhost:8787
-# Open http://localhost:8787 — Quick Setup wizard opens: Project → Preset → Key → Model → chat
+npm start          # http://localhost:8787 (`server/src/index.ts:5988` `PORT`, override with `PORT=...`)
+# Open http://localhost:8787 → Settings → provider preset (Ollama local, no key, ~30s) or API key (~60s) → add model → chat
 # Mobile: http://<your-vps-ip>:8787  (put behind Tailscale/Caddy for TLS)
 ```
 
@@ -409,7 +409,7 @@ Terminal-only, single-session, no preview/terminal/skills ecosystem.
 | IDOR on project/chat ids | Every route checks `findProject`/`findChat` + realpath | Similar elsewhere |
 | SSRF private host | Blocked for upload-url, MCP/LSP URLs, and shell `curl` via `isBlockedHost` + `isPrivateHostForShell` | Most agents trust URL fetches |
 
-> Fails closed by design. Multi-user: put auth in front via Caddy/Nginx/Tailscale. Kernel isolation is **DONE** via `KS_DOCKER_JAIL=1` (`server/src/docker.ts:10` + `server/src/agent.ts:714` + `server/src/index.ts:147` PTY) — `docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine` (override `KS_DOCKER_IMAGE`), project-only mount, no `--privileged`, fallback to native when docker unavailable.
+> Fails closed by design. Multi-user: put auth in front via Caddy/Nginx/Tailscale. Kernel isolation is **DONE** via `KS_DOCKER_JAIL=1` (`server/src/docker.ts:10` + `server/src/agent.ts:1168` + `server/src/index.ts:243` PTY) — `docker run --rm --network none --memory=512m --cpus=1 -v project:/workspace:rw -w /workspace node:20-alpine` (override `KS_DOCKER_IMAGE`), project-only mount, no `--privileged`, fallback to native when docker unavailable.
 
 ---
 
@@ -420,8 +420,8 @@ git clone <ks-agent> && cd ks-agent
 npm install
 npm run build
 npm start            # http://localhost:8787
-# Auto-opens Quick Setup wizard: Project → Preset (Ollama/DeepSeek/OpenAI) → Key → Model → chat
-# Ollama (local): preset “Ollama (local)” — no key, offline, ~30s
+# Settings → provider preset (Ollama/DeepSeek/OpenAI) → add model → chat
+# Ollama (local): preset “Ollama (local)” — no key, offline, ~30s (no wizard/auto-detect in-tree)
 ```
 
 Environment overrides (optional):
@@ -457,7 +457,7 @@ KS_DOCKER_IMAGE=node:20-alpine    # image for jail (default node:20-alpine, or a
 No. Similar skills shape for compatibility, but standalone Hono + React + SQLite product with its own storage, streaming, PTY, and preview system.
 
 **Can I use Claude / DeepSeek / local Ollama in KS Agent?**
-Yes. Any OpenAI-compatible endpoint works. Use `Quick Setup` preset or set `baseUrl` to your provider (`https://api.deepseek.com` or `http://localhost:11434/v1` for Ollama) and pick the model id. No `Authorization` header is sent when no key (verified `llm.ts:165`).
+Yes. Any OpenAI-compatible endpoint works. In Settings pick a preset (`PROVIDER_PRESETS`) or set `baseUrl` to your provider (`https://api.deepseek.com` or `http://localhost:11434/v1` for Ollama) and pick the model id. No `Authorization` header is sent when no key (verified `llm.ts:165`).
 
 **Does KS Agent do semantic code search?**
 Yes — **vector+hybrid 95/100 (beats Cody 85)** (`server/src/store.ts:491` `embedding_chunks` FLOAT32[384/768] per chunk 400-600 tokens + `store.ts:750` `chunkContentForEmbedding` + `store.ts:860` `localEmbed` + `store.ts:1100` `embedMany` batch 64 + `store.ts:1300` `semanticSearch` 0.5*vector+0.3*BM25+0.2*grep + `store.ts:688` sqlite-vec `vec0` + HNSW fallback + `server/src/agent.ts:341` `AGENT_TOOLS` + `server/src/index.ts:560` semantic API + `web/src/components/Sidebar.tsx:62` toggle). Lightweight pure-JS, no heavy deps, proven on 200-file bench `10/10 hybrid 0.733 vs grep 0`.
