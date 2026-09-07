@@ -113,7 +113,7 @@ Build clean, modern, fast, and responsive sites. Default to light, readable UI u
 - [ ] Fully responsive: desktop, tablet, mobile (test 375px, 768px, 1200px); no overflow.
 - [ ] No native `confirm/alert/prompt` in code; all modals are custom.
 - [ ] Semantic HTML, accessible (labels, alt, keyboard Esc/Enter, focus ring).
-- [ ] Empty/loading/error states designed, not blank.
+- [ ] Empty/loading/error states designed, not blank — loading uses suitable pattern: skeleton for cards/lists, spinner/circle for buttons, bar for page nav (see §5.11).
 - [ ] Fast: no unused deps, images optimized, lazy-load where needed.
 - [ ] Standalone: contains no internal strings/paths; works with `npm install && npm run dev && npm run build`.
 - [ ] No fake/demo data left behind — all features fully functional (see §5.5).
@@ -213,6 +213,21 @@ When the user is vague, underspecified, or just says "build me a dashboard / lan
 - Keep CSS under ~15KB gzipped. No heavy CSS frameworks, no 100KB icon fonts.
 - Test on throttled CPU (Chrome DevTools 4x slowdown) — interactions should stay ≥ 50fps.
 
+### 5.11 Loading States → Skeleton, Spinner, Bar, Text — Pick the Suitable One
+- **Never leave a blank page while fetching.** Every async view needs an explicit loading state that matches the content shape.
+- **Pick by context (don't use one pattern everywhere):**
+  - **Cards / Lists / Grids / Detail pages → Skeleton:** gray pulse blocks mimicking final layout (`height: 16px`, `border-radius: var(--radius-sm)`, `background: var(--surface-3)`, `animation: pulse 1.5s ease infinite`). 3-6 blocks, not a single spinner in center.
+  - **Buttons / Forms → Inline spinner (circle):** `16-18px` SVG circle with `stroke="currentColor"` + `animate-spin`, inside button, button `disabled` + `aria-busy="true"`. Keep button width stable to avoid layout shift.
+  - **Page navigation / route change → Top loading bar:** `2-3px` bar at top of viewport (`position:fixed; top:0; left:0; height:2px; background:var(--primary)`) with `transform: scaleX()` animation. Or `NProgress`-style. Hide on `load` / `error`.
+  - **Full-page initial load → Centered spinner + text:** large `32px` circle + `Loading…` text + `role="status" aria-live="polite"`. Timeout to error after ~10s, never spin forever.
+  - **Small inline / table cell / badge → Text:** `Loading…` / `●●●` pulse dots, `14px var(--text-faint)`. No heavy skeleton for a single line.
+- **Implementation rules:**
+  - Build reusable components: `<Skeleton />`, `<SkeletonCard />`, `<Spinner size={16|24|32} />`, `<LoadingBar />` — plain CSS, no extra deps.
+  - Skeleton CSS: `background: linear-gradient(90deg, var(--surface-3) 25%, var(--border) 50%, var(--surface-3) 75%); background-size: 200% 100%; animation: shimmer 1.3s infinite;` or simple `opacity: 0.6` pulse. Respect `prefers-reduced-motion: reduce → animation: none`.
+  - Accessibility: `aria-busy="true"`, `aria-live="polite"` for live regions, `alt=""` for decorative spinners.
+  - Error + retry: if fetch fails, replace skeleton/spinner with error banner + `Retry` button — never leave spinner stuck.
+  - Avoid: full-screen overlay spinner for a small card update; `Loading...` text alone for a whole dashboard; multiple competing spinners on one page.
+
 ---
 
 ## 6) Common AI Mistakes — Do NOT Do These
@@ -225,7 +240,8 @@ Learn from what AI generators repeatedly get wrong. If you catch yourself doing 
 - **"Coming soon" buttons:** `onClick={() => alert("Coming soon!")}` → Either build the feature or remove the button.
 - **Hardcoded counts:** `Cart (3)` that never updates → Derive from real state.
 - **No empty states:** blank page when list is empty → Show illustration + message + CTA ("No projects yet. Create your first project →").
-- **No loading/error:** fetch with no spinner or error banner → Always handle `loading`, `error`, and `empty`.
+- **No loading/error:** fetch with no spinner or error banner → Always handle `loading`, `error`, and `empty` (see §5.11 for suitable pattern).
+- **Wrong loading pattern:** giant full-page spinner for a single card, or `Loading...` text for entire dashboard skeleton → Use skeleton for cards/lists, spinner circle for buttons, bar for page nav — pick what fits context.
 
 ### Visual & UX
 - **Emoji as icons:** `🔥 🚀 ✨` as UI → Use SVG (see §5.1).
