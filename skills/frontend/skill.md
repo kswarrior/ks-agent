@@ -189,6 +189,10 @@ When the user is vague, underspecified, or just says "build me a dashboard / lan
   - **Marketing / Landing:** sticky header + anchor nav + footer.
   - **E-commerce / Catalog:** header with search + cart + sidebar filters (drawer on mobile).
 - Always include: active state styling, keyboard navigation, and mobile fallback (hamburger → drawer, tabs → horizontal scroll with `scrollbar-width: none`).
+- **Phone with sidebar — 3 rules:**
+  1. Below `768px` sidebar becomes off-canvas drawer: `position:fixed; inset:0 auto 0 0; width:280px; max-width:85vw; transform: translateX(-100%)`, hidden by default; hamburger `44×44px` in header toggles it via `transform` only (GPU, `0.2s ease`).
+  2. Drawer opens with `transform: translateX(0)` + overlay `background: rgba(0,0,0,0.4)`; close on overlay click + `Esc` + nav link click; add `overflow:hidden` on `<body>` when open and trap focus inside drawer (`aria-hidden` on main).
+  3. No mini/persistent sidebar on phone — content is single-column full-width (`margin-left:0`); sidebar nav items stay `44px` tall, `16px` font, same active style as desktop; never cause horizontal scroll.
 - Don't mix 3 nav patterns in one page. One primary nav (sidebar OR top tabs) + optional secondary (pills/tabs inside content).
 
 ### 5.8 Theme — Black/Dark + App-Suitable Colors
