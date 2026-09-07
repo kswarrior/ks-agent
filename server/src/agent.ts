@@ -2003,8 +2003,9 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
     }
 
     case 'run_shell': {
-      const command = typeof args.command === 'string' ? args.command.trim() : ''
-      if (!command) return err('command is required')
+      const rawCommand = typeof args.command === 'string' ? args.command.trim() : ''
+      if (!rawCommand) return err('command is required')
+      const command = containsLiteralProjectFolderPlaceholder(rawCommand) ? sanitizeShellPlaceholder(rawCommand) : rawCommand
       const danger = isDangerousCommand(command)
       if (danger) {
         // Force approval before executing any dangerous command.

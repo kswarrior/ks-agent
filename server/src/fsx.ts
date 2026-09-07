@@ -8,6 +8,15 @@ import path from 'node:path'
  * pointing outside the project, it is rejected.
  */
 export function resolveInProject(root: string, rel: string): string | null {
+  // Defensive: strip literal "${projectfolder}" placeholder that LLMs sometimes emit — e.g. "${projectfolder}/src" -> "src", "${projectfolder}" -> "." (project root)
+  if (/\$\{projectfolder\}/i.test(rel) || /\$projectfolder\b/i.test(rel)) {
+    let t = rel.trim()
+    t = t.replace(/^["']?\$\{projectfolder\}["']?[\/\\]?/i, '').replace(/^["']?\$projectfolder["']?[\/\\]?/i, '').replace(/\$\{projectfolder\}/gi, '').replace(/\$projectfolder/gi, '').replace(/%24%7Bprojectfolder%7D/gi, '')
+    t = t.replace(/[\/\\]{2,}/g, '/').replace(/^\/+/, '')
+    if (t.startsWith('./')) t = t.slice(2)
+    if (!t) t = '.'
+    rel = t
+  }
   const absRoot = path.resolve(root)
   const abs = path.resolve(absRoot, rel)
   if (abs !== absRoot && !abs.startsWith(absRoot + path.sep)) return null
