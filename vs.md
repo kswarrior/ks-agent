@@ -106,11 +106,11 @@ Legend: `✅` native · `🔶` partial / plugin · `❌` no · `—` not applica
 
 | Mode | Name | How it works | Status |
 |---|---|---|---|
-| **M1** | **Solo** | Single session, one agent per chat (`index.ts:641` Map, `index.ts:1042` 409 guard) — current default, simple tasks | ✅ **live** |
-| **M2** | **Swarm** | Main agent creates 2-5 parallel sub-agents via `delegate_task` (`agent.ts:341` new tool) — `research`/`explore`/`fix`/`write` each with own worktree (`git worktree add`) or Docker jail (`docker.ts:10`) | 🔶 **executing now** — tool + store + API scaffold |
-| **M3** | **Hive** | Fractal: Main → Agent → 5 sub-agents. E.g. `research-agent → 5 topic sub-agents` different things, depth 2, `parentSubAgentId` in `store.ts` | 📋 next |
-| **M4** | **Squad** | Team + Head: Main creates `Team` + `Head`; Head assigns tasks to members; members can spawn sub-agents (tree depth 3). Tables `teams {id, headId}`, `members {teamId, role}` | 📋 next |
-| **M5** | **Infinity** | Unlimited agents/teams (like M4) + **Preview Team** watches all `write_file` diffs in iframe, if `build` fail auto-calls Head + fix + **per-role multi-model** (`store.ts:40` `ModelEntry` per delegate — research=`DeepSeek-R1`, explore=`Claude`, write=`OpenAI`) | 📋 next — unseen level |
+| **M1** | **Solo** | Single session, one agent per chat (`index.ts:1075` Map, `index.ts:1485` 409 guard) — current default, simple tasks | ✅ **live** |
+| **M2** | **Swarm** | Main agent creates 2-5 parallel sub-agents via `delegate_task` (`agent.ts:1033` def, `:2733` exec) — `research`/`explore`/`fix`/`write`/`general`, forced fan-out when UI selects swarm (`agent.ts:3117`, `autoModes` `:3145`); `worktree:true` reserves an isolated path but real `git worktree add` is still pending (`agent.ts:2783`), or Docker jail (`docker.ts:10`) | ✅ **live (e2e 2026-09-07: 2 delegates `done` + messages)** |
+| **M3** | **Hive** | Fractal: Main → Agent → 5 sub-agents — nesting fields live (`parentSubAgentId` in `store.ts:215` type + `:452` column + `agent.ts:2744`/`2764` validation, hive force path `agent.ts:3145`) | 🔶 **partial (implemented, no dedicated e2e yet)** |
+| **M4** | **Squad** | Team + Head: `teams`/`teamMembers` tables (`store.ts:479`), `createTeam` (`store.ts:816`), `teamId` grouping + auto-create for squad/infinity (`agent.ts:3129` `3143`, `index.ts:480` `852`); no formal Head-assignment beyond `headId` field | 🔶 **partial (implemented, no dedicated e2e yet)** |
+| **M5** | **Infinity** | Unlimited fan-out like M4 + **per-role multi-model** via `delegate_task` `modelId` (`store.ts:758`, forced `agent.ts:3159`); no Preview-Team build-watch exists | 🔶 **partial (model fan-out live, no preview-watch)** |
 
 > **Execution order:** M1 done → M2 now → M3 → M4 → M5. Each mode fully customizable: `maxParallel 1-10`, `worktree on/off`, `per-role model` (`SettingsModal.tsx:40`), `previewGate on/off`, `docker jail` (`KS_DOCKER_JAIL=1`). After M5, `vs.md:96` flips to `✅ Swarm/Hive/Squad/Infinity (68→95)` and `vs.md:218` K 68→95.
 
