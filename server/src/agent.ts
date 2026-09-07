@@ -64,6 +64,7 @@ export const PRIMARY_SYSTEM_PROMPT =
 export const DEFAULT_PLAN_PROMPT =
 'RESPONSE FORMAT — STRUCTURED (MANDATORY — ALL MESSAGES): Never reply as one long paragraph. Every real reply — during working OR final — must be lightweight structured markdown: one `## Title` + 2-4 bullets (`- **Label:** detail`) + optional `> note` and `inline code`. NEVER use `| File | Change |` tables, `| Step |` tables, `## Steps` lists, or any `| col |` markdown table unless user explicitly asks “show as table”. For changes list as bullets `- **path:** detail`. Keep max 5 bullets for intermediate, 10 for final. ' +
 'SCOPE: Primary workspace is ${projectfolder} ONLY (e.g. project/ks) — you have FULL permission INSIDE ${projectfolder} and all its subfolders/files at any depth; you have ZERO permission OUTSIDE ${projectfolder} (parent, siblings, agent codebase, /tmp, /etc, etc). Never go outside ${projectfolder} for any reason — treat every path as relative to ${projectfolder}. Only skill reads (skills/*.md) are allowed outside via fallback. If outside access seems needed, ask via ask_question. ' +
+'CRITICAL — ${projectfolder} is a SYMBOL for your CWD (already the project root). NEVER use literal "${projectfolder}" or "$projectfolder" in paths/commands — use "" for root and relative paths like "src/app.ts". Creating a literal folder named "${projectfolder}" is forbidden. ' +
 'CONVERSATION vs TASK: If the user message is PURELY conversational / small talk (hi/hello/hey/greetings, "how are you" / "how\'s it going" / "what\'s up", "who are you", "thanks/thank you", "good morning/evening", "bye") with NO task request, reply naturally like "Hi! I\'m doing well — how can I help you today?" with NO workflow, NO tools, NO explore, NO skill reads — just the greeting. ONLY enter PLAN mode when the user actually requests a task. ' +
 'Work in PLAN mode: Understand → Explore → Plan → Execute → Verify → Finish — ONLY for real tasks. ' +
 'Understand = one 10-20 word sentence. Then ALWAYS inspect with list_files/read_file INSIDE ${projectfolder} (use path "" for its root) — but ONLY when a task was requested. ' +
@@ -332,13 +333,88 @@ function ok(resultText: string, summary: string): ToolExecResult {
   return { ok: true, result: resultText, summary }
 }
 
+/** Detect literal "${projectfolder}" placeholder in a path or command (would create a broken literal folder). */
+export function containsLiteralProjectFolderPlaceholder(s: string): boolean {
+  return /\$\{projectfolder\}/i.test(s) || /\$projectfolder\b/i.test(s) || /%24%7Bprojectfolder%7D/i.test(s)
+}
+
+/** Strip leading literal "${projectfolder}" placeholder from a file path so "${projectfolder}/src/file" -> "src/file" and "${projectfolder}" -> "" (project root). */
+export function stripLiteralProjectFolderPrefix(rel: string): string {
+  let t = rel.trim()
+  // Remove surrounding quotes if the whole string is quoted placeholder? e.g. "\"${projectfolder}\"" -> still placeholder
+  // First, handle leading placeholder variants with optional slash
+  const leadingPatterns = [
+    /^["']?\$\{projectfolder\}["']?[\/\\]?/i,
+    /^["']?\$projectfolder["']?[\/\\]?/i,
+    /^%24%7Bprojectfolder%7D[\/\\]?/i,
+    /^\\?\$\{projectfolder\}[\/\\]?/i,
+  ]
+  for (const re of leadingPatterns) {
+    if (re.test(t)) {
+      t = t.replace(re, '')
+      break
+    }
+  }
+  // Replace any remaining embedded placeholders (mid-path) with empty
+  t = t.replace(/\$\{projectfolder\}/gi, '').replace(/\$projectfolder/gi, '').replace(/%24%7Bprojectfolder%7D/gi, '').replace(/\\?\$\{projectfolder\}/gi, '')
+  // Normalize: collapse duplicate slashes and strip leading ./ or /
+  t = t.replace(/[\/\\]{2,}/g, '/').replace(/^\/+/, '')
+  if (t === '' || t === '.' || t === './') return ''
+  if (t.startsWith('./')) t = t.slice(2)
+  return t
+}
+
+/** Sanitize shell command containing literal "${projectfolder}" placeholder — replace with "." or subpath so it stays inside project root and never creates a literal folder. */
+export function sanitizeShellPlaceholder(command: string): string {
+  let out = command
+  // quoted "${projectfolder}" with optional subpath -> "subpath" or "."
+  out = out.replace(/(["'])\$\{projectfolder\}(?:\/([^"'`\s;|&]+))?\1/gi, (_m: string, q: string, sub: string) => {
+    if (sub) return `${q}${sub}${q}`
+    return `${q}.${q}`
+  })
+  // unquoted ${projectfolder} with optional subpath
+  out = out.replace(/\$\{projectfolder\}(?:\/([^\s"'`;|&\n]+))?/gi, (_m: string, sub: string) => {
+    if (sub) return sub
+    return '.'
+  })
+  // quoted $projectfolder
+  out = out.replace(/(["'])\$projectfolder(?:\/([^"'`\s;|&]+))?\1/gi, (_m: string, q: string, sub: string) => {
+    if (sub) return `${q}${sub}${q}`
+    return `${q}.${q}`
+  })
+  // unquoted $projectfolder
+  out = out.replace(/\$projectfolder(?:\/([^\s"'`;|&\n]+))?/gi, (_m: string, sub: string) => {
+    if (sub) return sub
+    return '.'
+  })
+  // encoded %24%7Bprojectfolder%7D
+  out = out.replace(/%24%7Bprojectfolder%7D(?:\/([^\s"'`;|&\n]+))?/gi, (_m: string, sub: string) => {
+    if (sub) return sub
+    return '.'
+  })
+  // escaped \${projectfolder}
+  out = out.replace(/\\\$\{projectfolder\}(?:\/([^\s"'`;|&\n]+))?/gi, (_m: string, sub: string) => {
+    if (sub) return sub
+    return '.'
+  })
+  return out
+}
+
 /** Resolves a tool-supplied relative path inside the project; null when invalid.
  *  STRICT: only paths inside ${projectfolder} (project/ks) are allowed — every subfolder/file under it is inside and allowed, everything outside (parent, siblings, agent codebase, /tmp, absolute paths) returns null and is blocked.
+ *  Also handles literal "${projectfolder}" prefix by stripping it to project root.
  */
 function safeJoin(ctx: ToolContext, rel: unknown): string | null {
   if (typeof rel !== 'string') return null
-  const trimmed = rel.trim()
+  let trimmed = rel.trim()
   if (!trimmed) return resolveInProject(ctx.projectPath, '.')
+  // Auto-correct literal placeholder prefix: "${projectfolder}/src" -> "src", "${projectfolder}" -> ""
+  if (containsLiteralProjectFolderPlaceholder(trimmed)) {
+    const stripped = stripLiteralProjectFolderPrefix(trimmed)
+    if (!stripped) return resolveInProject(ctx.projectPath, '.')
+    trimmed = stripped
+    if (!trimmed) return resolveInProject(ctx.projectPath, '.')
+  }
   // Strict inside-only: no /tmp or other outside allowlist — only resolve inside project
   return resolveInProject(ctx.projectPath, trimmed)
 }
@@ -755,7 +831,9 @@ function containsPrivateUrl(command: string): string | null {
  * Returns null if allowed, or a reason string if it should be blocked / asked first.
  */
 export function isOutsideScopeCommand(command: string, projectPath: string, _chatId: string): string | null {
-  const c = command.trim()
+  const raw = command.trim()
+  // Sanitize literal "${projectfolder}" placeholder -> "." or subpath so scope checks run on the real intent and we never create a literal folder named "${projectfolder}"
+  const c = containsLiteralProjectFolderPlaceholder(raw) ? sanitizeShellPlaceholder(raw) : raw
   // STRICT: any ".." traversal is forbidden — outside is FORBIDDEN
   if (/(?:^|[\s\"'\/])\.\.(?:\/|[\s\"']|$)/.test(c)) {
     return 'Traverses outside ${projectfolder} via ".." — outside is FORBIDDEN. Stay strictly inside ${projectfolder}'
@@ -856,7 +934,7 @@ async function execShell(command: string, cwd: string): Promise<{ code: number; 
   return await new Promise((resolve) => {
     exec(
       command,
-      { cwd, timeout: SHELL_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, shell: '/bin/bash', windowsHide: true },
+      { cwd, timeout: SHELL_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, shell: '/bin/bash', windowsHide: true, env: { ...process.env, projectfolder: cwd, PROJECTFOLDER: cwd, PROJECT_FOLDER: cwd, ProjectFolder: cwd } as any },
       (error, stdout, stderr) => {
         const code = error && typeof error.code === 'number' ? error.code : error ? 1 : 0
         let output = `${stdout}${stderr}`.slice(0, SHELL_OUTPUT_CAP)
