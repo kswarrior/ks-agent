@@ -2349,8 +2349,21 @@ function persistToSqlite(): void {
     preservedGithubKv = s.prepare("SELECT key, value FROM kv WHERE key IN ('githubToken','githubPollSettings') OR key LIKE 'githubPollSettings:%' OR key LIKE 'github:%'").all() as any
   } catch {}
   // Also preserve github_cache? not needed (ephemeral)
+  // Preserve sub-agents/teams/messages across bulk replace (they live in separate tables not covered by legacy db.json)
+  let preservedSubAgents: any[] = []
+  let preservedTeams: any[] = []
+  let preservedTeamMembers: any[] = []
+  let preservedSubAgentMessages: any[] = []
+  try { preservedSubAgents = s.prepare('SELECT * FROM subAgents').all() as any[] } catch {}
+  try { preservedTeams = s.prepare('SELECT * FROM teams').all() as any[] } catch {}
+  try { preservedTeamMembers = s.prepare('SELECT * FROM teamMembers').all() as any[] } catch {}
+  try { preservedSubAgentMessages = s.prepare('SELECT * FROM subAgentMessages').all() as any[] } catch {}
   try { s.pragma('foreign_keys = OFF') } catch {}
   const txn = s.transaction(() => {
+    s.prepare('DELETE FROM subAgentMessages').run()
+    s.prepare('DELETE FROM teamMembers').run()
+    s.prepare('DELETE FROM teams').run()
+    s.prepare('DELETE FROM subAgents').run()
     s.prepare('DELETE FROM activities').run()
     s.prepare('DELETE FROM previews').run()
     s.prepare('DELETE FROM questions').run()
@@ -2408,6 +2421,28 @@ function persistToSqlite(): void {
 
     const insPreview = s.prepare('INSERT INTO previews (id, chatId, port, createdAt, updatedAt) VALUES (?,?,?,?,?)')
     for (const p of db.previews) insPreview.run(p.id, p.chatId, p.port, p.createdAt, p.updatedAt)
+
+    // sub-agents/teams: prefer in-memory db values if present, else restore preserved sqlite rows (covers restart after direct inserts)
+    const subAgentsToPersist = (db.subAgents && db.subAgents.length) ? db.subAgents : preservedSubAgents.map((r: any) => ({ id: r.id, parentChatId: r.parentChatId, parentSubAgentId: r.parentSubAgentId ?? null, teamId: r.teamId ?? null, task: r.task, mode: r.mode, status: r.status, worktreePath: r.worktreePath ?? null, modelId: r.modelId ?? null, result: r.result ?? null, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+    const teamsToPersist = (db.teams && db.teams.length) ? db.teams : preservedTeams.map((r: any) => ({ id: r.id, name: r.name, chatId: r.chatId, headId: r.headId ?? null, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+    const teamMembersToPersist = (db.teamMembers && db.teamMembers.length) ? db.teamMembers : preservedTeamMembers.map((r: any) => ({ id: r.id, teamId: r.teamId, role: r.role, subAgentId: r.subAgentId ?? null, createdAt: r.createdAt }))
+    const subMsgsToPersist = (db.subAgentMessages && db.subAgentMessages.length) ? db.subAgentMessages : preservedSubAgentMessages.map((r: any) => ({ id: r.id, subAgentId: r.subAgentId, parentChatId: r.parentChatId, role: r.role, content: r.content, createdAt: r.createdAt, toolCallId: r.toolCallId ?? null, toolName: r.toolName ?? null }))
+    try {
+      const insSub = s.prepare('INSERT INTO subAgents (id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
+      for (const a of subAgentsToPersist) insSub.run(a.id, a.parentChatId, a.parentSubAgentId ?? null, a.teamId ?? null, a.task, a.mode, a.status, a.worktreePath ?? null, a.modelId ?? null, a.result ?? null, a.createdAt, a.updatedAt)
+    } catch {}
+    try {
+      const insTeam = s.prepare('INSERT INTO teams (id, name, chatId, headId, createdAt, updatedAt) VALUES (?,?,?,?,?,?)')
+      for (const t of teamsToPersist) insTeam.run(t.id, t.name, t.chatId, t.headId ?? null, t.createdAt, t.updatedAt)
+    } catch {}
+    try {
+      const insMember = s.prepare('INSERT INTO teamMembers (id, teamId, role, subAgentId, createdAt) VALUES (?,?,?,?,?)')
+      for (const m of teamMembersToPersist) insMember.run(m.id, m.teamId, m.role, m.subAgentId ?? null, m.createdAt)
+    } catch {}
+    try {
+      const insSubMsg = s.prepare('INSERT INTO subAgentMessages (id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName) VALUES (?,?,?,?,?,?,?,?)')
+      for (const sm of subMsgsToPersist) insSubMsg.run(sm.id, sm.subAgentId, sm.parentChatId, sm.role, sm.content, sm.createdAt, sm.toolCallId ?? null, sm.toolName ?? null)
+    } catch {}
 
     const insKv = s.prepare('INSERT INTO kv (key, value) VALUES (?,?)')
     insKv.run('systemPrompt', db.systemPrompt)
@@ -2698,7 +2733,29 @@ function loadFromSqlite(s: Database.Database): DB | null {
       themeSettings = { ...DEFAULT_THEME }
     }
 
-    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, themeSettings, skills, previews, mcpServers, lspServers, plugins, subAgents: [], teams: [], teamMembers: [] }
+    // Load sub-agents/teams/messages for persistence
+    let subAgents: SubAgent[] = []
+    try {
+      const rows = s.prepare('SELECT id, parentChatId, parentSubAgentId, teamId, task, mode, status, worktreePath, modelId, result, createdAt, updatedAt FROM subAgents ORDER BY createdAt').all() as any[]
+      subAgents = rows.map((r: any) => ({ id: r.id, parentChatId: r.parentChatId, parentSubAgentId: r.parentSubAgentId ?? null, teamId: r.teamId ?? null, task: r.task, mode: r.mode as SubAgentMode, status: r.status as SubAgentStatus, worktreePath: r.worktreePath ?? null, modelId: r.modelId ?? null, result: r.result ?? null, createdAt: r.createdAt, updatedAt: r.updatedAt }))
+    } catch {}
+    let teams: Team[] = []
+    try {
+      const rows = s.prepare('SELECT id, name, chatId, headId, createdAt, updatedAt FROM teams ORDER BY createdAt').all() as any[]
+      teams = rows as Team[]
+    } catch {}
+    let teamMembers: TeamMember[] = []
+    try {
+      const rows = s.prepare('SELECT id, teamId, role, subAgentId, createdAt FROM teamMembers ORDER BY createdAt').all() as any[]
+      teamMembers = rows as TeamMember[]
+    } catch {}
+    let subAgentMessages: SubAgentMessage[] = []
+    try {
+      const rows = s.prepare('SELECT id, subAgentId, parentChatId, role, content, createdAt, toolCallId, toolName FROM subAgentMessages ORDER BY createdAt').all() as any[]
+      subAgentMessages = rows as SubAgentMessage[]
+    } catch {}
+
+    return { projects, chats, messages, providers, models, systemPrompt, planPrompt, plans, terminals, questions, activities, retrySettings, themeSettings, skills, previews, mcpServers, lspServers, plugins, subAgents, teams, teamMembers, subAgentMessages }
   } catch (e) {
     console.error('Failed to load from sqlite:', e)
     return null

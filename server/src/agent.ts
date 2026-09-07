@@ -1,7 +1,7 @@
 import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { createSubAgent, findSubAgent, subAgentsOf, updateSubAgent, findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
+import { addSubAgentMessage, createSubAgent, findSubAgent, subAgentsOf, updateSubAgent, findPlanForChat, getDb, getRetrySettings, getSkills, messagesOf, newId, saveDb, semanticSearch, upsertEmbedding, deleteEmbedding, type Plan, type Question, type Activity } from './store.js'
 import { streamChatWithTools, type LLMMessage, type ParsedToolCall, type ToolDef, type RetrySettings } from './llm.js'
 import { relWithin, resolveInProject } from './fsx.js'
 import { callMCPTool, getMCPToolDefs, isMCPTool } from './mcp.js'
