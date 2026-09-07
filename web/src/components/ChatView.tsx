@@ -882,7 +882,6 @@ export function ChatView(props: Props) {
                 <span className="exec-label">Executing</span>
                 <span className="exec-step-badge">[{execStepBadge}]</span>
                 {execTitle && <span className="exec-title">{execTitle}</span>}
-                <span className="dots" aria-hidden><span className="dot" /><span className="dot" /><span className="dot" /></span>
               </div>
             )}
 
