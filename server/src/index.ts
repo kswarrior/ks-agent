@@ -2676,12 +2676,16 @@ app.get('/api/projects/:id/github/diff', async (c) => {
     } catch {}
   }
   if (!repo) return c.json({ error: 'Repo not found (pass ?repo=owner/repo or init git remote)' }, 400)
+  if (!isValidRepoSlug(repo)) return c.json({ error: 'Invalid repo (expected owner/name)' }, 400)
   const etag = c.req.header('if-none-match') || undefined
   try {
     const useEtag = settings.useEtag
     const url = pr ? `https://api.github.com/repos/${repo}/pulls/${encodeURIComponent(pr)}/files` : `https://api.github.com/repos/${repo}/pulls`
     const result = await fetchGitHub(url, project.id, { etag, useEtag })
-    if (result.status === 304) return c.json({ cached: true, data: result.data, etag: result.etag }, 304 as any)
+    if (result.status === 304) {
+      if (result.etag) c.header('ETag', result.etag)
+      return c.json({ cached: true, data: result.data, etag: result.etag })
+    }
     // For Hono, 304 with json still sends body — we return header instead
     if (result.fromCache) {
       c.header('X-Cache', 'HIT')
@@ -2721,6 +2725,7 @@ app.get('/api/projects/:id/github/pr', async (c) => {
     } catch {}
   }
   if (!repo) return c.json({ error: 'Repo not found (pass ?repo=owner/repo)' }, 400)
+  if (!isValidRepoSlug(repo)) return c.json({ error: 'Invalid repo (expected owner/name)' }, 400)
   try {
     const result = await fetchGitHub(`https://api.github.com/repos/${repo}/pulls`, project.id, { useEtag: settings.useEtag })
     if (result.etag) c.header('ETag', result.etag)
@@ -2749,6 +2754,7 @@ app.get('/api/projects/:id/github/commits', async (c) => {
     } catch {}
   }
   if (!repo) return c.json({ error: 'Repo not found' }, 400)
+  if (!isValidRepoSlug(repo)) return c.json({ error: 'Invalid repo (expected owner/name)' }, 400)
   try {
     const result = await fetchGitHub(`https://api.github.com/repos/${repo}/commits`, project.id, { useEtag: settings.useEtag })
     if (result.etag) c.header('ETag', result.etag)
@@ -2765,6 +2771,7 @@ app.get('/api/projects/:id/github/actions', async (c) => {
   if (!token) return c.json({ error: 'No GitHub token configured' }, 401)
   let repo = c.req.query('repo') ? String(c.req.query('repo')).trim().slice(0,200) : null
   if (!repo) return c.json({ error: 'Repo not found' }, 400)
+  if (!isValidRepoSlug(repo)) return c.json({ error: 'Invalid repo (expected owner/name)' }, 400)
   try {
     const result = await fetchGitHub(`https://api.github.com/repos/${repo}/actions/runs`, project.id, { useEtag: settings.useEtag })
     if (result.etag) c.header('ETag', result.etag)
@@ -5424,6 +5431,43 @@ function isBlockedHost(hostname: string): boolean {
   if (h.startsWith('::ffff:')) {
     const v4 = h.slice(7)
     if (v4) return isBlockedHost(v4)
+  }
+  // Alt IP encodings (SSRF): single decimal (2130706433), hex (0x7f000001), octal — all can resolve to loopback/private
+  if (/^(0x[0-9a-f]+|\d+)$/i.test(h)) {
+    try {
+      const n = h.toLowerCase().startsWith('0x') ? parseInt(h, 16) : parseInt(h, 10)
+      if (Number.isFinite(n) && n >= 0 && n <= 0xffffffff) {
+        const a = (n >>> 24) & 0xff
+        const b = (n >>> 16) & 0xff
+        if (a === 127 || a === 10 || a === 0) return true
+        if (a === 169 && b === 254) return true
+        if (a === 172 && b >= 16 && b <= 31) return true
+        if (a === 192 && b === 168) return true
+        // Any other single-label numeric host is suspicious — block fail-closed
+        return true
+      }
+    } catch {}
+    return true
+  }
+  // Dotted with hex/octal labels (0x7f.0.0.1, 0177.0.0.1): normalize then check
+  if (/^([0-9a-fx]+\.)+[0-9a-fx]+$/i.test(h) && /(0x|^0\d)/i.test(h)) {
+    try {
+      const parts = h.split('.').map((p) => {
+        if (/^0x[0-9a-f]+$/i.test(p)) return parseInt(p, 16)
+        if (/^0[0-7]+$/.test(p)) return parseInt(p, 8)
+        const n = Number(p)
+        return Number.isFinite(n) ? n : NaN
+      })
+      if (parts.length === 4 && parts.every((n) => Number.isFinite(n) && n >= 0 && n <= 255)) {
+        const [a, b] = parts as number[]
+        if (a === 127 || a === 10 || a === 0) return true
+        if (a === 169 && b === 254) return true
+        if (a === 172 && b >= 16 && b <= 31) return true
+        if (a === 192 && b === 168) return true
+      }
+      return true
+    } catch {}
+    return true
   }
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
   if (!m) return false

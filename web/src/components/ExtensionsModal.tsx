@@ -708,8 +708,6 @@ export function ExtensionsModal({ open, onClose }: Props) {
       toast(`Published ${p.name} v${p.version} → marketplace`, 'success')
       await Promise.all([loadPlugins(), loadMarketplace()])
       setPluginView('marketplace')
-      // show bundle preview briefly via console
-      console.log('[publish] bundle', res.bundle)
     } catch (e: any) {
       const msg = String(e?.message || 'Publish failed')
       if (msg.includes('entryPoint does not exist')) toast(msg, 'error')
