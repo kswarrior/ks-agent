@@ -28,6 +28,8 @@ interface ServerState {
 }
 
 // In-memory state
+
+let httpRpcId = 1
 const states = new Map<string, ServerState>()
 
 // Map full tool name -> { serverId, originalName }
@@ -221,7 +223,7 @@ class HttpMCPClient implements MCPClient {
   ) {}
 
   private async rpc(method: string, params: unknown, timeoutMs = 15000): Promise<any> {
-    const body = JSON.stringify({ jsonrpc: '2.0', id: Date.now() + Math.floor(Math.random() * 10000), method, params })
+    const body = JSON.stringify({ jsonrpc: '2.0', id: httpRpcId++, method, params })
     const controller = new AbortController()
     const t = setTimeout(() => controller.abort(), timeoutMs)
     try {

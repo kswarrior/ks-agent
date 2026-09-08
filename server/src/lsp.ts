@@ -29,6 +29,8 @@ interface ServerState {
 // In-memory state
 const states = new Map<string, ServerState>()
 
+let httpLspRpcId = 1
+
 // ---------------- Helpers ----------------
 
 function projectMatches(server: LSPServer, projectId?: string): boolean {
@@ -230,7 +232,7 @@ class HttpLspClient implements LspClient {
   ) {}
 
   private async rpc(method: string, params: unknown, timeoutMs = 10000): Promise<any> {
-    const body = JSON.stringify({ jsonrpc: '2.0', id: Date.now() + Math.floor(Math.random() * 10000), method, params })
+    const body = JSON.stringify({ jsonrpc: '2.0', id: httpLspRpcId++, method, params })
     const controller = new AbortController()
     const t = setTimeout(() => controller.abort(), timeoutMs)
     try {
@@ -312,7 +314,7 @@ class SocketLspClient implements LspClient {
   }
   private async rpc(method: string, params: unknown, timeoutMs = 10000): Promise<any> {
     // For tcp/socket we treat url as http endpoint; try fetch
-    const body = JSON.stringify({ jsonrpc: '2.0', id: Date.now() + Math.floor(Math.random() * 10000), method, params })
+    const body = JSON.stringify({ jsonrpc: '2.0', id: httpLspRpcId++, method, params })
     const controller = new AbortController()
     const t = setTimeout(() => controller.abort(), timeoutMs)
     try {

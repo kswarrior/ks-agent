@@ -75,7 +75,7 @@ import { streamChat, type LLMMessage } from './llm.js'
 import { DEFAULT_PLAN_PROMPT, PRIMARY_SYSTEM_PROMPT, clearSkillReadsForChat, clearSkillReadsForChats, getSkillReadStatus, hasReadSkill, isDangerousCommand, isOutsideScopeCommand, normalizeShellCommand, resolvePendingQuestion, runAgentLoop } from './agent.js'
 import { relWithin, resolveInProject, validSegment } from './fsx.js'
 import { getDockerImage, isDockerAvailableSync, isDockerJailEnabled } from './docker.js'
-import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDiff, gitLog, gitPull, gitPush, githubCreatePr, gitStatus, isGitRepo, isValidBranchName, parseRepoFromRemote } from './git.js'
+import { gitBranches, gitCheckout, gitCommit, gitCreateBranch, gitDiff, gitLog, gitPull, gitPush, githubCreatePr, gitStatus, isGitRepo, isValidBranchName, isValidRepoSlug, parseRepoFromRemote } from './git.js'
 import {
   fetchGitHub,
   getRateLimitState,
