@@ -299,7 +299,7 @@ export interface GithubPollSettings {
   webhookUrl?: string | null
 }
 
-export const GITHUB_TOKEN_REGEX = /^(gh[opsr]_|github_pat_)[A-Za-z0-9_]+$/
+export const GITHUB_TOKEN_REGEX = /^(gh[oprsu]_|github_pat_)[A-Za-z0-9_]+$/
 export const DEFAULT_GITHUB_POLL_SETTINGS: GithubPollSettings = {
   enabled: false,
   mode: 'interval',
@@ -558,7 +558,7 @@ export function setGithubToken(token: string, projectId?: string): string {
     } catch {}
     return ''
   }
-  if (!isValidGithubToken(t)) throw new Error('Invalid GitHub token: must start with ghp_/gho_/ghs_/ghr_/github_pat_ and be 20-120 chars')
+  if (!isValidGithubToken(t)) throw new Error('Invalid GitHub token: must start with ghp_/gho_/ghs_/ghr_/ghu_/github_pat_ and be 20-120 chars')
   try {
     const s = ensureDb()
     if (projectId) {

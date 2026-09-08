@@ -2425,7 +2425,7 @@ app.post('/api/settings/github', async (c) => {
   if (projectId && !findProject(projectId)) return c.json({ error: 'Project not found' }, 404)
   if (!token) return c.json({ error: 'Token is required' }, 400)
   if (token.length < 20 || token.length > 120) return c.json({ error: 'Token must be 20-120 chars' }, 400)
-  if (!isValidGithubToken(token)) return c.json({ error: 'Invalid GitHub token: must start with ghp_/gho_/ghs_/ghr_/github_pat_ and be 20-120 chars' }, 400)
+  if (!isValidGithubToken(token)) return c.json({ error: 'Invalid GitHub token: must start with ghp_/gho_/ghs_/ghr_/ghu_/github_pat_ and be 20-120 chars' }, 400)
   try {
     const masked = setGithubTokenStore(token, projectId)
     // restart scheduler if project-specific
