@@ -346,7 +346,7 @@ function AgentsPane({ activeChatId, subAgents, teams, activeAgent, onSelectAgent
                     {members.map(m => (
                       <button key={m.id} onClick={() => onSelectAgent?.({ kind: 'subagent', id: m.id })} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', background: activeAgent?.kind === 'subagent' && activeAgent.id === m.id ? 'var(--primary-bg)' : 'var(--surface-2)', border: `1px solid ${activeAgent?.kind === 'subagent' && activeAgent.id === m.id ? 'var(--primary-border)' : 'var(--border)'}`, borderRadius: 6, textAlign: 'left', cursor: 'pointer' }}>
                         <span className={`agent-dot agent-status-${m.status}`} style={{ width: 7, height: 7 }} />
-                        <span style={{ fontSize: 12, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.mode} · {m.task.slice(0, 34)}</span>
+                        <span style={{ fontSize: 12, color: 'var(--text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(m as any)?.mode ?? 'agent'} · {String((m as any)?.task ?? '').slice(0, 34)}</span>
                         <span style={{ fontSize: 10, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{m.status}</span>
                       </button>
                     ))}

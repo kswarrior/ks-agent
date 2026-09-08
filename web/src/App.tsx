@@ -456,16 +456,26 @@ function KsAgent() {
               }
             },
             onSubAgent: (sub) => {
-              // live-update the agent bar above the input when AI creates sub-agents
+              // Guard: ignore malformed payloads (e.g. legacy team markers without task/mode) to avoid white-screen
+              if (!sub || typeof sub.id !== 'string' || typeof (sub as any).task !== 'string' || typeof (sub as any).mode !== 'string') return
               if (activeChatIdRef.current !== chatId) return
               setSubAgents((prev) => {
                 const idx = prev.findIndex((s) => s.id === sub.id)
                 if (idx >= 0) {
                   const next = [...prev]
-                  next[idx] = sub
+                  // Merge to preserve createdAt/updatedAt when server omits them on done/error updates
+                  next[idx] = { ...prev[idx], ...sub, createdAt: (sub as any).createdAt ?? prev[idx].createdAt, updatedAt: (sub as any).updatedAt ?? prev[idx].updatedAt }
                   return next
                 }
                 return [...prev, sub]
+              })
+            },
+            onTeam: (team) => {
+              if (!team || typeof (team as any).id !== 'string') return
+              if (activeChatIdRef.current !== chatId) return
+              setTeams((prev) => {
+                if (prev.some((t) => t.id === (team as any).id)) return prev
+                return [...prev, team as Team]
               })
             },
             onRetry: (info) => {

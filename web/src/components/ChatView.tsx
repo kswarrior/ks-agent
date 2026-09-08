@@ -648,9 +648,11 @@ export function ChatView(props: Props) {
   const activeTeam = activeAgent.kind === 'team' ? teams.find((t) => t.id === activeAgent.id) ?? null : null
   const isAgentFocused = (activeAgent.kind === 'subagent' && !!activeSubAgent) || (activeAgent.kind === 'team' && !!activeTeam)
   function agentDisplayName(s: SubAgent): string {
-    const task = s.task.replace(/\s+/g, ' ').trim()
-    const short = task.length > 28 ? task.slice(0, 27) + '…' : task || s.mode
-    return `${s.mode} · ${short}`
+    const rawTask = typeof (s as any)?.task === 'string' ? (s as any).task : ''
+    const mode = typeof (s as any)?.mode === 'string' ? (s as any).mode : 'agent'
+    const task = rawTask.replace(/\s+/g, ' ').trim()
+    const short = task.length > 28 ? task.slice(0, 27) + '…' : task || mode
+    return `${mode} · ${short}`
   }
 
   return (
@@ -877,8 +879,8 @@ export function ChatView(props: Props) {
                   key={s.id}
                   className={`agent-box${activeAgent.kind === 'subagent' && activeAgent.id === s.id ? ' active' : ''}`}
                   onClick={() => props.onSelectAgent?.({ kind: 'subagent', id: s.id })}
-                  title={`${s.mode} sub-agent: ${s.task} — open sub-agent chat`}
-                  aria-label={`Sub-agent ${s.mode}: ${s.task.slice(0, 60)}`}
+                  title={`${(s as any)?.mode ?? 'agent'} sub-agent: ${(s as any)?.task ?? ''} — open sub-agent chat`}
+                  aria-label={`Sub-agent ${(s as any)?.mode ?? ''}: ${String((s as any)?.task ?? '').slice(0, 60)}`}
                   role="listitem"
                 >
                   <span className={`agent-dot agent-status-${s.status}`} aria-hidden />

@@ -93,6 +93,7 @@ export interface StreamHandlers {
   onChatTitle?: (data: { chatId: string; title: string; seq?: number }) => void
   onPreview?: (preview: Preview) => void
   onSubAgent?: (sub: import('./types').SubAgent) => void
+  onTeam?: (team: import('./types').Team) => void
   onRetry?: (info: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string }) => void
   onError: (message: string) => void
   onDone: () => void
@@ -183,11 +184,14 @@ export async function streamChatEvents(
             case 'subagent':
               handlers.onSubAgent?.(parsed as import('./types').SubAgent)
               break
+            case 'team':
+              handlers.onTeam?.(parsed as import('./types').Team)
+              break
             case 'retry':
               handlers.onRetry?.(parsed as { attempt: number; maxAttempts: number; delay: number; reason: string; error: string })
               break
             case 'error':
-              handlers.onError(parsed.message)
+              handlers.onError(typeof parsed?.message === 'string' && parsed.message ? parsed.message : JSON.stringify(parsed).slice(0, 500))
               break
             case 'done':
             case 'stopped':
