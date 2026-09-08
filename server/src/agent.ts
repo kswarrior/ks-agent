@@ -3127,7 +3127,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
       if ((mode === 'squad' || mode === 'infinity') && !hasTeam) {
         try {
           const team = createTeam(ctx.chatId, mode === 'squad' ? 'Squad Team' : 'Infinity Team')
-          try { ctx.onEvent('team', JSON.stringify({ id: team.id, chatId: team.chatId, name: team.name })) } catch {}
+          try { ctx.onEvent('team', JSON.stringify({ id: team.id, chatId: team.chatId, name: team.name, headId: team.headId ?? null, createdAt: team.createdAt, updatedAt: team.updatedAt })) } catch {}
           console.log(`[mode ${mode}] auto-created team ${team.id} for chat ${ctx.chatId} (forced by UI)`)
         } catch {}
       }
