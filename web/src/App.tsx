@@ -458,11 +458,6 @@ function KsAgent() {
             onSubAgent: (sub) => {
               // live-update the agent bar above the input when AI creates sub-agents
               if (activeChatIdRef.current !== chatId) return
-              // squad/infinity auto-team arrives on the same channel as { teamCreated:true } — refresh teams, don't push as sub-agent (would crash agentDisplayName on missing task/mode)
-              if ((sub as any)?.teamCreated) {
-                api.listTeams(chatId).then(setTeams).catch(() => {})
-                return
-              }
               setSubAgents((prev) => {
                 const idx = prev.findIndex((s) => s.id === sub.id)
                 if (idx >= 0) {
@@ -618,7 +613,7 @@ function KsAgent() {
                         if (sendingRef.current.has(chatId) || subsRef.current.has(chatId)) return
                         const modelId = selectedModelIdRef.current
                         try {
-                          await api.continueChat(chatId, '', modelId ?? null as any, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current)
+                          await api.continueChat(chatId, '', modelId ?? null as any, selectedModeRef.current)
                           trackGeneration(chatId)
                         } catch (e: any) {
                           toast(e.message, 'error')
