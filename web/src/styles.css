@@ -4540,4 +4540,5 @@ textarea {
 @media (max-width: 600px) {
   .agent-box-name { max-width: 110px; }
   .agent-bar { padding: 6px; gap: 6px; }
+  .hide-mobile { display: none !important; }
 }

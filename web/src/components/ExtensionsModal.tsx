@@ -728,7 +728,6 @@ export function ExtensionsModal({ open, onClose }: Props) {
       await Promise.all([loadSkills(), loadMarketplace()])
       setTab('plugins')
       setPluginView('marketplace')
-      console.log('[publish] skill bundle', res.bundle)
     } catch (e: any) {
       toast(e.message, 'error')
       setError(e.message)
