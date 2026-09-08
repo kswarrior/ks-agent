@@ -1,0 +1,1 @@
+{"name":"ks-minecraft-panel","version":"1.0.0","private":true,"type":"module","scripts":{"dev":"vite web","build":"vite build web"},"description":"","main":"index.js","keywords":[],"author":"","license":"ISC"}
