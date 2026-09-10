@@ -1,0 +1,11 @@
+# CPU install: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+# GPU (Colab/Kaggle): pip install torch torchvision + pip install unsloth trl
+torch
+torchvision
+transformers>=5.0
+peft>=0.20.0
+datasets
+accelerate
+pillow
+huggingface_hub
+numpy
