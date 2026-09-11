@@ -19,6 +19,7 @@ const LS_MODEL = 'ks.selectedModel'
 const LS_MODE = 'ks.selectedMode'
 const LS_CONTEXT = 'ks.contextMode'
 const LS_TOKENS = 'ks.maxTokens'
+const LS_THINKING = 'ks.thinking'
 
 function KsAgent() {
   const toast = useToast()
@@ -38,6 +39,8 @@ function KsAgent() {
   const [selectedMode, setSelectedMode] = useState<string>(() => { try { const v = localStorage.getItem(LS_MODE); return v && ['solo','swarm','hive','squad','infinity'].includes(v) ? v : 'solo' } catch { return 'solo' } })
   const [selectedContextMode, setSelectedContextMode] = useState<string>(() => { try { const v = localStorage.getItem(LS_CONTEXT); return v === 'full' || v === 'qa' ? v : 'qa' } catch { return 'qa' } })
   const [selectedMaxTokens, setSelectedMaxTokens] = useState<number | null>(() => { try { const v = localStorage.getItem(LS_TOKENS); if (!v || v === '' || v === 'null') return null; const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : null } catch { return null } })
+  // Thinking override (null = follow the selected model's Thinking Mode, default on)
+  const [selectedThinking, setSelectedThinking] = useState<boolean | null>(() => { try { const v = localStorage.getItem(LS_THINKING); if (v === 'off' || v === '0' || v === 'false') return false; if (v === 'on' || v === '1' || v === 'true') return true; return null } catch { return null } })
 
   const [sidebarOpen, setSidebarOpen] = useState(() => { try { return window.matchMedia('(min-width: 900px)').matches } catch { return true } })
   const [rsbOpen, setRsbOpen] = useState(() => { try { return window.matchMedia('(min-width: 1200px)').matches } catch { return true } })
@@ -156,10 +159,27 @@ function KsAgent() {
     } catch {}
   }, [selectedMaxTokens])
 
+  useEffect(() => {
+    try {
+      if (selectedThinking == null) localStorage.removeItem(LS_THINKING)
+      else localStorage.setItem(LS_THINKING, selectedThinking ? 'on' : 'off')
+    } catch {}
+  }, [selectedThinking])
+
   const selectedContextModeRef = useRef<string>(selectedContextMode)
   useEffect(() => { selectedContextModeRef.current = selectedContextMode }, [selectedContextMode])
   const selectedMaxTokensRef = useRef<number | null>(selectedMaxTokens)
   useEffect(() => { selectedMaxTokensRef.current = selectedMaxTokens }, [selectedMaxTokens])
+  const selectedThinkingRef = useRef<boolean | null>(selectedThinking)
+  useEffect(() => { selectedThinkingRef.current = selectedThinking }, [selectedThinking])
+  const modelsRef = useRef<ModelEntry[]>([])
+  useEffect(() => { modelsRef.current = models }, [models])
+  /** Effective thinking flag: model form setting wins when off, else the composer override (default on). Ref-safe for timers. */
+  function resolveThinking(): boolean {
+    const m = modelsRef.current.find((mm) => mm.id === selectedModelIdRef.current)
+    if ((m?.thinkingEnabled ?? true) === false) return false
+    return selectedThinkingRef.current ?? true
+  }
 
   // keep focused agent view valid — fall back to main when id disappears
   useEffect(() => {
@@ -623,7 +643,7 @@ function KsAgent() {
                         if (sendingRef.current.has(chatId) || subsRef.current.has(chatId)) return
                         const modelId = selectedModelIdRef.current
                         try {
-                          await api.continueChat(chatId, '', modelId ?? null as any, selectedModeRef.current)
+                          await api.continueChat(chatId, '', modelId ?? null as any, selectedModeRef.current, undefined, undefined, resolveThinking())
                           trackGeneration(chatId)
                         } catch (e: any) {
                           toast(e.message, 'error')
@@ -896,9 +916,9 @@ function KsAgent() {
     sendingRef.current.add(chatId)
     try {
       if (isPure) {
-        await api.continueChat(chatId, '', selectedModelId, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current)
+        await api.continueChat(chatId, '', selectedModelId, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current, resolveThinking())
       } else {
-        await api.continueChat(chatId, extraContent, selectedModelId, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current)
+        await api.continueChat(chatId, extraContent, selectedModelId, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current, resolveThinking())
       }
       // For pure continue preserve plan/activities so AI picks up where it left off
       if (!isPure) {
@@ -944,7 +964,7 @@ function KsAgent() {
   }
 
   // ---- sending ----
-  async function send(content: string, opts?: { contextMode?: string; maxTokens?: number | null }) {
+  async function send(content: string, opts?: { contextMode?: string; maxTokens?: number | null; thinking?: boolean }) {
     if (!selectedModelId) {
       toast('No model selected. Add one in Settings.', 'error')
       return
@@ -1038,7 +1058,8 @@ function KsAgent() {
     try {
       const ctxMode = opts?.contextMode ?? selectedContextModeRef.current ?? 'qa'
       const tok = opts?.maxTokens !== undefined ? opts.maxTokens : selectedMaxTokensRef.current
-      await api.sendMessage(chatId, content, selectedModelId, selectedModeRef.current, ctxMode, tok)
+      const thinking = opts?.thinking ?? resolveThinking()
+      await api.sendMessage(chatId, content, selectedModelId, selectedModeRef.current, ctxMode, tok, thinking)
       // Reset plan + activities for this chat so the next prompt starts
       // fresh from Understand → Explore → Planning → Executing.
       // Without this, hasExplore stays true and old plan (done) makes UI
@@ -1199,6 +1220,8 @@ function KsAgent() {
             onSelectContextMode={setSelectedContextMode}
             maxTokens={selectedMaxTokens}
             onSelectMaxTokens={setSelectedMaxTokens}
+            selectedThinking={selectedThinking}
+            onSelectThinking={setSelectedThinking}
             onSend={send}
             onStop={stopStreaming}
             onRequestSettings={() => setSettingsOpen(true)}
