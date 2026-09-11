@@ -478,6 +478,16 @@ function parseMaxTokens(raw: unknown, fallback?: number): number | undefined {
   if (!Number.isFinite(n) || n <= 0) return fallback
   return Math.max(256, Math.min(128000, Math.floor(n)))
 }
+/** Per-message thinking override; falls back to the model's setting (missing = enabled, the pre-toggle behavior). */
+function parseThinking(raw: unknown, model?: { thinkingEnabled?: boolean }): boolean {
+  if (typeof raw === 'boolean') return raw
+  if (typeof raw === 'string') {
+    const v = raw.trim().toLowerCase()
+    if (v === 'true' || v === '1' || v === 'on') return true
+    if (v === 'false' || v === '0' || v === 'off') return false
+  }
+  return model?.thinkingEnabled ?? true
+}
 function contextModeSystemNote(mode: ContextMode): string | null {
   if (mode === 'full') return 'CONTEXT MODE: Full — history includes recent tool outputs (file reads, grep, logs). Use this rich context to avoid re-reading files you already inspected; prefer reasoning from provided file snippets and only re-read when you need fresh verification.'
   return 'CONTEXT MODE: Chat/Q&A — history is prompt + AI output only (light). Re-read files you need via tools; do not assume file contents from memory.'
@@ -1290,9 +1300,11 @@ async function runGeneration(
   history: LLMMessage[],
   agent: AgentSpec | null,
   maxTokens?: number,
-  agentMode?: AgentMode
+  agentMode?: AgentMode,
+  thinking?: boolean
 ): Promise<void> {
   const retrySettings = getRetrySettings()
+  const thinkingEnabled = thinking ?? true
   try {
     if (agent) {
       await runAgentLoop({
@@ -1306,6 +1318,7 @@ async function runGeneration(
         signal: job.controller.signal,
         maxTokens,
         agentMode: agentMode ?? 'solo',
+        thinking: thinkingEnabled,
         onDelta: (text) => {
           job.content += text
           emitTo(job, 'delta', JSON.stringify(text))
@@ -1321,7 +1334,7 @@ async function runGeneration(
         let roundText = ''
         const startLen = job.content.length
         try {
-          for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings, maxTokens, (thinking) => emitTo(job, 'thinking', JSON.stringify({ text: thinking })), (info) => emitTo(job, 'retry', JSON.stringify(info)))) {
+          for await (const delta of streamChat(provider.baseUrl, provider.apiKey, model, history, job.controller.signal, retrySettings, maxTokens, thinkingEnabled ? (thinking) => emitTo(job, 'thinking', JSON.stringify({ text: thinking })) : undefined, (info) => emitTo(job, 'retry', JSON.stringify(info)))) {
             roundText += delta
             job.content += delta
             emitTo(job, 'delta', JSON.stringify(delta))
@@ -1497,6 +1510,7 @@ app.post('/api/chats/:id/messages', async (c) => {
     return c.json({ error: 'Model has no valid provider' }, 400)
   }
   const effectiveMaxTokens = parseMaxTokens((body as any).maxTokens, resolvedModel.maxTokens)
+  const thinking = parseThinking((body as any).thinking, resolvedModel)
 
   // From here to the response there are no awaits, so two concurrent posts to the
   // same chat cannot both slip past this guard and register a job.
@@ -1609,7 +1623,7 @@ app.post('/api/chats/:id/messages', async (c) => {
         }
         generations.set(chat.id, job)
         const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-        void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
+        void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode, thinking).finally(() => {
           job.finishedAt = new Date().toISOString()
         })
         return c.json({ userMsgId: lastAssistant.id, assistantId: job.assistantId, model: job.model, continued: true })
@@ -1737,7 +1751,7 @@ app.post('/api/chats/:id/messages', async (c) => {
 
   const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
 
-  void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
+  void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode, thinking).finally(() => {
     job.finishedAt = new Date().toISOString()
   })
 
@@ -1770,6 +1784,7 @@ app.post('/api/chats/:id/continue', async (c) => {
   const provider = db.providers.find((p) => p.id === resolvedModel.providerId)
   if (!provider) return c.json({ error: 'Model has no valid provider' }, 400)
   const effectiveMaxTokens = parseMaxTokens((body as any).maxTokens, resolvedModel.maxTokens)
+  const thinking = parseThinking((body as any).thinking, resolvedModel)
   const runningJob = generations.get(chat.id)
   if (runningJob && runningJob.status === 'running') return c.json({ error: 'This chat is already generating a reply' }, 409)
   const project = findProject(chat.projectId)
@@ -1843,7 +1858,7 @@ app.post('/api/chats/:id/continue', async (c) => {
       }
       generations.set(chat.id, job)
       const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-      void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
+      void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode, thinking).finally(() => {
         job.finishedAt = new Date().toISOString()
       })
       return c.json({ assistantId: job.assistantId, model: job.model, continued: true, content: '' })
@@ -1918,7 +1933,7 @@ app.post('/api/chats/:id/continue', async (c) => {
       generations.set(chat.id, job)
       void generateAndPersistTitle(chat, rawContent, provider, resolvedModel.model).catch(() => {})
       const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-      void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
+      void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode, thinking).finally(() => {
         job.finishedAt = new Date().toISOString()
       })
       return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })
@@ -2011,7 +2026,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     }
     generations.set(chat.id, job)
     const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
+    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode, thinking).finally(() => {
       job.finishedAt = new Date().toISOString()
     })
     return c.json({ assistantId: job.assistantId, model: job.model, continued: true, content: stripped })
@@ -2112,7 +2127,7 @@ app.post('/api/chats/:id/continue', async (c) => {
     generations.set(chat.id, job)
     void generateAndPersistTitle(chat, rawContent, provider, resolvedModel.model).catch(() => {})
     const agent: AgentSpec | null = project ? { projectPath: project.path, projectId: project.id } : null
-    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode).finally(() => {
+    void runGeneration(job, provider, resolvedModel.model, history, agent, effectiveMaxTokens, agentMode, thinking).finally(() => {
       job.finishedAt = new Date().toISOString()
     })
     return c.json({ userMsgId: userMsg.id, assistantId: job.assistantId, model: job.model })

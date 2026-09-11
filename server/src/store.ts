@@ -3059,7 +3059,7 @@ function tryMigrateFromLegacySqlite(): boolean {
       INSERT OR IGNORE INTO main.projects SELECT * FROM legacy.projects;
       INSERT OR IGNORE INTO main.chats SELECT * FROM legacy.chats;
       INSERT OR IGNORE INTO main.providers SELECT * FROM legacy.providers;
-      INSERT OR IGNORE INTO main.models SELECT * FROM legacy.models;
+      INSERT OR IGNORE INTO main.models (id, providerId, model, displayName, maxTokens, systemPrompt) SELECT id, providerId, model, displayName, maxTokens, systemPrompt FROM legacy.models;
       INSERT OR IGNORE INTO main.messages SELECT * FROM legacy.messages;
       INSERT OR IGNORE INTO main.plans SELECT * FROM legacy.plans;
       INSERT OR IGNORE INTO main.terminals SELECT * FROM legacy.terminals;
