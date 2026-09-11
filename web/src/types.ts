@@ -45,6 +45,8 @@ export interface ModelEntry {
   providerName: string
   maxTokens?: number
   systemPrompt?: string
+  /** Show reasoning/thinking output. Missing (old servers) means enabled. */
+  thinkingEnabled?: boolean
 }
 
 export interface FileEntry {

@@ -43,12 +43,13 @@ export async function sendMessage(
   modelId: string | null,
   mode?: string | null,
   contextMode?: string | null,
-  maxTokens?: number | null
+  maxTokens?: number | null,
+  thinking?: boolean | null
 ): Promise<{ userMsgId: string; assistantId: string; model: string }> {
   const res = await fetch(`/api/chats/${chatId}/messages`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, modelId, ...(mode ? { mode } : {}), ...(contextMode ? { contextMode } : {}), ...(maxTokens != null ? { maxTokens } : {}) })
+    body: JSON.stringify({ content, modelId, ...(mode ? { mode } : {}), ...(contextMode ? { contextMode } : {}), ...(maxTokens != null ? { maxTokens } : {}), ...(thinking != null ? { thinking } : {}) })
   })
   let data: any = null
   try {
@@ -64,12 +65,13 @@ export async function continueChat(
   modelId?: string | null,
   mode?: string | null,
   contextMode?: string | null,
-  maxTokens?: number | null
+  maxTokens?: number | null,
+  thinking?: boolean | null
 ): Promise<{ userMsgId?: string; assistantId: string; model: string; continued?: boolean; content?: string }> {
   const res = await fetch(`/api/chats/${chatId}/continue`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content: content ?? '', modelId: modelId ?? null, ...(mode ? { mode } : {}), ...(contextMode ? { contextMode } : {}), ...(maxTokens != null ? { maxTokens } : {}) })
+    body: JSON.stringify({ content: content ?? '', modelId: modelId ?? null, ...(mode ? { mode } : {}), ...(contextMode ? { contextMode } : {}), ...(maxTokens != null ? { maxTokens } : {}), ...(thinking != null ? { thinking } : {}) })
   })
   let data: any = null
   try {
@@ -333,9 +335,9 @@ export const listOllamaModels = (baseUrl: string) =>
   req<{ ok: boolean; models: string[]; count?: number; isLocal?: boolean; error?: string }>('/api/settings/providers/ollama-models', json('POST', { baseUrl }))
 
 export const listModels = () => req<ModelEntry[]>('/api/settings/models')
-export const createModel = (m: { providerId: string; model: string; displayName?: string; maxTokens?: number; systemPrompt?: string }) =>
+export const createModel = (m: { providerId: string; model: string; displayName?: string; maxTokens?: number; systemPrompt?: string; thinkingEnabled?: boolean }) =>
   req<ModelEntry>('/api/settings/models', json('POST', m))
-export const updateModel = (id: string, m: { displayName?: string; maxTokens?: number | null | string; systemPrompt?: string }) =>
+export const updateModel = (id: string, m: { displayName?: string; maxTokens?: number | null | string; systemPrompt?: string; thinkingEnabled?: boolean }) =>
   req<{ ok: true; model: ModelEntry }>(`/api/settings/models/${id}`, json('PATCH', m))
 export const deleteModel = (id: string) =>
   req<{ ok: true }>(`/api/settings/models/${id}`, { method: 'DELETE' })

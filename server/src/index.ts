@@ -2244,7 +2244,8 @@ app.get('/api/settings/models', (c) => {
       providerId: m.providerId,
       providerName: db.providers.find((p) => p.id === m.providerId)?.name ?? 'Unknown',
       maxTokens: m.maxTokens,
-      systemPrompt: m.systemPrompt ?? ''
+      systemPrompt: m.systemPrompt ?? '',
+      thinkingEnabled: m.thinkingEnabled ?? true
     }))
   )
 })
@@ -2263,7 +2264,8 @@ app.post('/api/settings/models', async (c) => {
   if (maxTokens != null && (isNaN(maxTokens) || maxTokens < 1)) {
     return c.json({ error: 'Max tokens must be a positive number' }, 400)
   }
-  const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}), ...(systemPrompt ? { systemPrompt } : {}), ...(maxTokens ? { maxTokens } : {}) }
+  const thinkingEnabled = body.thinkingEnabled === undefined ? true : Boolean(body.thinkingEnabled)
+  const entry = { id: newId(), providerId, model, ...(displayName ? { displayName } : {}), ...(systemPrompt ? { systemPrompt } : {}), ...(maxTokens ? { maxTokens } : {}), thinkingEnabled }
   getDb().models.push(entry)
   saveDb()
   const providerName = getDb().providers.find((p) => p.id === providerId)?.name ?? 'Unknown'
@@ -2284,6 +2286,9 @@ app.patch('/api/settings/models/:id', async (c) => {
     const systemPrompt = String(body.systemPrompt).trim()
     if (systemPrompt) model.systemPrompt = systemPrompt
     else delete model.systemPrompt
+  }
+  if (body.thinkingEnabled !== undefined) {
+    model.thinkingEnabled = Boolean(body.thinkingEnabled)
   }
   if (body.maxTokens !== undefined) {
     const raw = body.maxTokens

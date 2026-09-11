@@ -2900,6 +2900,8 @@ export interface AgentRunOptions {
   projectId?: string
   /** Maximum tokens for LLM response (optional). */
   maxTokens?: number
+  /** Forward provider reasoning/thinking deltas as 'thinking' SSE events. Default true. */
+  thinking?: boolean
   /** Forced mode from UI selection — when != solo, server guarantees delegation even if LLM ignores (manual select forces team). */
   agentMode?: AgentMode
   /** Live text deltas for the UI. */
@@ -3050,7 +3052,7 @@ export async function runAgentLoop(opts: AgentRunOptions): Promise<AgentRunOutco
           opts.signal,
           opts.retrySettings,
           opts.maxTokens,
-          (reasoning) => {
+          opts.thinking === false ? undefined : (reasoning) => {
             try { ctx.onEvent('thinking', JSON.stringify({ text: reasoning })) } catch {}
           },
           (info) => {
