@@ -52,6 +52,8 @@ export interface ModelEntry {
   maxTokens?: number
   /** Per-model system prompt override. When set it replaces the global/built-in system prompt. */
   systemPrompt?: string
+  /** Show reasoning/thinking output for this model. Missing (old DBs) means enabled. */
+  thinkingEnabled?: boolean
 }
 
 export type PlanStepStatus = 'pending' | 'working' | 'done'
@@ -385,6 +387,7 @@ function ensureDb(): Database.Database {
   migrateLspSchema(sqlite)
   migrateActivityIndex(sqlite)
   migrateSkillRole(sqlite)
+  migrateModelThinking(sqlite)
   // vector+hybrid chunk table migration — backward compatible, missing vec ≠ crash
   try { sqlite.exec(`
     CREATE TABLE IF NOT EXISTS embedding_chunks (
@@ -918,6 +921,7 @@ function initSchema(s: Database.Database): void {
       displayName TEXT,
       maxTokens INTEGER,
       systemPrompt TEXT,
+      thinkingEnabled INTEGER,
       FOREIGN KEY(providerId) REFERENCES providers(id) ON DELETE CASCADE
     );
     CREATE INDEX IF NOT EXISTS idx_models_providerId ON models(providerId);
@@ -2232,6 +2236,18 @@ function migrateSkillRole(s: Database.Database): void {
   } catch {}
 }
 
+function migrateModelThinking(s: Database.Database): void {
+  try {
+    const cols = s.prepare("PRAGMA table_info(models)").all() as any[]
+    if (!cols.length) return
+    const names = new Set(cols.map((c: any) => c.name))
+    if (!names.has('thinkingEnabled')) {
+      try { s.exec("ALTER TABLE models ADD COLUMN thinkingEnabled INTEGER") } catch {}
+      console.log('[migrate] Added models.thinkingEnabled column')
+    }
+  } catch {}
+}
+
 function titleFromFileName(base: string): string {
   return base
     .replace(/[-_]+/g, ' ')
@@ -2458,8 +2474,8 @@ function persistToSqlite(): void {
     const insProvider = s.prepare('INSERT INTO providers (id, name, baseUrl, apiKey) VALUES (?,?,?,?)')
     for (const p of db.providers) insProvider.run(p.id, p.name, p.baseUrl, p.apiKey)
 
-    const insModel = s.prepare('INSERT INTO models (id, providerId, model, displayName, maxTokens, systemPrompt) VALUES (?,?,?,?,?,?)')
-    for (const m of db.models) insModel.run(m.id, m.providerId, m.model, m.displayName ?? null, m.maxTokens ?? null, m.systemPrompt ?? null)
+    const insModel = s.prepare('INSERT INTO models (id, providerId, model, displayName, maxTokens, systemPrompt, thinkingEnabled) VALUES (?,?,?,?,?,?,?)')
+    for (const m of db.models) insModel.run(m.id, m.providerId, m.model, m.displayName ?? null, m.maxTokens ?? null, m.systemPrompt ?? null, m.thinkingEnabled == null ? null : m.thinkingEnabled ? 1 : 0)
 
     const insMessage = s.prepare('INSERT INTO messages (id, chatId, role, content, createdAt, error, model, modelDisplayName, providerName, startedAt, finishedAt, durationMs) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)')
     for (const m of db.messages) insMessage.run(m.id, m.chatId, m.role, m.content, m.createdAt, m.error ? 1 : null, m.model ?? null, m.modelDisplayName ?? null, m.providerName ?? null, m.startedAt ?? null, m.finishedAt ?? null, m.durationMs ?? null)
@@ -2557,14 +2573,16 @@ function loadFromSqlite(s: Database.Database): DB | null {
 
     const providers = s.prepare('SELECT id, name, baseUrl, apiKey FROM providers').all() as Provider[]
 
-    const modelsRows = s.prepare('SELECT id, providerId, model, displayName, maxTokens, systemPrompt FROM models').all() as any[]
+    const modelsRows = s.prepare('SELECT id, providerId, model, displayName, maxTokens, systemPrompt, thinkingEnabled FROM models').all() as any[]
     const models: ModelEntry[] = modelsRows.map((r) => ({
       id: r.id,
       providerId: r.providerId,
       model: r.model,
       displayName: r.displayName ?? undefined,
       maxTokens: r.maxTokens != null ? Number(r.maxTokens) : undefined,
-      systemPrompt: r.systemPrompt ?? undefined
+      systemPrompt: r.systemPrompt ?? undefined,
+      // Missing (pre-migration rows) means enabled — preserves old behavior.
+      thinkingEnabled: r.thinkingEnabled == null ? undefined : !!r.thinkingEnabled
     }))
 
     const messagesRows = s.prepare('SELECT id, chatId, role, content, createdAt, error, model, modelDisplayName, providerName, startedAt, finishedAt, durationMs FROM messages ORDER BY createdAt').all() as any[]
