@@ -60,7 +60,7 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
   const [ollamaModelsBusy, setOllamaModelsBusy] = useState(false)
   const [ollamaModelsError, setOllamaModelsError] = useState<string | null>(null)
   const [showModelForm, setShowModelForm] = useState(false)
-  const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '', maxTokens: '', systemPrompt: '' })
+  const [modelForm, setModelForm] = useState({ providerId: '', model: '', displayName: '', maxTokens: '', systemPrompt: '', thinkingEnabled: true })
   const [modelEdit, setModelEdit] = useState<ModelEntry | null>(null)
   const [planPrompt, setPlanPrompt] = useState('')
   const [planDraft, setPlanDraft] = useState('')
@@ -642,9 +642,10 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
         model: modelForm.model.trim(),
         ...(modelForm.displayName.trim() ? { displayName: modelForm.displayName.trim() } : {}),
         ...(modelForm.systemPrompt.trim() ? { systemPrompt: modelForm.systemPrompt.trim() } : {}),
-        ...(maxTokens ? { maxTokens } : {})
+        ...(maxTokens ? { maxTokens } : {}),
+        thinkingEnabled: modelForm.thinkingEnabled
       })
-      setModelForm({ providerId: '', model: '', displayName: '', maxTokens: '', systemPrompt: '' })
+      setModelForm({ providerId: '', model: '', displayName: '', maxTokens: '', systemPrompt: '', thinkingEnabled: true })
       setShowModelForm(false)
       toast('Model added', 'success')
       await refresh()
@@ -673,7 +674,8 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
       await api.updateModel(modelEdit.id, {
         displayName: modelEdit.displayName?.trim() ?? '',
         ...maxTokensPayload,
-        systemPrompt: modelEdit.systemPrompt?.trim() ?? ''
+        systemPrompt: modelEdit.systemPrompt?.trim() ?? '',
+        thinkingEnabled: modelEdit.thinkingEnabled ?? true
       })
       setModelEdit(null)
       await refresh()
@@ -1041,6 +1043,14 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                 <p className="hint" style={{ marginTop: 4 }}>
                   A model-specific system prompt overrides the global setting and the built-in default.
                 </p>
+                <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={modelEdit.thinkingEnabled ?? true}
+                    onChange={(e) => setModelEdit({ ...modelEdit, thinkingEnabled: e.target.checked })}
+                  />
+                  Thinking Mode — show this model's reasoning in chat (adds a Thinking toggle to the composer)
+                </label>
                 <div className="dialog-actions">
                   <button className="btn" onClick={() => { setModelEdit(null); setError(null) }}>
                     Cancel
@@ -1112,6 +1122,14 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                   onChange={(e) => setModelForm({ ...modelForm, systemPrompt: e.target.value })}
                 />
                 <p className="hint">A model-specific system prompt overrides the global setting and the built-in default.</p>
+                <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={modelForm.thinkingEnabled}
+                    onChange={(e) => setModelForm({ ...modelForm, thinkingEnabled: e.target.checked })}
+                  />
+                  Thinking Mode — show this model's reasoning in chat (adds a Thinking toggle to the composer)
+                </label>
                 <div className="dialog-actions">
                   <button className="btn" onClick={() => { setShowModelForm(false); setError(null) }}>
                     Cancel
@@ -1163,6 +1181,9 @@ export function SettingsModal({ open, onClose, onDataChanged }: Props) {
                         )}
                         {m.systemPrompt && (
                           <small style={{ color: 'var(--text-faint)', marginLeft: 6 }}>(custom prompt)</small>
+                        )}
+                        {m.thinkingEnabled === false && (
+                          <small style={{ color: 'var(--text-faint)', marginLeft: 6 }}>(thinking off)</small>
                         )}
                       </span>
                       <span style={{ display: 'inline-flex', gap: 4 }}>
