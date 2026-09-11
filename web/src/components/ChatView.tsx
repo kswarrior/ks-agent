@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { ActiveAgentView, Activity, Chat, Message, ModelEntry, Plan, Question, SubAgent, SubAgentMessage, Team } from '../types'
 import * as api from '../api'
 import { Markdown } from './Markdown'
-import { IconChevronDown, IconChevronLeft, IconRotate, IconSearch, IconStop, IconCopy, IconCheck, IconModeSolo, IconModeSwarm, IconModeHive, IconModeSquad, IconModeInfinity, IconSliders, IconLayers, IconMessageSquare, IconCoins } from '../icons'
+import { IconChevronDown, IconChevronLeft, IconRotate, IconSearch, IconStop, IconCopy, IconCheck, IconModeSolo, IconModeSwarm, IconModeHive, IconModeSquad, IconModeInfinity, IconSliders, IconLayers, IconMessageSquare, IconCoins, IconSparkles } from '../icons'
 import { QuestionList } from './QuestionCard'
 import { useToast } from '../toast'
 
@@ -418,7 +418,7 @@ interface Props {
   models: ModelEntry[]
   selectedModelId: string | null
   onSelectModel: (id: string) => void
-  onSend: (content: string, opts?: { contextMode?: ContextModeId; maxTokens?: number | null }) => void
+  onSend: (content: string, opts?: { contextMode?: ContextModeId; maxTokens?: number | null; thinking?: boolean }) => void
   onStop: () => void
   onRequestSettings: () => void
   questions: Question[]
@@ -433,6 +433,8 @@ interface Props {
   onSelectContextMode?: (id: ContextModeId) => void
   maxTokens?: number | null
   onSelectMaxTokens?: (v: number | null) => void
+  selectedThinking?: boolean | null
+  onSelectThinking?: (v: boolean) => void
   subAgents?: SubAgent[]
   teams?: Team[]
   activeAgent?: ActiveAgentView | null
@@ -495,6 +497,25 @@ export function ChatView(props: Props) {
       } catch {}
     }
   }
+  // Thinking toggle — only offered when the selected model has Thinking Mode enabled in its form.
+  const modelThinkingEnabled = (props.models.find((m) => m.id === props.selectedModelId)?.thinkingEnabled ?? true)
+  const [localThinking, setLocalThinking] = useState<boolean | null>(() => {
+    try {
+      const v = localStorage.getItem('ks.thinking')
+      if (v === 'off' || v === '0' || v === 'false') return false
+      if (v === 'on' || v === '1' || v === 'true') return true
+      return null
+    } catch { return null }
+  })
+  const selectedThinking: boolean = modelThinkingEnabled ? (props.selectedThinking ?? localThinking ?? true) : false
+  const setSelectedThinking = (v: boolean) => {
+    if (props.onSelectThinking) props.onSelectThinking(v)
+    else {
+      setLocalThinking(v)
+      try { localStorage.setItem('ks.thinking', v ? 'on' : 'off') } catch {}
+    }
+  }
+  const thinkingOff = modelThinkingEnabled && !selectedThinking
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -531,7 +552,7 @@ export function ChatView(props: Props) {
       autoGrow()
       textareaRef.current?.focus()
     })
-    props.onSend(content, { contextMode: selectedContextMode, maxTokens: selectedMaxTokens })
+    props.onSend(content, { contextMode: selectedContextMode, maxTokens: selectedMaxTokens, thinking: selectedThinking })
   }
 
   const selectedModel = props.models.find((m) => m.id === props.selectedModelId)
@@ -925,17 +946,17 @@ export function ChatView(props: Props) {
                   width: 36,
                   height: 36,
                   padding: 0,
-                  background: menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null ? 'var(--primary-bg)' : 'var(--surface-2)',
-                  border: `1px solid ${menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null ? 'var(--primary-border)' : 'var(--border)'}`,
+                  background: menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary-bg)' : 'var(--surface-2)',
+                  border: `1px solid ${menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary-border)' : 'var(--border)'}`,
                   borderRadius: 8,
-                  color: menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null ? 'var(--primary)' : 'var(--text-dim)',
+                  color: menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary)' : 'var(--text-dim)',
                   cursor: 'pointer',
                   lineHeight: 1,
                   position: 'relative',
                 }}
               >
                 <IconSliders size={16} />
-                {(selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null) && !menuOpen && (
+                {(selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff) && !menuOpen && (
                   <span style={{ position: 'absolute', top: 5, right: 5, width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 6px var(--primary-ring)' }} />
                 )}
               </button>
@@ -1021,6 +1042,36 @@ export function ChatView(props: Props) {
                       <span style={{ color: selectedContextMode === 'qa' ? 'var(--text)' : 'var(--text-faint)', fontWeight: selectedContextMode === 'qa' ? 600 : 400 }}>Q&A</span> = prompt + AI output (light, cheap) · <span style={{ color: selectedContextMode === 'full' ? 'var(--text)' : 'var(--text-faint)', fontWeight: selectedContextMode === 'full' ? 600 : 400 }}>Full</span> = + file reads/logs (heavy, best for coding, uses more tokens)
                     </div>
                   </div>
+
+                  {/* Thinking toggle — only when the selected model has Thinking Mode enabled */}
+                  {modelThinkingEnabled && (
+                    <div style={{ padding: '10px', borderBottom: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', flexShrink: 0 }}><IconSparkles size={14} /></span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.4, textTransform: 'uppercase', flex: 1 }}>Thinking</span>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: selectedThinking ? 'var(--primary)' : 'var(--text-faint)', background: selectedThinking ? 'var(--primary-bg)' : 'var(--btn)', border: `1px solid ${selectedThinking ? 'var(--primary-border)' : 'var(--border)'}`, borderRadius: 6, padding: '2px 6px' }}>{selectedThinking ? 'On' : 'Off'}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {([
+                          { id: true, label: 'On', desc: 'Show the model\u2019s reasoning in the Thinking card while it works' },
+                          { id: false, label: 'Off', desc: 'Hide reasoning — reply text only (provider still thinks)' },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.label}
+                            className={`dd-item${opt.id === selectedThinking ? ' active' : ''}`}
+                            onClick={() => setSelectedThinking(opt.id)}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', textAlign: 'left', borderRadius: 8 }}
+                          >
+                            <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{opt.label}</span>
+                              <small style={{ color: 'var(--text-faint)', fontSize: 11 }}>{opt.desc}</small>
+                            </span>
+                            {opt.id === selectedThinking && <span style={{ color: 'var(--primary)', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Token settings */}
                   <div style={{ padding: '10px' }}>
