@@ -93,7 +93,7 @@ implemented but not yet verified. `[ ]` means not done.
 ## Phase 5 — Developer surfaces
 
 - [ ] PTY terminal over WebSocket
-- [ ] Git status/diff/log/commit tools
+- [x] Git tools: init/status/diff/log/branch/commit/push/pull (native `execFile`, no shell)
 - [ ] MCP client (stdio + SSE) so existing MCP servers can be reused
 - [ ] LSP diagnostics surfaced as tool results
 
@@ -120,12 +120,14 @@ npm start            # http://localhost:8080
 npm run smoke        # isolated end-to-end test (build first)
 ```
 
-The smoke test verifies: health, project creation, path/shell guards, provider
-key masking, the streaming agent loop, a real built-in tool (`write_file`),
-provider retry recovery, the extension host calling a temporary mock extension,
-background runs with event replay, stop/abort handling, persistence, extension
-discovery with **no default extensions**, opt-in Minecraft/Android example
-scaffolds, and static UI serving.
+The smoke test verifies: health, project creation, path/shell guards, every
+built-in file tool (name search, tree, glob, grep, list, info, plan, append,
+copy, move, delete, unified-diff patch, shell), all native git tools (including
+a real push/pull to a temp bare remote), provider key masking, the streaming
+agent loop, a real built-in tool (`write_file`), provider retry recovery, the
+extension host calling a temporary mock extension, background runs with event
+replay, stop/abort handling, persistence, extension discovery with **no default
+extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
 
 ## Progress log
 
@@ -138,4 +140,9 @@ scaffolds, and static UI serving.
   `examples/extensions/` and are copied into `extensions/` only when wanted.
 - 2026-10-29: Agent runs now continue in the background when the UI switches
   chats; events replay on reconnect. Transient provider failures retry with
-  exponential backoff. Next: Docker jail, PTY, Git, MCP/LSP.
+  exponential backoff.
+- 2026-10-29: Expanded the built-in toolset with filename search (`find_files`),
+  `tree`, `read_multiple_files`, `create_dir`, `copy_file`, `append_file`,
+  `apply_patch`, and native git tools (`git_init/status/diff/log/branch/commit/
+  push/pull`). The smoke test now exercises every one of them, including a real
+  push/pull against a temp bare remote. Next: Docker jail, PTY, MCP/LSP.
