@@ -464,6 +464,30 @@ async function main() {
   )
   console.log('PASS stop / abort path')
 
+  const backgroundChat = await api('POST', `/api/projects/${project.id}/chats`, {
+    title: 'background chat',
+    modelId: model.id
+  })
+  const started = await fetch(`http://127.0.0.1:${serverPort}/api/chats/${backgroundChat.id}/messages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content: 'slow background task', modelId: model.id })
+  })
+  assert(started.status === 202, `background run did not start: ${started.status}`)
+  await sleep(600)
+  const runStatus = await api('GET', `/api/chats/${backgroundChat.id}/run`)
+  assert(runStatus.active === true, 'background run was not active without an event subscriber')
+  await api('POST', `/api/chats/${backgroundChat.id}/stop`)
+  const backgroundEvents = await fetch(`http://127.0.0.1:${serverPort}/api/chats/${backgroundChat.id}/events`)
+  assert(backgroundEvents.ok, `background event replay failed: ${backgroundEvents.status}`)
+  const replayed = await readEvents(backgroundEvents)
+  assert(
+    replayed.events.some((event) => event.type === 'done' && event.aborted === true),
+    'background run events were not replayed',
+    replayed.text.slice(0, 1000)
+  )
+  console.log('PASS background run + event replay')
+
   const messages = await api('GET', `/api/chats/${chat.id}/messages`)
   assert(messages.some((message) => message.role === 'user'), 'user message not persisted')
   assert(messages.some((message) => message.role === 'assistant'), 'assistant message not persisted')
