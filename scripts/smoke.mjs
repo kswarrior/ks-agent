@@ -1570,6 +1570,69 @@ async function main() {
     'deleted MCP server remains in config'
   )
 
+  const mcpInstallMarker = path.join(temp, 'mcp-install-ok.txt')
+  const mcpInstallCommand = `${process.execPath} -e 'require("fs").writeFileSync(${JSON.stringify(mcpInstallMarker)}, "installed")'`
+  const withInstallCommand = await api('POST', '/api/mcp', {
+    name: 'mockinstallmcp',
+    transport: 'stdio',
+    command: 'ks-agent-definitely-missing-mcp',
+    args: [],
+    installCommand: mcpInstallCommand
+  })
+  assert(
+    withInstallCommand.find((entry) => entry.name === 'mockinstallmcp')?.installCommand === mcpInstallCommand,
+    'MCP install command was not persisted'
+  )
+  const installedMcp = await api('POST', '/api/mcp/mockinstallmcp/install')
+  assert(fs.existsSync(mcpInstallMarker), 'MCP install command did not run')
+  assert(
+    installedMcp.some((entry) => entry.name === 'mockinstallmcp'),
+    'installed MCP server is missing from the list'
+  )
+  const detailMcp = await api('GET', '/api/mcp/mockinstallmcp')
+  assert(detailMcp.installCommand === mcpInstallCommand, 'MCP detail is missing the install command')
+  const patchedMcpInstall = `${process.execPath} -e 'require("fs").writeFileSync(${JSON.stringify(mcpInstallMarker)}, "patched")'`
+  const patchedMcp = await api('PATCH', '/api/mcp/mockinstallmcp', {
+    installCommand: patchedMcpInstall,
+    cwd: temp
+  })
+  const patchedMcpEntry = patchedMcp.find((entry) => entry.name === 'mockinstallmcp')
+  assert(
+    patchedMcpEntry?.installCommand === patchedMcpInstall,
+    'MCP install command edit was not saved'
+  )
+
+  const backgroundMcpMarker = path.join(temp, 'mcp-background-install.txt')
+  const backgroundMcpCommand = `${process.execPath} -e 'setTimeout(() => require("fs").writeFileSync(${JSON.stringify(backgroundMcpMarker)}, "background"), 1200)'`
+  await api('POST', '/api/mcp', {
+    name: 'mockbackgroundmcp',
+    transport: 'stdio',
+    command: 'ks-agent-definitely-missing-mcp',
+    args: [],
+    installCommand: backgroundMcpCommand
+  })
+  const backgroundStart = Date.now()
+  const backgroundInstall = await rawApi('POST', '/api/mcp/mockbackgroundmcp/install', { background: true })
+  const backgroundElapsed = Date.now() - backgroundStart
+  assert(backgroundInstall.status === 200, `background MCP install returned ${backgroundInstall.status}`)
+  assert(backgroundElapsed < 1200, `background MCP install blocked for ${backgroundElapsed}ms`)
+  assert(!fs.existsSync(backgroundMcpMarker), 'background MCP install finished before the response')
+  let backgroundFinished = false
+  for (let attempt = 0; attempt < 80 && !backgroundFinished; attempt++) {
+    await sleep(100)
+    backgroundFinished = fs.existsSync(backgroundMcpMarker)
+  }
+  assert(backgroundFinished, 'background MCP install did not complete')
+  await sleep(500)
+  const afterBackgroundMcp = await api('GET', '/api/mcp')
+  assert(
+    afterBackgroundMcp.some((entry) => entry.name === 'mockbackgroundmcp'),
+    'background MCP install removed the server from the list'
+  )
+  await api('DELETE', '/api/mcp/mockbackgroundmcp')
+  await api('DELETE', '/api/mcp/mockinstallmcp')
+  console.log('PASS MCP installCommand (foreground, background, edit)')
+
   const lspList = await api('POST', '/api/lsp/reload')
   const mockLsp = lspList.find((server) => server.name === 'mocklsp')
   assert(mockLsp, `LSP API missed mocklsp: ${JSON.stringify(lspList)}`)
@@ -1612,6 +1675,20 @@ async function main() {
     installedLsp.some((entry) => entry.name === 'mockinstalllsp'),
     'installed language server is missing from the list'
   )
+  const patchedLsp = await api('PATCH', '/api/lsp/mockinstalllsp', {
+    extensions: ['.txt', '.md'],
+    languageId: 'markdown',
+    installCommand: 'echo patched-install'
+  })
+  const patchedLspEntry = patchedLsp.find((entry) => entry.name === 'mockinstalllsp')
+  assert(
+    patchedLspEntry?.installCommand === 'echo patched-install' &&
+      patchedLspEntry.extensions.includes('.md') &&
+      patchedLspEntry.languageId === 'markdown',
+    `language server edit failed: ${JSON.stringify(patchedLspEntry)}`
+  )
+  const lspDetail = await api('GET', '/api/lsp/mockinstalllsp')
+  assert(lspDetail.installCommand === 'echo patched-install', 'language server detail is missing the edit')
   await api('DELETE', '/api/lsp/mockinstalllsp')
 
   await api('POST', '/api/lsp', {
@@ -1737,6 +1814,39 @@ async function main() {
     generatedKnowledgeList.filter((entry) => entry.source === 'generated').length === 1,
     'project has more than one generated summary'
   )
+
+  const backgroundStart = await rawApi('POST', `/api/projects/${project.id}/knowledge/summary`, {
+    background: true,
+    modelId: model.id
+  })
+  assert(backgroundStart.status === 202, `background summary did not start: ${backgroundStart.status}`)
+  assert(
+    backgroundStart.data?.projectId === project.id && backgroundStart.data?.id,
+    `background summary returned a bad job: ${backgroundStart.text}`
+  )
+  assert(
+    backgroundStart.data.status === 'running' || backgroundStart.data.status === 'completed',
+    `background summary returned status ${backgroundStart.data.status}`
+  )
+  let backgroundJob = backgroundStart.data
+  for (let attempt = 0; attempt < 100 && backgroundJob.status === 'running'; attempt++) {
+    await sleep(100)
+    const status = await api('GET', `/api/projects/${project.id}/knowledge/summary/status`)
+    backgroundJob = status.job
+  }
+  assert(
+    backgroundJob?.status === 'completed' && backgroundJob.entryId === projectSummary.id,
+    `background summary did not complete: ${JSON.stringify(backgroundJob)}`
+  )
+  const backgroundKnowledge = await api('GET', `/api/projects/${project.id}/knowledge`)
+  const backgroundSummary = backgroundKnowledge.find((entry) => entry.id === projectSummary.id)
+  assert(
+    backgroundSummary?.content.includes('MODEL_PROJECT_SUMMARY'),
+    'background summary did not save the generated content'
+  )
+  const missingProjectStatus = await rawApi('GET', '/api/projects/missing-project/knowledge/summary/status')
+  assert(missingProjectStatus.status === 404, 'summary status accepted a missing project')
+  console.log('PASS background project summary job + status polling')
 
   const emptyKnowledge = await rawApi('POST', '/api/knowledge', {
     scope: 'global',
