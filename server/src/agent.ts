@@ -5,9 +5,10 @@ import { extensions } from './extensions.js'
 import { streamCompletion, type LLMMessage, type StreamResult } from './llm.js'
 import { lsp } from './lsp.js'
 import { mcp } from './mcp.js'
+import { isProjectEnabled } from './scope.js'
 import { skills } from './skills.js'
 import { BUILTIN_TOOL_NAMES, builtinToolDefs, executeBuiltinTool } from './tools.js'
-import type { AgentEvent, Chat, Message, ModelEntry, Project, Provider, ToolCall, ToolResult } from './types.js'
+import type { AgentEvent, Chat, Message, ModelEntry, Project, Provider, ToolCall, ToolDef, ToolResult } from './types.js'
 
 export interface RunAgentOptions {
   chat: Chat
@@ -46,7 +47,10 @@ const PRIMARY_SYSTEM_PROMPT = `You are KS Agent, a precise coding agent working 
 - MCP tools are named mcp_<server>_<tool> and come from configured MCP servers.
   Prefer them for integrations they provide.
 - LSP diagnostics come from lsp_diagnostics. Treat reported errors as real
-  failures and fix them before finishing.`
+  failures and fix them before finishing.
+- When asked which skills, MCP servers or language servers are available,
+  enabled or disabled, call list_chat_extensions and answer from its output.
+  Never guess counts or repeat an earlier answer.`
 
 type DisabledExtensions = ReturnType<typeof listChatDisabled>
 
@@ -69,6 +73,72 @@ function systemMessage(project: Project, disabled: DisabledExtensions): LLMMessa
 - Date: ${new Date().toISOString()}
 - Shell: ${process.env.SHELL || '/bin/bash'}${extra ? `\n\n${extra}` : ''}`
   }
+}
+
+const CHAT_EXTENSIONS_TOOL: ToolDef = {
+  type: 'function',
+  function: {
+    name: 'list_chat_extensions',
+    description:
+      'List configured skills, MCP servers and language servers with their project scope and whether they are enabled in this chat. Use this whenever the user asks what is available, enabled or disabled.',
+    parameters: { type: 'object', properties: {} }
+  }
+}
+
+function chatExtensionState(
+  projects: string[],
+  name: string,
+  projectId: string,
+  disabled: Set<string>
+): 'project' | 'chat' | 'enabled' {
+  if (!isProjectEnabled(projects, projectId)) return 'project'
+  return disabled.has(name) ? 'chat' : 'enabled'
+}
+
+function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): ToolResult {
+  const skillItems = skills.list()
+  const mcpItems = mcp.list()
+  const lspItems = lsp.list()
+  const enabledCount = (items: Array<{ name: string; projects: string[] }>, set: Set<string>) =>
+    items.filter((item) => chatExtensionState(item.projects, item.name, project.id, set) === 'enabled').length
+
+  const lines = [`Chat tool selection for project "${project.name}":`]
+
+  lines.push(`Skills (${skillItems.length} configured, ${enabledCount(skillItems, disabled.skill)} enabled in this chat):`)
+  if (skillItems.length === 0) lines.push('- none')
+  for (const skill of skillItems.sort((a, b) => a.name.localeCompare(b.name))) {
+    const state = chatExtensionState(skill.projects, skill.name, project.id, disabled.skill)
+    if (state === 'project') lines.push(`- ${skill.name}: not enabled for this project`)
+    else if (state === 'chat') lines.push(`- ${skill.name}: disabled in this chat`)
+    else lines.push(`- ${skill.name}: enabled`)
+  }
+
+  lines.push(`MCP servers (${mcpItems.length} configured, ${enabledCount(mcpItems, disabled.mcp)} enabled in this chat):`)
+  if (mcpItems.length === 0) lines.push('- none')
+  for (const server of mcpItems.sort((a, b) => a.name.localeCompare(b.name))) {
+    const state = chatExtensionState(server.projects, server.name, project.id, disabled.mcp)
+    const detail = `${server.transport}, ${server.tools.length} tool${server.tools.length === 1 ? '' : 's'}`
+    if (state === 'project') lines.push(`- ${server.name} (${detail}): not enabled for this project`)
+    else if (state === 'chat') lines.push(`- ${server.name} (${detail}): disabled in this chat`)
+    else if (server.status === 'error') {
+      lines.push(`- ${server.name} (${detail}): enabled but unavailable: ${server.error ?? 'failed to start'}`)
+    } else lines.push(`- ${server.name} (${detail}): enabled${server.status === 'ready' ? ' (running)' : ''}`)
+  }
+
+  lines.push(`Language servers (${lspItems.length} configured, ${enabledCount(lspItems, disabled.lsp)} enabled in this chat):`)
+  if (lspItems.length === 0) lines.push('- none')
+  for (const server of lspItems.sort((a, b) => a.name.localeCompare(b.name))) {
+    const state = chatExtensionState(server.projects, server.name, project.id, disabled.lsp)
+    const detail = `${server.command}${server.extensions.length ? `; ${server.extensions.join(', ')}` : ''}`
+    if (state === 'project') lines.push(`- ${server.name} (${detail}): not enabled for this project`)
+    else if (state === 'chat') lines.push(`- ${server.name} (${detail}): disabled in this chat`)
+    else if (server.status === 'error') {
+      lines.push(`- ${server.name} (${detail}): enabled but unavailable: ${server.error ?? 'failed to start'}`)
+    } else lines.push(`- ${server.name} (${detail}): enabled${server.status === 'ready' ? ' (running)' : ''}`)
+  }
+
+  lines.push('Only project-enabled and chat-enabled items are exposed as tools.')
+  return { ok: true, output: lines.join('\n') }
 }
 
 function messageToLLM(message: Message): LLMMessage {
@@ -142,6 +212,7 @@ async function executeTool(
   if (args.__parse_error) {
     return { ok: false, output: `Could not parse tool arguments as JSON: ${String(args.__parse_error).slice(0, 500)}` }
   }
+  if (name === 'list_chat_extensions') return chatExtensionsStatus(project, disabled)
   if (BUILTIN_TOOL_NAMES.has(name)) {
     return executeBuiltinTool(name, args, { projectPath: project.path, signal })
   }
@@ -185,6 +256,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
       const stepStartedAt = Date.now()
 
       const tools = [
+        CHAT_EXTENSIONS_TOOL,
         ...builtinToolDefs,
         ...skills.toolDefs(project.id, disabled.skill),
         ...mcp.toolDefs(project.id, disabled.mcp),
