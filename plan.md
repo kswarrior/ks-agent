@@ -119,9 +119,9 @@ the Extensions modal. MCP and LSP never receive provider API keys.
 
 | Surface | Discovery | Runtime | Agent-facing tool | API / UI |
 | --- | --- | --- | --- | --- |
-| **Skills** | `skills/<name>/SKILL.md`, `.opencode/skills/<name>/SKILL.md`, or `KS_SKILLS_DIR` | Markdown + YAML frontmatter (`name`, `description`) parsed at startup/reload; body is returned on demand | `use_skill({ name })` | `GET /api/skills`, `POST /api/skills/reload`; Skills tab |
-| **MCP** | `mcp.json` (`mcpServers`) or `KS_MCP_CONFIG` | stdio child (newline JSON-RPC) or HTTP (Streamable HTTP / legacy SSE) with `initialize` → `notifications/initialized` → paginated `tools/list`; lazy start, restarted on reload | `mcp_<server>_<tool>` | `GET /api/mcp`, `POST /api/mcp/reload`; MCP tab |
-| **LSP** | `lsp.json` (`languageServers`) or `KS_LSP_CONFIG` | Spawned on first diagnostic request for a matching extension; LSP `Content-Length` framing, `initialize`, `didOpen` / `didChange`, then wait for `textDocument/publishDiagnostics` | `lsp_diagnostics({ path })` | `GET /api/lsp`, `POST /api/lsp/reload`; LSP tab |
+| **Skills** | `.ks-agent/skills/<name>/SKILL.md` (primary), `skills/` (legacy), `.opencode/skills/` (fallback), or `KS_SKILLS_DIR` | Markdown + YAML frontmatter (`name`, `description`) parsed at startup/reload; body is returned on demand | `use_skill({ name })` | `GET /api/skills`, `POST /api/skills/reload`; Skills tab |
+| **MCP** | `.ks-agent/mcp.json` (`mcpServers`) or `KS_MCP_CONFIG` | stdio child (newline JSON-RPC) or HTTP (Streamable HTTP / legacy SSE) with `initialize` → `notifications/initialized` → paginated `tools/list`; lazy start, restarted on reload | `mcp_<server>_<tool>` | `GET /api/mcp`, `POST /api/mcp/reload`; MCP tab |
+| **LSP** | `.ks-agent/lsp.json` (`languageServers`) or `KS_LSP_CONFIG` | Spawned on first diagnostic request for a matching extension; LSP `Content-Length` framing, `initialize`, `didOpen` / `didChange`, then wait for `textDocument/publishDiagnostics` | `lsp_diagnostics({ path })` | `GET /api/lsp`, `POST /api/lsp/reload`; LSP tab |
 
 ### Lifecycle
 
@@ -138,6 +138,23 @@ the Extensions modal. MCP and LSP never receive provider API keys.
    arguments from the model, LSP reads the file through the project path jail.
 5. **Shutdown/reload** — SIGINT/SIGTERM stops every MCP/LSP child; reload
    stops old children, re-reads config, then restarts MCP connections.
+
+### Agent config layout
+
+```
+.ks-agent/
+├── skills/            # one folder per skill, each with SKILL.md
+│   ├── code-review/
+│   ├── debugging/
+│   ├── frontend/
+│   └── ...
+├── mcp.json           # MCP servers (mcpServers)
+└── lsp.json           # language servers (languageServers)
+```
+
+The initial skills are copied from `.opencode/skills/`. `.ks-agent/skills`
+takes priority; the legacy `skills/` and `.opencode/skills/` folders are still
+scanned as fallbacks.
 
 ### Skill format
 
@@ -271,3 +288,8 @@ scaffolds, and static UI serving.
   All three have reload APIs and status/tool panels in the Extensions modal.
   Smoke exercises skills, all three MCP transports (stdio, Streamable HTTP,
   legacy SSE) and LSP didOpen/didChange against temporary mock servers.
+- 2026-10-29: Added the repo-root `.ks-agent/` config folder. All eight
+  `.opencode/skills` were copied into `.ks-agent/skills`; `mcp.json` and
+  `lsp.json` moved into `.ks-agent/`. The server now reads `.ks-agent/skills`,
+  `.ks-agent/mcp.json` and `.ks-agent/lsp.json` by default (legacy skill folders
+  remain fallbacks; env overrides unchanged).

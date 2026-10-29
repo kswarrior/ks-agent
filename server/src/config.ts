@@ -9,11 +9,16 @@ export const config = {
   dataDir: path.resolve(process.env.KS_DATA_DIR || path.join(root, 'storage')),
   projectsDir: path.resolve(process.env.KS_PROJECTS_DIR || path.join(root, 'project')),
   extensionsDir: path.resolve(process.env.KS_EXTENSIONS_DIR || path.join(root, 'extensions')),
+  agentDir: path.join(root, '.ks-agent'),
   skillsDirs: process.env.KS_SKILLS_DIR
     ? [path.resolve(process.env.KS_SKILLS_DIR)]
-    : [path.join(root, 'skills'), path.join(root, '.opencode', 'skills')],
-  mcpConfigPath: path.resolve(process.env.KS_MCP_CONFIG || path.join(root, 'mcp.json')),
-  lspConfigPath: path.resolve(process.env.KS_LSP_CONFIG || path.join(root, 'lsp.json')),
+    : [
+        path.join(root, '.ks-agent', 'skills'),
+        path.join(root, 'skills'),
+        path.join(root, '.opencode', 'skills')
+      ],
+  mcpConfigPath: path.resolve(process.env.KS_MCP_CONFIG || path.join(root, '.ks-agent', 'mcp.json')),
+  lspConfigPath: path.resolve(process.env.KS_LSP_CONFIG || path.join(root, '.ks-agent', 'lsp.json')),
   distDir: path.join(root, 'dist'),
   maxSteps: Math.max(1, Number(process.env.KS_MAX_STEPS || 30)),
   shellTimeoutMs: Math.max(1000, Number(process.env.KS_SHELL_TIMEOUT_MS || 120_000)),
@@ -26,7 +31,7 @@ export const config = {
   dockerImage: process.env.KS_DOCKER_IMAGE || 'node:20-alpine'
 }
 
-for (const dir of [config.dataDir, config.projectsDir, config.extensionsDir]) {
+for (const dir of [config.agentDir, config.dataDir, config.projectsDir, config.extensionsDir]) {
   fs.mkdirSync(dir, { recursive: true })
 }
 for (const dir of config.skillsDirs) {
