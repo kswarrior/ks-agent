@@ -47,19 +47,19 @@ export const deleteChat = (id: string) => req<{ ok: true }>(`/api/chats/${id}`, 
 export const listMessages = (chatId: string) => req<Message[]>(`/api/chats/${chatId}/messages`)
 export const stopChat = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/stop`, { method: 'POST' })
 
-export async function streamMessage(
+export const startChatRun = (chatId: string, content: string, modelId: string) =>
+  req<{ ok: true; chatId: string }>(`/api/chats/${chatId}/messages`, json('POST', { content, modelId }))
+
+export const getChatRun = (chatId: string) =>
+  req<{ active: boolean }>(`/api/chats/${chatId}/run`)
+
+export async function streamChatEvents(
   chatId: string,
-  content: string,
-  modelId: string,
   onEvent: (event: AgentEvent) => void,
   signal: AbortSignal
-): Promise<void> {
-  const res = await fetch(`/api/chats/${chatId}/messages`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content, modelId }),
-    signal
-  })
+): Promise<boolean> {
+  const res = await fetch(`/api/chats/${chatId}/events`, { signal })
+  if (res.status === 404) return false
   if (!res.ok) {
     let message = `Request failed (${res.status})`
     try {
@@ -94,6 +94,7 @@ export async function streamMessage(
       }
     }
   }
+  return true
 }
 
 export const listProviders = () => req<ProviderPublic[]>('/api/providers')
