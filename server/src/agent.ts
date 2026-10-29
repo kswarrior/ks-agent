@@ -18,6 +18,7 @@ import {
 import { lsp } from './lsp.js'
 import { mcp } from './mcp.js'
 import { isProjectEnabled } from './scope.js'
+import { knowledge } from './knowledge.js'
 import { skills } from './skills.js'
 import { BUILTIN_TOOL_NAMES, builtinToolDefs, executeBuiltinTool } from './tools.js'
 import type {
@@ -62,6 +63,8 @@ const PRIMARY_SYSTEM_PROMPT = `You are KS Agent, a precise coding agent working 
 - Do not overwrite unrelated work. Do not delete without checking references.
 - Keep tool output small: use offset/limit, include filters, and max_results.
 - If a command or edit fails, read the error, fix the cause, and retry.
+- Saved knowledge (user knowledge and project knowledge) is authoritative context.
+  Use it before re-exploring the project, and never dump it verbatim unless asked.
 - Skills are reusable instruction sets. Call use_skill before work that matches
   an installed skill and follow its workflow.
 - Extension tools are named ext_<extension>_<tool>. They run in isolated child
@@ -81,6 +84,7 @@ type DisabledExtensions = ReturnType<typeof listChatDisabled>
 
 function systemMessage(project: Project, disabled: DisabledExtensions): LLMMessage {
   const extra = [
+    knowledge.promptSection(project.id, disabled.knowledge),
     skills.promptSection(project.id, disabled.skill),
     mcp.promptSection(project.id, disabled.mcp),
     lsp.promptSection(project.id, disabled.lsp)
@@ -152,6 +156,20 @@ function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): T
     else lines.push(`- ${skill.name}: enabled`)
   }
 
+  const knowledgeItems = knowledge.listForProject(project.id)
+  const knowledgeEnabled = knowledgeItems.filter((entry) => entry.enabled)
+  const knowledgeUsable = knowledgeEnabled.filter((entry) => !disabled.knowledge.has(entry.id))
+  lines.push(
+    `Knowledge (${knowledgeItems.length} configured, ${knowledgeEnabled.length} enabled, ${knowledgeUsable.length} usable):`
+  )
+  if (knowledgeItems.length === 0) lines.push('- none')
+  for (const entry of knowledgeItems.sort((a, b) => a.title.localeCompare(b.title))) {
+    const scope = entry.scope === 'global' ? 'all projects' : 'this project'
+    if (!entry.enabled) lines.push(`- ${entry.title} (${scope}): disabled`)
+    else if (disabled.knowledge.has(entry.id)) lines.push(`- ${entry.title} (${scope}): disabled in this chat`)
+    else lines.push(`- ${entry.title} (${scope}): enabled`)
+  }
+
   lines.push(
     `MCP servers (${mcpItems.length} configured, ${enabledCount(mcpItems, disabled.mcp)} enabled, ${mcpUsable} usable):`
   )
@@ -198,9 +216,10 @@ function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): T
     `${value} ${value === 1 ? singular : plural}`
   lines.push(
     `Usable now: ${count(skillUsable, 'skill')}, ${count(
-      mcpUsable,
-      'MCP server'
-    )}, ${count(lspUsable, 'language server')}.`
+      knowledgeUsable.length,
+      'knowledge entry',
+      'knowledge entries'
+    )}, ${count(mcpUsable, 'MCP server')}, ${count(lspUsable, 'language server')}.`
   )
   lines.push(
     'Only project-enabled, chat-enabled and usable items are exposed as tools; disabled or unavailable items cannot be called.'
