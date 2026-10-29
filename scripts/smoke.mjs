@@ -1392,6 +1392,38 @@ async function main() {
       'npm i -g typescript-language-server',
     'install command was not persisted to lsp.json'
   )
+
+  const installMarker = path.join(temp, 'lsp-install-ok.txt')
+  await api('POST', '/api/lsp', {
+    name: 'mockinstalllsp',
+    command: 'ks-agent-definitely-missing-lsp',
+    extensions: ['.txt'],
+    languageId: 'plaintext',
+    installCommand: `${process.execPath} -e 'require("fs").writeFileSync(${JSON.stringify(installMarker)}, "installed")'`
+  })
+  const installedLsp = await api('POST', '/api/lsp/mockinstalllsp/install')
+  assert(fs.existsSync(installMarker), 'language server install command did not run')
+  assert(
+    installedLsp.some((entry) => entry.name === 'mockinstalllsp'),
+    'installed language server is missing from the list'
+  )
+  await api('DELETE', '/api/lsp/mockinstalllsp')
+
+  await api('POST', '/api/lsp', {
+    name: 'mockfailedlsp',
+    command: 'ks-agent-definitely-missing-lsp',
+    extensions: ['.txt'],
+    languageId: 'plaintext',
+    installCommand: `${process.execPath} -e 'process.exit(2)'`
+  })
+  const failedLspInstall = await rawApi('POST', '/api/lsp/mockfailedlsp/install')
+  assert(failedLspInstall.status === 500, `failed install returned ${failedLspInstall.status}`)
+  assert(
+    failedLspInstall.text.includes('Install failed'),
+    `failed install did not return details: ${failedLspInstall.text.slice(0, 300)}`
+  )
+  await api('DELETE', '/api/lsp/mockfailedlsp')
+
   const afterLspDelete = await api('DELETE', '/api/lsp/mockaddedlsp')
   assert(!afterLspDelete.some((entry) => entry.name === 'mockaddedlsp'), 'deleted language server is still listed')
   assert(

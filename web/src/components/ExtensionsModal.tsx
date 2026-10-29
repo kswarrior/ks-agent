@@ -411,9 +411,21 @@ export function ExtensionsModal({
                     <div className="muted small">Projects: {scopeLabel(server.projects, projects)}</div>
                     <div className="extension-card-actions">
                       <button
+                        className="btn small"
+                        onClick={() => void install(server.name)}
+                        disabled={busy || installing !== null || !server.installCommand}
+                        title={
+                          server.installCommand
+                            ? `Run: ${server.installCommand}`
+                            : 'Add an install command in .ks-agent/lsp.json to enable this'
+                        }
+                      >
+                        {installing === server.name ? 'Installing…' : 'Install'}
+                      </button>
+                      <button
                         className="btn ghost small"
                         onClick={() => setConfirmDelete({ kind: 'lsp', name: server.name })}
-                        disabled={busy}
+                        disabled={busy || installing !== null}
                       >
                         Delete
                       </button>
