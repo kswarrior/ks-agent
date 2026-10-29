@@ -414,7 +414,11 @@ export default function App() {
     setMessages((current) => [...current, optimistic])
 
     try {
-      await api.startChatRun(chatId, content, modelId)
+      const started = await api.startChatRun(chatId, content, modelId)
+      const title = started.title
+      if (title) {
+        setChats((current) => current.map((entry) => (entry.id === chatId ? { ...entry, title } : entry)))
+      }
     } catch (caught) {
       if (activeChatIdRef.current === chatId) {
         setError(caught instanceof Error ? caught.message : String(caught))

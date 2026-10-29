@@ -48,7 +48,7 @@ export const listMessages = (chatId: string) => req<Message[]>(`/api/chats/${cha
 export const stopChat = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/stop`, { method: 'POST' })
 
 export const startChatRun = (chatId: string, content: string, modelId: string) =>
-  req<{ ok: true; chatId: string }>(`/api/chats/${chatId}/messages`, json('POST', { content, modelId }))
+  req<{ ok: true; chatId: string; title?: string }>(`/api/chats/${chatId}/messages`, json('POST', { content, modelId }))
 
 export const getChatRun = (chatId: string) =>
   req<{ active: boolean }>(`/api/chats/${chatId}/run`)
