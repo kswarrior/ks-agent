@@ -285,15 +285,22 @@ export default function App() {
         setLive(null)
         setSteps([])
         setStreaming(false)
+        setChatSummary(null)
+        setSummaryBusy(false)
+        setSummaryError(null)
       }
       setError(null)
       setFailure(null)
       setRetryStatus(null)
 
       try {
-        const list = await api.listMessages(chatId)
+        const [list, savedSummary] = await Promise.all([
+          api.listMessages(chatId),
+          api.getChatSummary(chatId).catch(() => null)
+        ])
         if (subscription.cancelled) return
         setMessages(list)
+        setChatSummary(savedSummary)
         setMessagesLoading(false)
         const status = await api.getChatRun(chatId)
         if (subscription.cancelled || !status.active) return
@@ -316,8 +323,14 @@ export default function App() {
           setLive(null)
           setMessagesLoading(false)
           try {
-            const list = await api.listMessages(chatId)
-            if (!subscription.cancelled && activeChatIdRef.current === chatId) setMessages(list)
+            const [list, savedSummary] = await Promise.all([
+              api.listMessages(chatId),
+              api.getChatSummary(chatId).catch(() => null)
+            ])
+            if (!subscription.cancelled && activeChatIdRef.current === chatId) {
+              setMessages(list)
+              setChatSummary(savedSummary)
+            }
           } catch {
             // the final state can be reloaded manually
           }
@@ -400,6 +413,9 @@ export default function App() {
       setError(null)
       setFailure(null)
       setRetryStatus(null)
+      setChatSummary(null)
+      setSummaryBusy(false)
+      setSummaryError(null)
       return
     }
     setMessagesLoading(true)
@@ -502,6 +518,8 @@ export default function App() {
     setError(null)
     setFailure(null)
     setRetryStatus(null)
+    setSummaryBusy(false)
+    setSummaryError(null)
     setLive({ content: '', reasoning: '', tools: [], step: 0 })
     setSteps([])
     setStreaming(true)
@@ -572,6 +590,31 @@ export default function App() {
     }
   }
 
+  const saveSummary = async (text: string) => {
+    const chatId = activeChatId
+    if (!chatId) throw new Error('Select a chat first')
+    const saved = await api.saveChatSummary(chatId, text)
+    if (activeChatIdRef.current === chatId) {
+      setChatSummary(saved)
+      setSummaryError(null)
+    }
+  }
+
+  const removeSummary = async () => {
+    const chatId = activeChatId
+    if (!chatId) return
+    try {
+      await api.deleteChatSummary(chatId)
+      if (activeChatIdRef.current === chatId) {
+        setChatSummary(null)
+        setSummaryBusy(false)
+        setSummaryError(null)
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    }
+  }
+
   const refreshSettings = async () => {
     await Promise.all([refreshProviders(), refreshModels()])
   }
@@ -605,6 +648,9 @@ export default function App() {
         models={models}
         modelId={modelId}
         chatExtensions={chatExtensions}
+        summary={chatSummary}
+        summaryBusy={summaryBusy}
+        summaryError={summaryError}
         live={live}
         streaming={streaming}
         steps={steps}
@@ -614,6 +660,9 @@ export default function App() {
         retryStatus={retryStatus}
         onModelChange={setModelId}
         onToggleChatExtension={toggleChatExtension}
+        onSaveSummary={saveSummary}
+        onDeleteSummary={() => setDeleteSummaryTarget(true)}
+        onDismissSummaryError={() => setSummaryError(null)}
         onSend={send}
         onStop={stop}
         onOpenSidebar={() => setSidebarOpen(true)}
@@ -676,6 +725,16 @@ export default function App() {
           confirmLabel="Remove"
           onClose={() => setDeleteProjectTarget(null)}
           onConfirm={() => void removeProject(deleteProjectTarget)}
+        />
+      )}
+
+      {deleteSummaryTarget && (
+        <ConfirmModal
+          title="Remove conversation summary"
+          message="Older messages will be sent to the model again. The full transcript is still kept in this chat."
+          confirmLabel="Remove summary"
+          onClose={() => setDeleteSummaryTarget(false)}
+          onConfirm={() => void removeSummary()}
         />
       )}
     </div>
