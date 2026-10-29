@@ -72,6 +72,27 @@ function safeName(value: unknown): string | null {
   return name
 }
 
+const DEFAULT_PROJECT_NAME = 'My Project'
+const DEFAULT_PROJECT_FOLDER = 'my-project'
+
+function ensureProjectChat(projectId: string) {
+  const existing = listChats(projectId)
+  if (existing.length > 0) return existing[0]
+  return insertChat(projectId, 'New chat', null)
+}
+
+function ensureDefaultProject(): void {
+  if (listProjects().length > 0) return
+  const abs = resolveInProject(config.projectsDir, DEFAULT_PROJECT_FOLDER)
+  if (!abs) return
+  fs.mkdirSync(abs, { recursive: true })
+  const project = insertProject(DEFAULT_PROJECT_NAME, fs.realpathSync(abs))
+  ensureProjectChat(project.id)
+}
+
+ensureDefaultProject()
+for (const project of listProjects()) ensureProjectChat(project.id)
+
 app.onError((error, c) => {
   console.error('[server]', error)
   return c.json(errorJson(error instanceof Error ? error.message : String(error), 500), 500)
@@ -120,6 +141,7 @@ app.post('/api/projects', async (c) => {
   fs.mkdirSync(abs, { recursive: true })
   const real = fs.realpathSync(abs)
   const project = insertProject(name, real)
+  ensureProjectChat(project.id)
   void extensions.runHook('project.open', real, { projectId: project.id, name }).catch((error) => {
     console.warn('[extensions] project.open hook failed:', error)
   })
@@ -145,7 +167,9 @@ app.delete('/api/projects/:id', (c) => {
 app.get('/api/projects/:id/chats', (c) => {
   const project = getProject(c.req.param('id'))
   if (!project) return c.json(errorJson('project not found', 404), 404)
-  return c.json(listChats(project.id))
+  const chats = listChats(project.id)
+  if (chats.length === 0) chats.push(ensureProjectChat(project.id))
+  return c.json(chats)
 })
 
 app.post('/api/projects/:id/chats', async (c) => {
@@ -185,6 +209,7 @@ app.delete('/api/chats/:id', (c) => {
   if (run && !run.done) run.controller.abort()
   runs.delete(chat.id)
   removeChat(chat.id)
+  ensureProjectChat(chat.projectId)
   return c.json({ ok: true })
 })
 

@@ -274,7 +274,7 @@ export default function App() {
   const removeChat = async (chat: Chat) => {
     try {
       await api.deleteChat(chat.id)
-      const remaining = chats.filter((entry) => entry.id !== chat.id)
+      const remaining = await api.listChats(chat.projectId)
       setChats(remaining)
       if (activeChatId === chat.id) setActiveChatId(remaining[0]?.id ?? null)
     } catch (caught) {
