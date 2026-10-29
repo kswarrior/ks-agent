@@ -348,14 +348,7 @@ export function ChatView({
                     <pre>{live.reasoning}</pre>
                   </details>
                 ) : null}
-                {live?.content ? (
-                  <Markdown text={live.content} />
-                ) : streaming ? (
-                  <div className="skeleton-stack" role="status" aria-label="Thinking" aria-busy="true">
-                    <div className="skeleton skeleton-line" style={{ width: '72%' }} />
-                    <div className="skeleton skeleton-line" style={{ width: '44%', marginBottom: 0 }} />
-                  </div>
-                ) : null}
+                {live?.content ? <Markdown text={live.content} /> : null}
                 {visibleTools(live?.tools ?? []).map((tool) => (
                   <ToolCard
                     key={tool.id}
@@ -367,6 +360,16 @@ export function ChatView({
                     running={tool.status === 'running'}
                   />
                 ))}
+                {streaming && (
+                  <div className="thinking" role="status" aria-label="Thinking" aria-live="polite">
+                    <span>Thinking</span>
+                    <span className="thinking-dots" aria-hidden="true">
+                      <span>.</span>
+                      <span>.</span>
+                      <span>.</span>
+                    </span>
+                  </div>
+                )}
               </div>
             )}
               </>
