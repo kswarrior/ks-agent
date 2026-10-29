@@ -445,6 +445,8 @@ export default function App() {
         modelId={modelId}
         live={live}
         streaming={streaming}
+        steps={steps}
+        maxSteps={maxSteps}
         loading={projectsLoading || chatsLoading || messagesLoading}
         error={error}
         onModelChange={setModelId}

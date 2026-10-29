@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Chat, LiveState, Message, ModelEntry, Project } from '../types'
+import type { Chat, LiveState, Message, ModelEntry, Project, RunStep } from '../types'
 import { Markdown } from './Markdown'
 import { SelectMenu } from './SelectMenu'
+import { StepMenu } from './StepMenu'
 
 function formatArgs(raw: string): string {
   try {
@@ -67,6 +68,8 @@ export function ChatView({
   modelId,
   live,
   streaming,
+  steps,
+  maxSteps,
   loading,
   error,
   onModelChange,
@@ -81,6 +84,8 @@ export function ChatView({
   modelId: string
   live: LiveState | null
   streaming: boolean
+  steps: RunStep[]
+  maxSteps: number
   loading: boolean
   error: string | null
   onModelChange: (id: string) => void
@@ -222,7 +227,6 @@ export function ChatView({
 
             {(streaming || live) && (
               <div className="msg assistant live">
-                {live?.step ? <div className="step-badge">step {live.step}</div> : null}
                 {live?.reasoning ? (
                   <details className="reasoning">
                     <summary>Reasoning</summary>
