@@ -129,6 +129,20 @@ export function ChatView({
     return map
   }, [messages])
 
+  const hiddenToolCallIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const message of messages) {
+      if (message.role !== 'assistant' || !message.toolCalls) continue
+      for (const call of message.toolCalls) {
+        if (call.function.name === 'update_plan') ids.add(call.id)
+      }
+    }
+    return ids
+  }, [messages])
+
+  const visibleTools = (tools: LiveState['tools']) =>
+    tools.filter((tool) => tool.name !== 'update_plan')
+
   const send = () => {
     const content = draft.trim()
     if (!content || streaming || !modelId) return
@@ -212,7 +226,9 @@ export function ChatView({
                 return (
                   <div className="msg assistant" key={message.id}>
                     {message.content && <Markdown text={message.content} />}
-                    {calls.map((call) => {
+                    {calls
+                      .filter((call) => call.function.name !== 'update_plan')
+                      .map((call) => {
                       const result = toolResults.get(call.id)
                       return (
                         <ToolCard
@@ -233,6 +249,7 @@ export function ChatView({
                   (entry) => entry.role === 'assistant' && entry.toolCalls?.some((call) => call.id === message.toolCallId)
                 )
                 if (paired) return null
+                if (message.toolCallId && hiddenToolCallIds.has(message.toolCallId)) return null
                 return (
                   <div className="msg assistant" key={message.id}>
                     <ToolCard name="tool result" args="{}" output={message.content} ok />
@@ -258,7 +275,7 @@ export function ChatView({
                     <div className="skeleton skeleton-line" style={{ width: '44%', marginBottom: 0 }} />
                   </div>
                 ) : null}
-                {live?.tools.map((tool) => (
+                {visibleTools(live?.tools ?? []).map((tool) => (
                   <ToolCard
                     key={tool.id}
                     name={tool.name}
