@@ -652,6 +652,7 @@ code {
 
 /* ------------------------------------------------------------ tool cards */
 .tool-card {
+  position: relative;
   border: 0;
   border-left: 2px solid var(--line-strong);
   border-radius: 0;
@@ -660,7 +661,37 @@ code {
 }
 
 .tool-card.running {
-  border-left-color: var(--tool-running);
+  border-left-color: transparent;
+}
+
+.tool-card.running::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--tool-running) 35%,
+    #ffe4a8 50%,
+    var(--tool-running) 65%,
+    transparent 100%
+  );
+  background-size: 100% 220%;
+  box-shadow: 0 0 9px 1px rgba(240, 179, 91, 0.45);
+  animation: tool-flow 1.5s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes tool-flow {
+  0% {
+    background-position: 50% -110%;
+  }
+  100% {
+    background-position: 50% 110%;
+  }
 }
 
 .tool-card.done {
@@ -686,12 +717,57 @@ code {
   display: none;
 }
 
-.tool-name {
-  flex: 1;
+.tool-status {
+  flex: 0 0 auto;
   color: #d8d8df;
 }
 
+.tool-status.is-running {
+  color: var(--tool-running);
+  animation: tool-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes tool-glow {
+  0%,
+  100% {
+    opacity: 0.7;
+    text-shadow: 0 0 0 rgba(240, 179, 91, 0);
+  }
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 9px rgba(240, 179, 91, 0.55);
+  }
+}
+
+.tool-target {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tool-target-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #d8d8df;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-target-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tool-time {
+  flex: 0 0 auto;
   color: var(--muted);
   font-size: 11px;
 }
@@ -1335,7 +1411,9 @@ code {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
+  .skeleton,
+  .tool-card.running::before,
+  .tool-status.is-running {
     animation: none;
   }
 }

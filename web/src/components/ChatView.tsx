@@ -93,10 +93,19 @@ function ToolCard({
   durationMs?: number
   running?: boolean
 }) {
+  const meta = TOOL_META[name]
+  const label = running ? meta?.running ?? name : meta?.action ?? name
+  const { primary, detail } = describeTool(name, parseToolArgs(args))
   return (
     <details className={`tool-card ${running ? 'running' : ok === false ? 'failed' : 'done'}`}>
       <summary>
-        <span className="tool-name">{name}</span>
+        <span className={`tool-status${running ? ' is-running' : ''}`}>{label}</span>
+        {(primary || detail) && (
+          <span className="tool-target" title={[primary, detail].filter(Boolean).join(' ')}>
+            {primary && <span className="tool-target-name">{primary}</span>}
+            {detail && <span className="tool-target-path">{detail}</span>}
+          </span>
+        )}
         {typeof durationMs === 'number' && <span className="tool-time">{durationMs} ms</span>}
       </summary>
       <div className="tool-body">
