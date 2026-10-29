@@ -111,7 +111,49 @@ export function KnowledgePanel({
   useEffect(() => {
     setEditor(null)
     setNotice(null)
+    setJob(null)
+    const seq = ++jobSeq.current
+    if (!projectId) return
+    void getProjectKnowledgeJob(projectId)
+      .then(({ job: active }) => {
+        if (seq === jobSeq.current && active?.status === 'running') setJob(active)
+      })
+      .catch(() => {})
+    return () => {
+      jobSeq.current++
+    }
   }, [projectId])
+
+  useEffect(() => {
+    if (!projectId || job?.status !== 'running') return
+    const jobId = job.id
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void getProjectKnowledgeJob(projectId)
+        .then(({ job: next }) => {
+          if (cancelled) return
+          if (!next || next.id !== jobId) {
+            setJob(null)
+            return
+          }
+          if (next.status === 'running') return
+          setJob(next)
+          void load()
+          if (next.status === 'completed') {
+            setNotice('Project summary ready. It was generated in the background.')
+          } else {
+            setError(next.error || 'Project summary generation failed.')
+          }
+        })
+        .catch((caught) => {
+          if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
+        })
+    }, 1500)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [projectId, job?.id, job?.status, load])
 
   const selectedModel = models.some((model) => model.id === modelId) ? modelId : ''
 
@@ -201,14 +243,14 @@ export function KnowledgePanel({
   }
 
   const generate = async () => {
-    if (!projectId) return
+    if (!projectId || job?.status === 'running') return
     setBusyLabel('generate')
     setError(null)
     setNotice(null)
     try {
-      const entry = await generateProjectKnowledge(projectId, selectedModel || undefined)
-      await load()
-      setNotice('Project summary ready.')
+      const started = await startProjectKnowledge(projectId, selectedModel || undefined)
+      setJob(started)
+      setNotice('Generating the project summary in the background. You can leave this tab.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -283,7 +325,7 @@ export function KnowledgePanel({
                 <select
                   value={selectedModel}
                   onChange={(event) => setModelId(event.target.value)}
-                  disabled={busyLabel !== null || !projectId}
+                  disabled={busyLabel !== null || job?.status === 'running' || !projectId}
                 >
                   <option value="">Scan only (no model)</option>
                   {models.map((model) => (
@@ -295,11 +337,17 @@ export function KnowledgePanel({
                 <button
                   className="btn primary small"
                   onClick={() => void generate()}
-                  disabled={busyLabel !== null || !projectId}
+                  disabled={busyLabel !== null || job?.status === 'running' || !projectId}
                 >
-                  {busyLabel === 'generate' ? 'Generating…' : 'Generate summary'}
+                  {busyLabel === 'generate' || job?.status === 'running' ? 'Generating…' : 'Generate summary'}
                 </button>
               </div>
+              {job?.status === 'running' && (
+                <p className="knowledge-job muted small" role="status">
+                  Running in the background. You can leave this tab; generation keeps going and the summary is
+                  saved when it finishes.
+                </p>
+              )}
             </div>
           )}
 
