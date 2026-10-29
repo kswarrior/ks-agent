@@ -67,7 +67,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Run reports stay attached to their own output in chat history
 - [x] Composer with model picker, send, stop
 - [x] Chat header context meter and editable/removable conversation summary card
-- [x] Chat tools menu left of the model picker: per-chat skill/MCP/LSP toggles
+- [x] Chat tools menu left of the model picker: per-chat skill/knowledge/MCP/LSP toggles
 - [x] Settings: providers/models add/delete, masked keys, provider presets + custom, configurable retry tab
 - [x] Provider error cards with HTTP status/code/message and live retry countdown
 - [x] Extensions panel: status, tools, reload, project scope in add forms
@@ -105,7 +105,8 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] LSP diagnostics surfaced as `lsp_diagnostics` tool results
 - [x] Skills / MCP / LSP panels in the Extensions modal (status, tools, reload)
 - [x] Project-scoped skills / MCP / LSP (all projects or a selected subset)
-- [x] Per-chat enable/disable toggles for project-enabled skills / MCP / LSP
+- [x] Per-chat enable/disable toggles for project-enabled skills / knowledge / MCP / LSP
+- [x] Knowledge: editable user/project entries, scan-generated project summaries with optional model, prompt injection
 
 ## Phase 6 — Hardening and release
 
@@ -119,17 +120,19 @@ implemented but not yet verified. `[ ]` means not done.
 
 ---
 
-## How Skills, MCP and LSP work
+## How Skills, Knowledge, MCP and LSP work
 
-All three surfaces feed the same agent loop next to built-in tools and
-extensions. They are independent, project-scoped at call time, and visible in
-the Extensions modal. MCP and LSP never receive provider API keys.
+All four surfaces feed the same agent loop next to built-in tools and
+extensions. They are independent and visible in the Extensions modal; skills,
+MCP and LSP are project-scoped at call time. MCP and LSP never receive provider
+API keys.
 
 | Surface | Discovery | Runtime | Agent-facing tool | API / UI |
 | --- | --- | --- | --- | --- |
 | **Skills** | `.ks-agent/skills/<name>/SKILL.md` (primary), `skills/` (legacy), `.opencode/skills/` (fallback), or `KS_SKILLS_DIR`; frontmatter `projects` sets scope | Markdown + YAML frontmatter (`name`, `description`, `projects`) parsed at startup/reload; body is returned on demand | `use_skill({ name })` | `GET/POST /api/skills`, `DELETE /api/skills/:name`, `POST /api/skills/reload`; Skills tab with project scope |
 | **MCP** | `.ks-agent/mcp.json` (`mcpServers`, optional per-server `projects`) or `KS_MCP_CONFIG` | stdio child (newline JSON-RPC) or HTTP (Streamable HTTP / legacy SSE) with `initialize` → `notifications/initialized` → paginated `tools/list`; lazy start, restarted on reload | `mcp_<server>_<tool>` | `GET/POST /api/mcp`, `DELETE /api/mcp/:name`, `POST /api/mcp/reload`; MCP tab with project scope |
 | **LSP** | `.ks-agent/lsp.json` (`languageServers`, optional per-server `projects`) or `KS_LSP_CONFIG` | Spawned on first diagnostic request for a matching extension; LSP `Content-Length` framing, `initialize`, `didOpen` / `didChange`, then wait for `textDocument/publishDiagnostics` | `lsp_diagnostics({ path })` | `GET/POST /api/lsp`, `DELETE /api/lsp/:name`, `POST /api/lsp/:name/install`, `POST /api/lsp/reload`; LSP tab with project scope, install commands and auto-install |
+| **Knowledge** | SQLite `knowledge` table; global rows apply to every project, project rows use `project_id` | Editable Markdown notes; project summaries scan the tree and key config files, optionally with a model, then fall back to a deterministic scan summary | Injected into the system prompt (no tool) | `GET/POST /api/knowledge`, `GET/POST /api/projects/:id/knowledge`, `PATCH/PUT/DELETE /api/knowledge/:id`, `POST /api/projects/:id/knowledge/summary` (or `/generate`); Knowledge tab with global/project sections, edit, toggle, delete and generate |
 
 ### Lifecycle
 
@@ -137,8 +140,8 @@ the Extensions modal. MCP and LSP never receive provider API keys.
    its config, validates names, and reports invalid entries with an error
    instead of crashing the server.
 2. **Advertise** — the system prompt includes an authoritative chat-selection
-   block with every configured skill/MCP/LSP, its project scope, chat toggle
-   and runtime availability, plus the enabled-only sections. Tool definitions
+   block with every configured skill/knowledge/MCP/LSP, its project scope, chat
+   toggle and runtime availability, plus the enabled-only sections. Tool definitions
    only include project-enabled, chat-enabled and usable items (missing LSP
    binaries are excluded) for every provider request.
 3. **Start lazily** — MCP servers warm up in the background (and are awaited
@@ -151,7 +154,8 @@ the Extensions modal. MCP and LSP never receive provider API keys.
 5. **Shutdown/reload** — SIGINT/SIGTERM stops every MCP/LSP child; reload
    stops old children, re-reads config, then restarts MCP connections.
 
-The Extensions modal can add and delete all three surfaces. Adds and deletes
+The Extensions modal can add and delete skills, MCP servers and language
+servers, and manages knowledge entries in its own tab. Adds and deletes
 write to the `.ks-agent/` files (or the active env override) and hot-reload the
 registry, so changes apply without a server restart. Skills found only in a
 fallback folder are shown as read-only; create a same-named skill in
@@ -173,21 +177,21 @@ plus one checkbox per project, and every card shows its scope.
 - Each chat can additionally disable any project-enabled item without touching
   the project config. Only disabled rows are stored, in
   `chat_disabled_extensions(chat_id, kind, name)` where `kind` is
-  `skill`, `mcp` or `lsp`. Missing rows mean enabled, so new chats and new
-  extensions default to on.
+  `skill`, `knowledge`, `mcp` or `lsp`. Missing rows mean enabled, so new chats
+  and new items default to on.
 - `GET /api/chats/:id/extensions` returns only items enabled for the chat's
   project, each with an `enabled` flag for the chat.
 - `PATCH /api/chats/:id/extensions` with
-  `{ "kind": "skill" | "mcp" | "lsp", "name": "...", "enabled": false }`
+  `{ "kind": "skill" | "knowledge" | "mcp" | "lsp", "name": "...", "enabled": false }`
   writes or removes the disabled row.
 - The composer's **Tools** menu, immediately left of the model picker, lists
-  only project-enabled items grouped into Skills / MCP servers / Language
-  servers. Checking or unchecking an item toggles it for the current chat; the
+  only project-enabled items grouped into Skills / Knowledge / MCP servers /
+  Language servers. Checking or unchecking an item toggles it for the current chat; the
   trigger shows the active/total count and turns red when an enabled item is
   unavailable. Rapid toggles and chat switches cannot apply another chat's
   state.
 - The agent's system prompt contains an authoritative **Chat tool selection**
-  block with every configured skill/MCP/LSP, its project scope, chat toggle and
+  block with every configured skill/knowledge/MCP/LSP, its project scope, chat toggle and
   runtime availability (including missing binaries), so a status question can
   be answered without probing. The `list_chat_extensions` tool returns the same
   report for a mid-run refresh.
@@ -306,8 +310,8 @@ agent loop, a real built-in tool (`write_file`), provider retry recovery, the
 extension host calling a temporary mock extension, skills discovery +
 `use_skill`, MCP tool calls over stdio, Streamable HTTP and legacy SSE, LSP
 diagnostics over `didOpen` and `didChange` from a mock language server,
-project-scoped skill/MCP/LSP creation and filtering, per-chat extension
-disables (including blocked tool calls, unusable-tool filtering, unavailable
+project-scoped skill/MCP/LSP creation and filtering, knowledge CRUD and
+generated project summaries, per-chat extension disables (including blocked tool calls, unusable-tool filtering, unavailable
 binary reporting, the authoritative prompt selection block, the
 `list_chat_extensions` report and re-enabling), background runs with event
 replay, stop/abort handling, persistence (including assistant
@@ -437,3 +441,13 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   removed from the chat. Failed summary calls fall back to `trimHistory`; the
   context meter accounts for the cutoff. Smoke covers compaction, cutoff
   filtering, persisted summaries and the summary API.
+- 2026-10-29: Added SQLite-backed knowledge with two distinct scopes. User
+  knowledge applies to every project; project knowledge is scoped to one
+  project and can be written manually or generated by scanning the project
+  tree, key config files and README with an optional model (deterministic scan
+  fallback when no model is available). Entries are editable, enable/disable
+  globally, and toggle per chat through the existing disabled-extension store.
+  Enabled knowledge is injected into the system prompt with size caps; the
+  Extensions modal has a Knowledge tab for global/project lists, generation,
+  editing and deletion. Smoke covers CRUD, scoping, generated-summary reuse,
+  per-chat toggles and prompt injection/removal.

@@ -75,7 +75,7 @@ docker run --rm --network none --memory=512m --cpus=1 -v <projectPath>:/workspac
 - Settings → Retry: on/off, limited or unlimited attempts, backoff, jitter, Retry-After, network/5xx and custom status codes
 - Provider errors show the HTTP status, provider code/message and response details; live retries show the attempt count and countdown
 - Plans, activities, and previews persisted per chat
-- Skills, MCP servers, and LSP servers (global or per-project)
+- Skills, knowledge, MCP servers, and LSP servers (global or per-project)
 - Rename/delete chats via ⋮ menu — all confirmations use in-app dialogs
 - Responsive: sidebar becomes a drawer on phones (☰ toggles it)
 - Built-in tools: file read/write/edit/patch, directory tree, glob, grep, find, git (init/status/diff/log/branch/commit/push/pull), shell with path jail
@@ -148,6 +148,24 @@ Transports: `stdio`, `http` (Streamable HTTP), `sse` (legacy). Inferred from `co
 
 Diagnostics are returned as `file:line:column severity: message (code) [source]`.
 
+### Knowledge
+
+Knowledge is stored in SQLite and managed from **Extensions → Knowledge**. It
+has two independent scopes:
+
+- **User knowledge** applies to every project (preferences, conventions and
+  personal context).
+- **Project knowledge** applies only to the selected project. Use **Generate
+  summary** to scan the project tree and key config files, optionally with a
+  model, or write/edit notes manually.
+
+Both scopes can be enabled or disabled globally and toggled per chat from the
+Tools menu. Only enabled, chat-enabled entries are injected into the agent
+system prompt. Generated summaries are updated in place on regeneration. APIs:
+`GET/POST /api/knowledge`, `GET/POST /api/projects/:id/knowledge`,
+`PATCH/PUT/DELETE /api/knowledge/:id`, and
+`POST /api/projects/:id/knowledge/summary` (also `/generate`).
+
 ### Extension authoring
 
 Extensions live in `extensions/<name>/extension.json`. Copy an example to get started:
@@ -214,4 +232,4 @@ project/       # user projects (gitignored)
 
 ## Status
 
-Working MVP. See `plan.md` for the full build plan and progress log. Smoke test (`npm run smoke`) verifies health, projects, guards, all built-in tools, git, providers, streaming agent, extensions, skills, MCP (stdio/HTTP/SSE), LSP, scoping, and persistence.
+Working MVP. See `plan.md` for the full build plan and progress log. Smoke test (`npm run smoke`) verifies health, projects, guards, all built-in tools, git, providers, streaming agent, extensions, skills, knowledge, MCP (stdio/HTTP/SSE), LSP, scoping, and persistence.
