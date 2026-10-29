@@ -171,8 +171,13 @@ function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): T
     }
   }
 
+  const count = (value: number, singular: string, plural = `${singular}s`) =>
+    `${value} ${value === 1 ? singular : plural}`
   lines.push(
-    `Usable now: ${skillUsable} skills, ${mcpUsable} MCP servers, ${lspUsable} language servers.`
+    `Usable now: ${count(skillUsable, 'skill')}, ${count(
+      mcpUsable,
+      'MCP server'
+    )}, ${count(lspUsable, 'language server')}.`
   )
   lines.push(
     'Only project-enabled, chat-enabled and usable items are exposed as tools; disabled or unavailable items cannot be called.'
