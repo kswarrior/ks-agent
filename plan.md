@@ -161,3 +161,6 @@ extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
 - 2026-10-29: New chats now get a concise title automatically from the first
   prompt. The title is cleaned and shortened server-side and returned with the
   run start response so the sidebar updates immediately. Smoke covers it.
+- 2026-10-29: Task reports now label the run with the AI's plan title (or the
+  first meaningful sentence of its final answer) instead of repeating the raw
+  user prompt. The original prompt remains the fallback.
