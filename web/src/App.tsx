@@ -196,23 +196,17 @@ export default function App() {
 
   useEffect(() => {
     if (!activeChatId) {
+      detachRun()
       setMessages([])
+      setLive(null)
+      setStreaming(false)
       return
     }
-    let cancelled = false
-    setLive(null)
-    void api
-      .listMessages(activeChatId)
-      .then((list) => {
-        if (!cancelled) setMessages(list)
-      })
-      .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
-      })
+    void attachRun(activeChatId)
     return () => {
-      cancelled = true
+      detachRun()
     }
-  }, [activeChatId])
+  }, [activeChatId, attachRun, detachRun])
 
   useEffect(() => {
     const chat = chats.find((entry) => entry.id === activeChatId)
@@ -225,19 +219,16 @@ export default function App() {
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? null
 
   const selectProject = (project: Project) => {
-    if (streaming) return
     setActiveProjectId(project.id)
     setSidebarOpen(false)
   }
 
   const selectChat = (chat: Chat) => {
-    if (streaming) return
     setActiveChatId(chat.id)
     setSidebarOpen(false)
   }
 
   const createProject = async (name: string, path: string) => {
-    if (streaming) return
     const project = await api.createProject({ name, path: path.trim() || undefined })
     setProjects((current) => [...current, project])
     setActiveProjectId(project.id)
@@ -245,7 +236,7 @@ export default function App() {
   }
 
   const createChat = async () => {
-    if (!activeProjectId || streaming) return
+    if (!activeProjectId) return
     try {
       const chat = await api.createChat(activeProjectId, { modelId: modelId || null })
       setChats((current) => [chat, ...current])
@@ -292,9 +283,9 @@ export default function App() {
     if (!activeChat || !modelId || streaming) return
     const chatId = activeChat.id
     const projectId = activeChat.projectId
-    setStreaming(true)
     setError(null)
     setLive({ content: '', reasoning: '', tools: [], step: 0 })
+    setStreaming(true)
 
     const optimistic: Message = {
       id: `local-${Date.now()}`,
@@ -307,84 +298,31 @@ export default function App() {
     }
     setMessages((current) => [...current, optimistic])
 
-    const controller = new AbortController()
-    abortRef.current = controller
     try {
-      await api.streamMessage(
-        chatId,
-        content,
-        modelId,
-        (event) => {
-          if (event.type === 'assistant_start') {
-            setLive((current) =>
-              current ? { ...current, content: '', reasoning: '', tools: [], step: event.step } : current
-            )
-          } else if (event.type === 'step') {
-            setLive((current) => (current ? { ...current, step: event.step } : current))
-          } else if (event.type === 'token') {
-            setLive((current) => (current ? { ...current, content: current.content + event.text } : current))
-          } else if (event.type === 'reasoning') {
-            setLive((current) => (current ? { ...current, reasoning: current.reasoning + event.text } : current))
-          } else if (event.type === 'tool_start') {
-            setLive((current) =>
-              current
-                ? {
-                    ...current,
-                    tools: [
-                      ...current.tools,
-                      {
-                        id: event.call.id,
-                        name: event.call.name,
-                        arguments: event.call.arguments,
-                        status: 'running'
-                      }
-                    ]
-                  }
-                : current
-            )
-          } else if (event.type === 'tool_end') {
-            setLive((current) =>
-              current
-                ? {
-                    ...current,
-                    tools: current.tools.map((tool) =>
-                      tool.id === event.call.id
-                        ? {
-                            ...tool,
-                            status: event.result.ok ? 'ok' : 'error',
-                            output: event.result.output,
-                            durationMs: event.durationMs
-                          }
-                        : tool
-                    )
-                  }
-                : current
-            )
-          } else if (event.type === 'error') {
-            setError(event.error)
-          } else if (event.type === 'done' && event.aborted) {
-            setError('Stopped by user.')
-          }
-        },
-        controller.signal
-      )
+      await api.startChatRun(chatId, content, modelId)
     } catch (caught) {
-      if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      abortRef.current = null
       if (activeChatIdRef.current === chatId) {
+        setError(caught instanceof Error ? caught.message : String(caught))
+        setStreaming(false)
+        setLive(null)
         try {
-          const [list, chatList] = await Promise.all([api.listMessages(chatId), api.listChats(projectId)])
-          if (activeChatIdRef.current === chatId) {
-            setMessages(list)
-            setChats(chatList)
-          }
+          setMessages(await api.listMessages(chatId))
         } catch {
           // the final state can be reloaded manually
         }
       }
-      setStreaming(false)
-      setLive(null)
+      return
+    }
+
+    if (activeChatIdRef.current !== chatId) return
+    await attachRun(chatId)
+
+    if (activeChatIdRef.current === chatId) {
+      try {
+        setChats(await api.listChats(projectId))
+      } catch {
+        // the chat list can be reloaded manually
+      }
     }
   }
 
