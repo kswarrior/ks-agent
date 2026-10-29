@@ -3420,6 +3420,12 @@ code {
   border-color: var(--accent);
 }
 
+.knowledge-job {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--amber);
+}
+
 .knowledge-editor {
   padding: 14px;
   border: 1px solid var(--accent);

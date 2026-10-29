@@ -482,14 +482,10 @@ export default function App() {
   }
 
   const saveChatDetails = async (chat: Chat, fields: { title: string; modelId: string | null }) => {
-    try {
-      const updated = await api.updateChat(chat.id, fields)
-      setChats((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)))
-      if (activeChatIdRef.current === updated.id) {
-        setModelId(updated.modelId ?? '')
-      }
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
+    const updated = await api.updateChat(chat.id, fields)
+    setChats((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)))
+    if (activeChatIdRef.current === updated.id) {
+      setModelId(updated.modelId ?? '')
     }
   }
 
@@ -790,6 +786,69 @@ function CreateProjectModal({
           </button>
           <button type="submit" className="btn primary" disabled={busy || !name.trim()}>
             {busy ? 'Creating…' : 'Create project'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function EditChatModal({
+  chat,
+  models,
+  onClose,
+  onSave
+}: {
+  chat: Chat
+  models: ModelEntry[]
+  onClose: () => void
+  onSave: (fields: { title: string; modelId: string | null }) => Promise<void>
+}) {
+  const [title, setTitle] = useState(chat.title)
+  const [modelId, setModelId] = useState(chat.modelId ?? '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  return (
+    <Modal title="Edit chat" onClose={onClose}>
+      {error && <div className="error-banner">{error}</div>}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!title.trim()) return
+          setBusy(true)
+          setError(null)
+          void onSave({ title: title.trim(), modelId: modelId || null })
+            .then(onClose)
+            .catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)))
+            .finally(() => setBusy(false))
+        }}
+      >
+        <label className="field">
+          <span>Title</span>
+          <input value={title} onChange={(event) => setTitle(event.target.value)} autoFocus />
+        </label>
+        <label className="field">
+          <span>Model</span>
+          <select value={modelId} onChange={(event) => setModelId(event.target.value)}>
+            <option value="">Use the first available model</option>
+            {models.map((model) => (
+              <option value={model.id} key={model.id}>
+                {model.name || model.modelId}
+                {model.providerName ? ` · ${model.providerName}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted small">
+          The model is used for new messages in this chat. Existing messages keep their original model.
+        </p>
+        <div className="modal-actions">
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn primary" disabled={busy || !title.trim()}>
+            {busy ? 'Saving…' : 'Save chat'}
           </button>
         </div>
       </form>
