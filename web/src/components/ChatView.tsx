@@ -55,6 +55,7 @@ export function ChatView({
   modelId,
   live,
   streaming,
+  loading,
   error,
   onModelChange,
   onSend,
@@ -68,6 +69,7 @@ export function ChatView({
   modelId: string
   live: LiveState | null
   streaming: boolean
+  loading: boolean
   error: string | null
   onModelChange: (id: string) => void
   onSend: (content: string) => void
@@ -138,6 +140,16 @@ export function ChatView({
       ) : (
         <>
           <div className="messages">
+            {loading ? (
+              <div className="skeleton-stack" role="status" aria-label="Loading messages" aria-busy="true">
+                <div className="skeleton skeleton-message" style={{ width: '62%', marginLeft: 'auto' }} />
+                <div className="skeleton skeleton-line" style={{ width: '84%' }} />
+                <div className="skeleton skeleton-line" style={{ width: '70%' }} />
+                <div className="skeleton skeleton-line" style={{ width: '48%' }} />
+                <div className="skeleton skeleton-message" style={{ width: '76%' }} />
+              </div>
+            ) : (
+              <>
             {messages.length === 0 && !live && (
               <div className="empty-chat">
                 <h2>What should we build?</h2>
@@ -200,7 +212,14 @@ export function ChatView({
                     <pre>{live.reasoning}</pre>
                   </details>
                 ) : null}
-                {live?.content ? <Markdown text={live.content} /> : streaming ? <span className="typing">thinking…</span> : null}
+                {live?.content ? (
+                  <Markdown text={live.content} />
+                ) : streaming ? (
+                  <div className="skeleton-stack" role="status" aria-label="Thinking" aria-busy="true">
+                    <div className="skeleton skeleton-line" style={{ width: '72%' }} />
+                    <div className="skeleton skeleton-line" style={{ width: '44%', marginBottom: 0 }} />
+                  </div>
+                ) : null}
                 {live?.tools.map((tool) => (
                   <ToolCard
                     key={tool.id}
@@ -213,6 +232,8 @@ export function ChatView({
                   />
                 ))}
               </div>
+            )}
+              </>
             )}
             <div ref={bottomRef} />
           </div>
@@ -244,12 +265,31 @@ export function ChatView({
                 ariaLabel="Model"
               />
               {streaming ? (
-                <button className="btn danger" onClick={onStop}>
-                  Stop
+                <button className="icon-action" onClick={onStop} aria-label="Stop" title="Stop">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
+                  </svg>
                 </button>
               ) : (
-                <button className="btn primary" onClick={send} disabled={!draft.trim() || !modelId}>
-                  Send
+                <button
+                  className="icon-action primary"
+                  onClick={send}
+                  disabled={!draft.trim() || !modelId}
+                  aria-label="Send"
+                  title="Send"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 19V5" />
+                    <path d="m5 12 7-7 7 7" />
+                  </svg>
                 </button>
               )}
             </div>

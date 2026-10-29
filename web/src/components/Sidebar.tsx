@@ -6,6 +6,8 @@ export function Sidebar({
   activeProjectId,
   chats,
   activeChatId,
+  projectsLoading,
+  chatsLoading,
   open,
   onClose,
   onSelectProject,
@@ -22,6 +24,8 @@ export function Sidebar({
   activeProjectId: string | null
   chats: Chat[]
   activeChatId: string | null
+  projectsLoading: boolean
+  chatsLoading: boolean
   open: boolean
   onClose: () => void
   onSelectProject: (project: Project) => void

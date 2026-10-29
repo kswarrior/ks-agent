@@ -1125,6 +1125,112 @@ code {
   font-size: 10px;
 }
 
+/* ------------------------------------------------------------- skeletons */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #131316 25%, #232328 50%, #131316 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 12px;
+  margin-bottom: 9px;
+}
+
+.skeleton-title {
+  height: 18px;
+  margin-bottom: 10px;
+}
+
+.skeleton-row {
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.skeleton-select {
+  height: 36px;
+}
+
+.skeleton-message {
+  height: 68px;
+  max-width: 920px;
+  margin: 0 auto 16px;
+}
+
+.skeleton-stack {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------- action buttons */
+.icon-action {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  color: var(--text);
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    transform 120ms ease;
+}
+
+.icon-action svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-action:hover:not(:disabled) {
+  border-color: #4a4a52;
+  background: var(--bg-hover);
+}
+
+.icon-action:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.icon-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
+}
+
+.icon-action.primary {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #000000;
+}
+
+.icon-action.primary:hover:not(:disabled) {
+  border-color: #e4e4e6;
+  background: #e4e4e6;
+}
+
 /* ------------------------------------------------------------ scrollbars */
 * {
   scrollbar-width: thin;
