@@ -508,6 +508,7 @@ code {
   border-color: transparent;
   padding-left: 4px;
   padding-right: 4px;
+  margin-bottom: 4px;
 }
 
 .msg.assistant.live {
