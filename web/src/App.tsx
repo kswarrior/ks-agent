@@ -9,6 +9,7 @@ import type {
   AgentEvent,
   Chat,
   ChatExtensionsState,
+  ChatSummary,
   ExtensionInfo,
   ExtensionKind,
   FailureInfo,
@@ -63,6 +64,9 @@ export default function App() {
   const [mcpServers, setMcpServers] = useState<McpServerInfo[]>([])
   const [lspServers, setLspServers] = useState<LspServerInfo[]>([])
   const [chatExtensions, setChatExtensions] = useState<ChatExtensionsState | null>(null)
+  const [chatSummary, setChatSummary] = useState<ChatSummary | null>(null)
+  const [summaryBusy, setSummaryBusy] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const [modelId, setModelId] = useState('')
   const [live, setLive] = useState<LiveState | null>(null)
   const [steps, setSteps] = useState<RunStep[]>([])
@@ -81,6 +85,7 @@ export default function App() {
   const [renameTarget, setRenameTarget] = useState<Chat | null>(null)
   const [deleteChatTarget, setDeleteChatTarget] = useState<Chat | null>(null)
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<Project | null>(null)
+  const [deleteSummaryTarget, setDeleteSummaryTarget] = useState(false)
 
   const activeChatIdRef = useRef<string | null>(null)
   const chatExtensionsSeq = useRef(0)
@@ -131,6 +136,16 @@ export default function App() {
         attempts: event.attempts,
         retryable: event.retryable
       })
+    } else if (event.type === 'summary_start') {
+      setSummaryBusy(true)
+      setSummaryError(null)
+    } else if (event.type === 'summary') {
+      setSummaryBusy(false)
+      setSummaryError(null)
+      setChatSummary(event.summary)
+    } else if (event.type === 'summary_error') {
+      setSummaryBusy(false)
+      setSummaryError(event.message)
     } else if (event.type === 'token') {
       setRetryStatus(null)
       setLive((current) => (current ? { ...current, content: current.content + event.text } : current))
@@ -224,6 +239,7 @@ export default function App() {
       }
     } else if (event.type === 'error') {
       setRetryStatus(null)
+      setSummaryBusy(false)
       setError(event.error)
       setFailure({
         message: event.message || event.error,
@@ -241,6 +257,7 @@ export default function App() {
       })
     } else if (event.type === 'done') {
       setRetryStatus(null)
+      setSummaryBusy(false)
       setFailure(null)
       setSteps((current) => {
         const now = Date.now()
