@@ -979,6 +979,13 @@ export function SettingsModal({
                   disabled={busy}
                   onSave={(contextWindow) => saveModelContext(model.id, contextWindow)}
                 />
+                <button
+                  className="btn ghost small"
+                  disabled={busy}
+                  onClick={() => startEditModel(model)}
+                >
+                  Edit
+                </button>
                 <button className="btn ghost small" disabled={busy} onClick={() => run(() => deleteModel(model.id))}>
                   Delete
                 </button>

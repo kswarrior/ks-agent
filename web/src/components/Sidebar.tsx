@@ -16,7 +16,7 @@ export function Sidebar({
   onDeleteProject,
   onSelectChat,
   onCreateChat,
-  onRenameChat,
+  onEditChat,
   onDeleteChat,
   onOpenSettings,
   onOpenExtensions
@@ -34,7 +34,7 @@ export function Sidebar({
   onDeleteProject: (project: Project) => void
   onSelectChat: (chat: Chat) => void
   onCreateChat: () => void
-  onRenameChat: (chat: Chat) => void
+  onEditChat: (chat: Chat) => void
   onDeleteChat: (chat: Chat) => void
   onOpenSettings: () => void
   onOpenExtensions: () => void
@@ -126,10 +126,10 @@ export function Sidebar({
                 <span className="chat-actions">
                   <button
                     className="icon-btn tiny"
-                    title="Rename chat"
+                    title="Edit chat"
                     onClick={(event) => {
                       event.stopPropagation()
-                      onRenameChat(chat)
+                      onEditChat(chat)
                     }}
                   >
                     ✎
