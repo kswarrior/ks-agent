@@ -358,6 +358,7 @@ function startMockProvider() {
         lastProviderBody = body
         const messages = Array.isArray(body.messages) ? body.messages : []
         const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
+        const systemPrompt = messages.find((message) => message.role === 'system')?.content ?? ''
         const hasTool = (id) => messages.some((message) => message.role === 'tool' && message.tool_call_id === id)
         const providerError = (status, message, code) => {
           res.writeHead(status, {
@@ -365,6 +366,29 @@ function startMockProvider() {
             'retry-after': '0'
           })
           res.end(JSON.stringify({ error: { message, type: 'mock_error', code } }))
+        }
+        if (systemPrompt.includes('rolling handoff summary')) {
+          res.writeHead(200, {
+            'content-type': 'text/event-stream',
+            'cache-control': 'no-cache',
+            connection: 'keep-alive'
+          })
+          sse(res, {
+            choices: [
+              {
+                delta: {
+                  role: 'assistant',
+                  content:
+                    '## Objective\nCompaction smoke summary.\n\n## Important Details\n- Mock summary generated during smoke.\n\n## Work State\n### Completed\n- Earlier messages were compacted.\n\n### Active\n- Continuing the chat.\n\n### Blocked\n- None\n\n## Next Move\n1. Answer the latest message.\n\n## Relevant Files\n- hello.txt'
+                },
+                finish_reason: null
+              }
+            ]
+          })
+          sse(res, { choices: [{ delta: {}, finish_reason: 'stop' }] })
+          res.write('data: [DONE]\n\n')
+          res.end()
+          return
         }
         if (lastUser.includes('rate limit no retry') && noRetryAttempts++ === 0) {
           providerError(429, 'Rate limit reached for the mock model', 'rate_limit_exceeded')
