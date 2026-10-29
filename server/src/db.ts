@@ -225,6 +225,18 @@ export function listMessages(chatId: string): Message[] {
     db.prepare('SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC, rowid ASC').all(chatId) as MessageRow[]
   ).map(message)
 }
+export function getMessage(id: string): Message | null {
+  const row = db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow | undefined
+  return row ? message(row) : null
+}
+export function deleteMessagesFrom(chatId: string, messageId: string): number {
+  const target = db
+    .prepare('SELECT rowid AS message_row FROM messages WHERE id = ? AND chat_id = ?')
+    .get(messageId, chatId) as { message_row: number } | undefined
+  if (!target) return 0
+  return db.prepare('DELETE FROM messages WHERE chat_id = ? AND rowid >= ?').run(chatId, target.message_row)
+    .changes
+}
 export function insertMessage(input: {
   chatId: string
   role: Role
