@@ -451,3 +451,19 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   Extensions modal has a Knowledge tab for global/project lists, generation,
   editing and deletion. Smoke covers CRUD, scoping, generated-summary reuse,
   per-chat toggles and prompt injection/removal.
+- 2026-10-29: Added edit flows across the UI and full MCP install support.
+  Providers and models can be edited in place (including replacing or clearing
+  a saved provider key), chats expose a title + model editor from both the
+  sidebar ⋮ menu and the chat header, and Skills, MCP servers and language
+  servers are editable from the Extensions modal. Renaming a skill updates its
+  frontmatter and safely moves either the folder-style `SKILL.md` or a flat
+  `<name>.md` file, rejecting conflicts with 409. MCP servers gained LSP-style
+  `installCommand`/`cwd` metadata, an Install button, an auto-install-on-add
+  option and a Background install action backed by
+  `POST /api/mcp/:name/install` with `{"background":true}`. Project summary
+  generation now supports `{"background":true}` (`202` job) and
+  `GET /api/projects/:id/knowledge/summary/status`; the Knowledge panel polls
+  the job and reconnects on reopen, so leaving the panel does not cancel it.
+  Smoke covers provider/model/chat edits, skill folder + flat-file renames and
+  conflicts, MCP foreground/background installs and install-command edits, LSP
+  edits, and background knowledge jobs.

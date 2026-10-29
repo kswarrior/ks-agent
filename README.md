@@ -248,4 +248,4 @@ project/       # user projects (gitignored)
 
 ## Status
 
-Working MVP. See `plan.md` for the full build plan and progress log. Smoke test (`npm run smoke`) verifies health, projects, guards, all built-in tools, git, providers, streaming agent, extensions, skills, knowledge, MCP (stdio/HTTP/SSE), LSP, scoping, and persistence.
+Working MVP. See `plan.md` for the full build plan and progress log. Smoke test (`npm run smoke`) verifies health, projects, guards, all built-in tools, git, providers/models (including edits), chat edits, streaming agent, extensions, skill rename, knowledge plus background summary jobs, MCP (stdio/HTTP/SSE, foreground/background install), LSP edits, scoping, and persistence.
