@@ -12,6 +12,72 @@ function formatArgs(raw: string): string {
   }
 }
 
+type ToolMeta = { action: string; running: string }
+
+const TOOL_META: Record<string, ToolMeta> = {
+  read_file: { action: 'Read', running: 'Reading' },
+  write_file: { action: 'Write', running: 'Writing' },
+  edit_file: { action: 'Edit', running: 'Editing' },
+  list_dir: { action: 'List', running: 'Listing' },
+  glob: { action: 'Find', running: 'Finding' },
+  grep: { action: 'Search', running: 'Searching' },
+  get_file_info: { action: 'Inspect', running: 'Inspecting' },
+  delete_file: { action: 'Delete', running: 'Deleting' },
+  move_file: { action: 'Move', running: 'Moving' },
+  run_shell: { action: 'Run', running: 'Running' },
+  update_plan: { action: 'Plan', running: 'Planning' },
+  'tool result': { action: 'Result', running: 'Working' }
+}
+
+function parseToolArgs(raw: string): Record<string, unknown> {
+  try {
+    const value = JSON.parse(raw)
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function argsString(args: Record<string, unknown>, key: string): string {
+  const value = args[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function baseName(file: string): string {
+  const parts = file.replace(/\\/g, '/').split('/').filter(Boolean)
+  return parts[parts.length - 1] ?? file
+}
+
+function displayPath(file: string): string {
+  const clean = file.replace(/\\/g, '/').replace(/^\.\/+/, '')
+  if (!clean || clean === '.') return '/'
+  return clean.startsWith('/') ? clean : `/${clean}`
+}
+
+function describeTool(name: string, args: Record<string, unknown>): { primary: string; detail: string } {
+  const path = displayPath(argsString(args, 'path'))
+  switch (name) {
+    case 'run_shell':
+      return { primary: argsString(args, 'command'), detail: '' }
+    case 'grep':
+      return { primary: argsString(args, 'pattern'), detail: path }
+    case 'glob':
+      return { primary: argsString(args, 'pattern'), detail: path }
+    case 'move_file': {
+      const from = displayPath(argsString(args, 'from'))
+      const to = displayPath(argsString(args, 'to'))
+      return { primary: baseName(from), detail: `${from} → ${to}` }
+    }
+    case 'list_dir':
+      return { primary: baseName(path), detail: path }
+    default:
+      if (!path) return { primary: '', detail: '' }
+      return { primary: baseName(path), detail: path }
+  }
+}
+
 function ToolCard({
   name,
   args,
