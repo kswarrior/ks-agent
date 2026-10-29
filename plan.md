@@ -133,10 +133,11 @@ the Extensions modal. MCP and LSP never receive provider API keys.
 1. **Discover** — on server start (and on explicit reload) the registry reads
    its config, validates names, and reports invalid entries with an error
    instead of crashing the server.
-2. **Advertise** — the system prompt lists only the skills, MCP server/tool
-   counts and language servers enabled for the active project and not disabled
-   in the current chat. Tool definitions are filtered the same way for every
-   provider request.
+2. **Advertise** — the system prompt includes an authoritative chat-selection
+   block with every configured skill/MCP/LSP, its project scope, chat toggle
+   and runtime availability, plus the enabled-only sections. Tool definitions
+   only include project-enabled, chat-enabled and usable items (missing LSP
+   binaries are excluded) for every provider request.
 3. **Start lazily** — MCP servers warm up in the background (and are awaited
    once per agent run); language servers start only when a file with a matching
    extension needs diagnostics. Failures are captured per server.
@@ -179,15 +180,19 @@ plus one checkbox per project, and every card shows its scope.
 - The composer's **Tools** menu, immediately left of the model picker, lists
   only project-enabled items grouped into Skills / MCP servers / Language
   servers. Checking or unchecking an item toggles it for the current chat; the
-  trigger shows the active/total count.
-- The agent gets a `list_chat_extensions` tool that reports every configured
-  skill/MCP/LSP with its project scope, chat toggle and runtime availability
-  (including missing binaries). The system prompt tells the agent to call it
-  whenever the user asks what is enabled or disabled, instead of guessing.
-- The Tools menu marks language servers whose binary is missing or failed to
-  start as unavailable. Commands are checked on `PATH` before first use, so a
-  missing `pyright-langserver` or `typescript-language-server` is visible right
-  away instead of only after a failed diagnostics call.
+  trigger shows the active/total count and turns red when an enabled item is
+  unavailable. Rapid toggles and chat switches cannot apply another chat's
+  state.
+- The agent's system prompt contains an authoritative **Chat tool selection**
+  block with every configured skill/MCP/LSP, its project scope, chat toggle and
+  runtime availability (including missing binaries), so a status question can
+  be answered without probing. The `list_chat_extensions` tool returns the same
+  report for a mid-run refresh.
+- The Tools menu and agent report mark language servers whose binary is missing
+  or failed to start as unavailable. Commands are checked on `PATH` before
+  first use, unavailable servers are not exposed as `lsp_diagnostics` targets,
+  and a diagnostics call returns a clear `unavailable: Command not found`
+  result instead of spawning and failing with `ENOENT`.
 
 ### Agent config layout
 
@@ -299,9 +304,10 @@ extension host calling a temporary mock extension, skills discovery +
 `use_skill`, MCP tool calls over stdio, Streamable HTTP and legacy SSE, LSP
 diagnostics over `didOpen` and `didChange` from a mock language server,
 project-scoped skill/MCP/LSP creation and filtering, per-chat extension
-disables (including blocked tool calls, tool/prompt filtering and re-enabling),
-the agent's `list_chat_extensions` status report, background runs with
-event replay, stop/abort handling, persistence (including assistant
+disables (including blocked tool calls, unusable-tool filtering, unavailable
+binary reporting, the authoritative prompt selection block, the
+`list_chat_extensions` report and re-enabling), background runs with event
+replay, stop/abort handling, persistence (including assistant
 model/duration metadata), extension discovery with **no default extensions**,
 opt-in Minecraft/Android example scaffolds, and static UI serving.
 
@@ -389,3 +395,14 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   binaries are detected from `PATH` before first use, and smoke asserts
   disabled items disappear from the system prompt and tool definitions while
   the status tool still reports them.
+- 2026-10-29: Made the per-chat selection reliable end to end. The agent system
+  prompt now embeds the authoritative selection block (configured, enabled and
+  usable counts plus each item's project/chat/availability state), so "check
+  what is enabled" no longer depends on the model choosing to call a tool or
+  probing each extension. Missing-binary language servers are excluded from
+  `lsp_diagnostics` exposure and return `unavailable: Command not found`
+  instead of an `ENOENT` spawn failure; disabled items remain callable-blocked.
+  The Tools menu warns when enabled items are unavailable, and a request
+  sequence guard prevents a stale chat fetch from overwriting the active
+  chat's toggles after fast switching. Smoke covers the prompt block,
+  unavailable-binary tool filtering and error text.
