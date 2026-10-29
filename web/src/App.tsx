@@ -5,7 +5,7 @@ import { ConfirmModal, Modal, PromptModal } from './components/Modal'
 import { ExtensionsModal } from './components/ExtensionsModal'
 import { SettingsModal } from './components/SettingsModal'
 import { Sidebar } from './components/Sidebar'
-import type { Chat, ExtensionInfo, LiveState, Message, ModelEntry, Project, ProviderPublic } from './types'
+import type { AgentEvent, Chat, ExtensionInfo, LiveState, Message, ModelEntry, Project, ProviderPublic } from './types'
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -30,7 +30,7 @@ export default function App() {
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<Project | null>(null)
 
   const activeChatIdRef = useRef<string | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
+  const subscriptionRef = useRef<{ chatId: string; controller: AbortController; cancelled: boolean } | null>(null)
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId
@@ -39,6 +39,113 @@ export default function App() {
   const refreshProviders = useCallback(async () => setProviders(await api.listProviders()), [])
   const refreshModels = useCallback(async () => setModels(await api.listModels()), [])
   const refreshExtensions = useCallback(async () => setExtensions(await api.listExtensions()), [])
+
+  const handleEvent = useCallback((event: AgentEvent) => {
+    if (event.type === 'assistant_start') {
+      setLive((current) =>
+        current ? { ...current, content: '', reasoning: '', tools: [], step: event.step } : current
+      )
+    } else if (event.type === 'step') {
+      setLive((current) => (current ? { ...current, step: event.step } : current))
+    } else if (event.type === 'token') {
+      setLive((current) => (current ? { ...current, content: current.content + event.text } : current))
+    } else if (event.type === 'reasoning') {
+      setLive((current) => (current ? { ...current, reasoning: current.reasoning + event.text } : current))
+    } else if (event.type === 'tool_start') {
+      setLive((current) =>
+        current
+          ? {
+              ...current,
+              tools: [
+                ...current.tools,
+                {
+                  id: event.call.id,
+                  name: event.call.name,
+                  arguments: event.call.arguments,
+                  status: 'running'
+                }
+              ]
+            }
+          : current
+      )
+    } else if (event.type === 'tool_end') {
+      setLive((current) =>
+        current
+          ? {
+              ...current,
+              tools: current.tools.map((tool) =>
+                tool.id === event.call.id
+                  ? {
+                      ...tool,
+                      status: event.result.ok ? 'ok' : 'error',
+                      output: event.result.output,
+                      durationMs: event.durationMs
+                    }
+                  : tool
+              )
+            }
+          : current
+      )
+    } else if (event.type === 'error') {
+      setError(event.error)
+    } else if (event.type === 'done' && event.aborted) {
+      setError('Stopped by user.')
+    }
+  }, [])
+
+  const detachRun = useCallback(() => {
+    const current = subscriptionRef.current
+    if (!current) return
+    current.cancelled = true
+    current.controller.abort()
+    subscriptionRef.current = null
+  }, [])
+
+  const attachRun = useCallback(
+    async (chatId: string) => {
+      detachRun()
+      const controller = new AbortController()
+      const subscription = { chatId, controller, cancelled: false }
+      subscriptionRef.current = subscription
+      setLive(null)
+      setStreaming(false)
+      setError(null)
+
+      try {
+        const list = await api.listMessages(chatId)
+        if (subscription.cancelled) return
+        setMessages(list)
+        const status = await api.getChatRun(chatId)
+        if (subscription.cancelled || !status.active) return
+        setStreaming(true)
+        setLive({ content: '', reasoning: '', tools: [], step: 0 })
+        await api.streamChatEvents(
+          chatId,
+          (event) => {
+            if (!subscription.cancelled) handleEvent(event)
+          },
+          controller.signal
+        )
+      } catch (caught) {
+        if (!subscription.cancelled && !controller.signal.aborted) {
+          setError(caught instanceof Error ? caught.message : String(caught))
+        }
+      } finally {
+        if (!subscription.cancelled) {
+          setStreaming(false)
+          setLive(null)
+          try {
+            const list = await api.listMessages(chatId)
+            if (!subscription.cancelled && activeChatIdRef.current === chatId) setMessages(list)
+          } catch {
+            // the final state can be reloaded manually
+          }
+        }
+        if (subscriptionRef.current === subscription) subscriptionRef.current = null
+      }
+    },
+    [detachRun, handleEvent]
+  )
 
   useEffect(() => {
     let cancelled = false
