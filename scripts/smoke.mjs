@@ -1566,6 +1566,10 @@ async function main() {
     globalKnowledgeList.some((entry) => entry.id === globalKnowledge.id),
     'global knowledge was not listed'
   )
+  assert(
+    !globalKnowledgeList.some((entry) => entry.id === projectKnowledge.id),
+    'project knowledge leaked into the global knowledge list'
+  )
   const projectKnowledgeList = await api('GET', `/api/projects/${project.id}/knowledge`)
   assert(
     projectKnowledgeList.some((entry) => entry.id === projectKnowledge.id),
@@ -1770,6 +1774,26 @@ async function main() {
     enabled: false
   })
   assert(scopedToggle.status === 404, `chat toggle accepted a project-scoped-out skill: ${scopedToggle.status}`)
+
+  const titleToggle = await rawApi('PATCH', `/api/chats/${toggleChat.id}/extensions`, {
+    kind: 'knowledge',
+    name: 'Project facts',
+    enabled: false
+  })
+  assert(
+    titleToggle.status === 200 && titleToggle.data?.name === projectKnowledge.id,
+    `knowledge title toggle did not resolve to its id: ${titleToggle.status} ${titleToggle.text}`
+  )
+  const titleDisabledState = await api('GET', `/api/chats/${toggleChat.id}/extensions`)
+  assert(
+    extensionsItem(titleDisabledState, 'knowledge', projectKnowledge.id)?.enabled === false,
+    'knowledge title toggle did not disable the entry'
+  )
+  await api('PATCH', `/api/chats/${toggleChat.id}/extensions`, {
+    kind: 'knowledge',
+    name: projectKnowledge.id,
+    enabled: true
+  })
 
   const disabledSkillRun = await sendMessage(toggleChat.id, 'use the skill for this task', model.id)
   const disabledSkillTool = disabledSkillRun.events.find(
