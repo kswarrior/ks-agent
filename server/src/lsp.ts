@@ -6,6 +6,7 @@ import { config } from './config.js'
 import { readJsonConfig, writeJsonConfig } from './configFile.js'
 import { ConfigError } from './errors.js'
 import { resolveInProject } from './fsx.js'
+import { isProjectEnabled, normalizeProjects } from './scope.js'
 import type { LspServerInfo, ToolDef, ToolResult } from './types.js'
 
 interface LanguageServerConfig {
@@ -16,6 +17,7 @@ interface LanguageServerConfig {
   languageId: string
   env: Record<string, string>
   initializationOptions?: Record<string, unknown>
+  projects: string[]
 }
 
 interface Entry {
@@ -95,7 +97,8 @@ function normalizeServer(name: string, raw: unknown): LanguageServerConfig {
     env: stringMap(obj.env),
     initializationOptions: Object.keys(asRecord(obj.initializationOptions)).length
       ? asRecord(obj.initializationOptions)
-      : undefined
+      : undefined,
+    projects: normalizeProjects(obj.projects)
   }
 }
 
@@ -135,7 +138,8 @@ function serverToConfig(server: LanguageServerConfig): Record<string, unknown> {
     extensions: server.extensions,
     languageId: server.languageId,
     ...(Object.keys(server.env).length ? { env: server.env } : {}),
-    ...(server.initializationOptions ? { initializationOptions: server.initializationOptions } : {})
+    ...(server.initializationOptions ? { initializationOptions: server.initializationOptions } : {}),
+    ...(server.projects.length ? { projects: server.projects } : {})
   }
 }
 
@@ -520,6 +524,16 @@ export class LspRegistry {
     return this.entries.size
   }
 
+  private matches(name: string, entry: Entry, projectId?: string, disabled?: Set<string>): boolean {
+    if (!entry.config) return false
+    if (projectId !== undefined && !isProjectEnabled(entry.config.projects, projectId)) return false
+    return !disabled?.has(name)
+  }
+
+  listForProject(projectId: string): LspServerInfo[] {
+    return this.list().filter((server) => isProjectEnabled(server.projects, projectId))
+  }
+
   add(input: unknown): LspServerInfo[] {
     const obj = asRecord(input)
     const name = asString(obj.name).trim().toLowerCase()
@@ -563,9 +577,12 @@ export class LspRegistry {
     return this.list()
   }
 
-  toolDefs(): ToolDef[] {
-    if (this.entries.size === 0) return []
-    const servers = [...this.entries.keys()].sort().join(', ')
+  toolDefs(projectId?: string, disabled?: Set<string>): ToolDef[] {
+    const available = [...this.entries.entries()].filter(([name, entry]) =>
+      this.matches(name, entry, projectId, disabled)
+    )
+    if (available.length === 0) return []
+    const servers = available.map(([name]) => name).sort().join(', ')
     return [
       {
         type: 'function',
