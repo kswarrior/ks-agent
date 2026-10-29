@@ -604,7 +604,11 @@ export function SettingsModal({
         })
       }}
     >
-      <p className="muted">Models are grouped under a provider. Add a provider first if the list is empty.</p>
+      <p className="muted">
+        {editingModelId
+          ? 'Change the provider, display label, model id or context window. Existing chats keep using this model.'
+          : 'Models are grouped under a provider. Add a provider first if the list is empty.'}
+      </p>
       <label className="field">
         <span>Provider</span>
         <SelectMenu
@@ -647,7 +651,11 @@ export function SettingsModal({
         <small className="muted">Used by the chat header context meter. Default 128,000 tokens.</small>
       </label>
       <div className="settings-form-actions">
-        <button type="button" className="btn ghost" onClick={back}>
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={editingModelId ? cancelModelForm : back}
+        >
           Cancel
         </button>
         <button
@@ -655,7 +663,7 @@ export function SettingsModal({
           type="submit"
           disabled={busy || !providerId || !modelName.trim() || !modelId.trim() || !modelContextValid}
         >
-          Add model
+          {editingModelId ? 'Save model' : 'Add model'}
         </button>
       </div>
     </form>
@@ -898,10 +906,18 @@ export function SettingsModal({
                   ? selectedPreset.id === 'custom'
                     ? 'Custom provider'
                     : `Add ${selectedPreset.name}`
-                  : 'Add model'}
+                  : view === 'edit-provider'
+                    ? 'Edit provider'
+                    : view === 'edit-model'
+                      ? 'Edit model'
+                      : 'Add model'}
             </h3>
           </div>
-          {view === 'provider-picker' ? providerPicker : view === 'add-provider' ? addProvider : addModel}
+          {view === 'provider-picker'
+            ? providerPicker
+            : view === 'add-provider' || view === 'edit-provider'
+              ? providerForm
+              : modelForm}
         </>
       ) : tab === 'providers' ? (
         <>
@@ -920,6 +936,13 @@ export function SettingsModal({
                     {provider.baseUrl} · {provider.hasKey ? 'key saved' : 'no key'}
                   </span>
                 </div>
+                <button
+                  className="btn ghost small"
+                  disabled={busy}
+                  onClick={() => startEditProvider(provider)}
+                >
+                  Edit
+                </button>
                 <button
                   className="btn ghost small"
                   disabled={busy}
