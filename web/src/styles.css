@@ -328,9 +328,18 @@ code {
   font-size: 14px;
 }
 
-.main-title span {
+.main-title > span {
   color: var(--muted);
   font-size: 11px;
+}
+
+.main-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 14px;
 }
 
 .context-meter {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from './api'
 import { ChatView } from './components/ChatView'
-import { ConfirmModal, Modal, PromptModal } from './components/Modal'
+import { ConfirmModal, Modal } from './components/Modal'
 import { ExtensionsModal } from './components/ExtensionsModal'
 import { SettingsModal } from './components/SettingsModal'
 import { Sidebar } from './components/Sidebar'

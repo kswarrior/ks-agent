@@ -557,7 +557,8 @@ export function ChatView({
   onDismissSummaryError,
   onSend,
   onStop,
-  onOpenSidebar
+  onOpenSidebar,
+  onEditChat
 }: {
   project: Project | null
   chat: Chat | null
@@ -583,6 +584,7 @@ export function ChatView({
   onSend: (content: string) => void
   onStop: () => void
   onOpenSidebar: () => void
+  onEditChat: (chat: Chat) => void
 }) {
   const [draft, setDraft] = useState('')
   const [now, setNow] = useState(Date.now())
@@ -704,7 +706,19 @@ export function ChatView({
           <MenuIcon />
         </button>
         <div className="main-title">
-          <strong>{chat?.title || 'New chat'}</strong>
+          <span className="main-title-row">
+            <strong>{chat?.title || 'New chat'}</strong>
+            {chat && (
+              <button
+                className="icon-btn tiny"
+                title="Edit chat title and model"
+                aria-label="Edit chat"
+                onClick={() => onEditChat(chat)}
+              >
+                ✎
+              </button>
+            )}
+          </span>
           <span>{project.name}</span>
         </div>
         {chat && (
