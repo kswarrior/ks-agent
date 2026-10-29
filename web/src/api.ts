@@ -2,6 +2,7 @@ import type {
   AgentEvent,
   Chat,
   ChatExtensionsState,
+  ChatSummary,
   ExtensionInfo,
   ExtensionKind,
   LspServerInfo,

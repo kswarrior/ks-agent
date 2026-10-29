@@ -162,6 +162,9 @@ export type AgentEvent =
       durationMs: number
     }
   | ({ type: 'retry' } & RetryStatus)
+  | { type: 'summary_start'; estimatedTokens: number; contextWindow: number }
+  | { type: 'summary'; summary: ChatSummary }
+  | { type: 'summary_error'; message: string }
   | { type: 'done'; message?: Message; aborted?: boolean; maxStepsReached?: boolean }
   | ({ type: 'error'; error: string } & FailureInfo)
 
