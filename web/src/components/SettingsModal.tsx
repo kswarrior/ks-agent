@@ -270,9 +270,8 @@ export function SettingsModal({
 
   const retryDirty =
     Boolean(retryDraft && retrySettings) &&
-    (JSON.stringify({ ...retryDraft, retryOnStatusCodes: parsedCodes.codes }) !==
-      JSON.stringify(retrySettings) ||
-      retryCodes !== retrySettings?.retryOnStatusCodes.join(', '))
+    JSON.stringify({ ...retryDraft, retryOnStatusCodes: parsedCodes.codes }) !==
+      JSON.stringify(retrySettings)
 
   const saveRetry = async () => {
     if (!retryDraft) return
@@ -469,6 +468,199 @@ export function SettingsModal({
     </form>
   )
 
+  const retryPanel = !retryDraft ? (
+    <p className="empty-hint">{retryLoading ? 'Loading retry settings…' : 'Retry settings are unavailable.'}</p>
+  ) : (
+    <>
+      <div className="settings-toolbar">
+        <h3>Retry</h3>
+        {retrySaved && <span className="settings-saved">Saved</span>}
+      </div>
+      <div className="settings-card retry-master">
+        <div className="settings-card-main">
+          <strong>Automatic retry</strong>
+          <span className="muted small">
+            Retry provider requests after transient failures such as rate limits, server errors and network
+            timeouts.
+          </span>
+        </div>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={retryDraft.enabled}
+            onChange={(event) => updateRetry('enabled', event.target.checked)}
+            aria-label="Enable automatic retry"
+          />
+          <span className="switch-track" aria-hidden="true" />
+        </label>
+      </div>
+
+      <fieldset className="retry-fields" disabled={!retryDraft.enabled}>
+        <div className="settings-section">
+          <div className="settings-section-head">
+            <h4>Attempts</h4>
+            <div className="segmented" role="group" aria-label="Retry limit">
+              <button
+                type="button"
+                className={!retryDraft.unlimited ? 'active' : ''}
+                onClick={() => updateRetry('unlimited', false)}
+              >
+                Limited
+              </button>
+              <button
+                type="button"
+                className={retryDraft.unlimited ? 'active' : ''}
+                onClick={() => updateRetry('unlimited', true)}
+              >
+                Unlimited
+              </button>
+            </div>
+          </div>
+          <label className="field">
+            <span>Retries after the first attempt</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={retryDraft.maxRetries}
+              disabled={retryDraft.unlimited}
+              onChange={(event) => updateRetry('maxRetries', Number(event.target.value))}
+            />
+          </label>
+          <p className="muted small">
+            {retryDraft.unlimited
+              ? 'Keeps retrying until the request succeeds, you stop the run, or the error is not retryable.'
+              : `Up to ${retryDraft.maxRetries + 1} total attempt${retryDraft.maxRetries === 0 ? '' : 's'} (the first try plus ${retryDraft.maxRetries} retr${retryDraft.maxRetries === 1 ? 'y' : 'ies'}).`}
+          </p>
+        </div>
+
+        <div className="settings-section">
+          <h4>Backoff</h4>
+          <div className="settings-inline-grid">
+            <label className="field">
+              <span>Initial delay (ms)</span>
+              <input
+                type="number"
+                min={100}
+                max={120000}
+                step={100}
+                value={retryDraft.baseDelayMs}
+                onChange={(event) => updateRetry('baseDelayMs', Number(event.target.value))}
+              />
+            </label>
+            <label className="field">
+              <span>Max delay (ms)</span>
+              <input
+                type="number"
+                min={100}
+                max={600000}
+                step={100}
+                value={retryDraft.maxDelayMs}
+                onChange={(event) => updateRetry('maxDelayMs', Number(event.target.value))}
+              />
+            </label>
+            <label className="field">
+              <span>Backoff multiplier</span>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                step={0.1}
+                value={retryDraft.multiplier}
+                onChange={(event) => updateRetry('multiplier', Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <div className="settings-checks">
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={retryDraft.jitter}
+                onChange={(event) => updateRetry('jitter', event.target.checked)}
+              />
+              Add random jitter (75–100% of the delay)
+            </label>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={retryDraft.honorRetryAfter}
+                onChange={(event) => updateRetry('honorRetryAfter', event.target.checked)}
+              />
+              Honor the Retry-After response header
+            </label>
+          </div>
+        </div>
+
+        <div className="settings-section">
+          <h4>Retry when</h4>
+          <div className="settings-checks">
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={retryDraft.retryOnNetwork}
+                onChange={(event) => updateRetry('retryOnNetwork', event.target.checked)}
+              />
+              Network errors and timeouts
+            </label>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={retryDraft.retryOnServerErrors}
+                onChange={(event) => updateRetry('retryOnServerErrors', event.target.checked)}
+              />
+              Server errors (5xx)
+            </label>
+          </div>
+          <div className="settings-field">
+            <span className="field-label">Additional HTTP status codes</span>
+            <div className="code-chips">
+              {RETRY_STATUS_CODES.map((code) => (
+                <button
+                  type="button"
+                  key={code}
+                  className={`code-chip ${parsedCodes.codes.includes(code) ? 'active' : ''}`}
+                  onClick={() => toggleStatusCode(code)}
+                  aria-pressed={parsedCodes.codes.includes(code)}
+                >
+                  {code}
+                </button>
+              ))}
+            </div>
+            <input
+              value={retryCodes}
+              onChange={(event) => {
+                setRetrySaved(false)
+                setRetryCodes(event.target.value)
+              }}
+              placeholder="e.g. 429, 503"
+              aria-label="Retry status codes"
+            />
+            <p className={`muted small ${parsedCodes.invalid.length ? 'field-error' : ''}`}>
+              {parsedCodes.invalid.length
+                ? `Invalid code${parsedCodes.invalid.length === 1 ? '' : 's'}: ${parsedCodes.invalid.join(', ')}`
+                : 'Comma-separated status codes between 400 and 599. 429 is the usual rate-limit code.'}
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
+      <div className="settings-form-actions">
+        <button type="button" className="btn ghost" onClick={() => void resetRetry()} disabled={retrySaving}>
+          Reset defaults
+        </button>
+        <button
+          type="button"
+          className="btn primary"
+          onClick={() => void saveRetry()}
+          disabled={retrySaving || !retryDirty || parsedCodes.invalid.length > 0}
+        >
+          {retrySaving ? 'Saving…' : 'Save retry settings'}
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <Modal title="Settings" onClose={onClose} wide fullHeight>
       <div className="settings-tabs" role="tablist" aria-label="Settings">
@@ -487,6 +679,14 @@ export function SettingsModal({
           aria-selected={tab === 'models'}
         >
           Models
+        </button>
+        <button
+          className={`settings-tab ${tab === 'retry' ? 'active' : ''}`}
+          onClick={() => openTab('retry')}
+          role="tab"
+          aria-selected={tab === 'retry'}
+        >
+          Retry
         </button>
       </div>
 
