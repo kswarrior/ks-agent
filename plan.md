@@ -15,72 +15,75 @@ implemented but not yet verified. `[ ]` means not done.
 
 ## Phase 0 — Foundation
 
-- [ ] `plan.md` written and kept up to date (this file)
-- [ ] `package.json` with dev/build/typecheck/start/smoke scripts
-- [ ] Root + server `tsconfig.json`, `vite.config.ts`, `web/index.html`
-- [ ] `.gitignore` covers `node_modules`, builds, storage, logs, local data
-- [ ] Server skeleton: Hono app, health route, JSON errors, static serving
-- [ ] Config module: root/data/projects/extensions/dist paths, env overrides
-- [ ] SQLite schema with WAL + prepared-statement helpers
-- [ ] `npm run typecheck` and `npm run build` green
+- [x] `plan.md` written and kept up to date (this file)
+- [x] `package.json` with dev/build/typecheck/start/smoke scripts
+- [x] Root + server `tsconfig.json`, `vite.config.ts`, `web/index.html`
+- [x] `.gitignore` covers `node_modules`, builds, storage, project data, logs
+- [x] Server skeleton: Hono app, health route, JSON errors, static serving
+- [x] Config module: root/data/projects/extensions/dist paths, env overrides
+- [x] SQLite schema with WAL + prepared-statement helpers
+- [x] `npm run typecheck` and `npm run build` green
 
 ## Phase 1 — Core data and API
 
-- [ ] Projects CRUD (create folder inside `project/`, list, delete)
-- [ ] Chats CRUD per project
-- [ ] Messages persistence with tool calls/results
-- [ ] Providers CRUD (API keys stored server-side, masked in responses)
-- [ ] Models CRUD (provider + model id)
-- [ ] SSE streaming endpoint with abort/stop
-- [ ] Input validation and consistent error shape
+- [x] Projects CRUD (create folder inside `project/`, list, delete)
+- [x] Chats CRUD per project
+- [x] Messages persistence with tool calls/results
+- [x] Providers CRUD (API keys stored server-side, masked in responses)
+- [x] Models CRUD (provider + model id)
+- [x] SSE streaming endpoint with abort/stop
+- [x] Input validation and consistent error shape
 
 ## Phase 2 — Agent runtime
 
-- [ ] OpenAI-compatible chat-completions streaming client
-- [ ] Incremental content / reasoning / tool-call delta parsing
-- [ ] Agent loop: stream → execute tools → feed results → repeat
-- [ ] Max-step guard, abort handling, partial-message persistence
-- [ ] System prompt with project scope + tool rules
-- [ ] Context trimming (message count + character budget)
-- [ ] Built-in tools:
-  - [ ] `read_file`, `write_file`, `edit_file`
-  - [ ] `list_dir`, `glob`, `grep`, `get_file_info`
-  - [ ] `delete_file`, `move_file`
-  - [ ] `run_shell` with path jail, command guard, timeout, output cap
-  - [ ] `update_plan` (writes/checks off `plan.md` in the project)
-- [ ] Path jail: `..`, absolute paths, symlink escapes rejected
-- [ ] Shell guard: traversal, `~`, `$HOME`, private hosts, dangerous commands
+- [x] OpenAI-compatible chat-completions streaming client
+- [x] Incremental content / reasoning / tool-call delta parsing
+- [x] Agent loop: stream → execute tools → feed results → repeat
+- [~] Max-step guard, abort handling, partial-message persistence
+      (implemented; stop path not covered by the smoke test yet)
+- [x] System prompt with project scope + tool rules
+- [x] Context trimming (message count + character budget)
+- [x] Built-in tools:
+  - [x] `read_file`, `write_file`, `edit_file`
+  - [x] `list_dir`, `glob`, `grep`, `get_file_info`
+  - [x] `delete_file`, `move_file`
+  - [x] `run_shell` with path jail, command guard, timeout, output cap
+  - [x] `update_plan` (writes/checks off `plan.md` in the project)
+- [x] Path jail: `..`, absolute paths, symlink escapes rejected
+- [x] Shell guard: traversal, `~`, `$HOME`, private hosts, dangerous commands
 
 ## Phase 3 — Web UI
 
-- [ ] API client + shared types
-- [ ] Dark responsive shell with sidebar drawer on mobile
-- [ ] Project create/select/delete
-- [ ] Chat create/select/rename/delete
-- [ ] Message list with Markdown rendering
-- [ ] Live streaming assistant text + reasoning indicator
-- [ ] Tool activity cards (name, args, result, duration)
-- [ ] Composer with model picker, send, stop
-- [ ] Settings: providers/models add/delete, masked keys
-- [ ] Extensions panel: status, tools, reload
+- [x] API client + shared types
+- [x] Dark responsive shell with sidebar drawer on mobile
+- [x] Project create/select/delete
+- [x] Chat create/select/rename/delete
+- [x] Message list with Markdown rendering
+- [x] Live streaming assistant text + reasoning indicator
+- [x] Tool activity cards (name, args, result, duration)
+- [x] Composer with model picker, send, stop
+- [x] Settings: providers/models add/delete, masked keys
+- [x] Extensions panel: status, tools, reload
 
 ## Phase 4 — Extension system (the power feature)
 
-- [ ] Extension folder format: `extensions/<name>/extension.json`
-- [ ] Manifest validation (name, command, tools, permissions, timeout)
-- [ ] Lazy child-process host with newline-delimited JSON-RPC
-- [ ] Methods: `initialize`, `tools/list`, `tools/call`, `hook`
-- [ ] Tool namespacing (`ext_<name>_<tool>`) + JSON schema passthrough
-- [ ] Per-request timeout, crash handling, stderr logging, restart
-- [ ] Project-scoped calls: extension gets project path, never API keys
-- [ ] Hooks: `project.open`, `agent.start`, `agent.finish`
-- [ ] Reload API + extension status in UI
-- [ ] `extensions/sdk.mjs` helper for writing extensions in Node
-- [ ] Example extension: **web** (scaffold Vite/React, install, build, test)
-- [ ] Example extension: **minecraft** (Paper plugin scaffold, server lifecycle,
+- [x] Extension folder format: `extensions/<name>/extension.json`
+- [x] Manifest validation (name, command, tools, permissions, timeout)
+- [x] Lazy child-process host with newline-delimited JSON-RPC
+- [x] Methods: `initialize`, `tools/list`, `tools/call`, `hook`
+- [x] Tool namespacing (`ext_<name>_<tool>`) + JSON schema passthrough
+- [~] Per-request timeout, crash handling, stderr logging, restart
+      (timeout/crash/logging implemented; crash-restart path untested)
+- [x] Project-scoped calls: extension gets project path, never API keys
+- [x] Hooks: `project.open`, `agent.start`, `agent.finish`
+- [x] Reload API + extension status in UI
+- [x] `extensions/sdk.mjs` helper for writing extensions in Node
+- [x] Example extension: **web** (scaffold Vite/React, install, build, test,
+      start/stop/status dev server)
+- [x] Example extension: **minecraft** (Paper plugin scaffold, server lifecycle,
       mineflayer bot harness)
-- [ ] Example extension: **android** (Compose scaffold, Gradle build, adb install)
-- [ ] Mock-extension smoke test through the real agent loop
+- [x] Example extension: **android** (Compose scaffold, Gradle build, adb install)
+- [x] Mock-extension smoke test through the real agent loop
 
 ## Phase 5 — Developer surfaces
 
@@ -91,17 +94,36 @@ implemented but not yet verified. `[ ]` means not done.
 
 ## Phase 6 — Hardening and release
 
-- [ ] Path-jail and shell-guard test suite
+- [x] Path-jail and shell-guard tests (inside `npm run smoke`)
 - [ ] Optional Docker jail (`KS_DOCKER_JAIL=1`)
-- [ ] Rate limits / request size limits
+- [~] Rate limits / request size limits (basic size caps exist)
 - [ ] Retry with backoff for transient provider failures
-- [ ] End-to-end smoke script (`npm run smoke`)
+- [x] End-to-end smoke script (`npm run smoke`)
 - [ ] README / extension authoring guide
-- [ ] CI workflow: typecheck, build, smoke
+- [ ] CI workflow for typecheck, build and smoke
 
 ---
+
+## Current status
+
+Working MVP is runnable:
+
+```bash
+npm run typecheck
+npm run build
+npm start            # http://localhost:8787
+npm run smoke        # isolated end-to-end test (build first)
+```
+
+The smoke test verifies: health, project creation, path/shell guards, provider
+key masking, the streaming agent loop, a real built-in tool (`write_file`), the
+extension host calling the real `web` extension, persistence, extension
+discovery, Minecraft/Android scaffolding, and static UI serving.
 
 ## Progress log
 
 - 2026-10-29: Fresh implementation started at repo root. `old/` is kept only as
   reference; nothing in it is imported by the new code.
+- 2026-10-29: Phases 0–4 MVP implemented. `npm run typecheck`, `npm run build`
+  and `npm run smoke` all pass. Next: abort-path test, Docker jail, PTY, Git,
+  MCP/LSP, provider retries.
