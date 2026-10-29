@@ -40,6 +40,7 @@ function parseFrontmatter(raw: string): Frontmatter {
   return {
     name: fields.name ?? '',
     description: fields.description ?? '',
+    projects: normalizeProjects(fields.projects),
     body: text.slice(match[0].length)
   }
 }
@@ -76,6 +77,7 @@ function readSkill(file: string, fallbackName: string, source: string): LoadedSk
     path: file,
     source,
     writable: isInside(config.skillsDirs[0], file),
+    projects: parsed.projects,
     content: parsed.body.trim()
   }
 }
@@ -132,14 +134,26 @@ export class SkillRegistry {
       description: skill.description,
       path: skill.path,
       source: skill.source,
-      writable: isInside(this.writableDir(), skill.path)
+      writable: isInside(this.writableDir(), skill.path),
+      projects: skill.projects
     }
+  }
+
+  private available(projectId?: string, disabled?: Set<string>): LoadedSkill[] {
+    return [...this.skills.values()].filter((skill) => {
+      if (projectId !== undefined && !isProjectEnabled(skill.projects, projectId)) return false
+      return !disabled?.has(skill.name)
+    })
   }
 
   list(): SkillInfo[] {
     return [...this.skills.values()]
       .map((skill) => this.info(skill))
       .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  listForProject(projectId: string): SkillInfo[] {
+    return this.list().filter((skill) => isProjectEnabled(skill.projects, projectId))
   }
 
   count(): number {
@@ -152,7 +166,13 @@ export class SkillRegistry {
     return this.info(found)
   }
 
-  create(name: string, description: string, content: string, overwrite = false): SkillInfo {
+  create(
+    name: string,
+    description: string,
+    content: string,
+    projects: string[] = [],
+    overwrite = false
+  ): SkillInfo {
     const cleanName = name.trim().toLowerCase()
     if (!NAME_RE.test(cleanName)) {
       throw new ConfigError('Skill name must use lowercase letters, numbers, dashes or underscores (max 64 characters).')
@@ -173,7 +193,12 @@ export class SkillRegistry {
     }
     fs.mkdirSync(folder, { recursive: true })
     const descriptionLine = cleanDescription.replace(/"/g, "'")
-    fs.writeFileSync(file, `---\nname: ${cleanName}\ndescription: "${descriptionLine}"\n---\n\n${cleanContent}\n`, 'utf8')
+    const projectsLine = projects.length ? projects.join(', ') : 'all'
+    fs.writeFileSync(
+      file,
+      `---\nname: ${cleanName}\ndescription: "${descriptionLine}"\nprojects: ${projectsLine}\n---\n\n${cleanContent}\n`,
+      'utf8'
+    )
     this.discover()
     const created = this.get(cleanName)
     if (!created) throw new ConfigError('Skill could not be loaded after saving.')
