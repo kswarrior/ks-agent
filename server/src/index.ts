@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -9,22 +9,28 @@ import { config, isInside } from './config.js'
 import {
   getChat,
   getChatSummary,
+  getKnowledge,
   getModel,
   getProject,
   getProvider,
   insertChat,
+  insertKnowledge,
   insertMessage,
   insertModel,
   insertProject,
   insertProvider,
   listChatDisabled,
   listChats,
+  listGlobalKnowledge,
+  listKnowledge,
   listMessages,
   listModels,
+  listProjectKnowledge,
   listProjects,
   listProviders,
   removeChat,
   removeChatSummary,
+  removeKnowledge,
   removeModel,
   removeProject,
   removeProvider,
@@ -32,12 +38,14 @@ import {
   setChatExtensionEnabled,
   touchChat,
   updateChat,
+  updateKnowledge,
   updateModelContext,
   updateProvider
 } from './db.js'
 import { describeFailure, errorStatus } from './errors.js'
 import { extensions } from './extensions.js'
 import { cleanRelative, resolveInProject } from './fsx.js'
+import { knowledge } from './knowledge.js'
 import { lsp } from './lsp.js'
 import { mcp } from './mcp.js'
 import {
@@ -106,6 +114,13 @@ function chatExtensionsState(chat: Chat, project: Project): ChatExtensionsState 
     skills: skills
       .listForProject(project.id)
       .map((skill) => ({ ...skill, enabled: !disabled.skill.has(skill.name) })),
+    knowledge: knowledge
+      .listForProject(project.id)
+      .filter((entry) => entry.enabled)
+      .map(({ content: _content, enabled: _enabled, ...entry }) => ({
+        ...entry,
+        enabled: !disabled.knowledge.has(entry.id)
+      })),
     mcpServers: mcp
       .listForProject(project.id)
       .map((server) => ({ ...server, enabled: !disabled.mcp.has(server.name) })),
@@ -293,18 +308,23 @@ app.patch('/api/chats/:id/extensions', async (c) => {
   if (!project) return c.json(errorJson('project not found', 404), 404)
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
   const kind = body?.kind
-  if (kind !== 'skill' && kind !== 'mcp' && kind !== 'lsp') {
-    return c.json(errorJson('kind must be skill, mcp or lsp'), 400)
+  if (kind !== 'skill' && kind !== 'knowledge' && kind !== 'mcp' && kind !== 'lsp') {
+    return c.json(errorJson('kind must be skill, knowledge, mcp or lsp'), 400)
   }
-  const name = typeof body?.name === 'string' ? body.name.trim().toLowerCase() : ''
+  const rawName = typeof body?.name === 'string' ? body.name.trim() : ''
+  const name = kind === 'knowledge' ? rawName : rawName.toLowerCase()
   if (!name) return c.json(errorJson('name is required'), 400)
   if (typeof body?.enabled !== 'boolean') return c.json(errorJson('enabled must be a boolean'), 400)
   const available =
     kind === 'skill'
       ? skills.listForProject(project.id).some((skill) => skill.name === name)
-      : kind === 'mcp'
-        ? mcp.listForProject(project.id).some((server) => server.name === name)
-        : lsp.listForProject(project.id).some((server) => server.name === name)
+      : kind === 'knowledge'
+        ? knowledge
+            .listForProject(project.id)
+            .some((entry) => entry.enabled && entry.id === name)
+        : kind === 'mcp'
+          ? mcp.listForProject(project.id).some((server) => server.name === name)
+          : lsp.listForProject(project.id).some((server) => server.name === name)
   if (!available) {
     return c.json(errorJson(`${kind} "${name}" is not enabled for this project`, 404), 404)
   }
@@ -579,6 +599,157 @@ app.get('/api/extensions/:name', (c) => {
   if (!found) return c.json(errorJson('extension not found', 404), 404)
   return c.json(found)
 })
+
+// ---------------------------------------------------------------- knowledge
+function parseKnowledgeFields(body: Record<string, unknown> | null): {
+  title?: string
+  content?: string
+  enabled?: boolean
+  error?: string
+} {
+  const out: { title?: string; content?: string; enabled?: boolean; error?: string } = {}
+  if (body?.title !== undefined) {
+    const title = typeof body.title === 'string' ? body.title.trim() : ''
+    if (!title || title.length > 120) {
+      return { error: 'title must be a non-empty string of 120 characters or fewer' }
+    }
+    out.title = title
+  }
+  if (body?.content !== undefined) {
+    const content = typeof body.content === 'string' ? body.content.trim() : ''
+    if (!content) return { error: 'content must be a non-empty string' }
+    if (content.length > 50_000) return { error: 'content must be 50000 characters or fewer' }
+    out.content = content
+  }
+  if (body?.enabled !== undefined) {
+    if (typeof body.enabled !== 'boolean') return { error: 'enabled must be a boolean' }
+    out.enabled = body.enabled
+  }
+  return out
+}
+
+app.get('/api/knowledge', (c) => {
+  const projectId = c.req.query('projectId')
+  if (projectId) {
+    if (!getProject(projectId)) return c.json(errorJson('project not found', 404), 404)
+    return c.json(listProjectKnowledge(projectId))
+  }
+  return c.json(listGlobalKnowledge())
+})
+
+app.get('/api/knowledge/all', (c) => c.json(listKnowledge()))
+
+app.post('/api/knowledge', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  const fields = parseKnowledgeFields(body)
+  if (fields.error) return c.json(errorJson(fields.error), 400)
+  if (!fields.title || !fields.content) {
+    return c.json(errorJson('title and content are required'), 400)
+  }
+
+  let scope: 'global' | 'project'
+  if (body.scope === 'global') scope = 'global'
+  else if (body.scope === 'project' || body.projectId !== undefined) scope = 'project'
+  else scope = 'global'
+  if (body.scope !== undefined && body.scope !== 'global' && body.scope !== 'project') {
+    return c.json(errorJson('scope must be global or project'), 400)
+  }
+
+  let projectId: string | null = null
+  if (scope === 'project') {
+    if (typeof body.projectId !== 'string' || !body.projectId.trim()) {
+      return c.json(errorJson('projectId is required for project knowledge'), 400)
+    }
+    projectId = body.projectId.trim()
+    if (!getProject(projectId)) return c.json(errorJson('project not found', 404), 404)
+  } else if (body.projectId !== undefined) {
+    return c.json(errorJson('global knowledge cannot have a projectId'), 400)
+  }
+
+  const entry = insertKnowledge({
+    scope,
+    projectId,
+    title: fields.title,
+    content: fields.content,
+    enabled: fields.enabled
+  })
+  return c.json(entry, 201)
+})
+
+app.post('/api/projects/:id/knowledge', async (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  const fields = parseKnowledgeFields(body)
+  if (fields.error) return c.json(errorJson(fields.error), 400)
+  if (!fields.title || !fields.content) {
+    return c.json(errorJson('title and content are required'), 400)
+  }
+  return c.json(
+    insertKnowledge({
+      scope: 'project',
+      projectId: project.id,
+      title: fields.title,
+      content: fields.content,
+      enabled: fields.enabled
+    }),
+    201
+  )
+})
+
+async function updateKnowledgeRoute(c: Context) {
+  const entry = getKnowledge(c.req.param('id') ?? '')
+  if (!entry) return c.json(errorJson('knowledge entry not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  const fields = parseKnowledgeFields(body)
+  if (fields.error) return c.json(errorJson(fields.error), 400)
+  if (fields.title === undefined && fields.content === undefined && fields.enabled === undefined) {
+    return c.json(errorJson('title, content or enabled is required'), 400)
+  }
+  const updated = updateKnowledge(entry.id, fields)
+  if (!updated) return c.json(errorJson('knowledge entry not found', 404), 404)
+  return c.json(updated)
+}
+
+app.patch('/api/knowledge/:id', updateKnowledgeRoute)
+app.put('/api/knowledge/:id', updateKnowledgeRoute)
+
+app.delete('/api/knowledge/:id', (c) => {
+  const entry = getKnowledge(c.req.param('id'))
+  if (!entry) return c.json(errorJson('knowledge entry not found', 404), 404)
+  removeKnowledge(entry.id)
+  return c.json({ ok: true })
+})
+
+async function generateProjectKnowledge(c: Context) {
+  const project = getProject(c.req.param('id') ?? '')
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const modelId = typeof body?.modelId === 'string' && body.modelId.trim() ? body.modelId.trim() : undefined
+  if (modelId && !getModel(modelId)) return c.json(errorJson('model not found'), 404)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 120_000)
+  try {
+    const entry = await knowledge.generateProjectSummary(project, {
+      modelId,
+      signal: controller.signal
+    })
+    return c.json(entry)
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return c.json(errorJson('project summary generation timed out', 504), 504)
+    }
+    return c.json(errorJson(error instanceof Error ? error.message : String(error), 500), 500)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+app.post('/api/projects/:id/knowledge/summary', generateProjectKnowledge)
+app.post('/api/projects/:id/knowledge/generate', generateProjectKnowledge)
 
 // ------------------------------------------------------------------- skills
 app.get('/api/skills', (c) => c.json(skills.list()))
