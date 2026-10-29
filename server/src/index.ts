@@ -72,6 +72,33 @@ function safeName(value: unknown): string | null {
   return name
 }
 
+function chatTitleFromPrompt(content: string): string {
+  const text = content
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[#>*_~]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return 'New chat'
+
+  const stripped = text.replace(
+    /^(?:(?:please|pls|kindly|can you|could you|would you|will you|i want you to|i need you to|help me|i want to|i need to)\s+)+/i,
+    ''
+  )
+  const firstSentence = stripped.split(/(?<=[.!?])\s/)[0] ?? stripped
+  const words = firstSentence.split(' ')
+  let title = words.length > 8 ? words.slice(0, 8).join(' ') : firstSentence
+  title = title.replace(/[\s,;:!.?\-–—]+$/, '')
+  if (title.length > 60) {
+    const cut = title.slice(0, 60)
+    const at = cut.lastIndexOf(' ')
+    title = cut.slice(0, at > 40 ? at : 60).trimEnd()
+  }
+  if (!title) return 'New chat'
+  return title.charAt(0).toUpperCase() + title.slice(1)
+}
+
 const DEFAULT_PROJECT_NAME = 'My Project'
 const DEFAULT_PROJECT_FOLDER = 'my-project'
 
@@ -243,8 +270,10 @@ app.post('/api/chats/:id/messages', async (c) => {
   if (!provider) return c.json(errorJson('provider not found', 404), 404)
 
   insertMessage({ chatId: chat.id, role: 'user', content })
+  let chatTitle = chat.title
   if (!chat.title || chat.title === 'New chat') {
-    updateChat(chat.id, { title: content.trim().replace(/\s+/g, ' ').slice(0, 80) })
+    const updated = updateChat(chat.id, { title: chatTitleFromPrompt(content) })
+    chatTitle = updated?.title ?? chat.title
   } else {
     touchChat(chat.id)
   }
@@ -285,7 +314,7 @@ app.post('/api/chats/:id/messages', async (c) => {
       timer.unref()
     })
 
-  return c.json({ ok: true, chatId: chat.id }, 202)
+  return c.json({ ok: true, chatId: chat.id, title: chatTitle }, 202)
 })
 
 app.get('/api/chats/:id/events', (c) => {
