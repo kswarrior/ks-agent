@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createGlobalKnowledge,
   createProjectKnowledge,
   deleteKnowledge,
-  generateProjectKnowledge,
+  getProjectKnowledgeJob,
   listGlobalKnowledge,
   listProjectKnowledge,
+  startProjectKnowledge,
   updateKnowledge
 } from '../api'
-import type { KnowledgeEntry, ModelEntry } from '../types'
+import type { KnowledgeEntry, KnowledgeJob, ModelEntry } from '../types'
 import { ConfirmModal } from './Modal'
 
 type KnowledgeScope = 'global' | 'project'
@@ -83,6 +84,8 @@ export function KnowledgePanel({
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<KnowledgeEntry | null>(null)
   const [modelId, setModelId] = useState('')
+  const [job, setJob] = useState<KnowledgeJob | null>(null)
+  const jobSeq = useRef(0)
 
   const load = useCallback(async () => {
     setLoading(true)

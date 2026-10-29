@@ -155,6 +155,10 @@ export async function streamChatEvents(
 export const listProviders = () => req<ProviderPublic[]>('/api/providers')
 export const createProvider = (body: { name: string; baseUrl: string; apiKey: string }) =>
   req<ProviderPublic>('/api/providers', json('POST', body))
+export const updateProvider = (
+  id: string,
+  body: { name?: string; baseUrl?: string; apiKey?: string }
+) => req<ProviderPublic>(`/api/providers/${encodeURIComponent(id)}`, json('PATCH', body))
 export const deleteProvider = (id: string) => req<{ ok: true }>(`/api/providers/${id}`, { method: 'DELETE' })
 
 export const listModels = () => req<ModelEntry[]>('/api/models')
@@ -164,8 +168,12 @@ export const createModel = (body: {
   modelId: string
   contextWindow?: number
 }) => req<ModelEntry>('/api/models', json('POST', body))
+export const updateModel = (
+  id: string,
+  body: { providerId?: string; name?: string; modelId?: string; contextWindow?: number }
+) => req<ModelEntry>(`/api/models/${encodeURIComponent(id)}`, json('PATCH', body))
 export const updateModelContext = (id: string, contextWindow: number) =>
-  req<ModelEntry>(`/api/models/${encodeURIComponent(id)}`, json('PATCH', { contextWindow }))
+  updateModel(id, { contextWindow })
 export const deleteModel = (id: string) => req<{ ok: true }>(`/api/models/${id}`, { method: 'DELETE' })
 
 export const getRetrySettings = () => req<RetrySettings>('/api/settings/retry')
@@ -179,6 +187,8 @@ export const reloadExtensions = () => req<ExtensionInfo[]>('/api/extensions/relo
 
 export const listSkills = () => req<SkillInfo[]>('/api/skills')
 export const reloadSkills = () => req<SkillInfo[]>('/api/skills/reload', { method: 'POST' })
+export const getSkill = (name: string) =>
+  req<SkillDetail>(`/api/skills/${encodeURIComponent(name)}`)
 export const createSkill = (body: {
   name: string
   description: string
@@ -186,26 +196,52 @@ export const createSkill = (body: {
   projects?: string[]
   overwrite?: boolean
 }) => req<SkillInfo>('/api/skills', json('POST', body))
+export const updateSkill = (
+  name: string,
+  body: { name?: string; description?: string; content?: string; projects?: string[] }
+) => req<SkillInfo>(`/api/skills/${encodeURIComponent(name)}`, json('PATCH', body))
 export const deleteSkill = (name: string) =>
   req<{ ok: true }>(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
 
 export const listMcpServers = () => req<McpServerInfo[]>('/api/mcp')
 export const reloadMcpServers = () => req<McpServerInfo[]>('/api/mcp/reload', { method: 'POST' })
+export const getMcpServer = (name: string) =>
+  req<McpServerDetail>(`/api/mcp/${encodeURIComponent(name)}`)
 export const createMcpServer = (body: {
   name: string
   transport: 'stdio' | 'http' | 'sse'
   command?: string
   args?: string[]
   env?: Record<string, string>
+  cwd?: string
   url?: string
   headers?: Record<string, string>
+  installCommand?: string
   projects?: string[]
 }) => req<McpServerInfo[]>('/api/mcp', json('POST', body))
+export const updateMcpServer = (
+  name: string,
+  body: {
+    transport?: 'stdio' | 'http' | 'sse'
+    command?: string
+    args?: string[]
+    env?: Record<string, string>
+    cwd?: string
+    url?: string
+    headers?: Record<string, string>
+    installCommand?: string
+    projects?: string[]
+  }
+) => req<McpServerInfo[]>(`/api/mcp/${encodeURIComponent(name)}`, json('PATCH', body))
+export const installMcpServer = (name: string, background = false) =>
+  req<McpServerInfo[]>(`/api/mcp/${encodeURIComponent(name)}/install`, json('POST', { background }))
 export const deleteMcpServer = (name: string) =>
   req<McpServerInfo[]>(`/api/mcp/${encodeURIComponent(name)}`, { method: 'DELETE' })
 
 export const listLspServers = () => req<LspServerInfo[]>('/api/lsp')
 export const reloadLspServers = () => req<LspServerInfo[]>('/api/lsp/reload', { method: 'POST' })
+export const getLspServer = (name: string) =>
+  req<LspServerDetail>(`/api/lsp/${encodeURIComponent(name)}`)
 export const createLspServer = (body: {
   name: string
   command: string
@@ -216,6 +252,18 @@ export const createLspServer = (body: {
   env?: Record<string, string>
   projects?: string[]
 }) => req<LspServerInfo[]>('/api/lsp', json('POST', body))
+export const updateLspServer = (
+  name: string,
+  body: {
+    command?: string
+    args?: string[]
+    extensions?: string[]
+    languageId?: string
+    installCommand?: string
+    env?: Record<string, string>
+    projects?: string[]
+  }
+) => req<LspServerInfo[]>(`/api/lsp/${encodeURIComponent(name)}`, json('PATCH', body))
 export const deleteLspServer = (name: string) =>
   req<LspServerInfo[]>(`/api/lsp/${encodeURIComponent(name)}`, { method: 'DELETE' })
 export const installLspServer = (name: string) =>
