@@ -553,9 +553,28 @@ export function insertModel(
   ).run(row.id, row.provider_id, row.name, row.model_id, row.context_window, row.created_at)
   return model(row)
 }
-export function updateModelContext(id: string, contextWindow: number): ModelEntry | null {
-  db.prepare('UPDATE models SET context_window = ? WHERE id = ?').run(contextWindow, id)
+export function updateModel(
+  id: string,
+  fields: { providerId?: string; name?: string; modelId?: string; contextWindow?: number }
+): ModelEntry | null {
+  const current = getModel(id)
+  if (!current) return null
+  const providerId = fields.providerId ?? current.providerId
+  const name = fields.name ?? current.name
+  const modelId = fields.modelId ?? current.modelId
+  const contextWindow = fields.contextWindow ?? current.contextWindow
+  db.prepare('UPDATE models SET provider_id = ?, name = ?, model_id = ?, context_window = ? WHERE id = ?').run(
+    providerId,
+    name,
+    modelId,
+    contextWindow,
+    id
+  )
   return getModel(id)
+}
+
+export function updateModelContext(id: string, contextWindow: number): ModelEntry | null {
+  return updateModel(id, { contextWindow })
 }
 export function removeModel(id: string): void {
   db.prepare('DELETE FROM models WHERE id = ?').run(id)

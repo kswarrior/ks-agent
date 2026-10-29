@@ -3,7 +3,7 @@ import path from 'node:path'
 import { config, isInside } from './config.js'
 import { ConfigError } from './errors.js'
 import { isProjectEnabled, normalizeProjects } from './scope.js'
-import type { SkillInfo, ToolDef, ToolResult } from './types.js'
+import type { SkillDetail, SkillInfo, ToolDef, ToolResult } from './types.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const MAX_SKILL_BYTES = 200_000
@@ -166,6 +166,46 @@ export class SkillRegistry {
     return this.info(found)
   }
 
+  getDetail(name: string): SkillDetail | null {
+    const found = this.skills.get(name.trim().toLowerCase())
+    if (!found) return null
+    return { ...this.info(found), content: found.content }
+  }
+
+  private write(file: string, name: string, description: string, content: string, projects: string[]): void {
+    const descriptionLine = description.replace(/"/g, "'")
+    const projectsLine = projects.length ? projects.join(', ') : 'all'
+    fs.writeFileSync(
+      file,
+      `---\nname: ${name}\ndescription: "${descriptionLine}"\nprojects: ${projectsLine}\n---\n\n${content}\n`,
+      'utf8'
+    )
+  }
+
+  update(
+    name: string,
+    fields: { description?: string; content?: string; projects?: string[] }
+  ): SkillInfo {
+    const skill = this.skills.get(name.trim().toLowerCase())
+    if (!skill) throw new ConfigError(`Skill "${name}" was not found.`, 404)
+    if (!isInside(this.writableDir(), skill.path)) {
+      throw new ConfigError(`Skill "${skill.name}" is read-only. Add a same-named skill to override it first.`, 403)
+    }
+    const description = (fields.description ?? skill.description).replace(/\s+/g, ' ').trim().slice(0, 500)
+    if (!description) throw new ConfigError('Skill description is required.')
+    const content = (fields.content ?? skill.content).trim()
+    if (!content) throw new ConfigError('Skill instructions are required.')
+    if (content.length > MAX_SKILL_BYTES) {
+      throw new ConfigError(`Skill instructions must be under ${MAX_SKILL_BYTES} characters.`)
+    }
+    const projects = normalizeProjects(fields.projects ?? skill.projects)
+    this.write(skill.path, skill.name, description, content, projects)
+    this.discover()
+    const updated = this.get(skill.name)
+    if (!updated) throw new ConfigError('Skill could not be loaded after saving.')
+    return updated
+  }
+
   create(
     name: string,
     description: string,
@@ -192,13 +232,7 @@ export class SkillRegistry {
       throw new ConfigError(`Skill "${cleanName}" already exists.`, 409)
     }
     fs.mkdirSync(folder, { recursive: true })
-    const descriptionLine = cleanDescription.replace(/"/g, "'")
-    const projectsLine = projects.length ? projects.join(', ') : 'all'
-    fs.writeFileSync(
-      file,
-      `---\nname: ${cleanName}\ndescription: "${descriptionLine}"\nprojects: ${projectsLine}\n---\n\n${cleanContent}\n`,
-      'utf8'
-    )
+    this.write(file, cleanName, cleanDescription, cleanContent, projects)
     this.discover()
     const created = this.get(cleanName)
     if (!created) throw new ConfigError('Skill could not be loaded after saving.')

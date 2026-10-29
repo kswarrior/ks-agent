@@ -8,7 +8,7 @@ import { ConfigError } from './errors.js'
 import { resolveInProject } from './fsx.js'
 import { outputTail, runInstallCommand } from './install.js'
 import { isProjectEnabled, normalizeProjects } from './scope.js'
-import type { LspServerInfo, ToolDef, ToolResult } from './types.js'
+import type { LspServerDetail, LspServerInfo, ToolDef, ToolResult } from './types.js'
 
 interface LanguageServerConfig {
   name: string
@@ -601,6 +601,48 @@ export class LspRegistry {
     writeJsonConfig(config.lspConfigPath, root)
     this.discover()
     return this.list()
+  }
+
+  update(name: string, input: unknown): LspServerInfo[] {
+    const key = name.trim().toLowerCase()
+    if (!NAME_RE.test(key)) throw new ConfigError('Invalid language server name.')
+    const obj = asRecord(input)
+    const root = readJsonConfig(config.lspConfigPath)
+    const servers = configServerMap(root)
+    const current = servers[key]
+    if (!current || typeof current !== 'object') {
+      throw new ConfigError(`Language server "${name}" was not found.`, 404)
+    }
+    const merged = { ...asRecord(current), ...obj, name: key }
+    validateLspInput(merged)
+    const command = asString(merged.command).trim()
+    if (!command || command.length > 2000) {
+      throw new ConfigError('command is required and must be at most 2000 characters.')
+    }
+    let server: LanguageServerConfig
+    try {
+      server = normalizeServer(key, merged)
+    } catch (error) {
+      throw new ConfigError(error instanceof Error ? error.message : String(error))
+    }
+    servers[key] = serverToConfig(server)
+    root.languageServers = servers
+    if (root.servers) delete root.servers
+    if (root.lspServers) delete root.lspServers
+    writeJsonConfig(config.lspConfigPath, root)
+    this.discover()
+    return this.list()
+  }
+
+  get(name: string): LspServerDetail | null {
+    const entry = this.entries.get(name.trim().toLowerCase())
+    if (!entry?.config) return null
+    return {
+      ...this.list().find((server) => server.name === entry.name) as LspServerInfo,
+      args: entry.config.args,
+      env: entry.config.env,
+      initializationOptions: entry.config.initializationOptions
+    }
   }
 
   remove(name: string): LspServerInfo[] {
