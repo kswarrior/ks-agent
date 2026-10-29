@@ -4,6 +4,7 @@ import {
   deleteMcpServer,
   deleteSkill,
   installLspServer,
+  installMcpServer,
   reloadExtensions,
   reloadLspServers,
   reloadMcpServers,
@@ -11,13 +12,20 @@ import {
 } from '../api'
 import { copyText } from '../clipboard'
 import type { ExtensionInfo, LspServerInfo, McpServerInfo, ModelEntry, Project, SkillInfo } from '../types'
-import { AddLspForm, AddMcpForm, AddSkillForm } from './ConfigForms'
+import {
+  AddLspForm,
+  AddMcpForm,
+  AddSkillForm,
+  EditLspForm,
+  EditMcpForm,
+  EditSkillForm
+} from './ConfigForms'
 import { KnowledgePanel } from './KnowledgePanel'
 import { ConfirmModal, Modal } from './Modal'
 
 type ExtensionTab = 'extensions' | 'skills' | 'knowledge' | 'mcp' | 'lsp'
 type ConfigTab = 'skills' | 'mcp' | 'lsp'
-type ExtensionView = 'list' | 'add'
+type ExtensionView = 'list' | 'add' | 'edit'
 
 const TABS: { id: ExtensionTab; label: string }[] = [
   { id: 'extensions', label: 'Extensions' },
@@ -127,6 +135,7 @@ export function ExtensionsModal({
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ kind: ConfigTab; name: string } | null>(null)
+  const [editTarget, setEditTarget] = useState<{ kind: ConfigTab; name: string } | null>(null)
 
   const refreshTab = async (target: ExtensionTab) => {
     if (target === 'extensions') await onRefreshExtensions()
@@ -152,7 +161,7 @@ export function ExtensionsModal({
     }
   }
 
-  const install = async (name: string) => {
+  const installLsp = async (name: string) => {
     setInstalling(name)
     setError(null)
     setNotice(null)
@@ -160,6 +169,27 @@ export function ExtensionsModal({
       await installLspServer(name)
       await onRefreshLsp()
       setNotice(`${name} install command finished.`)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setInstalling(null)
+    }
+  }
+
+  const installMcp = async (name: string, background: boolean) => {
+    const key = background ? `bg:${name}` : name
+    setInstalling(key)
+    setError(null)
+    setNotice(null)
+    try {
+      await installMcpServer(name, background)
+      await onRefreshMcp()
+      if (background) {
+        setNotice(`Install started in the background for ${name}. Reload MCP servers when it finishes.`)
+        window.setTimeout(() => void onRefreshMcp(), 5000)
+      } else {
+        setNotice(`${name} install command finished.`)
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -223,6 +253,7 @@ export function ExtensionsModal({
             onClick={() => {
               setTab(entry.id)
               setView('list')
+              setEditTarget(null)
               setError(null)
               setNotice(null)
             }}
