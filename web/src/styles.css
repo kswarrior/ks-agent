@@ -948,6 +948,39 @@ code {
   background: var(--bg-hover);
 }
 
+.step-btn.live {
+  border-color: rgba(240, 179, 91, 0.4);
+}
+
+.step-live-dot {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.step-live-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 1px solid var(--amber);
+  border-radius: 50%;
+  animation: step-live-ring 1.4s ease-out infinite;
+}
+
+@keyframes step-live-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
 .step-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
@@ -1000,6 +1033,35 @@ code {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.step-popup-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.step-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--amber);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.step-live .step-live-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.step-empty {
+  padding: 18px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 .step-list {
