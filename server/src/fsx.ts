@@ -116,7 +116,7 @@ export interface WalkOptions {
   skipDirs?: Set<string>
 }
 
-const DEFAULT_SKIP = new Set([
+export const DEFAULT_SKIP_DIRS = new Set([
   'node_modules',
   '.git',
   '.hg',
@@ -131,6 +131,8 @@ const DEFAULT_SKIP = new Set([
   'target',
   '.gradle'
 ])
+
+const DEFAULT_SKIP = DEFAULT_SKIP_DIRS
 
 export function walkFiles(root: string, baseRel: string, options: WalkOptions = {}): string[] {
   const base = resolveInProject(root, baseRel)
@@ -155,6 +157,43 @@ export function walkFiles(root: string, baseRel: string, options: WalkOptions = 
         if (!skip.has(entry.name)) stack.push(abs)
       } else if (entry.isFile()) {
         out.push(relWithin(root, abs))
+      }
+    }
+  }
+  return out
+}
+
+export interface WalkEntry {
+  path: string
+  dir: boolean
+}
+
+/** Walk files and directories inside the project, skipping build/VCS folders. */
+export function walkEntries(root: string, baseRel: string, options: WalkOptions = {}): WalkEntry[] {
+  const base = resolveInProject(root, baseRel)
+  if (!base) return []
+  const skip = options.skipDirs ?? DEFAULT_SKIP
+  const maxEntries = options.maxFiles ?? 5000
+  const out: WalkEntry[] = []
+  const stack: string[] = [base]
+  while (stack.length && out.length < maxEntries) {
+    const dir = stack.pop() as string
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      if (out.length >= maxEntries) break
+      const abs = path.join(dir, entry.name)
+      if (entry.isSymbolicLink()) continue
+      if (entry.isDirectory()) {
+        if (skip.has(entry.name)) continue
+        out.push({ path: relWithin(root, abs), dir: true })
+        stack.push(abs)
+      } else if (entry.isFile()) {
+        out.push({ path: relWithin(root, abs), dir: false })
       }
     }
   }
