@@ -286,7 +286,9 @@ async function editFileTool(args: Record<string, unknown>, ctx: ToolContext): Pr
   }
   const next = bool(args, 'replace_all') ? text.split(oldString).join(newString) : text.replace(oldString, newString)
   fs.writeFileSync(abs, next, 'utf8')
-  return { ok: true, output: `Updated ${rel} (${count} occurrence${count === 1 ? '' : 's'} replaced)` }
+  const firstLine = text.slice(0, text.indexOf(oldString)).split('\n').length
+  const where = count === 1 ? ` at line ${firstLine}` : `, first at line ${firstLine}`
+  return { ok: true, output: `Updated ${rel} (${count} occurrence${count === 1 ? '' : 's'} replaced${where})` }
 }
 
 async function listDirTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {

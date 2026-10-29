@@ -886,6 +886,17 @@ code {
   color: var(--diff-del-text);
 }
 
+.diff-num {
+  flex: none;
+  width: 30px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: inherit;
+  text-align: right;
+  opacity: 0.65;
+  user-select: none;
+}
+
 .diff-sign {
   flex: none;
   width: 8px;

@@ -88,6 +88,8 @@ function ToolCard({
   const pattern = argsString(parsedArgs, 'pattern')
   const extraArgs = Object.entries(parsedArgs).filter(([key]) => !SPECIAL_ARG_KEYS.has(key))
   const isMetadataResult = ['edit_file', 'write_file', 'delete_file', 'move_file'].includes(name)
+  const editStartLine = changedLine(output)
+  const addedLines = content ? splitLines(content).length : 0
 
   return (
     <details className={`tool-card ${running ? 'running' : ok === false ? 'failed' : 'done'}`}>
@@ -110,14 +112,20 @@ function ToolCard({
 
         {name === 'edit_file' && (oldString || newString) && (
           <div className="tool-diff" role="group" aria-label="File changes">
-            {oldString && <DiffLines lines={splitLines(oldString)} kind="del" />}
-            {newString && <DiffLines lines={splitLines(newString)} kind="add" />}
+            {oldString && (
+              <DiffLines lines={splitLines(oldString)} kind="del" startLine={editStartLine} />
+            )}
+            {newString && (
+              <DiffLines lines={splitLines(newString)} kind="add" startLine={editStartLine} />
+            )}
           </div>
         )}
 
         {name === 'write_file' && content && (
           <>
-            <div className="tool-label">new content</div>
+            <div className="tool-label">
+              new content · {addedLines} {addedLines === 1 ? 'line' : 'lines'}
+            </div>
             <div className="tool-diff" role="group" aria-label="New file content">
               <DiffLines lines={splitLines(content)} kind="add" />
             </div>
