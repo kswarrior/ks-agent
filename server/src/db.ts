@@ -208,6 +208,10 @@ export function insertProvider(name: string, baseUrl: string, apiKey: string): P
   )
   return provider(row)
 }
+export function updateProvider(id: string, name: string, baseUrl: string, apiKey: string): Provider | null {
+  db.prepare('UPDATE providers SET name = ?, base_url = ?, api_key = ? WHERE id = ?').run(name, baseUrl, apiKey, id)
+  return getProvider(id)
+}
 export function removeProvider(id: string): void {
   db.prepare('DELETE FROM providers WHERE id = ?').run(id)
 }
