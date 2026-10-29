@@ -314,7 +314,8 @@ code {
   font-size: 11px;
 }
 
-.model-select {
+.model-select,
+.project-select {
   max-width: 220px;
   padding: 7px 10px;
   border: 1px solid var(--line-strong);
@@ -324,7 +325,12 @@ code {
   outline: none;
 }
 
-.model-select:focus {
+.project-select {
+  max-width: 190px;
+}
+
+.model-select:focus,
+.project-select:focus {
   border-color: var(--accent);
 }
 
@@ -679,19 +685,15 @@ code {
 .composer-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 10px;
   padding-top: 6px;
 }
 
-.composer-hint {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #5c5c66;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11px;
+.composer-model {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 260px;
 }
 
 /* --------------------------------------------------------------- buttons */
@@ -1001,6 +1003,10 @@ code {
 
   .model-select {
     max-width: 150px;
+  }
+
+  .project-select {
+    max-width: 120px;
   }
 
   .chat-actions {

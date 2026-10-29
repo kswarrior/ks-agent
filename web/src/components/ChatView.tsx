@@ -48,6 +48,7 @@ function ToolCard({
 
 export function ChatView({
   project,
+  projects,
   chat,
   messages,
   models,
@@ -55,12 +56,14 @@ export function ChatView({
   live,
   streaming,
   error,
+  onSelectProject,
   onModelChange,
   onSend,
   onStop,
   onOpenSidebar
 }: {
   project: Project | null
+  projects: Project[]
   chat: Chat | null
   messages: Message[]
   models: ModelEntry[]
@@ -68,6 +71,7 @@ export function ChatView({
   live: LiveState | null
   streaming: boolean
   error: string | null
+  onSelectProject: (project: Project) => void
   onModelChange: (id: string) => void
   onSend: (content: string) => void
   onStop: () => void
@@ -128,16 +132,18 @@ export function ChatView({
           <span>{project.name}</span>
         </div>
         <select
-          className="model-select"
-          value={modelId}
-          onChange={(event) => onModelChange(event.target.value)}
-          disabled={streaming}
-          title="Model"
+          className="project-select"
+          value={project.id}
+          onChange={(event) => {
+            const next = projects.find((entry) => entry.id === event.target.value)
+            if (next) onSelectProject(next)
+          }}
+          title="Project"
+          aria-label="Project"
         >
-          {models.length === 0 && <option value="">No models</option>}
-          {models.map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.name}
+          {projects.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
             </option>
           ))}
         </select>
@@ -247,7 +253,21 @@ export function ChatView({
               disabled={!modelId}
             />
             <div className="composer-actions">
-              <span className="composer-hint">{modelId ? models.find((model) => model.id === modelId)?.modelId ?? '' : 'no model'}</span>
+              <select
+                className="model-select composer-model"
+                value={modelId}
+                onChange={(event) => onModelChange(event.target.value)}
+                disabled={streaming || models.length === 0}
+                title="Model"
+                aria-label="Model"
+              >
+                {models.length === 0 && <option value="">No models</option>}
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
               {streaming ? (
                 <button className="btn danger" onClick={onStop}>
                   Stop
