@@ -198,7 +198,10 @@ app.get('/api/chats/:id/messages', (c) => {
 app.post('/api/chats/:id/messages', async (c) => {
   const chat = getChat(c.req.param('id'))
   if (!chat) return c.json(errorJson('chat not found', 404), 404)
-  if (activeRuns.has(chat.id)) return c.json(errorJson('a run is already active for this chat', 409), 409)
+  const existingRun = runs.get(chat.id)
+  if (existingRun && !existingRun.done) {
+    return c.json(errorJson('a run is already active for this chat', 409), 409)
+  }
 
   const project = getProject(chat.projectId)
   if (!project) return c.json(errorJson('project not found', 404), 404)
@@ -222,28 +225,78 @@ app.post('/api/chats/:id/messages', async (c) => {
   }
   if (chat.modelId !== model.id) updateChat(chat.id, { modelId: model.id })
 
-  const controller = new AbortController()
-  activeRuns.set(chat.id, controller)
+  const run: RunState = {
+    chatId: chat.id,
+    controller: new AbortController(),
+    events: [],
+    done: false,
+    startedAt: Date.now()
+  }
+  runs.set(chat.id, run)
+
+  const publish = (event: AgentEvent) => {
+    run.events.push(event)
+    if (event.type === 'done' || event.type === 'error') run.done = true
+  }
+
+  void runAgent({
+    chat,
+    project,
+    provider,
+    model,
+    signal: run.controller.signal,
+    onEvent: publish
+  })
+    .catch((error) => {
+      if (!run.done) {
+        publish({ type: 'error', error: error instanceof Error ? error.message : String(error) })
+      }
+    })
+    .finally(() => {
+      run.done = true
+      if (runs.get(chat.id) === run) runs.delete(chat.id)
+    })
+
+  return c.json({ ok: true, chatId: chat.id }, 202)
+})
+
+app.get('/api/chats/:id/events', (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  const run = runs.get(chat.id)
+  if (!run) return c.json(errorJson('no active run', 404), 404)
 
   return streamSSE(c, async (stream) => {
-    const emit = async (event: AgentEvent) => {
-      await stream.writeSSE({ data: JSON.stringify(event) })
-    }
-    stream.onAbort(() => controller.abort())
+    let closed = false
+    let index = 0
+    stream.onAbort(() => {
+      closed = true
+    })
     try {
-      await runAgent({ chat, project, provider, model, signal: controller.signal, onEvent: emit })
-    } catch (error) {
-      await emit({ type: 'error', error: error instanceof Error ? error.message : String(error) })
-    } finally {
-      activeRuns.delete(chat.id)
+      while (!closed) {
+        while (index < run.events.length) {
+          await stream.writeSSE({ data: JSON.stringify(run.events[index++]) })
+        }
+        if (run.done) break
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+    } catch {
+      closed = true
     }
   })
 })
 
+app.get('/api/chats/:id/run', (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  const run = runs.get(chat.id)
+  return c.json({ active: Boolean(run && !run.done) })
+})
+
 app.post('/api/chats/:id/stop', (c) => {
-  const controller = activeRuns.get(c.req.param('id'))
-  if (!controller) return c.json(errorJson('no active run', 404), 404)
-  controller.abort()
+  const run = runs.get(c.req.param('id'))
+  if (!run || run.done) return c.json(errorJson('no active run', 404), 404)
+  run.controller.abort()
   return c.json({ ok: true })
 })
 
@@ -342,7 +395,9 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
 
 async function shutdown(signal: string): Promise<void> {
   console.log(`[ks-agent] ${signal} received, shutting down`)
-  for (const controller of activeRuns.values()) controller.abort()
+  for (const run of runs.values()) {
+    if (!run.done) run.controller.abort()
+  }
   await extensions.stopAll()
   server.close(() => process.exit(0))
   setTimeout(() => process.exit(0), 2000).unref()
