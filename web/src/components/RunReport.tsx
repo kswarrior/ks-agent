@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Message, RunStep } from '../types'
+import { formatDuration } from '../format'
 import { absolutePath, argsString, parseToolArgs } from '../toolDisplay'
 
 type ChangeAction = 'Created' | 'Edited' | 'Deleted' | 'Moved'
@@ -104,44 +105,28 @@ function firstMeaningfulSentence(content: string): string {
   return sentence
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return '<1s'
-  const seconds = ms / 1000
-  if (seconds < 10) return `${seconds.toFixed(1)}s`
-  if (seconds < 60) return `${Math.round(seconds)}s`
-  const minutes = Math.floor(seconds / 60)
-  const rest = Math.round(seconds % 60)
-  return rest ? `${minutes}m ${rest}s` : `${minutes}m`
+export interface RunReportEntry {
+  report: RunReportData
+  finalMessageId: string
+  userMessageId: string
+  isLatest: boolean
 }
 
-export function buildRunReport({
-  messages,
+function buildRunReportEntry({
+  taskMessage,
+  runMessages,
   steps,
-  streaming,
-  loading,
+  isLatest,
   halted,
   rootPath
 }: {
-  messages: Message[]
+  taskMessage: Message
+  runMessages: Message[]
   steps: RunStep[]
-  streaming: boolean
-  loading: boolean
+  isLatest: boolean
   halted: boolean
   rootPath: string
-}): RunReportData | null {
-  if (loading || streaming || messages.length === 0) return null
-
-  let taskIndex = -1
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role === 'user') {
-      taskIndex = index
-      break
-    }
-  }
-  if (taskIndex < 0) return null
-
-  const taskMessage = messages[taskIndex]
-  const runMessages = messages.slice(taskIndex + 1)
+}): RunReportEntry | null {
   let finalMessage: Message | null = null
   for (let index = runMessages.length - 1; index >= 0; index -= 1) {
     const message = runMessages[index]
@@ -169,9 +154,10 @@ export function buildRunReport({
     halted || pending || /^Stopped after \d+ steps without finishing/im.test(finalMessage.content)
   const changes = collectChanges(runMessages, rootPath)
 
-  let durationMs = steps.reduce((total, step) => total + (step.durationMs ?? 0), 0)
+  let durationMs = finalMessage.durationMs ?? 0
+  if (!durationMs) durationMs = steps.reduce((total, step) => total + (step.durationMs ?? 0), 0)
   if (!durationMs) {
-    const last = runMessages[runMessages.length - 1]
+    const last = runMessages[runMessages.length - 1] ?? finalMessage
     durationMs = Math.max(0, last.createdAt - taskMessage.createdAt)
   }
 
@@ -188,16 +174,62 @@ export function buildRunReport({
   const task = planTitle || doneTask || plainText(taskMessage.content)
 
   return {
-    id: finalMessage.id,
-    task: clip(task, 200),
-    summary: clip(plainText(finalMessage.content), 240),
-    status: stopped ? 'stopped' : 'complete',
-    steps: stepCount,
-    tools: calls.length,
-    files: changes.length,
-    durationMs,
-    changes
+    report: {
+      id: finalMessage.id,
+      task: clip(task, 200),
+      summary: clip(plainText(finalMessage.content), 240),
+      status: stopped ? 'stopped' : 'complete',
+      steps: stepCount,
+      tools: calls.length,
+      files: changes.length,
+      durationMs,
+      changes
+    },
+    finalMessageId: finalMessage.id,
+    userMessageId: taskMessage.id,
+    isLatest
   }
+}
+
+export function buildRunReports({
+  messages,
+  steps,
+  streaming,
+  loading,
+  halted,
+  rootPath
+}: {
+  messages: Message[]
+  steps: RunStep[]
+  streaming: boolean
+  loading: boolean
+  halted: boolean
+  rootPath: string
+}): RunReportEntry[] {
+  if (loading || messages.length === 0) return []
+
+  const userIndices: number[] = []
+  messages.forEach((message, index) => {
+    if (message.role === 'user') userIndices.push(index)
+  })
+  if (userIndices.length === 0) return []
+
+  const entries: RunReportEntry[] = []
+  userIndices.forEach((taskIndex, runIndex) => {
+    const isLatest = runIndex === userIndices.length - 1
+    if (isLatest && streaming) return
+    const end = runIndex + 1 < userIndices.length ? userIndices[runIndex + 1] : messages.length
+    const entry = buildRunReportEntry({
+      taskMessage: messages[taskIndex],
+      runMessages: messages.slice(taskIndex + 1, end),
+      steps: isLatest ? steps : [],
+      isLatest,
+      halted: isLatest && halted,
+      rootPath
+    })
+    if (entry) entries.push(entry)
+  })
+  return entries
 }
 
 function CheckIcon() {
