@@ -116,8 +116,14 @@ export const createProvider = (body: { name: string; baseUrl: string; apiKey: st
 export const deleteProvider = (id: string) => req<{ ok: true }>(`/api/providers/${id}`, { method: 'DELETE' })
 
 export const listModels = () => req<ModelEntry[]>('/api/models')
-export const createModel = (body: { providerId: string; name: string; modelId: string }) =>
-  req<ModelEntry>('/api/models', json('POST', body))
+export const createModel = (body: {
+  providerId: string
+  name: string
+  modelId: string
+  contextWindow?: number
+}) => req<ModelEntry>('/api/models', json('POST', body))
+export const updateModelContext = (id: string, contextWindow: number) =>
+  req<ModelEntry>(`/api/models/${encodeURIComponent(id)}`, json('PATCH', { contextWindow }))
 export const deleteModel = (id: string) => req<{ ok: true }>(`/api/models/${id}`, { method: 'DELETE' })
 
 export const getRetrySettings = () => req<RetrySettings>('/api/settings/retry')

@@ -6,6 +6,7 @@ import {
   deleteProvider,
   getRetrySettings,
   resetRetrySettings,
+  updateModelContext,
   updateRetrySettings
 } from '../api'
 import type { ModelEntry, ProviderPublic, RetrySettings } from '../types'
@@ -150,6 +151,62 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
 ]
 
 const CUSTOM_PRESET = PROVIDER_PRESETS[PROVIDER_PRESETS.length - 1]
+const DEFAULT_CONTEXT_WINDOW = 128_000
+
+function ModelContextEditor({
+  model,
+  disabled,
+  onSave
+}: {
+  model: ModelEntry
+  disabled: boolean
+  onSave: (contextWindow: number) => Promise<void>
+}) {
+  const [value, setValue] = useState(String(model.contextWindow))
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setValue(String(model.contextWindow))
+  }, [model.contextWindow])
+
+  const save = async () => {
+    const next = Math.round(Number(value))
+    if (!Number.isFinite(next) || next < 1_000 || next > 10_000_000 || next === model.contextWindow) {
+      setValue(String(model.contextWindow))
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave(next)
+    } catch {
+      setValue(String(model.contextWindow))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <label className="model-context" title="Maximum context window in tokens">
+      <span className="muted small">Context window</span>
+      <input
+        type="number"
+        min={1_000}
+        max={10_000_000}
+        step={1_000}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            event.currentTarget.blur()
+          }
+        }}
+        disabled={disabled || saving}
+      />
+    </label>
+  )
+}
 
 export function SettingsModal({
   providers,

@@ -477,6 +477,17 @@ app.delete('/api/providers/:id', (c) => {
 })
 
 // ------------------------------------------------------------------ models
+const DEFAULT_CONTEXT_WINDOW = 128_000
+const MAX_CONTEXT_WINDOW = 10_000_000
+
+function parseContextWindow(value: unknown): number | null {
+  if (value === undefined) return DEFAULT_CONTEXT_WINDOW
+  const parsed =
+    typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN
+  if (!Number.isInteger(parsed) || parsed < 1_000 || parsed > MAX_CONTEXT_WINDOW) return null
+  return parsed
+}
+
 app.get('/api/models', (c) => c.json(listModels()))
 
 app.post('/api/models', async (c) => {
@@ -484,10 +495,26 @@ app.post('/api/models', async (c) => {
   const providerId = typeof body?.providerId === 'string' ? body.providerId : ''
   const name = safeName(body?.name)
   const modelId = typeof body?.modelId === 'string' ? body.modelId.trim() : ''
+  const contextWindow = parseContextWindow(body?.contextWindow)
   if (!providerId || !getProvider(providerId)) return c.json(errorJson('valid providerId is required'), 400)
   if (!name) return c.json(errorJson('name is required'), 400)
   if (!modelId) return c.json(errorJson('modelId is required'), 400)
-  return c.json(insertModel(providerId, name, modelId), 201)
+  if (contextWindow === null) {
+    return c.json(errorJson('contextWindow must be an integer between 1000 and 10000000'), 400)
+  }
+  return c.json(insertModel(providerId, name, modelId, contextWindow), 201)
+})
+
+app.patch('/api/models/:id', async (c) => {
+  const model = getModel(c.req.param('id'))
+  if (!model) return c.json(errorJson('model not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (body?.contextWindow === undefined) return c.json(errorJson('contextWindow is required'), 400)
+  const contextWindow = parseContextWindow(body.contextWindow)
+  if (contextWindow === null) {
+    return c.json(errorJson('contextWindow must be an integer between 1000 and 10000000'), 400)
+  }
+  return c.json(updateModelContext(model.id, contextWindow))
 })
 
 app.delete('/api/models/:id', (c) => {
