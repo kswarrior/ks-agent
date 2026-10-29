@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   createGlobalKnowledge,
   createProjectKnowledge,
@@ -110,10 +110,7 @@ export function KnowledgePanel({
     setNotice(null)
   }, [projectId])
 
-  const defaultModel = useMemo(() => {
-    if (models.some((model) => model.id === modelId)) return modelId
-    return models[0]?.id ?? ''
-  }, [models, modelId])
+  const selectedModel = models.some((model) => model.id === modelId) ? modelId : ''
 
   const save = async () => {
     if (!editor) return
@@ -206,7 +203,7 @@ export function KnowledgePanel({
     setError(null)
     setNotice(null)
     try {
-      const entry = await generateProjectKnowledge(projectId, defaultModel || undefined)
+      const entry = await generateProjectKnowledge(projectId, selectedModel || undefined)
       await load()
       setNotice('Project summary ready.')
     } catch (caught) {
@@ -281,7 +278,7 @@ export function KnowledgePanel({
               </div>
               <div className="knowledge-generate-actions">
                 <select
-                  value={defaultModel}
+                  value={selectedModel}
                   onChange={(event) => setModelId(event.target.value)}
                   disabled={busyLabel !== null || !projectId}
                 >
