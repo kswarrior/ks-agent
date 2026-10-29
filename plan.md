@@ -115,7 +115,7 @@ Working MVP is runnable:
 ```bash
 npm run typecheck
 npm run build
-npm start            # http://localhost:8787
+npm start            # http://localhost:8080
 npm run smoke        # isolated end-to-end test (build first)
 ```
 
