@@ -251,6 +251,36 @@ function MenuIcon() {
   )
 }
 
+function ThinkingBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
+  return (
+    <details className="thinking-block">
+      <summary title="Show or hide reasoning">
+        <span>Thinking</span>
+        {streaming && (
+          <span className="thinking-dots" aria-hidden="true">
+            <span>.</span>
+            <span>.</span>
+            <span>.</span>
+          </span>
+        )}
+        <svg
+          className="thinking-chevron"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </summary>
+      <pre className="thinking-context">{reasoning.trim()}</pre>
+    </details>
+  )
+}
+
 function MessageSkeleton() {
   return (
     <div className="skeleton-stack" role="status" aria-label="Loading messages" aria-busy="true">
@@ -469,11 +499,8 @@ export function ChatView({
 
             {(streaming || live) && (
               <div className="msg assistant live">
-                {live?.reasoning ? (
-                  <details className="reasoning">
-                    <summary>Reasoning</summary>
-                    <pre>{live.reasoning}</pre>
-                  </details>
+                {live?.reasoning.trim() ? (
+                  <ThinkingBlock reasoning={live.reasoning} streaming={streaming} />
                 ) : null}
                 {live?.content ? <Markdown text={live.content} /> : null}
                 {visibleTools(live?.tools ?? []).map((tool) => (
@@ -488,7 +515,7 @@ export function ChatView({
                     rootPath={project.path}
                   />
                 ))}
-                {streaming && (
+                {streaming && !live?.reasoning.trim() && (
                   <div className="thinking" role="status" aria-label="Thinking" aria-live="polite">
                     <span>Thinking</span>
                     <span className="thinking-dots" aria-hidden="true">
