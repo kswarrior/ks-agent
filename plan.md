@@ -43,6 +43,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Automatic retry with backoff for transient provider failures
 - [x] System prompt with project scope + tool rules
 - [x] Context trimming (message count + character budget)
+- [x] Automatic context compaction into a persisted, editable handoff summary
 - [x] Built-in tools:
   - [x] `read_file`, `read_multiple_files`, `write_file`, `edit_file`, `apply_patch`, `append_file`
   - [x] `list_dir`, `tree`, `find_files` (filename search), `glob`, `grep`, `get_file_info`
@@ -65,6 +66,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Per-output footer: copy, provider/model, and time taken
 - [x] Run reports stay attached to their own output in chat history
 - [x] Composer with model picker, send, stop
+- [x] Chat header context meter and editable/removable conversation summary card
 - [x] Chat tools menu left of the model picker: per-chat skill/MCP/LSP toggles
 - [x] Settings: providers/models add/delete, masked keys, provider presets + custom, configurable retry tab
 - [x] Provider error cards with HTTP status/code/message and live retry countdown
