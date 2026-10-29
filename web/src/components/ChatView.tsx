@@ -353,7 +353,7 @@ function RetryCard({ retry, now }: { retry: RetryStatus; now: number }) {
       <div className="agent-retry-head">
         <span className="agent-retry-badge">{retry.status ? `HTTP ${retry.status}` : 'RETRY'}</span>
         <strong>
-          Retrying in {waitLabel(remaining)} · {attemptLabel}
+          {remaining > 100 ? `Retrying in ${waitLabel(remaining)}` : 'Retrying now'} · {attemptLabel}
         </strong>
       </div>
       <p className="agent-retry-message">

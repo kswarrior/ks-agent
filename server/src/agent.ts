@@ -357,6 +357,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
         }
       }
       if (!result) throw new Error('Provider returned no result')
+      providerAttempts = 0
 
       if (result.toolCalls.length) {
         const toolCalls: ToolCall[] = result.toolCalls.map((call, index) => ({
