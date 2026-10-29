@@ -1541,6 +1541,75 @@ async function main() {
   await api('DELETE', '/api/lsp/missinglsp')
   console.log('PASS skills / MCP / LSP APIs + reload')
 
+  const globalKnowledge = await api('POST', '/api/knowledge', {
+    scope: 'global',
+    title: 'Global preferences',
+    content: 'GLOBAL_KNOWLEDGE_TOKEN: keep answers concise.'
+  })
+  assert(
+    globalKnowledge.scope === 'global' && globalKnowledge.projectId === null && globalKnowledge.enabled,
+    `global knowledge was not created correctly: ${JSON.stringify(globalKnowledge)}`
+  )
+  const projectKnowledge = await api('POST', `/api/projects/${project.id}/knowledge`, {
+    title: 'Project facts',
+    content: 'PROJECT_KNOWLEDGE_TOKEN: the smoke project uses src/utils/math.ts.'
+  })
+  assert(
+    projectKnowledge.scope === 'project' &&
+      projectKnowledge.projectId === project.id &&
+      projectKnowledge.enabled,
+    `project knowledge was not created correctly: ${JSON.stringify(projectKnowledge)}`
+  )
+
+  const globalKnowledgeList = await api('GET', '/api/knowledge')
+  assert(
+    globalKnowledgeList.some((entry) => entry.id === globalKnowledge.id),
+    'global knowledge was not listed'
+  )
+  const projectKnowledgeList = await api('GET', `/api/projects/${project.id}/knowledge`)
+  assert(
+    projectKnowledgeList.some((entry) => entry.id === projectKnowledge.id),
+    'project knowledge was not listed through the project route'
+  )
+  const allKnowledgeList = await api('GET', '/api/knowledge/all')
+  assert(
+    allKnowledgeList.some((entry) => entry.id === globalKnowledge.id) &&
+      allKnowledgeList.some((entry) => entry.id === projectKnowledge.id),
+    'all-knowledge listing is missing entries'
+  )
+
+  const updatedGlobalKnowledge = await api('PATCH', `/api/knowledge/${globalKnowledge.id}`, {
+    content: 'GLOBAL_KNOWLEDGE_TOKEN: keep answers concise and factual.'
+  })
+  assert(
+    updatedGlobalKnowledge.content.includes('concise and factual'),
+    'knowledge edit was not persisted'
+  )
+
+  const projectSummary = await api('POST', `/api/projects/${project.id}/knowledge/summary`, {})
+  assert(projectSummary.source === 'generated', 'project summary was not marked generated')
+  assert(
+    projectSummary.content.includes('## Overview') && projectSummary.content.includes('## Key Files'),
+    `project summary is missing expected sections: ${projectSummary.content.slice(0, 300)}`
+  )
+  const regeneratedSummary = await api('POST', `/api/projects/${project.id}/knowledge/generate`, {})
+  assert(regeneratedSummary.id === projectSummary.id, 'regenerating the project summary created a duplicate')
+  const generatedKnowledgeList = await api('GET', `/api/projects/${project.id}/knowledge`)
+  assert(
+    generatedKnowledgeList.filter((entry) => entry.source === 'generated').length === 1,
+    'project has more than one generated summary'
+  )
+
+  const emptyKnowledge = await rawApi('POST', '/api/knowledge', {
+    scope: 'global',
+    title: 'Empty',
+    content: '   '
+  })
+  assert(emptyKnowledge.status === 400, `empty knowledge content was accepted: ${emptyKnowledge.status}`)
+  const missingKnowledge = await rawApi('PATCH', '/api/knowledge/missing-knowledge', { enabled: false })
+  assert(missingKnowledge.status === 404, `missing knowledge edit returned ${missingKnowledge.status}`)
+  console.log('PASS knowledge CRUD + project summary generation')
+
   const scopedSkill = await api('POST', '/api/skills', {
     name: 'scoped-skill',
     description: 'Only enabled for the second smoke project',
@@ -1629,6 +1698,18 @@ async function main() {
     !projectExtensions.lspServers.some((server) => server.name === 'scopedlsp'),
     'scoped language server leaked into the project chat'
   )
+  assert(
+    projectExtensions.knowledge.some((entry) => entry.id === globalKnowledge.id && entry.enabled),
+    'global knowledge is missing from the project chat'
+  )
+  assert(
+    projectExtensions.knowledge.some((entry) => entry.id === projectKnowledge.id && entry.enabled),
+    'project knowledge is missing from the project chat'
+  )
+  assert(
+    projectExtensions.knowledge.some((entry) => entry.id === projectSummary.id && entry.enabled),
+    'generated project summary is missing from the project chat'
+  )
 
   const otherChat = await api('POST', `/api/projects/${otherProject.id}/chats`, { modelId: model.id })
   const otherExtensions = await api('GET', `/api/chats/${otherChat.id}/extensions`)
@@ -1648,17 +1729,31 @@ async function main() {
     otherExtensions.lspServers.some((server) => server.name === 'scopedlsp' && server.enabled),
     'scoped language server is missing from the second project chat'
   )
+  assert(
+    otherExtensions.knowledge.some((entry) => entry.id === globalKnowledge.id && entry.enabled),
+    'global knowledge is missing from the second project chat'
+  )
+  assert(
+    !otherExtensions.knowledge.some((entry) => entry.id === projectKnowledge.id),
+    'project knowledge leaked into the second project chat'
+  )
 
   const toggleChat = await api('POST', `/api/projects/${project.id}/chats`, { modelId: model.id })
   const toggles = [
     ['skill', 'smoke-skill'],
+    ['knowledge', globalKnowledge.id],
     ['mcp', 'mockmcp'],
     ['lsp', 'mocklsp']
   ]
   const extensionsItem = (state, kind, name) =>
-    (kind === 'skill' ? state.skills : kind === 'mcp' ? state.mcpServers : state.lspServers).find(
-      (entry) => entry.name === name
-    )
+    (kind === 'skill'
+      ? state.skills
+      : kind === 'knowledge'
+        ? state.knowledge
+        : kind === 'mcp'
+          ? state.mcpServers
+          : state.lspServers
+    ).find((entry) => (kind === 'knowledge' ? entry.id === name : entry.name === name))
   for (const [kind, name] of toggles) {
     await api('PATCH', `/api/chats/${toggleChat.id}/extensions`, { kind, name, enabled: false })
   }
@@ -1712,9 +1807,14 @@ async function main() {
   assert(
     disabledSystem.includes('Chat tool selection for project') &&
       disabledSystem.includes('- smoke-skill: disabled in this chat') &&
+      disabledSystem.includes('- Global preferences (all projects): disabled in this chat') &&
       disabledSystem.includes('- mocklsp (') &&
       disabledSystem.includes('disabled in this chat'),
     'system prompt did not include the authoritative chat selection'
+  )
+  assert(
+    !disabledSystem.includes('GLOBAL_KNOWLEDGE_TOKEN'),
+    'knowledge disabled in the chat was still injected into the system prompt'
   )
   assert(!disabledSystem.includes('Smoke-test skill'), 'disabled skill leaked into the usable skills section')
   assert(!disabledSystem.includes('## Skills\n'), 'disabled-only skills section was still advertised')
@@ -1755,6 +1855,7 @@ async function main() {
   assert(
     statusTool.result.ok &&
       statusTool.result.output.includes('- smoke-skill: disabled in this chat') &&
+      statusTool.result.output.includes('- Global preferences (all projects): disabled in this chat') &&
       statusTool.result.output.includes('- mockmcp (stdio, 1 tool): disabled in this chat') &&
       statusTool.result.output.includes('- mocklsp (') &&
       statusTool.result.output.includes(': disabled in this chat') &&
@@ -1780,7 +1881,24 @@ async function main() {
       `${kind} ${name} was not re-enabled in the chat`
     )
   }
-  console.log('PASS project scoping + per-chat extension toggles')
+
+  const knowledgeRun = await sendMessage(toggleChat.id, 'use saved knowledge', model.id)
+  assert(
+    knowledgeRun.events.some((event) => event.type === 'done'),
+    'knowledge prompt run did not finish'
+  )
+  const knowledgeSystem =
+    (lastProviderBody?.messages ?? []).find((message) => message.role === 'system')?.content ?? ''
+  assert(
+    knowledgeSystem.includes('GLOBAL_KNOWLEDGE_TOKEN') &&
+      knowledgeSystem.includes('PROJECT_KNOWLEDGE_TOKEN'),
+    'enabled global and project knowledge were not injected into the system prompt'
+  )
+  assert(
+    knowledgeSystem.includes('## Knowledge') && knowledgeSystem.includes('### User knowledge'),
+    'system prompt is missing the knowledge section'
+  )
+  console.log('PASS project scoping + per-chat extension toggles + knowledge injection')
 
   const minecraft = await callExtension(
     path.join(repo, 'examples', 'extensions', 'minecraft'),
