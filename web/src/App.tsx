@@ -82,7 +82,7 @@ export default function App() {
   const [showCreate, setShowCreate] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showExtensions, setShowExtensions] = useState(false)
-  const [renameTarget, setRenameTarget] = useState<Chat | null>(null)
+  const [editChatTarget, setEditChatTarget] = useState<Chat | null>(null)
   const [deleteChatTarget, setDeleteChatTarget] = useState<Chat | null>(null)
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<Project | null>(null)
   const [deleteSummaryTarget, setDeleteSummaryTarget] = useState(false)
@@ -481,10 +481,13 @@ export default function App() {
     }
   }
 
-  const renameChat = async (chat: Chat, title: string) => {
+  const saveChatDetails = async (chat: Chat, fields: { title: string; modelId: string | null }) => {
     try {
-      const updated = await api.updateChat(chat.id, { title })
+      const updated = await api.updateChat(chat.id, fields)
       setChats((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)))
+      if (activeChatIdRef.current === updated.id) {
+        setModelId(updated.modelId ?? '')
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     }
@@ -636,7 +639,7 @@ export default function App() {
         onDeleteProject={setDeleteProjectTarget}
         onSelectChat={selectChat}
         onCreateChat={createChat}
-        onRenameChat={setRenameTarget}
+        onEditChat={setEditChatTarget}
         onDeleteChat={setDeleteChatTarget}
         onOpenSettings={() => setShowSettings(true)}
         onOpenExtensions={() => setShowExtensions(true)}
@@ -667,6 +670,7 @@ export default function App() {
         onSend={send}
         onStop={stop}
         onOpenSidebar={() => setSidebarOpen(true)}
+        onEditChat={setEditChatTarget}
       />
 
       {bootError && <div className="boot-error">{bootError}</div>}
@@ -702,13 +706,12 @@ export default function App() {
         />
       )}
 
-      {renameTarget && (
-        <PromptModal
-          title="Rename chat"
-          label="Title"
-          initialValue={renameTarget.title}
-          onClose={() => setRenameTarget(null)}
-          onSubmit={(value) => void renameChat(renameTarget, value)}
+      {editChatTarget && (
+        <EditChatModal
+          chat={editChatTarget}
+          models={models}
+          onClose={() => setEditChatTarget(null)}
+          onSave={(fields) => saveChatDetails(editChatTarget, fields)}
         />
       )}
 
