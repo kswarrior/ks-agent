@@ -2,7 +2,27 @@ import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.js'
-import { isProbablyBinary, matchesGlob, resolveInProject, unsafeCommand, walkFiles } from './fsx.js'
+import {
+  DEFAULT_SKIP_DIRS,
+  isProbablyBinary,
+  matchesGlob,
+  resolveInProject,
+  unsafeCommand,
+  walkEntries,
+  walkFiles
+} from './fsx.js'
+import {
+  gitBranches,
+  gitCheckout,
+  gitCommit,
+  gitCreateBranch,
+  gitDiff,
+  gitInit,
+  gitLog,
+  gitPull,
+  gitPush,
+  gitStatus
+} from './git.js'
 import type { AgentEvent, ToolDef, ToolResult } from './types.js'
 
 export interface ToolContext {
@@ -26,6 +46,27 @@ export const builtinToolDefs: ToolDef[] = [
           limit: { type: 'integer', description: 'Max lines to return (default 400, max 2000)' }
         },
         required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_multiple_files',
+      description:
+        'Read several UTF-8 text files inside the project in one call. Returns each file with numbered lines and a header. Use offset/limit per file for large files.',
+      parameters: {
+        type: 'object',
+        properties: {
+          paths: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'File paths relative to the project root (1-30 files)'
+          },
+          offset: { type: 'integer', description: 'First line to return for each file (1-based, default 1)' },
+          limit: { type: 'integer', description: 'Max lines per file (default 200, max 1000)' }
+        },
+        required: ['paths']
       }
     }
   },
@@ -66,6 +107,22 @@ export const builtinToolDefs: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'apply_patch',
+      description:
+        'Apply a unified diff patch to a file inside the project. The patch must contain @@ hunk headers (e.g. "@@ -1,3 +1,3 @@" with context, - and + lines). More robust than edit_file for multi-line or multi-hunk changes. Creates the file when the patch adds it.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'File path relative to the project root' },
+          patch: { type: 'string', description: 'Unified diff text with @@ hunk headers' }
+        },
+        required: ['path', 'patch']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'list_dir',
       description: 'List files and directories inside the project. Outside the project is forbidden.',
       parameters: {
@@ -91,6 +148,44 @@ export const builtinToolDefs: ToolDef[] = [
           limit: { type: 'integer', description: 'Max results (default 200, max 2000)' }
         },
         required: ['pattern']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_files',
+      description:
+        'Find files or directories by NAME inside the project (filename search, not content search). Use this to locate a file when you know part of its name. match:"contains" (default) searches substrings, match:"glob" accepts patterns like "*.test.ts", match:"regex" accepts a JavaScript regular expression. Skips node_modules, .git and build outputs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'File/directory name, substring, glob or regex to find' },
+          path: { type: 'string', description: 'Base directory relative to the project root (default ".")' },
+          match: { type: 'string', enum: ['contains', 'glob', 'regex'], description: 'Matching mode (default "contains")' },
+          type: { type: 'string', enum: ['file', 'dir', 'any'], description: 'Limit results to files, directories or any (default "file")' },
+          ignore_case: { type: 'boolean', description: 'Case-insensitive matching (default true)' },
+          limit: { type: 'integer', description: 'Max results (default 100, max 1000)' },
+          offset: { type: 'integer', description: 'Result offset for pagination (default 0)' }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'tree',
+      description:
+        'Show a directory tree inside the project. Useful to understand project structure quickly. Skips node_modules, .git and build outputs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Directory relative to the project root (default ".")' },
+          depth: { type: 'integer', description: 'Max depth to render (default 3, max 10)' },
+          limit: { type: 'integer', description: 'Max entries to render (default 500, max 5000)' }
+        },
+        required: []
       }
     }
   },
