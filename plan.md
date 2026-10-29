@@ -63,7 +63,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Live streaming assistant text + reasoning indicator
 - [x] Tool activity cards (name, args, result, duration)
 - [x] Composer with model picker, send, stop
-- [x] Settings: providers/models add/delete, masked keys
+- [x] Settings: providers/models add/delete, masked keys, provider presets + custom
 - [x] Extensions panel: status, tools, reload
 
 ## Phase 4 — Extension system (the power feature)
@@ -146,3 +146,7 @@ extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
   `apply_patch`, and native git tools (`git_init/status/diff/log/branch/commit/
   push/pull`). The smoke test now exercises every one of them, including a real
   push/pull against a temp bare remote. Next: Docker jail, PTY, MCP/LSP.
+- 2026-10-29: Provider add flow now starts with a preset picker (OpenAI, Google
+  Gemini, NVIDIA NIM, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together,
+  Fireworks, Cerebras, Moonshot, Ollama, LM Studio) plus a Custom option that
+  starts with empty fields. Selecting a preset prefills name and base URL.
