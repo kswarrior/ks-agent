@@ -557,6 +557,10 @@ export class LspRegistry {
     return !disabled?.has(name)
   }
 
+  private usable(entry: Entry): boolean {
+    return Boolean(entry.config && commandAvailable(entry.config.command))
+  }
+
   listForProject(projectId: string): LspServerInfo[] {
     return this.list().filter((server) => isProjectEnabled(server.projects, projectId))
   }
@@ -605,8 +609,8 @@ export class LspRegistry {
   }
 
   toolDefs(projectId?: string, disabled?: Set<string>): ToolDef[] {
-    const available = [...this.entries.entries()].filter(([name, entry]) =>
-      this.matches(name, entry, projectId, disabled)
+    const available = [...this.entries.entries()].filter(
+      ([name, entry]) => this.matches(name, entry, projectId, disabled) && this.usable(entry)
     )
     if (available.length === 0) return []
     const servers = available.map(([name]) => name).sort().join(', ')
@@ -680,25 +684,23 @@ export class LspRegistry {
         !disabled?.has(server.name)
     )
     if (servers.length === 0) return ''
-    const lines = servers.map(
+    const usable = servers.filter((server) => server.status !== 'error')
+    const unavailable = servers.filter((server) => server.status === 'error')
+    const unavailableLine = unavailable.length
+      ? `\nUnavailable (do not call): ${unavailable
+          .map((server) => `${server.name} (${server.error ?? 'unavailable'})`)
+          .join('; ')}`
+      : ''
+    if (usable.length === 0) {
+      return `## Language servers
+No usable language servers are enabled in this chat.${unavailableLine}`
+    }
+    const lines = usable.map(
       (server) => `- ${server.name}: ${server.extensions.join(', ')} (${server.command})`
     )
     return `## Language servers
-Use lsp_diagnostics after editing source files to surface type and syntax errors. Configured servers:
-${lines.join('\n')}`
-  }
-
-  private serverFor(
-    relPath: string,
-    projectId?: string,
-    disabled?: Set<string>
-  ): LanguageServerConfig | null {
-    const ext = path.extname(relPath).toLowerCase()
-    for (const [name, entry] of this.entries) {
-      if (!this.matches(name, entry, projectId, disabled)) continue
-      if (entry.config?.extensions.includes(ext)) return entry.config
-    }
-    return null
+Use lsp_diagnostics after editing source files to surface type and syntax errors. Usable servers:
+${lines.join('\n')}${unavailableLine}`
   }
 
   private ensureClient(server: LanguageServerConfig, rootPath: string): Promise<LspClient> {
@@ -736,31 +738,53 @@ ${lines.join('\n')}`
       return { ok: false, output: `File not found: ${rel}` }
     }
     if (!stat.isFile()) return { ok: false, output: `${rel} is not a file` }
-    const server = this.serverFor(rel, projectId, disabled)
-    if (!server) {
-      const ext = path.extname(rel).toLowerCase()
-      const blocked = [...this.entries.entries()].find(
-        ([name, entry]) =>
-          !this.matches(name, entry, projectId, disabled) &&
-          entry.config?.extensions.includes(ext) &&
-          (projectId === undefined || isProjectEnabled(entry.config.projects, projectId))
-      )
-      if (blocked) {
-        return { ok: false, output: `Language server "${blocked[0]}" is disabled in this chat.` }
+    const ext = path.extname(rel).toLowerCase()
+    const candidates = [...this.entries.entries()].filter(([, entry]) => {
+      if (!entry.config) return false
+      if (projectId !== undefined && !isProjectEnabled(entry.config.projects, projectId)) return false
+      return entry.config.extensions.includes(ext)
+    })
+    const enabled = candidates.filter(([name]) => !disabled?.has(name))
+    const usable = enabled.filter(([, entry]) => this.usable(entry))
+    if (usable.length === 0) {
+      if (enabled.length > 0) {
+        const info = this.list()
+        const detail = enabled
+          .map(([name]) => {
+            const error = info.find((server) => server.name === name)?.error ?? 'unavailable'
+            return `${name} (${error})`
+          })
+          .join('; ')
+        return {
+          ok: false,
+          output: `Language server${enabled.length === 1 ? '' : 's'} unavailable: ${detail}`
+        }
       }
-      const available = this.list()
+      const blocked = candidates.filter(([name]) => disabled?.has(name))
+      if (blocked.length > 0) {
+        return { ok: false, output: `Language server "${blocked[0][0]}" is disabled in this chat.` }
+      }
+      const configured = this.list()
         .filter(
           (entry) =>
             entry.extensions.length &&
             (projectId === undefined || isProjectEnabled(entry.projects, projectId))
         )
-        .map((entry) => `${entry.name} (${entry.extensions.join(', ')})`)
+        .map(
+          (entry) =>
+            `${entry.name} (${entry.extensions.join(', ')}${
+              entry.status === 'error' ? ', unavailable' : ''
+            })`
+        )
         .join('; ')
       return {
         ok: false,
-        output: `No language server configured for ${ext || 'this file'}. Available: ${available || '(none)'}`
+        output: `No language server is enabled for ${ext || 'this file'}. Configured: ${
+          configured || '(none)'
+        }`
       }
     }
+    const server = usable[0][1].config as LanguageServerConfig
     try {
       const client = await this.ensureClient(server, projectPath)
       return await client.diagnostics(abs, rel)

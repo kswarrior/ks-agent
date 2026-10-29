@@ -104,12 +104,23 @@ function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): T
   const skillItems = skills.list()
   const mcpItems = mcp.list()
   const lspItems = lsp.list()
+  const isEnabled = (item: { name: string; projects: string[] }, set: Set<string>) =>
+    chatExtensionState(item.projects, item.name, project.id, set) === 'enabled'
   const enabledCount = (items: Array<{ name: string; projects: string[] }>, set: Set<string>) =>
-    items.filter((item) => chatExtensionState(item.projects, item.name, project.id, set) === 'enabled').length
+    items.filter((item) => isEnabled(item, set)).length
+  const skillUsable = skillItems.filter((item) => isEnabled(item, disabled.skill)).length
+  const mcpUsable = mcpItems.filter(
+    (server) => isEnabled(server, disabled.mcp) && server.status === 'ready'
+  ).length
+  const lspUsable = lspItems.filter(
+    (server) => isEnabled(server, disabled.lsp) && server.status !== 'error'
+  ).length
 
-  const lines = [`Chat tool selection for project "${project.name}":`]
+  const lines = [`Chat tool selection for project "${project.name}" (authoritative for this chat):`]
 
-  lines.push(`Skills (${skillItems.length} configured, ${enabledCount(skillItems, disabled.skill)} enabled in this chat):`)
+  lines.push(
+    `Skills (${skillItems.length} configured, ${enabledCount(skillItems, disabled.skill)} enabled, ${skillUsable} usable):`
+  )
   if (skillItems.length === 0) lines.push('- none')
   for (const skill of skillItems.sort((a, b) => a.name.localeCompare(b.name))) {
     const state = chatExtensionState(skill.projects, skill.name, project.id, disabled.skill)
@@ -118,7 +129,9 @@ function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): T
     else lines.push(`- ${skill.name}: enabled`)
   }
 
-  lines.push(`MCP servers (${mcpItems.length} configured, ${enabledCount(mcpItems, disabled.mcp)} enabled in this chat):`)
+  lines.push(
+    `MCP servers (${mcpItems.length} configured, ${enabledCount(mcpItems, disabled.mcp)} enabled, ${mcpUsable} usable):`
+  )
   if (mcpItems.length === 0) lines.push('- none')
   for (const server of mcpItems.sort((a, b) => a.name.localeCompare(b.name))) {
     const state = chatExtensionState(server.projects, server.name, project.id, disabled.mcp)
@@ -127,10 +140,16 @@ function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): T
     else if (state === 'chat') lines.push(`- ${server.name} (${detail}): disabled in this chat`)
     else if (server.status === 'error') {
       lines.push(`- ${server.name} (${detail}): enabled but unavailable: ${server.error ?? 'failed to start'}`)
-    } else lines.push(`- ${server.name} (${detail}): enabled${server.status === 'ready' ? ' (running)' : ''}`)
+    } else {
+      lines.push(
+        `- ${server.name} (${detail}): enabled${server.status === 'ready' ? ' (running)' : ' (not running)'}`
+      )
+    }
   }
 
-  lines.push(`Language servers (${lspItems.length} configured, ${enabledCount(lspItems, disabled.lsp)} enabled in this chat):`)
+  lines.push(
+    `Language servers (${lspItems.length} configured, ${enabledCount(lspItems, disabled.lsp)} enabled, ${lspUsable} usable):`
+  )
   if (lspItems.length === 0) lines.push('- none')
   for (const server of lspItems.sort((a, b) => a.name.localeCompare(b.name))) {
     const state = chatExtensionState(server.projects, server.name, project.id, disabled.lsp)
@@ -139,10 +158,25 @@ function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): T
     else if (state === 'chat') lines.push(`- ${server.name} (${detail}): disabled in this chat`)
     else if (server.status === 'error') {
       lines.push(`- ${server.name} (${detail}): enabled but unavailable: ${server.error ?? 'failed to start'}`)
-    } else lines.push(`- ${server.name} (${detail}): enabled${server.status === 'ready' ? ' (running)' : ''}`)
+    } else {
+      lines.push(
+        `- ${server.name} (${detail}): enabled${
+          server.status === 'ready'
+            ? ' (running)'
+            : server.status === 'starting'
+              ? ' (starting)'
+              : ' (not running)'
+        }`
+      )
+    }
   }
 
-  lines.push('Only project-enabled and chat-enabled items are exposed as tools.')
+  lines.push(
+    `Usable now: ${skillUsable} skills, ${mcpUsable} MCP servers, ${lspUsable} language servers.`
+  )
+  lines.push(
+    'Only project-enabled, chat-enabled and usable items are exposed as tools; disabled or unavailable items cannot be called.'
+  )
   return { ok: true, output: lines.join('\n') }
 }
 
