@@ -5,6 +5,7 @@ import readline from 'node:readline'
 import { config } from './config.js'
 import { readJsonConfig, writeJsonConfig } from './configFile.js'
 import { ConfigError } from './errors.js'
+import { isProjectEnabled, normalizeProjects } from './scope.js'
 import type { McpServerInfo, McpToolInfo, ToolDef, ToolResult } from './types.js'
 
 type Transport = 'stdio' | 'http' | 'sse'
@@ -20,6 +21,7 @@ interface ServerConfig {
   headers: Record<string, string>
   enabled: boolean
   timeoutMs: number
+  projects: string[]
 }
 
 interface Entry {
@@ -117,7 +119,8 @@ function normalizeServer(name: string, raw: unknown): ServerConfig {
     url: url || undefined,
     headers: stringMap(obj.headers),
     enabled: obj.enabled !== false,
-    timeoutMs
+    timeoutMs,
+    projects: normalizeProjects(obj.projects)
   }
 }
 
@@ -163,6 +166,7 @@ function serverToConfig(server: ServerConfig): Record<string, unknown> {
   if (server.cwd) value.cwd = server.cwd
   if (server.url) value.url = server.url
   if (Object.keys(server.headers).length) value.headers = server.headers
+  if (server.projects.length) value.projects = server.projects
   return value
 }
 
@@ -845,11 +849,22 @@ export class McpRegistry {
     return `mcp_${server}_${tool}`.replace(/[^a-zA-Z0-9_-]/g, '_')
   }
 
-  toolDefs(): ToolDef[] {
+  private matches(name: string, entry: Entry, projectId?: string, disabled?: Set<string>): boolean {
+    if (!entry.config) return false
+    if (projectId !== undefined && !isProjectEnabled(entry.config.projects, projectId)) return false
+    return !disabled?.has(name)
+  }
+
+  listForProject(projectId: string): McpServerInfo[] {
+    return this.list().filter((server) => isProjectEnabled(server.projects, projectId))
+  }
+
+  toolDefs(projectId?: string, disabled?: Set<string>): ToolDef[] {
     const defs: ToolDef[] = []
     for (const [name, entry] of this.entries) {
       const running = this.running.get(name)
-      if (!entry.config || !running || running.client.status !== 'ready') continue
+      if (!this.matches(name, entry, projectId, disabled)) continue
+      if (!running || running.client.status !== 'ready') continue
       for (const tool of running.client.tools) {
         defs.push({
           type: 'function',

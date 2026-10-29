@@ -221,9 +221,10 @@ export class SkillRegistry {
     this.discover()
   }
 
-  toolDefs(): ToolDef[] {
-    if (this.skills.size === 0) return []
-    const names = [...this.skills.keys()].sort().join(', ')
+  toolDefs(projectId?: string, disabled?: Set<string>): ToolDef[] {
+    const available = this.available(projectId, disabled)
+    if (available.length === 0) return []
+    const names = available.map((skill) => skill.name).sort().join(', ')
     return [
       {
         type: 'function',
@@ -245,9 +246,10 @@ export class SkillRegistry {
     ]
   }
 
-  promptSection(): string {
-    if (this.skills.size === 0) return ''
-    const lines = [...this.skills.values()]
+  promptSection(projectId?: string, disabled?: Set<string>): string {
+    const available = this.available(projectId, disabled)
+    if (available.length === 0) return ''
+    const lines = available
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((skill) => `- ${skill.name}: ${skill.description}`)
     return `## Skills
@@ -255,14 +257,20 @@ Reusable skills are installed. If a task matches a skill, call use_skill with th
 ${lines.join('\n')}`
   }
 
-  call(name: string, args: Record<string, unknown>): ToolResult {
+  call(name: string, args: Record<string, unknown>, projectId?: string, disabled?: Set<string>): ToolResult {
     if (name !== 'use_skill') return { ok: false, output: `Unknown skill tool: ${name}` }
     const requested = typeof args.name === 'string' ? args.name.trim() : ''
     if (!requested) return { ok: false, output: 'name is required' }
     const skill = this.skills.get(requested.toLowerCase())
     if (!skill) {
-      const available = [...this.skills.keys()].sort().join(', ') || '(none)'
+      const available = this.available(projectId, disabled).map((entry) => entry.name).sort().join(', ') || '(none)'
       return { ok: false, output: `Unknown skill "${requested}". Available skills: ${available}` }
+    }
+    if (projectId !== undefined && !isProjectEnabled(skill.projects, projectId)) {
+      return { ok: false, output: `Skill "${skill.name}" is not enabled for this project.` }
+    }
+    if (disabled?.has(skill.name)) {
+      return { ok: false, output: `Skill "${skill.name}" is disabled in this chat.` }
     }
     const content = skill.content.length > config.maxToolOutput * 2
       ? `${skill.content.slice(0, config.maxToolOutput * 2)}\n[... skill truncated]`
