@@ -47,9 +47,13 @@ export function ModelSelect({
         (model.providerName ?? '').toLowerCase().includes(query)
       )
     })
-    const map = new Map<string, { name: string; models: ModelEntry[] }>()
+    const map = new Map<string, { id: string; name: string; models: ModelEntry[] }>()
     for (const model of filtered) {
-      const group = map.get(model.providerId) ?? { name: model.providerName ?? 'Provider', models: [] }
+      const group = map.get(model.providerId) ?? {
+        id: model.providerId,
+        name: model.providerName ?? 'Provider',
+        models: []
+      }
       group.models.push(model)
       map.set(model.providerId, group)
     }
@@ -168,7 +172,7 @@ export function ModelSelect({
 
             <div className="model-list">
               {groups.map((group) => (
-                <div className="model-group" key={group.name}>
+                <div className="model-group" key={group.id}>
                   <div className="model-group-title">{group.name}</div>
                   {group.models.map((model) => (
                     <button
