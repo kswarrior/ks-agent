@@ -31,11 +31,16 @@ import {
   updateChat,
   updateProvider
 } from './db.js'
-import { errorStatus } from './errors.js'
+import { describeFailure, errorStatus } from './errors.js'
 import { extensions } from './extensions.js'
 import { cleanRelative, resolveInProject } from './fsx.js'
 import { lsp } from './lsp.js'
 import { mcp } from './mcp.js'
+import {
+  DEFAULT_RETRY_SETTINGS,
+  getRetrySettings,
+  saveRetrySettings
+} from './retry.js'
 import { normalizeProjects } from './scope.js'
 import { skills } from './skills.js'
 import type { AgentEvent, Chat, ChatExtensionsState, ExtensionKind, Project, ProviderPublic } from './types.js'
@@ -376,9 +381,7 @@ app.post('/api/chats/:id/messages', async (c) => {
     onEvent: publish
   })
     .catch((error) => {
-      if (!run.done) {
-        publish({ type: 'error', error: error instanceof Error ? error.message : String(error) })
-      }
+      if (!run.done) publish({ type: 'error', ...describeFailure(error) })
     })
     .finally(() => {
       run.done = true
@@ -492,6 +495,19 @@ app.delete('/api/models/:id', (c) => {
   removeModel(model.id)
   return c.json({ ok: true })
 })
+
+// --------------------------------------------------------------- settings
+app.get('/api/settings/retry', (c) => c.json(getRetrySettings()))
+
+app.put('/api/settings/retry', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json(errorJson('JSON object body required'), 400)
+  }
+  return c.json(saveRetrySettings(body))
+})
+
+app.post('/api/settings/retry/reset', (c) => c.json(saveRetrySettings(DEFAULT_RETRY_SETTINGS)))
 
 // -------------------------------------------------------------- extensions
 app.get('/api/extensions', (c) => c.json(extensions.list()))

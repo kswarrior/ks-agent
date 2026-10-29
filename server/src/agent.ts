@@ -448,8 +448,11 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
       await emit({ type: 'done', aborted: true })
       return
     }
-    const message = error instanceof Error ? error.message : String(error)
-    await emit({ type: 'error', error: message })
+    const failure = describeFailure(error, {
+      attempts: providerAttempts || undefined,
+      retryable: isRetryableProviderError(error, retrySettings)
+    })
+    await emit({ type: 'error', ...failure })
   } finally {
     await extensions.runHook('agent.finish', project.path, { chatId: chat.id })
   }

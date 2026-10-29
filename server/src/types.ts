@@ -145,6 +145,7 @@ export interface AgentEvent {
     | 'reasoning'
     | 'tool_start'
     | 'tool_end'
+    | 'retry'
     | 'done'
     | 'error'
   [key: string]: unknown

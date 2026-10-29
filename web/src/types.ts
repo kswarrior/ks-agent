@@ -107,6 +107,39 @@ export interface ChatExtensionsState {
   lspServers: Array<LspServerInfo & { enabled: boolean }>
 }
 
+export interface RetrySettings {
+  enabled: boolean
+  unlimited: boolean
+  maxRetries: number
+  baseDelayMs: number
+  maxDelayMs: number
+  multiplier: number
+  jitter: boolean
+  retryOnNetwork: boolean
+  retryOnServerErrors: boolean
+  retryOnStatusCodes: number[]
+  honorRetryAfter: boolean
+}
+
+export interface FailureInfo {
+  message: string
+  status?: number
+  code?: string
+  title?: string
+  details?: string
+  retryAfterMs?: number
+  attempts?: number
+  retryable?: boolean
+}
+
+export interface RetryStatus extends FailureInfo {
+  attempt: number
+  maxAttempts: number | null
+  delayMs: number
+  nextAt: number
+  unlimited: boolean
+}
+
 export type AgentEvent =
   | { type: 'step'; step: number; maxSteps: number }
   | { type: 'assistant_start'; step: number }
@@ -119,8 +152,9 @@ export type AgentEvent =
       result: { ok: boolean; output: string }
       durationMs: number
     }
+  | ({ type: 'retry' } & RetryStatus)
   | { type: 'done'; message?: Message; aborted?: boolean; maxStepsReached?: boolean }
-  | { type: 'error'; error: string }
+  | ({ type: 'error'; error: string } & FailureInfo)
 
 export interface LiveTool {
   id: string
