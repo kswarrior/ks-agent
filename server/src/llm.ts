@@ -37,6 +37,7 @@ export interface StreamOptions {
   callbacks?: StreamCallbacks
   idleTimeoutMs?: number
   temperature?: number
+  maxTokens?: number
 }
 
 function completionUrl(baseUrl: string): string {
@@ -109,6 +110,7 @@ export async function streamCompletion(options: StreamOptions): Promise<StreamRe
     body.tool_choice = 'auto'
   }
   if (typeof options.temperature === 'number') body.temperature = options.temperature
+  if (typeof options.maxTokens === 'number') body.max_tokens = options.maxTokens
 
   const toolCalls = new Map<number, ToolCallAccumulator>()
   let content = ''

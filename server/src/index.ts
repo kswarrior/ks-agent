@@ -8,6 +8,7 @@ import { runAgent } from './agent.js'
 import { config, isInside } from './config.js'
 import {
   getChat,
+  getChatSummary,
   getModel,
   getProject,
   getProvider,
@@ -23,9 +24,11 @@ import {
   listProjects,
   listProviders,
   removeChat,
+  removeChatSummary,
   removeModel,
   removeProject,
   removeProvider,
+  saveChatSummary,
   setChatExtensionEnabled,
   touchChat,
   updateChat,
@@ -325,6 +328,35 @@ app.get('/api/chats/:id/messages', (c) => {
   const chat = getChat(c.req.param('id'))
   if (!chat) return c.json(errorJson('chat not found', 404), 404)
   return c.json(listMessages(chat.id))
+})
+
+app.get('/api/chats/:id/summary', (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  return c.json(getChatSummary(chat.id))
+})
+
+app.put('/api/chats/:id/summary', async (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const summary = typeof body?.summary === 'string' ? body.summary.trim() : ''
+  if (!summary) return c.json(errorJson('summary must be a non-empty string'), 400)
+  if (summary.length > 50_000) return c.json(errorJson('summary must be 50000 characters or fewer'), 400)
+  const current = getChatSummary(chat.id)
+  const messages = listMessages(chat.id)
+  const requestedCovered = typeof body?.coveredMessageId === 'string' ? body.coveredMessageId : ''
+  const coveredMessageId = messages.some((message) => message.id === requestedCovered)
+    ? requestedCovered
+    : current?.coveredMessageId || messages[messages.length - 1]?.id || ''
+  return c.json(saveChatSummary(chat.id, summary, coveredMessageId))
+})
+
+app.delete('/api/chats/:id/summary', (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  removeChatSummary(chat.id)
+  return c.json({ ok: true })
 })
 
 app.post('/api/chats/:id/messages', async (c) => {

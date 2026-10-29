@@ -420,11 +420,92 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
   await mcp.ready(project.id, disabled.mcp)
   const system = systemMessage(project, disabled)
   let history = listMessages(chat.id)
-  let messages = trimHistory(system, history)
+  let summary = getChatSummary(chat.id)
+  const contextCharBudget = Math.max(MIN_CONTEXT_CHARS, model.contextWindow * CONTEXT_CHARS_PER_TOKEN)
   let partial = ''
   let providerAttempts = 0
   const retrySettings = getRetrySettings()
   const runStartedAt = Date.now()
+
+  const buildMessages = () => {
+    const applied = summary && history.some((message) => message.id === summary?.coveredMessageId) ? summary : null
+    return trimHistory(systemWithSummary(system, applied), historyAfterSummary(history, applied), contextCharBudget)
+  }
+
+  const prepareContext = async (): Promise<LLMMessage[]> => {
+    const applied = summary && history.some((message) => message.id === summary?.coveredMessageId) ? summary : null
+    const remaining = historyAfterSummary(history, applied)
+    const groups = groupHistory(remaining)
+    const activeSystem = systemWithSummary(system, applied)
+    const currentChars = contextChars(activeSystem, groups)
+    const triggerChars = contextCharBudget * SUMMARY_TRIGGER_RATIO
+    if (groups.length < 2 || currentChars <= triggerChars) {
+      return trimHistory(activeSystem, remaining, contextCharBudget)
+    }
+
+    const targetChars = contextCharBudget * SUMMARY_TARGET_RATIO
+    const selected: Message[][] = []
+    let remainingChars = currentChars - llmMessageChars(activeSystem)
+    for (const group of groups) {
+      if (selected.length >= groups.length - 1 || remainingChars <= targetChars) break
+      selected.push(group)
+      remainingChars -= groupChars(group)
+    }
+    if (selected.length === 0) return trimHistory(activeSystem, remaining, contextCharBudget)
+
+    const selectedMessages = selected.flat()
+    const coveredMessageId = selectedMessages[selectedMessages.length - 1].id
+    await emit({
+      type: 'summary_start',
+      estimatedTokens: Math.ceil(currentChars / CONTEXT_CHARS_PER_TOKEN),
+      contextWindow: model.contextWindow
+    })
+    try {
+      const transcriptBudget = Math.max(
+        20_000,
+        Math.min(120_000, Math.round(contextCharBudget * 0.6))
+      )
+      const transcript = summarizeTranscript(selectedMessages, transcriptBudget, 8000)
+      const result = await streamCompletion({
+        baseUrl: provider.baseUrl,
+        apiKey: provider.apiKey,
+        model: model.modelId,
+        messages: [
+          { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `## Previous summary
+${summary?.summary?.trim() || '(none)'}
+
+## New transcript to merge
+${transcript || '(empty)'}
+
+Update the summary using the required format. Keep facts from the previous summary that remain relevant, update the work state, and add facts from the new transcript.`
+          }
+        ],
+        signal,
+        temperature: 0.2,
+        maxTokens: SUMMARY_MAX_TOKENS
+      })
+      const text = result.content.trim()
+      if (!text) throw new Error('Summary response was empty')
+      summary = saveChatSummary(chat.id, text, coveredMessageId)
+      console.info(
+        `[agent] compacted chat ${chat.id} through ${coveredMessageId} (${Math.ceil(
+          currentChars / CONTEXT_CHARS_PER_TOKEN
+        )} estimated tokens)`
+      )
+      await emit({ type: 'summary', summary })
+    } catch (error) {
+      if (signal.aborted || (error instanceof Error && error.name === 'AbortError')) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      console.warn(`[agent] context summary failed; falling back to trimming: ${message}`)
+      await emit({ type: 'summary_error', message })
+    }
+    return buildMessages()
+  }
+
+  let messages = await prepareContext()
 
   await extensions.runHook('agent.start', project.path, { chatId: chat.id })
 
@@ -550,7 +631,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
         }
 
         history = listMessages(chat.id)
-        messages = trimHistory(system, history)
+        messages = await prepareContext()
         void assistant
         continue
       }

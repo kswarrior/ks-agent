@@ -32,6 +32,13 @@ export interface Message {
   createdAt: number
 }
 
+export interface ChatSummary {
+  chatId: string
+  summary: string
+  coveredMessageId: string
+  updatedAt: number
+}
+
 export interface ProviderPublic {
   id: string
   name: string

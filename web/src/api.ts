@@ -58,6 +58,11 @@ export const setChatExtension = (
 ) => req<{ ok: true }>(`/api/chats/${chatId}/extensions`, json('PATCH', body))
 
 export const listMessages = (chatId: string) => req<Message[]>(`/api/chats/${chatId}/messages`)
+export const getChatSummary = (chatId: string) => req<ChatSummary | null>(`/api/chats/${chatId}/summary`)
+export const saveChatSummary = (chatId: string, summary: string) =>
+  req<ChatSummary>(`/api/chats/${chatId}/summary`, json('PUT', { summary }))
+export const deleteChatSummary = (chatId: string) =>
+  req<{ ok: true }>(`/api/chats/${chatId}/summary`, { method: 'DELETE' })
 export const stopChat = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/stop`, { method: 'POST' })
 
 export const startChatRun = (chatId: string, content: string, modelId: string) =>
