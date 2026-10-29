@@ -172,6 +172,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
   let history = listMessages(chat.id)
   let messages = trimHistory(system, history)
   let partial = ''
+  const runStartedAt = Date.now()
 
   await extensions.runHook('agent.start', project.path, { chatId: chat.id })
 
@@ -181,6 +182,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
       await emit({ type: 'step', step, maxSteps: config.maxSteps })
       await emit({ type: 'assistant_start', step })
       partial = ''
+      const stepStartedAt = Date.now()
 
       const tools = [
         ...builtinToolDefs,
@@ -243,7 +245,9 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
           chatId: chat.id,
           role: 'assistant',
           content: result.content,
-          toolCalls
+          toolCalls,
+          modelId: model.id,
+          durationMs: Date.now() - stepStartedAt
         })
         messages.push({
           role: 'assistant',
@@ -287,7 +291,9 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
       const finalMessage = insertMessage({
         chatId: chat.id,
         role: 'assistant',
-        content: result.content
+        content: result.content,
+        modelId: model.id,
+        durationMs: Date.now() - runStartedAt
       })
       await emit({ type: 'done', message: finalMessage })
       return
@@ -296,13 +302,25 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
     const notice =
       `Stopped after ${config.maxSteps} steps without finishing. ` +
       'The task may be incomplete; continue with a narrower instruction.'
-    const finalMessage = insertMessage({ chatId: chat.id, role: 'assistant', content: notice })
+    const finalMessage = insertMessage({
+      chatId: chat.id,
+      role: 'assistant',
+      content: notice,
+      modelId: model.id,
+      durationMs: Date.now() - runStartedAt
+    })
     await emit({ type: 'done', message: finalMessage, maxStepsReached: true })
   } catch (error) {
     const isAbort = signal.aborted || (error instanceof Error && error.name === 'AbortError')
     if (isAbort) {
       if (partial.trim()) {
-        insertMessage({ chatId: chat.id, role: 'assistant', content: partial })
+        insertMessage({
+          chatId: chat.id,
+          role: 'assistant',
+          content: partial,
+          modelId: model.id,
+          durationMs: Date.now() - runStartedAt
+        })
       }
       await emit({ type: 'done', aborted: true })
       return

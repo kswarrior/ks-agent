@@ -452,6 +452,8 @@ export default function App() {
       content,
       toolCalls: null,
       toolCallId: null,
+      modelId: null,
+      durationMs: null,
       createdAt: Date.now()
     }
     setMessages((current) => [...current, optimistic])

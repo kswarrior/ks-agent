@@ -113,6 +113,8 @@ const message = (r: MessageRow): Message => ({
   content: r.content,
   toolCalls: r.tool_calls ? (JSON.parse(r.tool_calls) as ToolCall[]) : null,
   toolCallId: r.tool_call_id,
+  modelId: r.model_id ?? null,
+  durationMs: r.duration_ms ?? null,
   createdAt: r.created_at
 })
 const provider = (r: ProviderRow): Provider => ({
@@ -229,6 +231,8 @@ export function insertMessage(input: {
   content: string
   toolCalls?: ToolCall[] | null
   toolCallId?: string | null
+  modelId?: string | null
+  durationMs?: number | null
 }): Message {
   const row: MessageRow = {
     id: newId(),
@@ -237,11 +241,23 @@ export function insertMessage(input: {
     content: input.content,
     tool_calls: input.toolCalls && input.toolCalls.length ? JSON.stringify(input.toolCalls) : null,
     tool_call_id: input.toolCallId ?? null,
+    model_id: input.modelId ?? null,
+    duration_ms: input.durationMs ?? null,
     created_at: Date.now()
   }
   db.prepare(
-    'INSERT INTO messages (id, chat_id, role, content, tool_calls, tool_call_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(row.id, row.chat_id, row.role, row.content, row.tool_calls, row.tool_call_id, row.created_at)
+    'INSERT INTO messages (id, chat_id, role, content, tool_calls, tool_call_id, model_id, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(
+    row.id,
+    row.chat_id,
+    row.role,
+    row.content,
+    row.tool_calls,
+    row.tool_call_id,
+    row.model_id,
+    row.duration_ms,
+    row.created_at
+  )
   return message(row)
 }
 
