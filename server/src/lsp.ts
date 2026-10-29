@@ -189,6 +189,7 @@ class LspClient {
         'initialize',
         {
           processId: process.pid,
+          clientInfo: { name: 'ks-agent', version: '0.2.0' },
           rootUri: pathToFileURL(this.rootPath).toString(),
           rootPath: this.rootPath,
           workspaceFolders: [{ uri: pathToFileURL(this.rootPath).toString(), name: path.basename(this.rootPath) }],
@@ -326,14 +327,17 @@ class LspClient {
     return new Promise<ToolResult>((resolve) => {
       let settled = false
       let timer: ReturnType<typeof setTimeout>
-      const finish = (diagnostics: Diagnostic[] | null) => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
+      const removeWaiter = () => {
         const waiters = this.diagnosticsWaiters.get(uri) ?? []
         const index = waiters.indexOf(onDiagnostics)
         if (index !== -1) waiters.splice(index, 1)
         if (waiters.length === 0) this.diagnosticsWaiters.delete(uri)
+      }
+      const finish = (diagnostics: Diagnostic[] | null) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        removeWaiter()
         if (diagnostics === null) {
           resolve({
             ok: true,
@@ -367,8 +371,16 @@ class LspClient {
           })
         }
       } catch (error) {
-        finish([])
-        void error
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        removeWaiter()
+        resolve({
+          ok: false,
+          output: `Language server ${this.cfg.name} failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        })
       }
     })
   }

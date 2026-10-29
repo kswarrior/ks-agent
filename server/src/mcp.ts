@@ -535,14 +535,19 @@ class HttpMcpClient extends BaseMcpClient {
     }
   }
 
-  private async readResponse(response: Response, id: number): Promise<unknown> {
+  private async readResponse(response: Response, id: number, timeoutMs: number): Promise<unknown> {
     const contentType = response.headers.get('content-type') ?? ''
     if (contentType.includes('text/event-stream') && response.body) {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
       let eventName = ''
+      let timedOut = false
       const dataLines: string[] = []
+      const timer = setTimeout(() => {
+        timedOut = true
+        void reader.cancel().catch(() => {})
+      }, timeoutMs)
       try {
         for (;;) {
           const chunk = await reader.read()
