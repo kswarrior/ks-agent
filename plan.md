@@ -94,8 +94,10 @@ implemented but not yet verified. `[ ]` means not done.
 
 - [ ] PTY terminal over WebSocket
 - [x] Git tools: init/status/diff/log/branch/commit/push/pull (native `execFile`, no shell)
-- [ ] MCP client (stdio + SSE) so existing MCP servers can be reused
-- [ ] LSP diagnostics surfaced as tool results
+- [x] Skills: `SKILL.md` discovery, agent prompt index, `use_skill` tool, reload API/UI
+- [x] MCP client (stdio + Streamable HTTP + legacy SSE) so existing MCP servers can be reused
+- [x] LSP diagnostics surfaced as `lsp_diagnostics` tool results
+- [x] Skills / MCP / LSP panels in the Extensions modal (status, tools, reload)
 
 ## Phase 6 — Hardening and release
 
@@ -106,6 +108,96 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] End-to-end smoke script (`npm run smoke`)
 - [ ] README / extension authoring guide
 - [ ] CI workflow for typecheck, build and smoke
+
+---
+
+## How Skills, MCP and LSP work
+
+All three surfaces feed the same agent loop next to built-in tools and
+extensions. They are independent, project-scoped at call time, and visible in
+the Extensions modal. MCP and LSP never receive provider API keys.
+
+| Surface | Discovery | Runtime | Agent-facing tool | API / UI |
+| --- | --- | --- | --- | --- |
+| **Skills** | `skills/<name>/SKILL.md`, `.opencode/skills/<name>/SKILL.md`, or `KS_SKILLS_DIR` | Markdown + YAML frontmatter (`name`, `description`) parsed at startup/reload; body is returned on demand | `use_skill({ name })` | `GET /api/skills`, `POST /api/skills/reload`; Skills tab |
+| **MCP** | `mcp.json` (`mcpServers`) or `KS_MCP_CONFIG` | stdio child (newline JSON-RPC) or HTTP (Streamable HTTP / legacy SSE) with `initialize` → `notifications/initialized` → paginated `tools/list`; lazy start, restarted on reload | `mcp_<server>_<tool>` | `GET /api/mcp`, `POST /api/mcp/reload`; MCP tab |
+| **LSP** | `lsp.json` (`languageServers`) or `KS_LSP_CONFIG` | Spawned on first diagnostic request for a matching extension; LSP `Content-Length` framing, `initialize`, `didOpen` / `didChange`, then wait for `textDocument/publishDiagnostics` | `lsp_diagnostics({ path })` | `GET /api/lsp`, `POST /api/lsp/reload`; LSP tab |
+
+### Lifecycle
+
+1. **Discover** — on server start (and on explicit reload) the registry reads
+   its config, validates names, and reports invalid entries with an error
+   instead of crashing the server.
+2. **Advertise** — the system prompt lists installed skills, MCP server/tool
+   counts and configured language servers. Tool definitions are injected into
+   every provider request, so the model can call them directly.
+3. **Start lazily** — MCP servers warm up in the background (and are awaited
+   once per agent run); language servers start only when a file with a matching
+   extension needs diagnostics. Failures are captured per server.
+4. **Call** — tools run inside the active project: MCP receives the JSON
+   arguments from the model, LSP reads the file through the project path jail.
+5. **Shutdown/reload** — SIGINT/SIGTERM stops every MCP/LSP child; reload
+   stops old children, re-reads config, then restarts MCP connections.
+
+### Skill format
+
+```markdown
+---
+name: debugging
+description: Use when debugging or reproducing an error
+---
+
+# Debugging
+Step-by-step workflow the agent must follow.
+```
+
+### MCP format
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
+    },
+    "remote": {
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer ..." }
+    }
+  }
+}
+```
+
+`transport` may be `stdio`, `http` (Streamable HTTP) or `sse`; it is inferred
+from `command`/`url` when omitted.
+
+### LSP format
+
+```json
+{
+  "languageServers": {
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "extensions": [".ts", ".tsx", ".js"],
+      "languageId": "typescript"
+    }
+  }
+}
+```
+
+Diagnostics are returned as `file:line:column severity: message (code) [source]`.
+Only diagnostics for the requested file are waited on; a server that reports
+nothing within the timeout returns an explicit "no diagnostics reported" result.
+
+### Security boundaries
+
+- Skills are read-only instructions; they cannot execute commands by themselves.
+- MCP and LSP processes are started from explicit local config (trusted by the
+  operator). MCP receives only tool arguments and no provider credentials.
+- LSP reads files through the same path jail as built-in tools.
+- Extension isolation is unchanged: one child process per extension, project
+  path only, no API keys.
 
 ---
 

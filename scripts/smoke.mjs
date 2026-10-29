@@ -940,6 +940,24 @@ async function main() {
   }
   console.log('PASS extension discovery (no default extensions)')
 
+  const skillList = await api('POST', '/api/skills/reload')
+  assert(
+    skillList.some((skill) => skill.name === 'smoke-skill' && skill.description.includes('Smoke-test skill')),
+    `skills API missed smoke-skill: ${JSON.stringify(skillList)}`
+  )
+
+  const mcpList = await api('POST', '/api/mcp/reload')
+  const mockMcp = mcpList.find((server) => server.name === 'mockmcp')
+  assert(mockMcp, `MCP API missed mockmcp: ${JSON.stringify(mcpList)}`)
+  assert(mockMcp.status === 'ready', `mockmcp is not ready: ${mockMcp.error ?? mockMcp.status}`)
+  assert(mockMcp.tools.some((tool) => tool.name === 'echo'), 'mockmcp echo tool was not listed')
+
+  const lspList = await api('POST', '/api/lsp/reload')
+  const mockLsp = lspList.find((server) => server.name === 'mocklsp')
+  assert(mockLsp, `LSP API missed mocklsp: ${JSON.stringify(lspList)}`)
+  assert(mockLsp.extensions.includes('.ts'), 'mocklsp has no .ts extension mapping')
+  console.log('PASS skills / MCP / LSP APIs + reload')
+
   const minecraft = await callExtension(
     path.join(repo, 'examples', 'extensions', 'minecraft'),
     'plugin_scaffold',
