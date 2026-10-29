@@ -63,12 +63,15 @@ export interface ExtensionInfo {
   error?: string
 }
 
+export type ExtensionKind = 'skill' | 'mcp' | 'lsp'
+
 export interface SkillInfo {
   name: string
   description: string
   path: string
   source: string
   writable: boolean
+  projects: string[]
 }
 
 export interface McpToolInfo {

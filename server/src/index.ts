@@ -269,6 +269,40 @@ app.patch('/api/chats/:id', async (c) => {
   return c.json(updateChat(chat.id, { title: title ?? undefined, modelId }))
 })
 
+app.get('/api/chats/:id/extensions', (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  const project = getProject(chat.projectId)
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  return c.json(chatExtensionsState(chat, project))
+})
+
+app.patch('/api/chats/:id/extensions', async (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  const project = getProject(chat.projectId)
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const kind = body?.kind
+  if (kind !== 'skill' && kind !== 'mcp' && kind !== 'lsp') {
+    return c.json(errorJson('kind must be skill, mcp or lsp'), 400)
+  }
+  const name = typeof body?.name === 'string' ? body.name.trim().toLowerCase() : ''
+  if (!name) return c.json(errorJson('name is required'), 400)
+  if (typeof body?.enabled !== 'boolean') return c.json(errorJson('enabled must be a boolean'), 400)
+  const available =
+    kind === 'skill'
+      ? skills.listForProject(project.id).some((skill) => skill.name === name)
+      : kind === 'mcp'
+        ? mcp.listForProject(project.id).some((server) => server.name === name)
+        : lsp.listForProject(project.id).some((server) => server.name === name)
+  if (!available) {
+    return c.json(errorJson(`${kind} "${name}" is not enabled for this project`, 404), 404)
+  }
+  setChatExtensionEnabled(chat.id, kind as ExtensionKind, name, body.enabled)
+  return c.json({ ok: true, kind, name, enabled: body.enabled })
+})
+
 app.delete('/api/chats/:id', (c) => {
   const chat = getChat(c.req.param('id'))
   if (!chat) return c.json(errorJson('chat not found', 404), 404)
@@ -479,8 +513,10 @@ app.post('/api/skills', async (c) => {
   const name = typeof body.name === 'string' ? body.name : ''
   const description = typeof body.description === 'string' ? body.description : ''
   const content = typeof body.content === 'string' ? body.content : ''
+  const projects = readProjectIds(body.projects)
+  if (!projects) return c.json(errorJson('projects must be a list of existing project ids'), 400)
   try {
-    return c.json(skills.create(name, description, content, body.overwrite === true), 201)
+    return c.json(skills.create(name, description, content, projects, body.overwrite === true), 201)
   } catch (error) {
     const failure = configErrorJson(error)
     return c.json(failure.body, failure.status)
@@ -505,8 +541,10 @@ app.get('/api/mcp', (c) => c.json(mcp.list()))
 app.post('/api/mcp', async (c) => {
   const body = await c.req.json().catch(() => null)
   if (!body || typeof body !== 'object') return c.json(errorJson('JSON body required'), 400)
+  const projects = readProjectIds((body as Record<string, unknown>).projects)
+  if (!projects) return c.json(errorJson('projects must be a list of existing project ids'), 400)
   try {
-    return c.json(await mcp.add(body), 201)
+    return c.json(await mcp.add({ ...(body as Record<string, unknown>), projects }), 201)
   } catch (error) {
     const failure = configErrorJson(error)
     return c.json(failure.body, failure.status)
@@ -530,8 +568,10 @@ app.get('/api/lsp', (c) => c.json(lsp.list()))
 app.post('/api/lsp', async (c) => {
   const body = await c.req.json().catch(() => null)
   if (!body || typeof body !== 'object') return c.json(errorJson('JSON body required'), 400)
+  const projects = readProjectIds((body as Record<string, unknown>).projects)
+  if (!projects) return c.json(errorJson('projects must be a list of existing project ids'), 400)
   try {
-    return c.json(lsp.add(body), 201)
+    return c.json(lsp.add({ ...(body as Record<string, unknown>), projects }), 201)
   } catch (error) {
     const failure = configErrorJson(error)
     return c.json(failure.body, failure.status)
