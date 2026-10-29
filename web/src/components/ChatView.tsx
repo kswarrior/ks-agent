@@ -302,7 +302,6 @@ export function ChatView({
   live,
   streaming,
   steps,
-  maxSteps,
   loading,
   error,
   onModelChange,
@@ -318,7 +317,6 @@ export function ChatView({
   live: LiveState | null
   streaming: boolean
   steps: RunStep[]
-  maxSteps: number
   loading: boolean
   error: string | null
   onModelChange: (id: string) => void
@@ -559,7 +557,7 @@ export function ChatView({
                 ariaLabel="Model"
               />
               <div className="composer-right">
-                <StepMenu steps={steps} maxSteps={maxSteps} streaming={streaming} />
+                <StepMenu messages={messages} steps={steps} streaming={streaming} />
                 {streaming ? (
                   <button className="icon-action" onClick={onStop} aria-label="Stop" title="Stop">
                     <svg viewBox="0 0 24 24" aria-hidden="true">

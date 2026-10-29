@@ -55,7 +55,6 @@ export default function App() {
   const [modelId, setModelId] = useState('')
   const [live, setLive] = useState<LiveState | null>(null)
   const [steps, setSteps] = useState<RunStep[]>([])
-  const [maxSteps, setMaxSteps] = useState(0)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
@@ -88,7 +87,6 @@ export default function App() {
       )
       setSteps((current) => beginStep(current, event.step))
     } else if (event.type === 'step') {
-      setMaxSteps(event.maxSteps)
       setLive((current) => (current ? { ...current, step: event.step } : current))
       setSteps((current) => beginStep(current, event.step))
     } else if (event.type === 'token') {
@@ -210,7 +208,6 @@ export default function App() {
       subscriptionRef.current = subscription
       setLive(null)
       setSteps([])
-      setMaxSteps(0)
       setStreaming(false)
       setError(null)
 
@@ -312,7 +309,6 @@ export default function App() {
       setMessages([])
       setLive(null)
       setSteps([])
-      setMaxSteps(0)
       setStreaming(false)
       setMessagesLoading(false)
       return
@@ -488,7 +484,6 @@ export default function App() {
         live={live}
         streaming={streaming}
         steps={steps}
-        maxSteps={maxSteps}
         loading={projectsLoading || chatsLoading || messagesLoading}
         error={error}
         onModelChange={setModelId}

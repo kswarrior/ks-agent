@@ -1282,6 +1282,83 @@ code {
   border-radius: 8px;
 }
 
+.plan-title {
+  padding: 2px 8px 6px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-list {
+  gap: 1px;
+}
+
+.plan-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.plan-item.running {
+  background: var(--accent-soft);
+}
+
+.plan-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.plan-dot.pending {
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.plan-dot.running {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(240, 179, 91, 0.14);
+  animation: plan-dot-pulse 1.4s ease-in-out infinite;
+}
+
+.plan-dot.done {
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(86, 214, 139, 0.1);
+}
+
+.plan-text {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.plan-item.running .plan-text {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.plan-item.done .plan-text {
+  color: var(--muted);
+}
+
+@keyframes plan-dot-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(240, 179, 91, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(240, 179, 91, 0.04);
+  }
+}
+
 .step-item.active {
   background: var(--accent-soft);
 }

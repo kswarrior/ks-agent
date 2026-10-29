@@ -1,7 +1,38 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { RunStep } from '../types'
+import type { Message, RunStep } from '../types'
 import { describeTool, parseToolArgs, toolLabel } from '../toolDisplay'
+
+type PlanStep = { text: string; done: boolean }
+type PlanSnapshot = { title: string; steps: PlanStep[] }
+
+function latestPlan(messages: Message[]): PlanSnapshot | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role === 'user') break
+    if (message.role !== 'assistant' || !message.toolCalls) continue
+    for (let callIndex = message.toolCalls.length - 1; callIndex >= 0; callIndex -= 1) {
+      const call = message.toolCalls[callIndex]
+      if (call.function.name !== 'update_plan') continue
+      const args = parseToolArgs(call.function.arguments)
+      const title = typeof args.title === 'string' && args.title.trim() ? args.title.trim() : 'Plan'
+      const rawSteps = Array.isArray(args.steps) ? args.steps : []
+      const steps: PlanStep[] = []
+      for (const item of rawSteps) {
+        if (typeof item === 'string') {
+          if (item.trim()) steps.push({ text: item.trim(), done: false })
+          continue
+        }
+        if (!item || typeof item !== 'object') continue
+        const step = item as Record<string, unknown>
+        if (typeof step.text !== 'string' || !step.text.trim()) continue
+        steps.push({ text: step.text.trim(), done: step.done === true })
+      }
+      if (steps.length > 0) return { title, steps }
+    }
+  }
+  return null
+}
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)} ms`
@@ -29,12 +60,12 @@ function stepStatusLabel(step: RunStep): string {
 }
 
 export function StepMenu({
+  messages,
   steps,
-  maxSteps,
   streaming
 }: {
+  messages: Message[]
   steps: RunStep[]
-  maxSteps: number
   streaming: boolean
 }) {
   const [open, setOpen] = useState(false)
@@ -47,6 +78,14 @@ export function StepMenu({
   const ordered = [...steps].sort((a, b) => a.step - b.step)
   const latest = ordered[ordered.length - 1]
   const currentStep = latest?.step ?? 0
+  const plan = useMemo(() => latestPlan(messages), [messages])
+  const completedPlanSteps = plan?.steps.filter((step) => step.done).length ?? 0
+  const activePlanIndex = plan && streaming ? plan.steps.findIndex((step) => !step.done) : -1
+  const countLabel = plan
+    ? `${completedPlanSteps}/${plan.steps.length}`
+    : ordered.length > 0
+      ? String(currentStep)
+      : ''
 
   const position = () => {
     const next = triggerRef.current?.getBoundingClientRect()
@@ -81,8 +120,8 @@ export function StepMenu({
   }, [open])
 
   useEffect(() => {
-    if (steps.length === 0 && !streaming) setOpen(false)
-  }, [steps.length, streaming])
+    if (steps.length === 0 && !streaming && !plan) setOpen(false)
+  }, [steps.length, streaming, plan])
 
   useEffect(() => {
     if (!open || !streaming) return
@@ -93,9 +132,9 @@ export function StepMenu({
   useEffect(() => {
     if (!open) return
     activeRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [open, ordered.length, latest?.status, latest?.content.length, latest?.tools.length])
+  }, [open, plan, ordered.length, latest?.status, latest?.content.length, latest?.tools.length])
 
-  if (ordered.length === 0 && !streaming) return null
+  if (ordered.length === 0 && !streaming && !plan) return null
 
   return (
     <div className="step-menu">
@@ -125,10 +164,7 @@ export function StepMenu({
           </svg>
         )}
         <span>Steps</span>
-        <span className="step-btn-count">
-          {currentStep}
-          {maxSteps ? `/${maxSteps}` : ''}
-        </span>
+        {countLabel && <span className="step-btn-count">{countLabel}</span>}
         <svg
           className="step-caret"
           viewBox="0 0 24 24"
@@ -157,7 +193,7 @@ export function StepMenu({
             }}
           >
             <div className="step-popup-head">
-              <span>Run steps</span>
+              <span>{plan ? 'Plan' : 'Run steps'}</span>
               <span className="step-popup-meta">
                 {streaming && (
                   <span className="step-live">
@@ -165,13 +201,29 @@ export function StepMenu({
                     Live
                   </span>
                 )}
-                <span>
-                  {currentStep}
-                  {maxSteps ? ` / ${maxSteps}` : ''}
-                </span>
+                {countLabel && <span>{countLabel}</span>}
               </span>
             </div>
-            {ordered.length === 0 ? (
+            {plan ? (
+              <>
+                {plan.title !== 'Plan' && <div className="plan-title">{plan.title}</div>}
+                <ol className="step-list plan-list">
+                  {plan.steps.map((step, index) => {
+                    const status = step.done ? 'done' : index === activePlanIndex ? 'running' : 'pending'
+                    return (
+                      <li
+                        key={`${index}-${step.text}`}
+                        ref={status === 'running' ? activeRef : undefined}
+                        className={`plan-item ${status}`}
+                      >
+                        <span className={`plan-dot ${status}`} aria-hidden="true" />
+                        <span className="plan-text">{step.text}</span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </>
+            ) : ordered.length === 0 ? (
               <div className="step-empty">Waiting for the first step…</div>
             ) : (
               <ol className="step-list">
