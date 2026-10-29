@@ -184,7 +184,7 @@ export class SkillRegistry {
 
   private removeSkillPath(file: string): void {
     const folder = path.dirname(file)
-    if (path.basename(file).toLowerCase() === 'skill.md' && path.basename(folder) !== path.basename(this.writableDir())) {
+    if (path.basename(file).toLowerCase() === 'skill.md' && folder !== this.writableDir()) {
       fs.rmSync(folder, { recursive: true, force: true })
     } else {
       fs.rmSync(file, { force: true })
