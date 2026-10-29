@@ -487,20 +487,21 @@ export class LspRegistry {
           .map(([, client]) => client)
         const ready = clients.find((client) => client.status === 'ready')
         const error = entry.error ?? clients.find((client) => client.error)?.error
+        const status: LspServerInfo['status'] = entry.error
+          ? 'error'
+          : ready
+            ? 'ready'
+            : clients.some((client) => client.status === 'starting')
+              ? 'starting'
+              : clients.some((client) => client.status === 'error')
+                ? 'error'
+                : 'stopped'
         return {
           name: entry.name,
           command: entry.config ? [entry.config.command, ...entry.config.args].join(' ') : '',
           extensions: entry.config?.extensions ?? [],
           languageId: entry.config?.languageId ?? '',
-          status: entry.error
-            ? 'error'
-            : ready
-              ? 'ready'
-              : clients.some((client) => client.status === 'starting')
-                ? 'starting'
-                : clients.some((client) => client.status === 'error')
-                  ? 'error'
-                  : 'stopped',
+          status,
           ...(error ? { error } : {})
         }
       })
