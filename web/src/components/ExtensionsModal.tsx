@@ -10,9 +10,10 @@ import {
 } from '../api'
 import type { ExtensionInfo, LspServerInfo, McpServerInfo, SkillInfo } from '../types'
 import { AddLspForm, AddMcpForm, AddSkillForm } from './ConfigForms'
-import { Modal } from './Modal'
+import { ConfirmModal, Modal } from './Modal'
 
 type ExtensionTab = 'extensions' | 'skills' | 'mcp' | 'lsp'
+type ExtensionView = 'list' | 'add'
 
 const TABS: { id: ExtensionTab; label: string }[] = [
   { id: 'extensions', label: 'Extensions' },
@@ -24,15 +25,15 @@ const TABS: { id: ExtensionTab; label: string }[] = [
 const TAB_EMPTY: Record<Exclude<ExtensionTab, 'extensions'>, { title: string; body: string }> = {
   skills: {
     title: 'No skills found',
-    body: 'Add a folder with a SKILL.md (name + description frontmatter) under skills/ or .opencode/skills.'
+    body: 'Add a folder with a SKILL.md (name + description frontmatter) under .ks-agent/skills/, skills/ or .opencode/skills.'
   },
   mcp: {
     title: 'No MCP servers configured',
-    body: 'Add stdio or HTTP MCP servers to mcp.json, then reload to load their tools.'
+    body: 'Add stdio, Streamable HTTP or legacy SSE servers to .ks-agent/mcp.json, then reload to load their tools.'
   },
   lsp: {
     title: 'No language servers configured',
-    body: 'Add language servers to lsp.json to get lsp_diagnostics errors and warnings for source files.'
+    body: 'Add language servers to .ks-agent/lsp.json to get lsp_diagnostics errors and warnings for source files.'
   }
 }
 
@@ -48,6 +49,12 @@ const TAB_BUTTON: Record<ExtensionTab, string> = {
   skills: 'Reload skills',
   mcp: 'Reload MCP servers',
   lsp: 'Reload language servers'
+}
+
+const ADD_BUTTON: Record<Exclude<ExtensionTab, 'extensions'>, string> = {
+  skills: 'Add skill',
+  mcp: 'Add MCP server',
+  lsp: 'Add language server'
 }
 
 export function ExtensionsModal({
@@ -72,26 +79,46 @@ export function ExtensionsModal({
   onRefreshLsp: () => Promise<void>
 }) {
   const [tab, setTab] = useState<ExtensionTab>('extensions')
+  const [view, setView] = useState<ExtensionView>('list')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: Exclude<ExtensionTab, 'extensions'>; name: string } | null>(
+    null
+  )
+
+  const refreshTab = async (target: ExtensionTab) => {
+    if (target === 'extensions') await onRefreshExtensions()
+    else if (target === 'skills') await onRefreshSkills()
+    else if (target === 'mcp') await onRefreshMcp()
+    else await onRefreshLsp()
+  }
 
   const reload = async () => {
     setBusy(true)
     setError(null)
     try {
-      if (tab === 'extensions') {
-        await reloadExtensions()
-        await onRefreshExtensions()
-      } else if (tab === 'skills') {
-        await reloadSkills()
-        await onRefreshSkills()
-      } else if (tab === 'mcp') {
-        await reloadMcpServers()
-        await onRefreshMcp()
-      } else {
-        await reloadLspServers()
-        await onRefreshLsp()
-      }
+      if (tab === 'extensions') await reloadExtensions()
+      else if (tab === 'skills') await reloadSkills()
+      else if (tab === 'mcp') await reloadMcpServers()
+      else await reloadLspServers()
+      await refreshTab(tab)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async () => {
+    if (!confirmDelete) return
+    setBusy(true)
+    setError(null)
+    try {
+      if (confirmDelete.kind === 'skills') await deleteSkill(confirmDelete.name)
+      else if (confirmDelete.kind === 'mcp') await deleteMcpServer(confirmDelete.name)
+      else await deleteLspServer(confirmDelete.name)
+      await refreshTab(confirmDelete.kind)
+      setConfirmDelete(null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
