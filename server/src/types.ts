@@ -155,6 +155,9 @@ export interface AgentEvent {
     | 'tool_start'
     | 'tool_end'
     | 'retry'
+    | 'summary_start'
+    | 'summary'
+    | 'summary_error'
     | 'done'
     | 'error'
   [key: string]: unknown

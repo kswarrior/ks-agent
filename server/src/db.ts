@@ -3,7 +3,17 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.js'
-import type { Chat, ExtensionKind, Message, ModelEntry, Project, Provider, Role, ToolCall } from './types.js'
+import type {
+  Chat,
+  ChatSummary,
+  ExtensionKind,
+  Message,
+  ModelEntry,
+  Project,
+  Provider,
+  Role,
+  ToolCall
+} from './types.js'
 
 const dbPath = path.join(config.dataDir, 'ksagent.db')
 fs.mkdirSync(path.dirname(dbPath), { recursive: true })
@@ -62,6 +72,12 @@ CREATE TABLE IF NOT EXISTS chat_disabled_extensions (
   name TEXT NOT NULL,
   PRIMARY KEY (chat_id, kind, name)
 );
+CREATE TABLE IF NOT EXISTS chat_summaries (
+  chat_id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+  summary TEXT NOT NULL,
+  covered_message_id TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_chats_project ON chats(project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_chat_disabled_chat ON chat_disabled_extensions(chat_id);
@@ -95,6 +111,12 @@ type MessageRow = {
   duration_ms: number | null
   created_at: number
 }
+type ChatSummaryRow = {
+  chat_id: string
+  summary: string
+  covered_message_id: string
+  updated_at: number
+}
 type ProviderRow = { id: string; name: string; base_url: string; api_key: string; created_at: number }
 type ModelRow = {
   id: string
@@ -125,6 +147,12 @@ const message = (r: MessageRow): Message => ({
   modelId: r.model_id ?? null,
   durationMs: r.duration_ms ?? null,
   createdAt: r.created_at
+})
+const chatSummary = (r: ChatSummaryRow): ChatSummary => ({
+  chatId: r.chat_id,
+  summary: r.summary,
+  coveredMessageId: r.covered_message_id,
+  updatedAt: r.updated_at
 })
 const provider = (r: ProviderRow): Provider => ({
   id: r.id,
@@ -281,6 +309,42 @@ export function insertMessage(input: {
     row.created_at
   )
   return message(row)
+}
+
+export function listMessagesAfter(chatId: string, messageId: string): Message[] {
+  const target = db
+    .prepare('SELECT rowid AS message_row FROM messages WHERE id = ? AND chat_id = ?')
+    .get(messageId, chatId) as { message_row: number } | undefined
+  if (!target) return listMessages(chatId)
+  return (
+    db
+      .prepare('SELECT * FROM messages WHERE chat_id = ? AND rowid > ? ORDER BY created_at ASC, rowid ASC')
+      .all(chatId, target.message_row) as MessageRow[]
+  ).map(message)
+}
+
+export function getChatSummary(chatId: string): ChatSummary | null {
+  const row = db.prepare('SELECT * FROM chat_summaries WHERE chat_id = ?').get(chatId) as
+    | ChatSummaryRow
+    | undefined
+  return row ? chatSummary(row) : null
+}
+
+export function saveChatSummary(chatId: string, summary: string, coveredMessageId: string): ChatSummary {
+  const row: ChatSummaryRow = {
+    chat_id: chatId,
+    summary,
+    covered_message_id: coveredMessageId,
+    updated_at: Date.now()
+  }
+  db.prepare(
+    'INSERT INTO chat_summaries (chat_id, summary, covered_message_id, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(chat_id) DO UPDATE SET summary = excluded.summary, covered_message_id = excluded.covered_message_id, updated_at = excluded.updated_at'
+  ).run(row.chat_id, row.summary, row.covered_message_id, row.updated_at)
+  return chatSummary(row)
+}
+
+export function removeChatSummary(chatId: string): void {
+  db.prepare('DELETE FROM chat_summaries WHERE chat_id = ?').run(chatId)
 }
 
 export function listProviders(): Provider[] {
