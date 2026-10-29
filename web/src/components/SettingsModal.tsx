@@ -143,14 +143,18 @@ export function SettingsModal({
 }) {
   const [tab, setTab] = useState<SettingsTab>('providers')
   const [view, setView] = useState<SettingsView>('list')
+  const [selectedPresetId, setSelectedPresetId] = useState('custom')
   const [providerName, setProviderName] = useState('')
-  const [baseUrl, setBaseUrl] = useState('https://api.openai.com/v1')
+  const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '')
   const [modelName, setModelName] = useState('')
   const [modelId, setModelId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const selectedPreset = PROVIDER_PRESETS.find((preset) => preset.id === selectedPresetId) ?? CUSTOM_PRESET
+  const isLocalEndpoint = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(baseUrl)
 
   useEffect(() => {
     if (!providers.some((provider) => provider.id === providerId)) {
