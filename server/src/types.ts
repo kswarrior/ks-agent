@@ -129,6 +129,19 @@ export interface ChatKnowledgeInfo {
   updatedAt: number
 }
 
+export type KnowledgeJobStatus = 'running' | 'completed' | 'error'
+
+export interface KnowledgeJob {
+  id: string
+  projectId: string
+  modelId?: string
+  status: KnowledgeJobStatus
+  startedAt: number
+  finishedAt?: number
+  entryId?: string
+  error?: string
+}
+
 export type ExtensionKind = 'skill' | 'mcp' | 'lsp' | 'knowledge'
 
 export interface SkillInfo {

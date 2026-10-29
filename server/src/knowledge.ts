@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
@@ -9,7 +10,7 @@ import {
   updateKnowledge
 } from './db.js'
 import { streamCompletion } from './llm.js'
-import type { KnowledgeEntry, ModelEntry, Project, Provider } from './types.js'
+import type { KnowledgeEntry, KnowledgeJob, ModelEntry, Project, Provider } from './types.js'
 
 const MAX_SCANNED_FILES = 1200
 const MAX_SCAN_DEPTH = 8
@@ -19,6 +20,12 @@ const MAX_KEY_FILE_CHARS = 10_000
 const MAX_KNOWLEDGE_CHARS = 20_000
 const MAX_PROMPT_CHARS = 40_000
 const MAX_PROMPT_ENTRY_CHARS = 12_000
+const SUMMARY_JOB_TIMEOUT_MS = 120_000
+
+interface SummaryJob extends KnowledgeJob {
+  controller: AbortController
+  timer: ReturnType<typeof setTimeout>
+}
 
 const SKIP_DIRS = new Set([
   '.git',
