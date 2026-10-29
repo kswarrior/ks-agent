@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import readline from 'node:readline'
 import { config } from './config.js'
+import { readJsonConfig, writeJsonConfig } from './configFile.js'
+import { ConfigError } from './errors.js'
 import type { McpServerInfo, McpToolInfo, ToolDef, ToolResult } from './types.js'
 
 type Transport = 'stdio' | 'http' | 'sse'
@@ -133,6 +135,54 @@ function parseConfig(raw: unknown): Array<{ name: string; value: unknown }> {
     return Object.entries(source as Record<string, unknown>).map(([name, value]) => ({ name, value }))
   }
   return Object.entries(obj).map(([name, value]) => ({ name, value }))
+}
+
+function configServerMap(root: Record<string, unknown>): Record<string, unknown> {
+  if (Array.isArray(root.servers)) {
+    const map: Record<string, unknown> = {}
+    for (const item of root.servers) {
+      const entry = asRecord(item)
+      const name = asString(entry.name)
+      if (name) map[name] = item
+    }
+    return map
+  }
+  if (root.mcpServers && typeof root.mcpServers === 'object') return asRecord(root.mcpServers)
+  if (root.servers && typeof root.servers === 'object') return asRecord(root.servers)
+  return {}
+}
+
+function serverToConfig(server: ServerConfig): Record<string, unknown> {
+  const value: Record<string, unknown> = {
+    transport: server.transport,
+    args: server.args,
+    timeoutMs: server.timeoutMs
+  }
+  if (server.command) value.command = server.command
+  if (Object.keys(server.env).length) value.env = server.env
+  if (server.cwd) value.cwd = server.cwd
+  if (server.url) value.url = server.url
+  if (Object.keys(server.headers).length) value.headers = server.headers
+  return value
+}
+
+function validateStringMap(value: unknown, label: string): void {
+  if (value === undefined) return
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ConfigError(`${label} must be an object of string values.`)
+  }
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item !== 'string' || !key.trim() || key.length > 200 || item.length > 4000) {
+      throw new ConfigError(`${label} must use non-empty string keys and values.`)
+    }
+  }
+}
+
+function validateArgs(value: unknown): void {
+  if (value === undefined) return
+  if (!Array.isArray(value) || value.length > 100 || value.some((item) => typeof item !== 'string' || item.length > 4000)) {
+    throw new ConfigError('args must be an array of up to 100 strings.')
+  }
 }
 
 function mcpResultToText(result: unknown): { ok: boolean; output: string } {
