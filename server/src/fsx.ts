@@ -21,6 +21,9 @@ export function cleanRelative(input: string): string {
  * absolute paths, NUL bytes and symlink escapes (existing target or parent).
  */
 export function resolveInProject(root: string, rel: string): string | null {
+  const raw = (rel ?? '').trim()
+  if (raw.includes('\0')) return null
+  if (path.isAbsolute(raw) || /^[A-Za-z]:[\\/]/.test(raw)) return null
   const cleaned = cleanRelative(rel)
   if (cleaned.includes('\0')) return null
   const absRoot = path.resolve(root)
