@@ -73,7 +73,33 @@ export interface ExtensionInfo {
   error?: string
 }
 
-export type ExtensionKind = 'skill' | 'mcp' | 'lsp'
+export type KnowledgeScope = 'global' | 'project'
+export type KnowledgeSource = 'manual' | 'generated'
+
+export interface KnowledgeEntry {
+  id: string
+  scope: KnowledgeScope
+  projectId: string | null
+  title: string
+  content: string
+  enabled: boolean
+  source: KnowledgeSource
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ChatKnowledgeInfo {
+  id: string
+  scope: KnowledgeScope
+  projectId: string | null
+  title: string
+  source: KnowledgeSource
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export type ExtensionKind = 'skill' | 'mcp' | 'lsp' | 'knowledge'
 
 export interface SkillInfo {
   name: string
@@ -112,6 +138,7 @@ export interface LspServerInfo {
 
 export interface ChatExtensionsState {
   skills: Array<SkillInfo & { enabled: boolean }>
+  knowledge: ChatKnowledgeInfo[]
   mcpServers: Array<McpServerInfo & { enabled: boolean }>
   lspServers: Array<LspServerInfo & { enabled: boolean }>
 }

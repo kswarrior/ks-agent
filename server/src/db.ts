@@ -7,6 +7,9 @@ import type {
   Chat,
   ChatSummary,
   ExtensionKind,
+  KnowledgeEntry,
+  KnowledgeScope,
+  KnowledgeSource,
   Message,
   ModelEntry,
   Project,
@@ -78,9 +81,21 @@ CREATE TABLE IF NOT EXISTS chat_summaries (
   covered_message_id TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS knowledge (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_chats_project ON chats(project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_chat_disabled_chat ON chat_disabled_extensions(chat_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_project ON knowledge(project_id, updated_at DESC);
 `)
 
 function ensureColumn(table: string, column: string, definition: string): void {
@@ -115,6 +130,17 @@ type ChatSummaryRow = {
   chat_id: string
   summary: string
   covered_message_id: string
+  updated_at: number
+}
+type KnowledgeRow = {
+  id: string
+  scope: KnowledgeScope
+  project_id: string | null
+  title: string
+  content: string
+  enabled: number
+  source: KnowledgeSource
+  created_at: number
   updated_at: number
 }
 type ProviderRow = { id: string; name: string; base_url: string; api_key: string; created_at: number }
@@ -152,6 +178,17 @@ const chatSummary = (r: ChatSummaryRow): ChatSummary => ({
   chatId: r.chat_id,
   summary: r.summary,
   coveredMessageId: r.covered_message_id,
+  updatedAt: r.updated_at
+})
+const knowledgeEntry = (r: KnowledgeRow): KnowledgeEntry => ({
+  id: r.id,
+  scope: r.scope,
+  projectId: r.project_id,
+  title: r.title,
+  content: r.content,
+  enabled: Boolean(r.enabled),
+  source: r.source,
+  createdAt: r.created_at,
   updatedAt: r.updated_at
 })
 const provider = (r: ProviderRow): Provider => ({
