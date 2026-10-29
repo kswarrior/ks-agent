@@ -291,6 +291,10 @@ export function SettingsModal({
       setError('Retries must be between 0 and 100, or use unlimited.')
       return
     }
+    if (retryDraft.multiplier < 1 || retryDraft.multiplier > 10) {
+      setError('Backoff multiplier must be between 1 and 10.')
+      return
+    }
     setRetrySaving(true)
     setError(null)
     setRetrySaved(false)
