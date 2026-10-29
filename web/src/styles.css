@@ -498,6 +498,10 @@ code {
   margin-top: 6px;
 }
 
+.msg.assistant .tool-card + .tool-card {
+  margin-top: 4px;
+}
+
 .muted {
   color: var(--muted);
 }
