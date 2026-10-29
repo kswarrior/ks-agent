@@ -170,3 +170,5 @@ export const createLspServer = (body: {
 }) => req<LspServerInfo[]>('/api/lsp', json('POST', body))
 export const deleteLspServer = (name: string) =>
   req<LspServerInfo[]>(`/api/lsp/${encodeURIComponent(name)}`, { method: 'DELETE' })
+export const installLspServer = (name: string) =>
+  req<LspServerInfo[]>(`/api/lsp/${encodeURIComponent(name)}/install`, { method: 'POST' })

@@ -603,6 +603,15 @@ app.delete('/api/lsp/:name', (c) => {
   }
 })
 
+app.post('/api/lsp/:name/install', async (c) => {
+  try {
+    return c.json(await lsp.install(c.req.param('name')))
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
 app.post('/api/lsp/reload', (c) => c.json(lsp.reload()))
 
 app.all('/api/*', (c) => c.json(errorJson(`unknown API route: ${c.req.method} ${c.req.path}`, 404), 404))
