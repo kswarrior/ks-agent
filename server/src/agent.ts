@@ -288,8 +288,13 @@ function groupChars(group: Message[]): number {
   return group.reduce((sum, message) => sum + llmMessageChars(messageToLLM(message)), 0)
 }
 
+function summaryApplies(history: Message[], summary: ChatSummary | null): summary is ChatSummary {
+  if (!summary) return false
+  return summary.coveredMessageId === '' || history.some((message) => message.id === summary.coveredMessageId)
+}
+
 function historyAfterSummary(history: Message[], summary: ChatSummary | null): Message[] {
-  if (!summary) return history
+  if (!summary || !summary.coveredMessageId) return history
   const index = history.findIndex((message) => message.id === summary.coveredMessageId)
   return index >= 0 ? history.slice(index + 1) : history
 }
@@ -431,12 +436,12 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
   const runStartedAt = Date.now()
 
   const buildMessages = () => {
-    const applied = summary && history.some((message) => message.id === summary?.coveredMessageId) ? summary : null
+    const applied = summaryApplies(history, summary) ? summary : null
     return trimHistory(systemWithSummary(system, applied), historyAfterSummary(history, applied), contextCharBudget)
   }
 
   const prepareContext = async (): Promise<LLMMessage[]> => {
-    const applied = summary && history.some((message) => message.id === summary?.coveredMessageId) ? summary : null
+    const applied = summaryApplies(history, summary) ? summary : null
     const remaining = historyAfterSummary(history, applied)
     const groups = groupHistory(remaining)
     const activeSystem = systemWithSummary(system, applied)

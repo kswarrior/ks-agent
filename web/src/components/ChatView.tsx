@@ -46,9 +46,11 @@ function estimateContextTokens(
   let chars = 0
   let visible = messages
   if (summary) {
-    const cutoff = messages.findIndex((message) => message.id === summary.coveredMessageId)
-    if (cutoff >= 0) {
-      visible = messages.slice(cutoff + 1)
+    const cutoff = summary.coveredMessageId
+      ? messages.findIndex((message) => message.id === summary.coveredMessageId)
+      : -1
+    if (!summary.coveredMessageId || cutoff >= 0) {
+      if (cutoff >= 0) visible = messages.slice(cutoff + 1)
       chars += summary.summary.length + MESSAGE_OVERHEAD_CHARS
     }
   }

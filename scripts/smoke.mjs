@@ -1106,6 +1106,18 @@ async function main() {
   )
   const emptySummary = await rawApi('PUT', `/api/chats/${compactChat.id}/summary`, { summary: '   ' })
   assert(emptySummary.status === 400, 'empty summary was accepted')
+  const manualChat = await api('POST', `/api/projects/${project.id}/chats`, {
+    title: 'manual summary smoke',
+    modelId: compactModel.id
+  })
+  await api('PUT', `/api/chats/${manualChat.id}/summary`, {
+    summary: '## Objective\nManual handoff summary.'
+  })
+  const manualRun = await sendMessage(manualChat.id, 'manual summary check', compactModel.id)
+  assert(manualRun.events.some((event) => event.type === 'done'), 'manual summary run did not finish')
+  const manualSystem = (lastProviderBody?.messages ?? []).find((message) => message.role === 'system')?.content ?? ''
+  assert(manualSystem.includes('Manual handoff summary'), 'manual summary was not added to the system prompt')
+  await api('DELETE', `/api/chats/${manualChat.id}`)
   await api('DELETE', `/api/chats/${compactChat.id}/summary`)
   const deletedSummary = await api('GET', `/api/chats/${compactChat.id}/summary`)
   assert(deletedSummary === null, 'summary was not deleted')
