@@ -396,6 +396,137 @@ async function main() {
   assert(unsafeCommand('npm run build', project.path) === null, 'shell guard blocked a safe command')
   console.log('PASS project create + path/shell guards')
 
+  process.env.KS_DATA_DIR = path.join(temp, 'tool-data')
+  process.env.KS_PROJECTS_DIR = path.join(temp, 'tool-projects')
+  process.env.KS_EXTENSIONS_DIR = path.join(temp, 'tool-extensions')
+  const { executeBuiltinTool } = await import('../dist-server/tools.js')
+  const callTool = (name, args) => executeBuiltinTool(name, args, { projectPath: project.path })
+  const okTool = async (name, args) => {
+    const result = await callTool(name, args)
+    assert(result.ok, `${name} failed: ${result.output}`)
+    return result.output
+  }
+  const failTool = async (name, args) => {
+    const result = await callTool(name, args)
+    assert(!result.ok, `${name} should have failed but returned: ${result.output}`)
+    return result.output
+  }
+
+  await okTool('create_dir', { path: 'src/utils' })
+  await okTool('create_dir', { path: 'docs' })
+  await okTool('write_file', {
+    path: 'src/utils/math.ts',
+    content: 'export const sum = (a: number, b: number) => a + b\n'
+  })
+  await okTool('write_file', {
+    path: 'src/index.ts',
+    content: "import { sum } from './utils/math'\nconsole.log(sum(1, 2))\n"
+  })
+  await okTool('write_file', { path: 'docs/readme.md', content: '# Smoke docs\n' })
+
+  const byName = await okTool('find_files', { query: 'math' })
+  assert(byName.includes('src/utils/math.ts'), `find_files by name missed math.ts: ${byName}`)
+  const byGlob = await okTool('find_files', { query: '*.md', match: 'glob' })
+  assert(byGlob.includes('docs/readme.md'), `find_files glob missed readme.md: ${byGlob}`)
+  const byRegex = await okTool('find_files', { query: '^math\\.ts$', match: 'regex' })
+  assert(byRegex.includes('src/utils/math.ts'), `find_files regex missed math.ts: ${byRegex}`)
+  const byDir = await okTool('find_files', { query: 'utils', type: 'dir' })
+  assert(byDir.includes('src/utils/'), `find_files dir search missed src/utils: ${byDir}`)
+  await failTool('find_files', { query: 'math', path: '../' })
+  const tree = await okTool('tree', { path: '.', depth: 3 })
+  assert(
+    tree.includes('src/') && tree.includes('utils/') && tree.includes('math.ts'),
+    `tree output is incomplete: ${tree}`
+  )
+
+  const globbed = await okTool('glob', { pattern: '**/*.ts' })
+  assert(globbed.includes('src/index.ts') && globbed.includes('src/utils/math.ts'), `glob missed files: ${globbed}`)
+  const grepped = await okTool('grep', { pattern: 'export const diff', include: '*.ts' })
+  assert(grepped.includes('src/utils/math.ts'), `grep missed math.ts: ${grepped}`)
+  const listed = await okTool('list_dir', { path: 'src' })
+  assert(listed.includes('utils/'), `list_dir missed utils: ${listed}`)
+  const info = await okTool('get_file_info', { path: 'src/utils/math.ts' })
+  assert(info.includes('lines:'), `get_file_info missing line count: ${info}`)
+  await okTool('update_plan', { title: 'Tools smoke', steps: [{ text: 'test tools', done: true }] })
+  assert(fs.readFileSync(path.join(project.path, 'plan.md'), 'utf8').includes('[x] test tools'), 'update_plan failed')
+
+  await okTool('append_file', {
+    path: 'src/utils/math.ts',
+    content: 'export const diff = (a: number, b: number) => a - b\n'
+  })
+  const mathFile = path.join(project.path, 'src', 'utils', 'math.ts')
+  assert(fs.readFileSync(mathFile, 'utf8').includes('export const diff'), 'append_file failed')
+  await okTool('copy_file', { from: 'src/utils/math.ts', to: 'src/utils/math.copy.ts' })
+  assert(
+    fs.readFileSync(path.join(project.path, 'src', 'utils', 'math.copy.ts'), 'utf8').includes('export const diff'),
+    'copy_file failed'
+  )
+  await failTool('copy_file', { from: 'src/utils/math.ts', to: 'src/utils/math.copy.ts' })
+  await okTool('copy_file', { from: 'src/utils/math.ts', to: 'src/utils/math.copy.ts', overwrite: true })
+  const multi = await okTool('read_multiple_files', { paths: ['src/index.ts', 'docs/readme.md'] })
+  assert(
+    multi.includes('=== src/index.ts ===') && multi.includes('=== docs/readme.md ==='),
+    `read_multiple_files missed headers: ${multi}`
+  )
+  await failTool('read_multiple_files', { paths: ['../outside.txt'] })
+  await okTool('move_file', { from: 'src/utils/math.copy.ts', to: 'src/utils/math.moved.ts' })
+  assert(fs.existsSync(path.join(project.path, 'src', 'utils', 'math.moved.ts')), 'move_file failed')
+  await okTool('delete_file', { path: 'src/utils/math.moved.ts' })
+  assert(!fs.existsSync(path.join(project.path, 'src', 'utils', 'math.moved.ts')), 'delete_file failed')
+
+  await okTool('write_file', { path: 'patch-demo.txt', content: 'alpha\nbeta\ngamma\ndelta\nepsilon\n' })
+  await okTool('apply_patch', {
+    path: 'patch-demo.txt',
+    patch: [
+      '--- a/patch-demo.txt',
+      '+++ b/patch-demo.txt',
+      '@@ -2,1 +2,1 @@',
+      '-beta',
+      '+BETA',
+      '@@ -4,1 +4,2 @@',
+      '-delta',
+      '+DELTA',
+      '+DELTA2'
+    ].join('\n')
+  })
+  assert(
+    fs.readFileSync(path.join(project.path, 'patch-demo.txt'), 'utf8') === 'alpha\nBETA\ngamma\nDELTA\nDELTA2\nepsilon\n',
+    'apply_patch multi-hunk result is wrong'
+  )
+  await okTool('write_file', { path: 'new-from-patch.txt', content: '' })
+  await okTool('apply_patch', { path: 'new-from-patch.txt', patch: '@@ -0,0 +1,2 @@\n+hello\n+patch\n' })
+  assert(
+    fs.readFileSync(path.join(project.path, 'new-from-patch.txt'), 'utf8') === 'hello\npatch\n',
+    'apply_patch new-file result is wrong'
+  )
+  await failTool('apply_patch', {
+    path: 'patch-demo.txt',
+    patch: '@@ -1,1 +1,1 @@\n-nope\n+x\n'
+  })
+
+  const shell = await okTool('run_shell', { command: 'printf shell-ok' })
+  assert(shell.includes('shell-ok') && shell.includes('exit code: 0'), `run_shell failed: ${shell}`)
+  console.log('PASS file tools (find/tree/glob/grep/list/info/plan/append/copy/move/delete/patch/shell)')
+
+  await okTool('git_init', { branch: 'main' })
+  assert((await okTool('git_status', {})).includes('branch: main'), 'git_init did not create branch main')
+  await okTool('git_commit', { message: 'initial tools smoke' })
+  assert((await okTool('git_log', { limit: 5 })).includes('initial tools smoke'), 'git_log missed commit')
+  await okTool('git_branch', { action: 'create', name: 'feature/tools' })
+  assert((await okTool('git_status', {})).includes('branch: feature/tools'), 'git_branch did not checkout')
+  await okTool('append_file', { path: 'docs/readme.md', content: '\nfeature line\n' })
+  assert((await okTool('git_diff', { file: 'docs/readme.md' })).includes('feature line'), 'git_diff missed change')
+  await okTool('git_commit', { message: 'add feature line' })
+  await okTool('git_branch', { action: 'checkout', name: 'main' })
+  const remotePath = path.join(temp, 'remote.git')
+  execFileSync('git', ['init', '--bare', remotePath], { stdio: 'ignore' })
+  execFileSync('git', ['remote', 'add', 'origin', remotePath], { cwd: project.path })
+  assert((await okTool('git_push', { remote: 'origin', branch: 'main' })).length > 0, 'git_push returned no output')
+  assert((await okTool('git_pull', { remote: 'origin', branch: 'main' })).length > 0, 'git_pull returned no output')
+  await failTool('git_diff', { file: '../outside.txt' })
+  await failTool('git_branch', { action: 'create', name: 'bad name' })
+  console.log('PASS git tools (init/status/diff/log/branch/commit/push/pull + guards)')
+
   const provider = await api('POST', '/api/providers', {
     name: 'mock',
     baseUrl: `http://127.0.0.1:${mockPort}/v1`,
