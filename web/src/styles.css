@@ -1003,6 +1003,10 @@ code {
     max-width: 150px;
   }
 
+  .chat-actions {
+    display: flex;
+  }
+
   .composer {
     width: calc(100% - 16px);
     margin-bottom: 10px;
