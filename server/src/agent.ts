@@ -421,7 +421,10 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
   const system = systemMessage(project, disabled)
   let history = listMessages(chat.id)
   let summary = getChatSummary(chat.id)
-  const contextCharBudget = Math.max(MIN_CONTEXT_CHARS, model.contextWindow * CONTEXT_CHARS_PER_TOKEN)
+  const configuredWindow = Math.round(config.maxContextChars / CONTEXT_CHARS_PER_TOKEN)
+  const contextWindow =
+    Number.isFinite(model.contextWindow) && model.contextWindow > 0 ? model.contextWindow : configuredWindow
+  const contextCharBudget = Math.max(MIN_CONTEXT_CHARS, contextWindow * CONTEXT_CHARS_PER_TOKEN)
   let partial = ''
   let providerAttempts = 0
   const retrySettings = getRetrySettings()
@@ -458,7 +461,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
     await emit({
       type: 'summary_start',
       estimatedTokens: Math.ceil(currentChars / CONTEXT_CHARS_PER_TOKEN),
-      contextWindow: model.contextWindow
+      contextWindow
     })
     try {
       const transcriptBudget = Math.max(

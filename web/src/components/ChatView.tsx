@@ -432,6 +432,13 @@ function SummaryCard({
     if (!editing) setDraft(summary.summary)
   }, [summary.summary, editing])
 
+  useEffect(() => {
+    if (!disabled || !editing) return
+    setDraft(summary.summary)
+    setError(null)
+    setEditing(false)
+  }, [disabled, editing, summary.summary])
+
   const cancel = () => {
     setDraft(summary.summary)
     setError(null)
