@@ -5,13 +5,15 @@ export function Modal({
   onClose,
   children,
   footer,
-  wide
+  wide,
+  fullHeight
 }: {
   title: string
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
   wide?: boolean
+  fullHeight?: boolean
 }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -23,7 +25,10 @@ export function Modal({
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className={`modal ${wide ? 'modal-wide' : ''}`} onMouseDown={(event) => event.stopPropagation()}>
+      <div
+        className={`modal ${wide ? 'modal-wide' : ''} ${fullHeight ? 'modal-screen' : ''}`.trim()}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="modal-head">
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">

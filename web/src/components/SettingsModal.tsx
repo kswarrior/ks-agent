@@ -177,7 +177,7 @@ export function SettingsModal({
   )
 
   return (
-    <Modal title="Settings" onClose={onClose} wide>
+    <Modal title="Settings" onClose={onClose} wide fullHeight>
       <div className="settings-tabs" role="tablist" aria-label="Settings">
         <button
           className={`settings-tab ${tab === 'providers' ? 'active' : ''}`}
