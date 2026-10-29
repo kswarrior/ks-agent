@@ -445,6 +445,13 @@ async function main() {
   assert(globbed.includes('src/index.ts') && globbed.includes('src/utils/math.ts'), `glob missed files: ${globbed}`)
   const grepped = await okTool('grep', { pattern: 'export const sum', include: '*.ts' })
   assert(grepped.includes('src/utils/math.ts'), `grep missed math.ts: ${grepped}`)
+  const read = await okTool('read_file', { path: 'src/index.ts' })
+  assert(read.includes('1: ') && read.includes("import { sum }"), `read_file output is wrong: ${read}`)
+  await okTool('edit_file', { path: 'src/index.ts', old_string: 'sum(1, 2)', new_string: 'sum(2, 3)' })
+  assert(
+    fs.readFileSync(path.join(project.path, 'src', 'index.ts'), 'utf8').includes('sum(2, 3)'),
+    'edit_file failed'
+  )
   const listed = await okTool('list_dir', { path: 'src' })
   assert(listed.includes('utils/'), `list_dir missed utils: ${listed}`)
   const info = await okTool('get_file_info', { path: 'src/utils/math.ts' })
