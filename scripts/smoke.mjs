@@ -1815,20 +1815,23 @@ async function main() {
     'project has more than one generated summary'
   )
 
-  const backgroundStart = await rawApi('POST', `/api/projects/${project.id}/knowledge/summary`, {
+  const summaryBackgroundStart = await rawApi('POST', `/api/projects/${project.id}/knowledge/summary`, {
     background: true,
     modelId: model.id
   })
-  assert(backgroundStart.status === 202, `background summary did not start: ${backgroundStart.status}`)
   assert(
-    backgroundStart.data?.projectId === project.id && backgroundStart.data?.id,
-    `background summary returned a bad job: ${backgroundStart.text}`
+    summaryBackgroundStart.status === 202,
+    `background summary did not start: ${summaryBackgroundStart.status}`
   )
   assert(
-    backgroundStart.data.status === 'running' || backgroundStart.data.status === 'completed',
-    `background summary returned status ${backgroundStart.data.status}`
+    summaryBackgroundStart.data?.projectId === project.id && summaryBackgroundStart.data?.id,
+    `background summary returned a bad job: ${summaryBackgroundStart.text}`
   )
-  let backgroundJob = backgroundStart.data
+  assert(
+    summaryBackgroundStart.data.status === 'running' || summaryBackgroundStart.data.status === 'completed',
+    `background summary returned status ${summaryBackgroundStart.data.status}`
+  )
+  let backgroundJob = summaryBackgroundStart.data
   for (let attempt = 0; attempt < 100 && backgroundJob.status === 'running'; attempt++) {
     await sleep(100)
     const status = await api('GET', `/api/projects/${project.id}/knowledge/summary/status`)
