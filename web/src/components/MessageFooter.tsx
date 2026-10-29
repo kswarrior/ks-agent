@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { copyText } from '../clipboard'
 import { formatDuration } from '../format'
 import type { ModelEntry } from '../types'
 
@@ -17,26 +18,6 @@ function CheckIcon() {
       <path d="m5 12 4 4L19 6" />
     </svg>
   )
-}
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text)
-      return
-    } catch {}
-  }
-  const field = document.createElement('textarea')
-  field.value = text
-  field.setAttribute('readonly', '')
-  field.style.position = 'fixed'
-  field.style.top = '-1000px'
-  field.style.opacity = '0'
-  document.body.appendChild(field)
-  field.select()
-  const copied = document.execCommand('copy')
-  field.remove()
-  if (!copied) throw new Error('Copy failed')
 }
 
 export function MessageFooter({

@@ -462,6 +462,15 @@ export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
           placeholder=".ts, .tsx, .js, .jsx"
         />
       </label>
+      <label className="field">
+        <span>Install command (optional)</span>
+        <input
+          value={installCommand}
+          onChange={(event) => setInstallCommand(event.target.value)}
+          placeholder="npm i -g typescript-language-server typescript"
+        />
+        <small className="muted">Shown on the server card. Run it on the host if the command is missing.</small>
+      </label>
       <ProjectScopeField projects={projects} value={projectIds} onChange={setProjectIds} />
       <FormActions
         busy={busy}

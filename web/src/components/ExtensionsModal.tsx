@@ -8,6 +8,7 @@ import {
   reloadMcpServers,
   reloadSkills
 } from '../api'
+import { copyText } from '../clipboard'
 import type { ExtensionInfo, LspServerInfo, McpServerInfo, Project, SkillInfo } from '../types'
 import { AddLspForm, AddMcpForm, AddSkillForm } from './ConfigForms'
 import { ConfirmModal, Modal } from './Modal'
@@ -60,6 +61,30 @@ const ADD_BUTTON: Record<Exclude<ExtensionTab, 'extensions'>, string> = {
 function scopeLabel(projectIds: string[], projects: Project[]): string {
   if (projectIds.length === 0) return 'All projects'
   return projectIds.map((id) => projects.find((project) => project.id === id)?.name ?? id).join(', ')
+}
+
+function InstallCommand({ command }: { command: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const copy = async () => {
+    try {
+      await copyText(command)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {}
+  }
+
+  return (
+    <div className="lsp-install">
+      <span className="muted small">Install command</span>
+      <div className="lsp-install-row">
+        <code title={command}>{command}</code>
+        <button type="button" className="btn ghost small" onClick={() => void copy()}>
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export function ExtensionsModal({
@@ -357,6 +382,7 @@ export function ExtensionsModal({
                     </div>
                     {server.error && <div className="error-banner small">{server.error}</div>}
                     <code className="muted small">{server.command}</code>
+                    {server.installCommand && <InstallCommand command={server.installCommand} />}
                     {server.extensions.length > 0 && (
                       <div className="chips">
                         {server.extensions.map((extension) => (
