@@ -393,15 +393,6 @@ function SubAgentChat({ subAgentId, streaming }: { subAgentId: string; streaming
   )
 }
 
-const MODES = [
-  { id: 'solo', label: 'Solo', desc: 'Single session', Icon: IconModeSolo },
-  { id: 'swarm', label: 'Swarm', desc: 'Main → 5 sub-agents', Icon: IconModeSwarm },
-  { id: 'hive', label: 'Hive', desc: 'Fractal depth 2', Icon: IconModeHive },
-  { id: 'squad', label: 'Squad', desc: 'Team + Head', Icon: IconModeSquad },
-  { id: 'infinity', label: 'Infinity', desc: 'Unlimited + Preview', Icon: IconModeInfinity },
-] as const
-type ModeId = typeof MODES[number]['id']
-
 const CONTEXT_MODES = [
   { id: 'qa' as const, label: 'Chat / Q&A', desc: 'Prompt + AI output', Icon: IconMessageSquare },
   { id: 'full' as const, label: 'Full Context', desc: 'Prompt + AI + file reads/logs', Icon: IconLayers },
@@ -427,8 +418,6 @@ interface Props {
   activities?: Activity[]
   onContinue?: () => void
   retryInfo?: { attempt: number; maxAttempts: number; delay: number; reason: string; error: string } | null
-  selectedMode?: ModeId | null
-  onSelectMode?: (id: ModeId) => void
   selectedContextMode?: ContextModeId | null
   onSelectContextMode?: (id: ContextModeId) => void
   maxTokens?: number | null
@@ -448,21 +437,6 @@ export function ChatView(props: Props) {
   const [provOpen, setProvOpen] = useState(false)
   const [provFilterId, setProvFilterId] = useState<string | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [localMode, setLocalMode] = useState<ModeId>(() => {
-    try {
-      const v = localStorage.getItem('ks.selectedMode') as ModeId | null
-      return (v && (MODES as any).some((m: any) => m.id === v) ? v : 'solo') as ModeId
-    } catch { return 'solo' }
-  })
-  const selectedMode: ModeId = (props.selectedMode as ModeId) ?? localMode
-  const setSelectedMode = (id: ModeId) => {
-    if (props.onSelectMode) props.onSelectMode(id)
-    else {
-      setLocalMode(id)
-      try { localStorage.setItem('ks.selectedMode', id) } catch {}
-    }
-  }
-  const selectedModeObj = MODES.find(m => m.id === selectedMode) ?? MODES[0]
   // Context mode (Chat/Q&A vs Full) + token settings — lifted to App if provided, else local
   const [localContextMode, setLocalContextMode] = useState<ContextModeId>(() => {
     try {
@@ -946,17 +920,16 @@ export function ChatView(props: Props) {
                   width: 36,
                   height: 36,
                   padding: 0,
-                  background: menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary-bg)' : 'var(--surface-2)',
-                  border: `1px solid ${menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary-border)' : 'var(--border)'}`,
-                  borderRadius: 8,
-                  color: menuOpen || selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary)' : 'var(--text-dim)',
+background: menuOpen || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary-bg)' : 'var(--surface-2)',
+border: `1px solid ${menuOpen || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary-border)' : 'var(--border)'}`,
+color: menuOpen || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff ? 'var(--primary)' : 'var(--text-dim)',
                   cursor: 'pointer',
                   lineHeight: 1,
                   position: 'relative',
                 }}
               >
                 <IconSliders size={16} />
-                {(selectedMode !== 'solo' || selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff) && !menuOpen && (
+                {(selectedContextMode !== 'qa' || selectedMaxTokens != null || thinkingOff) && !menuOpen && (
                   <span style={{ position: 'absolute', top: 5, right: 5, width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)', boxShadow: '0 0 6px var(--primary-ring)' }} />
                 )}
               </button>
@@ -981,36 +954,7 @@ export function ChatView(props: Props) {
                     gap: 0,
                   }}
                 >
-                  {/* Mode selection */}
-                  <div style={{ padding: '10px 10px 8px', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      <span style={{ width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', flexShrink: 0 }}><selectedModeObj.Icon size={14} /></span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.4, textTransform: 'uppercase', flex: 1 }}>Mode selection</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--primary)', background: 'var(--primary-bg)', border: '1px solid var(--primary-border)', borderRadius: 6, padding: '2px 6px' }}>{selectedModeObj.label}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {MODES.map((m) => (
-                        <button
-                          key={m.id}
-                          className={`dd-item${m.id === selectedMode ? ' active' : ''}`}
-                          onClick={() => setSelectedMode(m.id as ModeId)}
-                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 9px', textAlign: 'left', borderRadius: 8 }}
-                        >
-                          <span style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: m.id === selectedMode ? 'var(--primary)' : 'var(--text-dim)' }}>
-                            <m.Icon size={15} />
-                          </span>
-                          <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{m.label}</span>
-                            <small style={{ color: 'var(--text-faint)', fontSize: 11 }}>{m.desc}</small>
-                          </span>
-                          {m.id === selectedMode && <span style={{ color: 'var(--primary)', fontSize: 12, fontWeight: 700 }}>✓</span>}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.4, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 7px' }}>
-                      <span style={{ fontWeight: 700, color: selectedMode !== 'solo' ? 'var(--primary)' : 'var(--text-faint)' }}>{selectedMode !== 'solo' ? 'FORCED: ' : ''}</span>Solo=1 · Swarm=2-5 · Hive=nested · Squad=2+Team · Infinity=unlimited+Preview{selectedMode !== 'solo' ? ' — AI must delegate' : ''}
-                    </div>
-                  </div>
+
 
                   {/* Context selection */}
                   <div style={{ padding: '10px', borderBottom: '1px solid var(--border)' }}>

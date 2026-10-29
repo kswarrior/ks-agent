@@ -15,9 +15,8 @@ import { applyTheme } from './theme'
 
 const LS_PROJECT = 'ks.activeProject'
 const LS_CHAT = 'ks.activeChat'
-const LS_MODEL = 'ks.selectedModel'
-const LS_MODE = 'ks.selectedMode'
-const LS_CONTEXT = 'ks.contextMode'
+  const LS_MODEL = 'ks.selectedModel'
+  const LS_CONTEXT = 'ks.contextMode'
 const LS_TOKENS = 'ks.maxTokens'
 const LS_THINKING = 'ks.thinking'
 
@@ -36,7 +35,6 @@ function KsAgent() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => { try { return localStorage.getItem(LS_PROJECT) } catch { return null } })
   const [activeChatId, setActiveChatId] = useState<string | null>(() => { try { return localStorage.getItem(LS_CHAT) } catch { return null } })
   const [selectedModelId, setSelectedModelId] = useState<string | null>(() => { try { return localStorage.getItem(LS_MODEL) } catch { return null } })
-  const [selectedMode, setSelectedMode] = useState<string>(() => { try { const v = localStorage.getItem(LS_MODE); return v && ['solo','swarm','hive','squad','infinity'].includes(v) ? v : 'solo' } catch { return 'solo' } })
   const [selectedContextMode, setSelectedContextMode] = useState<string>(() => { try { const v = localStorage.getItem(LS_CONTEXT); return v === 'full' || v === 'qa' ? v : 'qa' } catch { return 'qa' } })
   const [selectedMaxTokens, setSelectedMaxTokens] = useState<number | null>(() => { try { const v = localStorage.getItem(LS_TOKENS); if (!v || v === '' || v === 'null') return null; const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : null } catch { return null } })
   // Thinking override (null = follow the selected model's Thinking Mode, default on)
@@ -96,11 +94,6 @@ function KsAgent() {
     selectedModelIdRef.current = selectedModelId
   }, [selectedModelId])
 
-  const selectedModeRef = useRef<string>(selectedMode)
-  useEffect(() => {
-    selectedModeRef.current = selectedMode
-  }, [selectedMode])
-
   // ---- initial load ----
   useEffect(() => {
     ;(async () => {
@@ -143,10 +136,6 @@ function KsAgent() {
       else localStorage.removeItem(LS_MODEL)
     } catch {}
   }, [selectedModelId])
-
-  useEffect(() => {
-    try { localStorage.setItem(LS_MODE, selectedMode) } catch {}
-  }, [selectedMode])
 
   useEffect(() => {
     try { localStorage.setItem(LS_CONTEXT, selectedContextMode) } catch {}
@@ -643,7 +632,7 @@ function KsAgent() {
                         if (sendingRef.current.has(chatId) || subsRef.current.has(chatId)) return
                         const modelId = selectedModelIdRef.current
                         try {
-                          await api.continueChat(chatId, '', modelId ?? null as any, selectedModeRef.current, undefined, undefined, resolveThinking())
+                          await api.continueChat(chatId, '', modelId ?? null as any, 'solo', undefined, undefined, resolveThinking())
                           trackGeneration(chatId)
                         } catch (e: any) {
                           toast(e.message, 'error')
