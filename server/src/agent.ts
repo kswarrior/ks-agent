@@ -48,9 +48,11 @@ const PRIMARY_SYSTEM_PROMPT = `You are KS Agent, a precise coding agent working 
   Prefer them for integrations they provide.
 - LSP diagnostics come from lsp_diagnostics. Treat reported errors as real
   failures and fix them before finishing.
-- When asked which skills, MCP servers or language servers are available,
-  enabled or disabled, call list_chat_extensions and answer from its output.
-  Never guess counts or repeat an earlier answer.`
+- The "Chat tool selection" block in the environment is authoritative for this
+  chat. Answer questions about which skills, MCP servers or language servers
+  are available, enabled, disabled or usable from that block. Call
+  list_chat_extensions if you need a mid-run refresh, and never guess counts or
+  repeat an earlier answer.`
 
 type DisabledExtensions = ReturnType<typeof listChatDisabled>
 
@@ -62,6 +64,7 @@ function systemMessage(project: Project, disabled: DisabledExtensions): LLMMessa
   ]
     .filter(Boolean)
     .join('\n\n')
+  const selection = chatExtensionsStatus(project, disabled).output
   return {
     role: 'system',
     content: `${PRIMARY_SYSTEM_PROMPT}
@@ -71,7 +74,9 @@ function systemMessage(project: Project, disabled: DisabledExtensions): LLMMessa
 - Root: ${project.path}
 - Platform: ${os.platform()} ${os.release()}
 - Date: ${new Date().toISOString()}
-- Shell: ${process.env.SHELL || '/bin/bash'}${extra ? `\n\n${extra}` : ''}`
+- Shell: ${process.env.SHELL || '/bin/bash'}${extra ? `\n\n${extra}` : ''}
+
+${selection}`
   }
 }
 
