@@ -10,11 +10,14 @@ import type {
   Chat,
   ExtensionInfo,
   LiveState,
+  LspServerInfo,
+  McpServerInfo,
   Message,
   ModelEntry,
   Project,
   ProviderPublic,
-  RunStep
+  RunStep,
+  SkillInfo
 } from './types'
 
 function finishStep(step: RunStep, status: 'done' | 'error', now: number): RunStep {
@@ -52,6 +55,9 @@ export default function App() {
   const [providers, setProviders] = useState<ProviderPublic[]>([])
   const [models, setModels] = useState<ModelEntry[]>([])
   const [extensions, setExtensions] = useState<ExtensionInfo[]>([])
+  const [skills, setSkills] = useState<SkillInfo[]>([])
+  const [mcpServers, setMcpServers] = useState<McpServerInfo[]>([])
+  const [lspServers, setLspServers] = useState<LspServerInfo[]>([])
   const [modelId, setModelId] = useState('')
   const [live, setLive] = useState<LiveState | null>(null)
   const [steps, setSteps] = useState<RunStep[]>([])
@@ -79,6 +85,9 @@ export default function App() {
   const refreshProviders = useCallback(async () => setProviders(await api.listProviders()), [])
   const refreshModels = useCallback(async () => setModels(await api.listModels()), [])
   const refreshExtensions = useCallback(async () => setExtensions(await api.listExtensions()), [])
+  const refreshSkills = useCallback(async () => setSkills(await api.listSkills()), [])
+  const refreshMcp = useCallback(async () => setMcpServers(await api.listMcpServers()), [])
+  const refreshLsp = useCallback(async () => setLspServers(await api.listLspServers()), [])
 
   const handleEvent = useCallback((event: AgentEvent) => {
     if (event.type === 'assistant_start') {
@@ -255,17 +264,24 @@ export default function App() {
     let cancelled = false
     void (async () => {
       try {
-        const [projectList, providerList, modelList, extensionList] = await Promise.all([
-          api.listProjects(),
-          api.listProviders(),
-          api.listModels(),
-          api.listExtensions()
-        ])
+        const [projectList, providerList, modelList, extensionList, skillList, mcpList, lspList] =
+          await Promise.all([
+            api.listProjects(),
+            api.listProviders(),
+            api.listModels(),
+            api.listExtensions(),
+            api.listSkills(),
+            api.listMcpServers(),
+            api.listLspServers()
+          ])
         if (cancelled) return
         setProjects(projectList)
         setProviders(providerList)
         setModels(modelList)
         setExtensions(extensionList)
+        setSkills(skillList)
+        setMcpServers(mcpList)
+        setLspServers(lspList)
         if (projectList.length) setActiveProjectId((current) => current ?? projectList[0].id)
       } catch (caught) {
         if (!cancelled) setBootError(caught instanceof Error ? caught.message : String(caught))
@@ -513,8 +529,14 @@ export default function App() {
       {showExtensions && (
         <ExtensionsModal
           extensions={extensions}
+          skills={skills}
+          mcpServers={mcpServers}
+          lspServers={lspServers}
           onClose={() => setShowExtensions(false)}
-          onRefresh={refreshExtensions}
+          onRefreshExtensions={refreshExtensions}
+          onRefreshSkills={refreshSkills}
+          onRefreshMcp={refreshMcp}
+          onRefreshLsp={refreshLsp}
         />
       )}
 

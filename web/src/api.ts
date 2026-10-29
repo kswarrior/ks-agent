@@ -2,10 +2,13 @@ import type {
   AgentEvent,
   Chat,
   ExtensionInfo,
+  LspServerInfo,
+  McpServerInfo,
   Message,
   ModelEntry,
   Project,
-  ProviderPublic
+  ProviderPublic,
+  SkillInfo
 } from './types'
 
 async function req<T>(url: string, options?: RequestInit): Promise<T> {
@@ -109,3 +112,12 @@ export const deleteModel = (id: string) => req<{ ok: true }>(`/api/models/${id}`
 
 export const listExtensions = () => req<ExtensionInfo[]>('/api/extensions')
 export const reloadExtensions = () => req<ExtensionInfo[]>('/api/extensions/reload', { method: 'POST' })
+
+export const listSkills = () => req<SkillInfo[]>('/api/skills')
+export const reloadSkills = () => req<SkillInfo[]>('/api/skills/reload', { method: 'POST' })
+
+export const listMcpServers = () => req<McpServerInfo[]>('/api/mcp')
+export const reloadMcpServers = () => req<McpServerInfo[]>('/api/mcp/reload', { method: 'POST' })
+
+export const listLspServers = () => req<LspServerInfo[]>('/api/lsp')
+export const reloadLspServers = () => req<LspServerInfo[]>('/api/lsp/reload', { method: 'POST' })
