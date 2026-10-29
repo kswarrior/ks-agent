@@ -201,14 +201,16 @@ export default function App() {
   }, [])
 
   const attachRun = useCallback(
-    async (chatId: string) => {
+    async (chatId: string, preserveLive = false) => {
       detachRun()
       const controller = new AbortController()
       const subscription = { chatId, controller, cancelled: false }
       subscriptionRef.current = subscription
-      setLive(null)
-      setSteps([])
-      setStreaming(false)
+      if (!preserveLive) {
+        setLive(null)
+        setSteps([])
+        setStreaming(false)
+      }
       setError(null)
 
       try {
@@ -219,7 +221,7 @@ export default function App() {
         const status = await api.getChatRun(chatId)
         if (subscription.cancelled || !status.active) return
         setStreaming(true)
-        setLive({ content: '', reasoning: '', tools: [], step: 0 })
+        if (!preserveLive) setLive({ content: '', reasoning: '', tools: [], step: 0 })
         await api.streamChatEvents(
           chatId,
           (event) => {
@@ -428,7 +430,7 @@ export default function App() {
     }
 
     if (activeChatIdRef.current !== chatId) return
-    await attachRun(chatId)
+    await attachRun(chatId, true)
 
     if (activeChatIdRef.current === chatId) {
       try {
