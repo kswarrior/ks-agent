@@ -1,0 +1,342 @@
+import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
+import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
+import fs from 'node:fs'
+import path from 'node:path'
+import { runAgent } from './agent.js'
+import { config, isInside } from './config.js'
+import {
+  getChat,
+  getModel,
+  getProject,
+  getProvider,
+  insertChat,
+  insertMessage,
+  insertModel,
+  insertProject,
+  insertProvider,
+  listChats,
+  listMessages,
+  listModels,
+  listProjects,
+  listProviders,
+  removeChat,
+  removeModel,
+  removeProject,
+  removeProvider,
+  touchChat,
+  updateChat,
+  updateProvider
+} from './db.js'
+import { extensions } from './extensions.js'
+import { cleanRelative, resolveInProject } from './fsx.js'
+import type { AgentEvent, ProviderPublic } from './types.js'
+
+const app = new Hono()
+const activeRuns = new Map<string, AbortController>()
+
+function errorJson(message: string, status = 400) {
+  return { error: message, status }
+}
+
+function publicProvider(provider: {
+  id: string
+  name: string
+  baseUrl: string
+  apiKey: string
+  createdAt: number
+}): ProviderPublic {
+  return {
+    id: provider.id,
+    name: provider.name,
+    baseUrl: provider.baseUrl,
+    hasKey: provider.apiKey.length > 0,
+    createdAt: provider.createdAt
+  }
+}
+
+function safeName(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const name = value.trim()
+  if (!name || name.length > 100 || name.includes('\0')) return null
+  return name
+}
+
+app.onError((error, c) => {
+  console.error('[server]', error)
+  return c.json(errorJson(error instanceof Error ? error.message : String(error), 500), 500)
+})
+
+app.get('/api/health', (c) =>
+  c.json({
+    ok: true,
+    name: 'ks-agent',
+    version: '0.2.0',
+    projects: listProjects().length,
+    extensions: extensions.list().length
+  })
+)
+
+app.get('/api/config', (c) =>
+  c.json({
+    maxSteps: config.maxSteps,
+    maxToolOutput: config.maxToolOutput,
+    dockerJail: config.dockerJail,
+    projectsDir: config.projectsDir,
+    extensions: extensions.list()
+  })
+)
+
+// ---------------------------------------------------------------- projects
+app.get('/api/projects', (c) => c.json(listProjects()))
+
+app.post('/api/projects', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  const name = safeName(body.name)
+  if (!name) return c.json(errorJson('name is required (max 100 chars)'), 400)
+
+  const requested = typeof body.path === 'string' && body.path.trim() ? body.path.trim() : name
+  const relative = cleanRelative(requested)
+  const abs = resolveInProject(config.projectsDir, relative)
+  if (!abs) return c.json(errorJson('project path must stay inside the projects directory'), 400)
+  if (path.resolve(abs) === path.resolve(config.projectsDir)) {
+    return c.json(errorJson('project path cannot be the projects directory itself'), 400)
+  }
+  if (listProjects().some((project) => path.resolve(project.path) === path.resolve(abs))) {
+    return c.json(errorJson('a project already uses this path'), 409)
+  }
+
+  fs.mkdirSync(abs, { recursive: true })
+  const real = fs.realpathSync(abs)
+  const project = insertProject(name, real)
+  void extensions.runHook('project.open', real, { projectId: project.id, name }).catch((error) => {
+    console.warn('[extensions] project.open hook failed:', error)
+  })
+  return c.json(project, 201)
+})
+
+app.delete('/api/projects/:id', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const deleteFolder = c.req.query('deleteFolder') === 'true'
+  removeProject(project.id)
+  if (
+    deleteFolder &&
+    isInside(config.projectsDir, project.path) &&
+    path.resolve(project.path) !== path.resolve(config.projectsDir)
+  ) {
+    fs.rmSync(project.path, { recursive: true, force: true })
+  }
+  return c.json({ ok: true })
+})
+
+// ------------------------------------------------------------------- chats
+app.get('/api/projects/:id/chats', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  return c.json(listChats(project.id))
+})
+
+app.post('/api/projects/:id/chats', async (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const title =
+    typeof body?.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 120) : 'New chat'
+  const modelId = typeof body?.modelId === 'string' && body.modelId ? body.modelId : null
+  if (modelId && !getModel(modelId)) return c.json(errorJson('model not found'), 404)
+  return c.json(insertChat(project.id, title, modelId), 201)
+})
+
+app.patch('/api/chats/:id', async (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  const title = body.title === undefined ? undefined : safeName(body.title)
+  if (body.title !== undefined && !title) return c.json(errorJson('title must be a non-empty string'), 400)
+  const modelId =
+    body.modelId === undefined
+      ? undefined
+      : body.modelId === null
+        ? null
+        : typeof body.modelId === 'string'
+          ? body.modelId
+          : undefined
+  if (modelId && !getModel(modelId)) return c.json(errorJson('model not found'), 404)
+  return c.json(updateChat(chat.id, { title: title ?? undefined, modelId }))
+})
+
+app.delete('/api/chats/:id', (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  activeRuns.get(chat.id)?.abort()
+  removeChat(chat.id)
+  return c.json({ ok: true })
+})
+
+// ---------------------------------------------------------------- messages
+app.get('/api/chats/:id/messages', (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  return c.json(listMessages(chat.id))
+})
+
+app.post('/api/chats/:id/messages', async (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  if (activeRuns.has(chat.id)) return c.json(errorJson('a run is already active for this chat', 409), 409)
+
+  const project = getProject(chat.projectId)
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const content = typeof body?.content === 'string' ? body.content : ''
+  if (!content.trim()) return c.json(errorJson('content is required'), 400)
+  if (content.length > 200_000) return c.json(errorJson('content is too large'), 413)
+
+  const requestedModel = typeof body?.modelId === 'string' && body.modelId ? body.modelId : chat.modelId
+  if (!requestedModel) return c.json(errorJson('modelId is required (add a provider and model first)'), 400)
+  const model = getModel(requestedModel)
+  if (!model) return c.json(errorJson('model not found', 404), 404)
+  const provider = getProvider(model.providerId)
+  if (!provider) return c.json(errorJson('provider not found', 404), 404)
+
+  insertMessage({ chatId: chat.id, role: 'user', content })
+  if (!chat.title || chat.title === 'New chat') {
+    updateChat(chat.id, { title: content.trim().replace(/\s+/g, ' ').slice(0, 80) })
+  } else {
+    touchChat(chat.id)
+  }
+  if (chat.modelId !== model.id) updateChat(chat.id, { modelId: model.id })
+
+  const controller = new AbortController()
+  activeRuns.set(chat.id, controller)
+
+  return streamSSE(c, async (stream) => {
+    const emit = async (event: AgentEvent) => {
+      await stream.writeSSE({ data: JSON.stringify(event) })
+    }
+    stream.onAbort(() => controller.abort())
+    try {
+      await runAgent({ chat, project, provider, model, signal: controller.signal, onEvent: emit })
+    } catch (error) {
+      await emit({ type: 'error', error: error instanceof Error ? error.message : String(error) })
+    } finally {
+      activeRuns.delete(chat.id)
+    }
+  })
+})
+
+app.post('/api/chats/:id/stop', (c) => {
+  const controller = activeRuns.get(c.req.param('id'))
+  if (!controller) return c.json(errorJson('no active run', 404), 404)
+  controller.abort()
+  return c.json({ ok: true })
+})
+
+// --------------------------------------------------------------- providers
+app.get('/api/providers', (c) => c.json(listProviders().map(publicProvider)))
+
+app.post('/api/providers', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const name = safeName(body?.name)
+  const baseUrl = typeof body?.baseUrl === 'string' ? body.baseUrl.trim().replace(/\/+$/, '') : ''
+  const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : ''
+  if (!name) return c.json(errorJson('name is required'), 400)
+  if (!/^https?:\/\//i.test(baseUrl)) return c.json(errorJson('baseUrl must start with http:// or https://'), 400)
+  if (baseUrl.length > 500 || apiKey.length > 10_000) return c.json(errorJson('provider fields are too large'), 413)
+  return c.json(publicProvider(insertProvider(name, baseUrl, apiKey)), 201)
+})
+
+app.patch('/api/providers/:id', async (c) => {
+  const provider = getProvider(c.req.param('id'))
+  if (!provider) return c.json(errorJson('provider not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  const name = body.name === undefined ? provider.name : safeName(body.name)
+  if (!name) return c.json(errorJson('name is required'), 400)
+  const baseUrl =
+    body.baseUrl === undefined
+      ? provider.baseUrl
+      : typeof body.baseUrl === 'string'
+        ? body.baseUrl.trim().replace(/\/+$/, '')
+        : ''
+  if (!/^https?:\/\//i.test(baseUrl)) return c.json(errorJson('baseUrl must start with http:// or https://'), 400)
+  const apiKey =
+    body.apiKey === undefined ? provider.apiKey : typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
+  return c.json(publicProvider(updateProvider(provider.id, name, baseUrl, apiKey)))
+})
+
+app.delete('/api/providers/:id', (c) => {
+  const provider = getProvider(c.req.param('id'))
+  if (!provider) return c.json(errorJson('provider not found', 404), 404)
+  removeProvider(provider.id)
+  return c.json({ ok: true })
+})
+
+// ------------------------------------------------------------------ models
+app.get('/api/models', (c) => c.json(listModels()))
+
+app.post('/api/models', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const providerId = typeof body?.providerId === 'string' ? body.providerId : ''
+  const name = safeName(body?.name)
+  const modelId = typeof body?.modelId === 'string' ? body.modelId.trim() : ''
+  if (!providerId || !getProvider(providerId)) return c.json(errorJson('valid providerId is required'), 400)
+  if (!name) return c.json(errorJson('name is required'), 400)
+  if (!modelId) return c.json(errorJson('modelId is required'), 400)
+  return c.json(insertModel(providerId, name, modelId), 201)
+})
+
+app.delete('/api/models/:id', (c) => {
+  const model = getModel(c.req.param('id'))
+  if (!model) return c.json(errorJson('model not found', 404), 404)
+  removeModel(model.id)
+  return c.json({ ok: true })
+})
+
+// -------------------------------------------------------------- extensions
+app.get('/api/extensions', (c) => c.json(extensions.list()))
+
+app.post('/api/extensions/reload', async (c) => c.json(await extensions.reload()))
+
+app.get('/api/extensions/:name', (c) => {
+  const found = extensions.list().find((extension) => extension.name === c.req.param('name'))
+  if (!found) return c.json(errorJson('extension not found', 404), 404)
+  return c.json(found)
+})
+
+app.all('/api/*', (c) => c.json(errorJson(`unknown API route: ${c.req.method} ${c.req.path}`, 404), 404))
+
+// ------------------------------------------------------------------ static
+if (fs.existsSync(config.distDir)) {
+  app.use('*', serveStatic({ root: config.distDir }))
+  app.get('*', serveStatic({ root: config.distDir, rewriteRequestPath: () => '/index.html' }))
+} else {
+  app.get('/', (c) =>
+    c.text('KS Agent API is running. Build the web UI with `npm run build`, or use `npm run dev:web`.')
+  )
+}
+
+const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
+  console.log(`[ks-agent] http://localhost:${info.port}`)
+  console.log(`[ks-agent] projects: ${config.projectsDir}`)
+  console.log(
+    `[ks-agent] extensions: ${extensions.list().map((extension) => extension.name).join(', ') || '(none)'}`
+  )
+})
+
+async function shutdown(signal: string): Promise<void> {
+  console.log(`[ks-agent] ${signal} received, shutting down`)
+  for (const controller of activeRuns.values()) controller.abort()
+  await extensions.stopAll()
+  server.close(() => process.exit(0))
+  setTimeout(() => process.exit(0), 2000).unref()
+}
+
+process.on('SIGINT', () => void shutdown('SIGINT'))
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
+
+export { app }
