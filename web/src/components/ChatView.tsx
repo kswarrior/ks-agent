@@ -64,6 +64,9 @@ function ToolCard({
   const fullPath = rawPath ? (rootPath ? absolutePath(rootPath, rawPath) : detail) : ''
   const fullFrom = rawFrom ? absolutePath(rootPath, rawFrom) : ''
   const fullTo = rawTo ? absolutePath(rootPath, rawTo) : ''
+  const location =
+    fullPath ||
+    (rootPath && ['grep', 'glob', 'list_dir', 'run_shell'].includes(name) ? rootPath : '')
   const oldString = typeof parsedArgs.old_string === 'string' ? parsedArgs.old_string : ''
   const newString = typeof parsedArgs.new_string === 'string' ? parsedArgs.new_string : ''
   const content = typeof parsedArgs.content === 'string' ? parsedArgs.content : ''
@@ -85,9 +88,9 @@ function ToolCard({
         {typeof durationMs === 'number' && <span className="tool-time">{durationMs} ms</span>}
       </summary>
       <div className="tool-body">
-        {fullPath && (
-          <div className="tool-file-path" title={fullPath}>
-            {fullPath}
+        {location && (
+          <div className="tool-file-path" title={location}>
+            {location}
           </div>
         )}
 

@@ -16,6 +16,10 @@
   --tool-running: #b99a5a;
   --tool-done: #6a9e7b;
   --tool-failed: #b96b6b;
+  --diff-add-bg: rgba(86, 214, 139, 0.14);
+  --diff-add-text: #b9f0cf;
+  --diff-del-bg: rgba(255, 107, 107, 0.14);
+  --diff-del-text: #ffc4c4;
   --radius: 12px;
   --sidebar: 286px;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
