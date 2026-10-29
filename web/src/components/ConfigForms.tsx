@@ -79,6 +79,12 @@ function parsePairs(value: string, separator: '=' | ':'): Record<string, string>
   return pairs
 }
 
+function formatPairs(pairs: Record<string, string>, separator: '=' | ':'): string {
+  return Object.entries(pairs)
+    .map(([key, value]) => `${key}${separator}${value}`)
+    .join('\n')
+}
+
 function FormActions({
   busy,
   disabled,
@@ -232,14 +238,18 @@ export function AddSkillForm({ projects, onDone, onCancel }: FormProps) {
   )
 }
 
-export function AddMcpForm({ projects, onDone, onCancel }: FormProps) {
+export function AddMcpForm({ projects, onDone, onCancel, onError }: FormProps) {
   const [name, setName] = useState('')
   const [transport, setTransport] = useState<'stdio' | 'http' | 'sse'>('stdio')
   const [command, setCommand] = useState('')
   const [args, setArgs] = useState('')
   const [env, setEnv] = useState('')
+  const [cwd, setCwd] = useState('')
   const [url, setUrl] = useState('')
   const [headers, setHeaders] = useState('')
+  const [installCommand, setInstallCommand] = useState('')
+  const [autoInstall, setAutoInstall] = useState(false)
+  const [backgroundInstall, setBackgroundInstall] = useState(true)
   const [projectIds, setProjectIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -248,14 +258,25 @@ export function AddMcpForm({ projects, onDone, onCancel }: FormProps) {
     setBusy(true)
     setError(null)
     try {
+      const serverName = name.trim().toLowerCase()
       await createMcpServer({
         name,
         transport,
         projects: projectIds,
+        installCommand: installCommand.trim() || undefined,
         ...(transport === 'stdio'
-          ? { command, args: splitLines(args), env: parsePairs(env, '=') }
+          ? { command, args: splitLines(args), env: parsePairs(env, '='), cwd: cwd.trim() || undefined }
           : { url, headers: parsePairs(headers, ':') })
       })
+      if (autoInstall && installCommand.trim()) {
+        try {
+          await installMcpServer(serverName, backgroundInstall)
+        } catch (caught) {
+          await onDone()
+          onError?.(caught instanceof Error ? caught.message : String(caught))
+          return
+        }
+      }
       await onDone()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -324,6 +345,14 @@ export function AddMcpForm({ projects, onDone, onCancel }: FormProps) {
               placeholder="API_KEY=..."
             />
           </label>
+          <label className="field">
+            <span>Working directory (optional)</span>
+            <input
+              value={cwd}
+              onChange={(event) => setCwd(event.target.value)}
+              placeholder="Defaults to the KS Agent folder"
+            />
+          </label>
         </>
       ) : (
         <>
@@ -346,7 +375,37 @@ export function AddMcpForm({ projects, onDone, onCancel }: FormProps) {
           </label>
         </>
       )}
+      <label className="field">
+        <span>Install command (optional)</span>
+        <input
+          value={installCommand}
+          onChange={(event) => setInstallCommand(event.target.value)}
+          placeholder="npx -y @modelcontextprotocol/server-filesystem --help"
+        />
+        <small className="muted">Shown on the server card. Run it on the host when the server is missing.</small>
+      </label>
       <ProjectScopeField projects={projects} value={projectIds} onChange={setProjectIds} />
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={autoInstall}
+          onChange={(event) => setAutoInstall(event.target.checked)}
+          disabled={!installCommand.trim() || busy}
+        />
+        <span>Install automatically after adding</span>
+      </label>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={backgroundInstall}
+          onChange={(event) => setBackgroundInstall(event.target.checked)}
+          disabled={!installCommand.trim() || !autoInstall || busy}
+        />
+        <span>Run the automatic install in the background</span>
+      </label>
+      {!installCommand.trim() && (
+        <span className="muted small">Add an install command to enable automatic installation.</span>
+      )}
       <FormActions
         busy={busy}
         disabled={!name.trim() || (transport === 'stdio' ? !command.trim() : !/^https?:\/\//i.test(url.trim()))}
