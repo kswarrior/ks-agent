@@ -119,9 +119,9 @@ the Extensions modal. MCP and LSP never receive provider API keys.
 
 | Surface | Discovery | Runtime | Agent-facing tool | API / UI |
 | --- | --- | --- | --- | --- |
-| **Skills** | `.ks-agent/skills/<name>/SKILL.md` (primary), `skills/` (legacy), `.opencode/skills/` (fallback), or `KS_SKILLS_DIR` | Markdown + YAML frontmatter (`name`, `description`) parsed at startup/reload; body is returned on demand | `use_skill({ name })` | `GET /api/skills`, `POST /api/skills/reload`; Skills tab |
-| **MCP** | `.ks-agent/mcp.json` (`mcpServers`) or `KS_MCP_CONFIG` | stdio child (newline JSON-RPC) or HTTP (Streamable HTTP / legacy SSE) with `initialize` → `notifications/initialized` → paginated `tools/list`; lazy start, restarted on reload | `mcp_<server>_<tool>` | `GET /api/mcp`, `POST /api/mcp/reload`; MCP tab |
-| **LSP** | `.ks-agent/lsp.json` (`languageServers`) or `KS_LSP_CONFIG` | Spawned on first diagnostic request for a matching extension; LSP `Content-Length` framing, `initialize`, `didOpen` / `didChange`, then wait for `textDocument/publishDiagnostics` | `lsp_diagnostics({ path })` | `GET /api/lsp`, `POST /api/lsp/reload`; LSP tab |
+| **Skills** | `.ks-agent/skills/<name>/SKILL.md` (primary), `skills/` (legacy), `.opencode/skills/` (fallback), or `KS_SKILLS_DIR` | Markdown + YAML frontmatter (`name`, `description`) parsed at startup/reload; body is returned on demand | `use_skill({ name })` | `GET/POST /api/skills`, `DELETE /api/skills/:name`, `POST /api/skills/reload`; Skills tab |
+| **MCP** | `.ks-agent/mcp.json` (`mcpServers`) or `KS_MCP_CONFIG` | stdio child (newline JSON-RPC) or HTTP (Streamable HTTP / legacy SSE) with `initialize` → `notifications/initialized` → paginated `tools/list`; lazy start, restarted on reload | `mcp_<server>_<tool>` | `GET/POST /api/mcp`, `DELETE /api/mcp/:name`, `POST /api/mcp/reload`; MCP tab |
+| **LSP** | `.ks-agent/lsp.json` (`languageServers`) or `KS_LSP_CONFIG` | Spawned on first diagnostic request for a matching extension; LSP `Content-Length` framing, `initialize`, `didOpen` / `didChange`, then wait for `textDocument/publishDiagnostics` | `lsp_diagnostics({ path })` | `GET/POST /api/lsp`, `DELETE /api/lsp/:name`, `POST /api/lsp/reload`; LSP tab |
 
 ### Lifecycle
 
@@ -138,6 +138,13 @@ the Extensions modal. MCP and LSP never receive provider API keys.
    arguments from the model, LSP reads the file through the project path jail.
 5. **Shutdown/reload** — SIGINT/SIGTERM stops every MCP/LSP child; reload
    stops old children, re-reads config, then restarts MCP connections.
+
+The Extensions modal can add and delete all three surfaces. Adds and deletes
+write to the `.ks-agent/` files (or the active env override) and hot-reload the
+registry, so changes apply without a server restart. Skills found only in a
+fallback folder are shown as read-only; create a same-named skill in
+`.ks-agent/skills` to override it. `/api/health` reports the discovered counts
+as `skills`, `mcpServers` and `lspServers`.
 
 ### Agent config layout
 
@@ -293,3 +300,9 @@ scaffolds, and static UI serving.
   `lsp.json` moved into `.ks-agent/`. The server now reads `.ks-agent/skills`,
   `.ks-agent/mcp.json` and `.ks-agent/lsp.json` by default (legacy skill folders
   remain fallbacks; env overrides unchanged).
+- 2026-10-29: Finished extension management in the web UI. The Skills, MCP and
+  LSP tabs now expose Add forms and Delete actions backed by the create/delete
+  APIs, with confirmation before deletion. Skills report `writable` so fallback
+  skills stay read-only until overridden. The smoke test now also creates and
+  deletes a skill, an MCP server and a language server, asserting both the API
+  responses and the persisted config files.
