@@ -11,8 +11,60 @@ const repo = process.cwd()
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ks-agent-smoke-'))
 const projectsDir = path.join(temp, 'projects')
 const dataDir = path.join(temp, 'data')
+const extensionsDir = path.join(temp, 'extensions')
 fs.mkdirSync(projectsDir, { recursive: true })
 fs.mkdirSync(dataDir, { recursive: true })
+fs.mkdirSync(extensionsDir, { recursive: true })
+fs.copyFileSync(path.join(repo, 'extensions', 'sdk.mjs'), path.join(extensionsDir, 'sdk.mjs'))
+const mockExtensionDir = path.join(extensionsDir, 'mock')
+fs.mkdirSync(mockExtensionDir, { recursive: true })
+fs.writeFileSync(
+  path.join(mockExtensionDir, 'extension.json'),
+  JSON.stringify(
+    {
+      name: 'mock',
+      version: '1.0.0',
+      description: 'Smoke-test extension (created in a temp folder, not shipped)',
+      command: ['node', 'index.mjs'],
+      permissions: { projectWrite: true },
+      tools: [
+        {
+          name: 'write_note',
+          description: 'Write a text file inside the project',
+          parameters: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+              content: { type: 'string' }
+            },
+            required: ['path', 'content']
+          }
+        }
+      ]
+    },
+    null,
+    2
+  )
+)
+fs.writeFileSync(
+  path.join(mockExtensionDir, 'index.mjs'),
+  `import fs from 'node:fs'
+import path from 'node:path'
+import { serve, ok, fail } from '../sdk.mjs'
+
+serve({
+  async call(name, args, params) {
+    if (name !== 'write_note') return fail('unknown tool: ' + name)
+    const root = path.resolve(params.projectPath ?? '')
+    const target = path.resolve(root, String(args.path ?? 'note.txt'))
+    if (target !== root && !target.startsWith(root + path.sep)) return fail('path escapes project')
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(target, String(args.content ?? ''), 'utf8')
+    return ok('wrote ' + path.relative(root, target))
+  }
+})
+`
+)
 
 const logs = []
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -107,7 +159,7 @@ function startMockProvider() {
           return
         }
 
-        if (lastUser.includes('scaffold') && !hasTool('call_web')) {
+        if (lastUser.includes('note') && !hasTool('call_mock')) {
           sse(res, {
             choices: [
               {
@@ -116,11 +168,11 @@ function startMockProvider() {
                   tool_calls: [
                     {
                       index: 0,
-                      id: 'call_web',
+                      id: 'call_mock',
                       type: 'function',
                       function: {
-                        name: 'ext_web_scaffold',
-                        arguments: JSON.stringify({ path: 'webapp', name: 'smoke-web' })
+                        name: 'ext_mock_write_note',
+                        arguments: JSON.stringify({ path: 'extension.txt', content: 'from extension' })
                       }
                     }
                   ]
@@ -220,9 +272,8 @@ async function sendMessage(chatId, content, modelId) {
   return readEvents(res)
 }
 
-function callExtension(extension, tool, args, projectPath) {
+function callExtension(dir, tool, args, projectPath) {
   return new Promise((resolve, reject) => {
-    const dir = path.join(repo, 'extensions', extension)
     const child = spawn(process.execPath, [path.join(dir, 'index.mjs')], {
       cwd: dir,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -232,7 +283,7 @@ function callExtension(extension, tool, args, projectPath) {
     let seq = 0
     const timer = setTimeout(() => {
       child.kill('SIGKILL')
-      reject(new Error(`extension ${extension} timed out\n${errors.join('\n')}`))
+      reject(new Error(`extension ${dir} timed out\n${errors.join('\n')}`))
     }, 30_000)
 
     const rl = readline.createInterface({ input: child.stdout })
