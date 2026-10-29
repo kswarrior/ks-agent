@@ -11,6 +11,7 @@ import {
 import { Markdown } from './Markdown'
 import { ModelSelect } from './ModelSelect'
 import { StepMenu } from './StepMenu'
+import { buildRunReport, RunReport } from './RunReport'
 
 const SPECIAL_ARG_KEYS = new Set(['path', 'old_string', 'new_string', 'content', 'command', 'pattern', 'from', 'to'])
 
@@ -262,6 +263,7 @@ export function ChatView({
 }) {
   const [draft, setDraft] = useState('')
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const rootPath = project?.path ?? ''
 
   useEffect(() => {
     setDraft('')
@@ -289,6 +291,11 @@ export function ChatView({
     }
     return ids
   }, [messages])
+
+  const runReport = useMemo(
+    () => buildRunReport({ messages, steps, streaming, loading, rootPath }),
+    [messages, steps, streaming, loading, rootPath]
+  )
 
   const persistedToolCallIds = useMemo(() => {
     const ids = new Set<string>()
@@ -422,6 +429,8 @@ export function ChatView({
               }
               return null
             })}
+
+            {runReport && <RunReport key={runReport.id} report={runReport} />}
 
             {(streaming || live) && (
               <div className="msg assistant live">
