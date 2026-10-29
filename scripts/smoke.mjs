@@ -1122,6 +1122,19 @@ async function main() {
     `skills API missed smoke-skill: ${JSON.stringify(skillList)}`
   )
 
+  const createdSkill = await api('POST', '/api/skills', {
+    name: 'smoke-created-skill',
+    description: 'Skill created through the API',
+    content: '# Created\nReturn CREATED_OK.'
+  })
+  assert(createdSkill.writable === true, 'created skill is not writable')
+  assert(
+    fs.existsSync(path.join(skillsDir, 'smoke-created-skill', 'SKILL.md')),
+    'created skill file is missing'
+  )
+  await api('DELETE', '/api/skills/smoke-created-skill')
+  assert(!fs.existsSync(path.join(skillsDir, 'smoke-created-skill')), 'deleted skill folder still exists')
+
   const mcpList = await api('POST', '/api/mcp/reload')
   for (const [name, transport] of [
     ['mockmcp', 'stdio'],
@@ -1135,10 +1148,47 @@ async function main() {
     assert(server.tools.some((tool) => tool.name === 'echo'), `${name} echo tool was not listed`)
   }
 
+  const addedMcp = await api('POST', '/api/mcp', {
+    name: 'mockadded',
+    transport: 'stdio',
+    command: process.execPath,
+    args: [mcpServerPath]
+  })
+  const addedMcpServer = addedMcp.find((entry) => entry.name === 'mockadded')
+  assert(addedMcpServer?.status === 'ready', 'added MCP server did not start')
+  assert(
+    addedMcpServer.tools.some((tool) => tool.name === 'echo'),
+    'added MCP server did not expose echo'
+  )
+  const afterMcpDelete = await api('DELETE', '/api/mcp/mockadded')
+  assert(!afterMcpDelete.some((entry) => entry.name === 'mockadded'), 'deleted MCP server is still listed')
+  assert(
+    !JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8')).mcpServers.mockadded,
+    'deleted MCP server remains in config'
+  )
+
   const lspList = await api('POST', '/api/lsp/reload')
   const mockLsp = lspList.find((server) => server.name === 'mocklsp')
   assert(mockLsp, `LSP API missed mocklsp: ${JSON.stringify(lspList)}`)
   assert(mockLsp.extensions.includes('.ts'), 'mocklsp has no .ts extension mapping')
+
+  const addedLsp = await api('POST', '/api/lsp', {
+    name: 'mockaddedlsp',
+    command: process.execPath,
+    args: [lspServerPath],
+    extensions: ['.ts'],
+    languageId: 'typescript'
+  })
+  assert(
+    addedLsp.some((entry) => entry.name === 'mockaddedlsp' && entry.extensions.includes('.ts')),
+    'added language server is not listed'
+  )
+  const afterLspDelete = await api('DELETE', '/api/lsp/mockaddedlsp')
+  assert(!afterLspDelete.some((entry) => entry.name === 'mockaddedlsp'), 'deleted language server is still listed')
+  assert(
+    !JSON.parse(fs.readFileSync(lspConfigPath, 'utf8')).languageServers.mockaddedlsp,
+    'deleted language server remains in config'
+  )
   console.log('PASS skills / MCP / LSP APIs + reload')
 
   const minecraft = await callExtension(
