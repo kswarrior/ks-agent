@@ -73,6 +73,7 @@ function readSkill(file: string, fallbackName: string, source: string): LoadedSk
     description,
     path: file,
     source,
+    writable: isInside(config.skillsDirs[0], file),
     content: parsed.body.trim()
   }
 }
