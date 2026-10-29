@@ -1080,7 +1080,39 @@ async function main() {
   assert(updatedModel.contextWindow === 200_000, 'model context window was not updated')
   const invalidModelContext = await rawApi('PATCH', `/api/models/${model.id}`, { contextWindow: 5 })
   assert(invalidModelContext.status === 400, 'invalid context window was accepted')
-  console.log('PASS provider/model (key masked, context window)')
+  const editedProvider = await api('PATCH', `/api/providers/${provider.id}`, {
+    name: 'mock provider edited',
+    baseUrl: `http://127.0.0.1:${mockPort}/v1`
+  })
+  assert(
+    editedProvider.name === 'mock provider edited' && editedProvider.hasKey === true,
+    `provider full edit failed: ${JSON.stringify(editedProvider)}`
+  )
+  const clearedProviderKey = await api('PATCH', `/api/providers/${provider.id}`, { apiKey: '' })
+  assert(clearedProviderKey.hasKey === false, 'provider key was not cleared')
+  const restoredProviderKey = await api('PATCH', `/api/providers/${provider.id}`, { apiKey: 'test-key' })
+  assert(restoredProviderKey.hasKey === true, 'provider key was not restored')
+  const editedModel = await api('PATCH', `/api/models/${model.id}`, {
+    name: 'Mock Model Edited',
+    modelId: 'mock-model-edited',
+    contextWindow: 96_000
+  })
+  assert(
+    editedModel.name === 'Mock Model Edited' &&
+      editedModel.modelId === 'mock-model-edited' &&
+      editedModel.contextWindow === 96_000,
+    `model full edit failed: ${JSON.stringify(editedModel)}`
+  )
+  const restoredModel = await api('PATCH', `/api/models/${model.id}`, {
+    name: 'Mock Model',
+    modelId: 'mock-model',
+    contextWindow: 200_000
+  })
+  assert(
+    restoredModel.modelId === 'mock-model' && restoredModel.contextWindow === 200_000,
+    'model edits could not be restored'
+  )
+  console.log('PASS provider/model full edit (name/base URL/key clear/model fields)')
 
   const compactModel = await api('POST', '/api/models', {
     providerId: provider.id,
