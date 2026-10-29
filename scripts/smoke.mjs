@@ -1111,7 +1111,20 @@ async function main() {
   assert(messages.some((message) => message.role === 'user'), 'user message not persisted')
   assert(messages.some((message) => message.role === 'assistant'), 'assistant message not persisted')
   assert(messages.some((message) => message.role === 'tool'), 'tool result not persisted')
-  console.log('PASS message history')
+  const assistantMessages = messages.filter((message) => message.role === 'assistant')
+  assert(
+    assistantMessages.every((message) => message.modelId === model.id),
+    `assistant messages are missing the model id: ${JSON.stringify(assistantMessages.map((message) => message.modelId))}`
+  )
+  assert(
+    assistantMessages.some((message) => typeof message.durationMs === 'number' && message.durationMs >= 0),
+    'assistant message duration was not persisted'
+  )
+  assert(
+    messages.filter((message) => message.role === 'user').every((message) => message.modelId === null),
+    'user messages should not carry a model id'
+  )
+  console.log('PASS message history (model + duration metadata)')
 
   const extensions = await api('GET', '/api/extensions')
   const names = extensions.map((extension) => extension.name)

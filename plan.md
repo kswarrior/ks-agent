@@ -62,6 +62,8 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Message list with Markdown rendering
 - [x] Live streaming assistant text + reasoning indicator
 - [x] Tool activity cards (name, args, result, duration)
+- [x] Per-output footer: copy, provider/model, and time taken
+- [x] Run reports stay attached to their own output in chat history
 - [x] Composer with model picker, send, stop
 - [x] Chat tools menu left of the model picker: per-chat skill/MCP/LSP toggles
 - [x] Settings: providers/models add/delete, masked keys, provider presets + custom
@@ -290,9 +292,9 @@ extension host calling a temporary mock extension, skills discovery +
 diagnostics over `didOpen` and `didChange` from a mock language server,
 project-scoped skill/MCP/LSP creation and filtering, per-chat extension
 disables (including blocked tool calls and re-enabling), background runs with
-event replay, stop/abort handling, persistence, extension discovery with **no
-default extensions**, opt-in Minecraft/Android example scaffolds, and static UI
-serving.
+event replay, stop/abort handling, persistence (including assistant
+model/duration metadata), extension discovery with **no default extensions**,
+opt-in Minecraft/Android example scaffolds, and static UI serving.
 
 ## Progress log
 
@@ -362,3 +364,10 @@ serving.
   the menu. Smoke now creates scoped skill/MCP/LSP entries, asserts filtering
   per project and chat, verifies disabled calls are blocked, and re-enables
   them.
+- 2026-10-29: Run reports are now tied to their own run and stay directly under
+  that output instead of being a single report at the bottom of the chat, so
+  sending another prompt no longer moves or replaces the previous report.
+  Assistant messages persist their model id and duration and show an
+  opencode-style footer with Copy, provider · model, and time taken. Existing
+  SQLite databases are migrated automatically with the new `model_id` and
+  `duration_ms` message columns; smoke asserts both fields round-trip.
