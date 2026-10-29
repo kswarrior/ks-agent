@@ -66,7 +66,8 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Run reports stay attached to their own output in chat history
 - [x] Composer with model picker, send, stop
 - [x] Chat tools menu left of the model picker: per-chat skill/MCP/LSP toggles
-- [x] Settings: providers/models add/delete, masked keys, provider presets + custom
+- [x] Settings: providers/models add/delete, masked keys, provider presets + custom, configurable retry tab
+- [x] Provider error cards with HTTP status/code/message and live retry countdown
 - [x] Extensions panel: status, tools, reload, project scope in add forms
 
 ## Phase 4 — Extension system (the power feature)
@@ -109,7 +110,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Path-jail and shell-guard tests (inside `npm run smoke`)
 - [ ] Optional Docker jail (`KS_DOCKER_JAIL=1`)
 - [~] Rate limits / request size limits (basic size caps exist)
-- [x] Retry with backoff for transient provider failures
+- [x] Configurable retry: on/off, limited/unlimited, backoff, status codes, network/5xx, Retry-After
 - [x] End-to-end smoke script (`npm run smoke`)
 - [ ] README / extension authoring guide
 - [ ] CI workflow for typecheck, build and smoke
@@ -406,3 +407,4 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   sequence guard prevents a stale chat fetch from overwriting the active
   chat's toggles after fast switching. Smoke covers the prompt block,
   unavailable-binary tool filtering and error text.
+- 2026-10-29: Added a Retry tab to Settings backed by `GET/PUT /api/settings/retry` and the SQLite `settings` table. Retry can be disabled, limited (0–100 retries) or unlimited, with initial/max delay, multiplier, jitter, network/timeout and 5xx toggles, additional retryable status codes, and Retry-After support. The agent reads the settings on every run and emits `retry` events with the status, provider code, message, attempt, delay and next timestamp. The chat now replaces the Thinking indicator with a live retry card (`HTTP 429`, attempt count, countdown, provider message) and, when retries are exhausted, an inline failure card showing the HTTP status, provider code, message, total attempts and expandable response details. Smoke covers defaults/validation, structured 400 errors, disabled retry, limited retry and unlimited retry.
