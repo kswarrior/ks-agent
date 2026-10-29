@@ -79,6 +79,7 @@ export default function App() {
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<Project | null>(null)
 
   const activeChatIdRef = useRef<string | null>(null)
+  const chatExtensionsSeq = useRef(0)
   const subscriptionRef = useRef<{ chatId: string; controller: AbortController; cancelled: boolean } | null>(null)
 
   useEffect(() => {
@@ -91,10 +92,13 @@ export default function App() {
   const refreshSkills = useCallback(async () => setSkills(await api.listSkills()), [])
   const refreshMcp = useCallback(async () => setMcpServers(await api.listMcpServers()), [])
   const refreshLsp = useCallback(async () => setLspServers(await api.listLspServers()), [])
-  const refreshChatExtensions = useCallback(
-    async (chatId: string) => setChatExtensions(await api.listChatExtensions(chatId)),
-    []
-  )
+  const refreshChatExtensions = useCallback(async (chatId: string) => {
+    const seq = ++chatExtensionsSeq.current
+    const state = await api.listChatExtensions(chatId)
+    if (seq === chatExtensionsSeq.current && activeChatIdRef.current === chatId) {
+      setChatExtensions(state)
+    }
+  }, [])
 
   const handleEvent = useCallback((event: AgentEvent) => {
     if (event.type === 'assistant_start') {
@@ -347,23 +351,18 @@ export default function App() {
 
   useEffect(() => {
     if (!activeChatId) {
+      chatExtensionsSeq.current++
       setChatExtensions(null)
       return
     }
-    let cancelled = false
     setChatExtensions(null)
-    void api
-      .listChatExtensions(activeChatId)
-      .then((state) => {
-        if (!cancelled) setChatExtensions(state)
-      })
-      .catch(() => {
-        if (!cancelled) setChatExtensions(null)
-      })
+    void refreshChatExtensions(activeChatId).catch(() => {
+      if (activeChatIdRef.current === activeChatId) setChatExtensions(null)
+    })
     return () => {
-      cancelled = true
+      chatExtensionsSeq.current++
     }
-  }, [activeChatId])
+  }, [activeChatId, refreshChatExtensions])
 
   useEffect(() => {
     const chat = chats.find((entry) => entry.id === activeChatId)
@@ -500,10 +499,12 @@ export default function App() {
   }
 
   const toggleChatExtension = async (kind: ExtensionKind, name: string, enabled: boolean) => {
-    if (!activeChatId) return
+    const chatId = activeChatId
+    if (!chatId) return
     try {
-      await api.setChatExtension(activeChatId, { kind, name, enabled })
-      await refreshChatExtensions(activeChatId)
+      await api.setChatExtension(chatId, { kind, name, enabled })
+      if (activeChatIdRef.current !== chatId) return
+      await refreshChatExtensions(chatId)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     }

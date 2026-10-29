@@ -80,10 +80,9 @@ export function ChatExtensionsMenu({
     }
   ]
   const total = sections.reduce((sum, section) => sum + section.items.length, 0)
-  const enabledCount = sections.reduce(
-    (sum, section) => sum + section.items.filter((item) => item.enabled).length,
-    0
-  )
+  const enabledItems = sections.flatMap((section) => section.items.filter((item) => item.enabled))
+  const enabledCount = enabledItems.length
+  const unavailableCount = enabledItems.filter((item) => item.warning).length
 
   const position = () => {
     const next = triggerRef.current?.getBoundingClientRect()
