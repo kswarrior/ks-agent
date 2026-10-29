@@ -122,7 +122,8 @@ moves the folder or file in one step.
 {
   "mcpServers": {
     "example": {
-      "command": ["node", "server.mjs"],
+      "command": "node",
+      "args": ["server.mjs"],
       "cwd": ".",
       "installCommand": "npm i -g example-mcp",
       "projects": ["project-id"]
