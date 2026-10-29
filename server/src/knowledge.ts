@@ -208,24 +208,54 @@ function deterministicSummary(project: Project, snapshot: ProjectSnapshot): stri
     .slice(0, 8)
     .map((entry) => `\`${entry.extension}\` (${entry.count})`)
     .join(', ')
-  const keyFiles = snapshot.keyFiles.map((entry) => `- ${entry.file}`).join('\n') || '- (no standard project files found)'
+  const keyFiles =
+    snapshot.keyFiles.map((entry) => `- ${entry.file}`).join('\n') || '- (no standard project files found)'
   const structure = snapshot.tree
     ? snapshot.tree
         .split('\n')
         .slice(0, 40)
         .join('\n')
     : '- (empty project)'
+
+  const packageFile = snapshot.keyFiles.find((entry) => entry.file === 'package.json')
+  let scripts: Array<[string, string]> = []
+  let packages: string[] = []
+  if (packageFile) {
+    try {
+      const parsed = JSON.parse(packageFile.content) as {
+        scripts?: Record<string, unknown>
+        dependencies?: Record<string, unknown>
+        devDependencies?: Record<string, unknown>
+      }
+      scripts = Object.entries(parsed.scripts ?? {})
+        .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+        .slice(0, 12)
+      packages = [
+        ...Object.keys(parsed.dependencies ?? {}),
+        ...Object.keys(parsed.devDependencies ?? {})
+      ].slice(0, 15)
+    } catch {
+      // Truncated or invalid package.json; keep the scan summary.
+    }
+  }
+
+  const buildLines = scripts.length
+    ? scripts.map(([name, command]) => `- \`npm run ${name}\`: ${command}`).join('\n')
+    : snapshot.keyFiles.some((entry) => entry.file === 'package.json')
+      ? '- package.json is present but its scripts could not be read.'
+      : '- No package.json scripts were detected.'
+  const packageLine = packages.length ? `\nKey packages: ${packages.join(', ')}.` : ''
   return `## Overview
 ${project.name} is a project at \`${project.path}\`. The scan found ${snapshot.fileCount} files in ${snapshot.dirCount} directories.
 
 ## Tech Stack
-${topExtensions ? `Detected file types: ${topExtensions}.` : 'No common source file types were detected.'}
+${topExtensions ? `Detected file types: ${topExtensions}.` : 'No common source file types were detected.'}${packageLine}
 
 ## Structure
 ${structure}
 
 ## Build and Run
-${snapshot.keyFiles.some((entry) => entry.file === 'package.json') ? '- Node project: check `package.json` scripts (for example `npm run build`, `npm test`).' : '- No package.json scripts were detected.'}
+${buildLines}
 ${snapshot.keyFiles.some((entry) => entry.file === 'Dockerfile') ? '- A Dockerfile is present.' : ''}
 
 ## Key Files
