@@ -264,6 +264,7 @@ export function removeChat(id: string): void {
 export function listChatDisabled(chatId: string): Record<ExtensionKind, Set<string>> {
   const out: Record<ExtensionKind, Set<string>> = {
     skill: new Set(),
+    knowledge: new Set(),
     mcp: new Set(),
     lsp: new Set()
   }
@@ -382,6 +383,111 @@ export function saveChatSummary(chatId: string, summary: string, coveredMessageI
 
 export function removeChatSummary(chatId: string): void {
   db.prepare('DELETE FROM chat_summaries WHERE chat_id = ?').run(chatId)
+}
+
+export function listKnowledge(): KnowledgeEntry[] {
+  return (
+    db.prepare('SELECT * FROM knowledge ORDER BY scope ASC, updated_at DESC').all() as KnowledgeRow[]
+  ).map(knowledgeEntry)
+}
+
+export function listGlobalKnowledge(): KnowledgeEntry[] {
+  return (
+    db
+      .prepare("SELECT * FROM knowledge WHERE scope = 'global' ORDER BY updated_at DESC")
+      .all() as KnowledgeRow[]
+  ).map(knowledgeEntry)
+}
+
+export function listProjectKnowledge(projectId: string): KnowledgeEntry[] {
+  return (
+    db
+      .prepare("SELECT * FROM knowledge WHERE scope = 'project' AND project_id = ? ORDER BY updated_at DESC")
+      .all(projectId) as KnowledgeRow[]
+  ).map(knowledgeEntry)
+}
+
+export function listKnowledgeForProject(projectId: string): KnowledgeEntry[] {
+  return (
+    db
+      .prepare(
+        "SELECT * FROM knowledge WHERE scope = 'global' OR (scope = 'project' AND project_id = ?) ORDER BY scope ASC, updated_at DESC"
+      )
+      .all(projectId) as KnowledgeRow[]
+  ).map(knowledgeEntry)
+}
+
+export function getKnowledge(id: string): KnowledgeEntry | null {
+  const row = db.prepare('SELECT * FROM knowledge WHERE id = ?').get(id) as KnowledgeRow | undefined
+  return row ? knowledgeEntry(row) : null
+}
+
+export function findGeneratedProjectKnowledge(projectId: string): KnowledgeEntry | null {
+  const row = db
+    .prepare(
+      "SELECT * FROM knowledge WHERE scope = 'project' AND project_id = ? AND source = 'generated' ORDER BY updated_at DESC LIMIT 1"
+    )
+    .get(projectId) as KnowledgeRow | undefined
+  return row ? knowledgeEntry(row) : null
+}
+
+export function insertKnowledge(input: {
+  scope: KnowledgeScope
+  projectId: string | null
+  title: string
+  content: string
+  enabled?: boolean
+  source?: KnowledgeSource
+}): KnowledgeEntry {
+  const now = Date.now()
+  const row: KnowledgeRow = {
+    id: newId(),
+    scope: input.scope,
+    project_id: input.projectId,
+    title: input.title,
+    content: input.content,
+    enabled: input.enabled === false ? 0 : 1,
+    source: input.source ?? 'manual',
+    created_at: now,
+    updated_at: now
+  }
+  db.prepare(
+    'INSERT INTO knowledge (id, scope, project_id, title, content, enabled, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(
+    row.id,
+    row.scope,
+    row.project_id,
+    row.title,
+    row.content,
+    row.enabled,
+    row.source,
+    row.created_at,
+    row.updated_at
+  )
+  return knowledgeEntry(row)
+}
+
+export function updateKnowledge(
+  id: string,
+  fields: { title?: string; content?: string; enabled?: boolean }
+): KnowledgeEntry | null {
+  const current = getKnowledge(id)
+  if (!current) return null
+  const title = fields.title ?? current.title
+  const content = fields.content ?? current.content
+  const enabled = fields.enabled === undefined ? current.enabled : fields.enabled
+  db.prepare('UPDATE knowledge SET title = ?, content = ?, enabled = ?, updated_at = ? WHERE id = ?').run(
+    title,
+    content,
+    enabled ? 1 : 0,
+    Date.now(),
+    id
+  )
+  return getKnowledge(id)
+}
+
+export function removeKnowledge(id: string): void {
+  db.prepare('DELETE FROM knowledge WHERE id = ?').run(id)
 }
 
 export function listProviders(): Provider[] {
