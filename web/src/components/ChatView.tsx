@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   Chat,
   ChatExtensionsState,
@@ -19,9 +19,10 @@ import {
 } from '../toolDisplay'
 import { ChatExtensionsMenu } from './ChatExtensionsMenu'
 import { Markdown } from './Markdown'
+import { MessageFooter } from './MessageFooter'
 import { ModelSelect } from './ModelSelect'
 import { StepMenu } from './StepMenu'
-import { buildRunReport, RunReport } from './RunReport'
+import { buildRunReports, RunReport } from './RunReport'
 
 const SPECIAL_ARG_KEYS = new Set([
   'path',
@@ -370,9 +371,14 @@ export function ChatView({
     return ids
   }, [messages])
 
-  const runReport = useMemo(
-    () => buildRunReport({ messages, steps, streaming, loading, halted: Boolean(error), rootPath }),
+  const runReports = useMemo(
+    () => buildRunReports({ messages, steps, streaming, loading, halted: Boolean(error), rootPath }),
     [messages, steps, streaming, loading, error, rootPath]
+  )
+
+  const reportsByFinalMessage = useMemo(
+    () => new Map(runReports.map((entry) => [entry.finalMessageId, entry])),
+    [runReports]
   )
 
   const persistedToolCallIds = useMemo(() => {
@@ -402,7 +408,8 @@ export function ChatView({
     composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  const stopped = runReport?.status === 'stopped'
+  const latestReport = runReports.find((entry) => entry.isLatest)
+  const stopped = latestReport?.report.status === 'stopped'
 
   if (!project) {
     return (
@@ -482,25 +489,46 @@ export function ChatView({
                   calls.length === 0 &&
                   (message.toolCalls?.length ?? 0) > 0
                 if (hiddenOnly) return null
+                const reportEntry = reportsByFinalMessage.get(message.id)
+                const messageModelId = message.modelId ?? chat?.modelId ?? null
+                const messageModel = messageModelId
+                  ? models.find((entry) => entry.id === messageModelId)
+                  : undefined
                 return (
-                  <div className="msg assistant" key={message.id}>
-                    {message.content && <Markdown text={message.content} />}
-                    {calls.map((call) => {
-                      const result = toolResults.get(call.id)
-                      return (
-                        <ToolCard
-                          key={call.id}
-                          name={call.function.name}
-                          args={call.function.arguments}
-                          output={result?.content}
-                          ok={result ? true : undefined}
-                          running={streaming && !result}
-                          rootPath={project.path}
+                  <Fragment key={message.id}>
+                    <div className="msg assistant">
+                      {message.content && <Markdown text={message.content} />}
+                      {calls.map((call) => {
+                        const result = toolResults.get(call.id)
+                        return (
+                          <ToolCard
+                            key={call.id}
+                            name={call.function.name}
+                            args={call.function.arguments}
+                            output={result?.content}
+                            ok={result ? true : undefined}
+                            running={streaming && !result}
+                            rootPath={project.path}
+                          />
+                        )
+                      })}
+                      {!message.content && calls.length === 0 && <p className="muted">(empty response)</p>}
+                      {message.content && (
+                        <MessageFooter
+                          content={message.content}
+                          model={messageModel}
+                          modelId={messageModelId}
+                          durationMs={message.durationMs}
                         />
-                      )
-                    })}
-                    {!message.content && calls.length === 0 && <p className="muted">(empty response)</p>}
-                  </div>
+                      )}
+                    </div>
+                    {reportEntry && (
+                      <RunReport
+                        report={reportEntry.report}
+                        onContinue={reportEntry.isLatest ? continueRun : undefined}
+                      />
+                    )}
+                  </Fragment>
                 )
               }
               if (message.role === 'tool') {
@@ -517,8 +545,6 @@ export function ChatView({
               }
               return null
             })}
-
-            {runReport && <RunReport key={runReport.id} report={runReport} onContinue={continueRun} />}
 
             {(streaming || live) && (
               <div className="msg assistant live">
