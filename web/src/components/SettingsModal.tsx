@@ -449,16 +449,26 @@ export function SettingsModal({
     }
   }
 
-  const addProvider = (
+  const providerForm = (
     <form
       className="settings-form"
       onSubmit={(event) => {
         event.preventDefault()
         void run(async () => {
-          await createProvider({ name: providerName, baseUrl, apiKey })
+          if (editingProviderId) {
+            await updateProvider(editingProviderId, {
+              name: providerName,
+              baseUrl,
+              ...(clearProviderKey ? { apiKey: '' } : apiKey.trim() ? { apiKey: apiKey.trim() } : {})
+            })
+          } else {
+            await createProvider({ name: providerName, baseUrl, apiKey })
+          }
           setProviderName('')
           setBaseUrl('')
           setApiKey('')
+          setClearProviderKey(false)
+          setEditingProviderId(null)
           setView('list')
         })
       }}
@@ -474,7 +484,7 @@ export function SettingsModal({
           value={providerName}
           onChange={(event) => setProviderName(event.target.value)}
           placeholder={selectedPreset.id === 'custom' ? 'My provider' : selectedPreset.name}
-          autoFocus={selectedPreset.id === 'custom'}
+          autoFocus={selectedPreset.id === 'custom' || Boolean(editingProviderId)}
         />
       </label>
       <label className="field">
@@ -486,18 +496,47 @@ export function SettingsModal({
         />
       </label>
       <label className="field">
-        <span>API key (optional)</span>
+        <span>API key {editingProviderId ? '(leave blank to keep the saved key)' : '(optional)'}</span>
         <input
           value={apiKey}
-          onChange={(event) => setApiKey(event.target.value)}
-          placeholder={isLocalEndpoint ? 'No key needed for local endpoints' : 'sk-…'}
+          onChange={(event) => {
+            setApiKey(event.target.value)
+            if (event.target.value.trim()) setClearProviderKey(false)
+          }}
+          placeholder={
+            editingProviderId
+              ? providers.find((provider) => provider.id === editingProviderId)?.hasKey
+                ? 'Saved key stays unless replaced'
+                : 'No key saved'
+              : isLocalEndpoint
+                ? 'No key needed for local endpoints'
+                : 'sk-…'
+          }
           type="password"
           autoComplete="off"
-          autoFocus={selectedPreset.id !== 'custom'}
+          autoFocus={selectedPreset.id !== 'custom' && !editingProviderId}
         />
       </label>
+      {editingProviderId && providers.find((provider) => provider.id === editingProviderId)?.hasKey && (
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={clearProviderKey}
+            onChange={(event) => {
+              setClearProviderKey(event.target.checked)
+              if (event.target.checked) setApiKey('')
+            }}
+            disabled={Boolean(apiKey.trim())}
+          />
+          <span>Remove the saved API key</span>
+        </label>
+      )}
       <div className="settings-form-actions">
-        <button type="button" className="btn ghost" onClick={cancel}>
+        <button
+          type="button"
+          className="btn ghost"
+          onClick={editingProviderId ? cancelProviderForm : cancel}
+        >
           Cancel
         </button>
         <button
@@ -505,7 +544,7 @@ export function SettingsModal({
           type="submit"
           disabled={busy || !providerName.trim() || !/^https?:\/\//i.test(baseUrl.trim())}
         >
-          Add provider
+          {editingProviderId ? 'Save provider' : 'Add provider'}
         </button>
       </div>
     </form>
@@ -536,21 +575,31 @@ export function SettingsModal({
     </>
   )
 
-  const addModel = (
+  const modelForm = (
     <form
       className="settings-form"
       onSubmit={(event) => {
         event.preventDefault()
         void run(async () => {
-          await createModel({
-            providerId,
-            name: modelName,
-            modelId,
-            contextWindow: modelContextValue
-          })
+          if (editingModelId) {
+            await updateModel(editingModelId, {
+              providerId,
+              name: modelName,
+              modelId,
+              contextWindow: modelContextValue
+            })
+          } else {
+            await createModel({
+              providerId,
+              name: modelName,
+              modelId,
+              contextWindow: modelContextValue
+            })
+          }
           setModelName('')
           setModelId('')
           setModelContextWindow(String(DEFAULT_CONTEXT_WINDOW))
+          setEditingModelId(null)
           setView('list')
         })
       }}
