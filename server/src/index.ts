@@ -16,6 +16,7 @@ import {
   insertModel,
   insertProject,
   insertProvider,
+  listChatDisabled,
   listChats,
   listMessages,
   listModels,
@@ -25,6 +26,7 @@ import {
   removeModel,
   removeProject,
   removeProvider,
+  setChatExtensionEnabled,
   touchChat,
   updateChat,
   updateProvider
@@ -34,8 +36,9 @@ import { extensions } from './extensions.js'
 import { cleanRelative, resolveInProject } from './fsx.js'
 import { lsp } from './lsp.js'
 import { mcp } from './mcp.js'
+import { normalizeProjects } from './scope.js'
 import { skills } from './skills.js'
-import type { AgentEvent, ProviderPublic } from './types.js'
+import type { AgentEvent, Chat, ChatExtensionsState, ExtensionKind, Project, ProviderPublic } from './types.js'
 
 const app = new Hono()
 
@@ -79,6 +82,28 @@ function safeName(value: unknown): string | null {
   const name = value.trim()
   if (!name || name.length > 100 || name.includes('\0')) return null
   return name
+}
+
+function readProjectIds(value: unknown): string[] | null {
+  if (value !== undefined && typeof value !== 'string' && !Array.isArray(value)) return null
+  const ids = normalizeProjects(value)
+  if (ids.some((id) => !getProject(id))) return null
+  return ids
+}
+
+function chatExtensionsState(chat: Chat, project: Project): ChatExtensionsState {
+  const disabled = listChatDisabled(chat.id)
+  return {
+    skills: skills
+      .listForProject(project.id)
+      .map((skill) => ({ ...skill, enabled: !disabled.skill.has(skill.name) })),
+    mcpServers: mcp
+      .listForProject(project.id)
+      .map((server) => ({ ...server, enabled: !disabled.mcp.has(server.name) })),
+    lspServers: lsp
+      .listForProject(project.id)
+      .map((server) => ({ ...server, enabled: !disabled.lsp.has(server.name) }))
+  }
 }
 
 function chatTitleFromPrompt(content: string): string {

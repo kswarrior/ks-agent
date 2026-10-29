@@ -136,7 +136,8 @@ async function executeTool(
   name: string,
   args: Record<string, unknown>,
   project: Project,
-  signal: AbortSignal
+  signal: AbortSignal,
+  disabled: DisabledExtensions
 ): Promise<ToolResult> {
   if (args.__parse_error) {
     return { ok: false, output: `Could not parse tool arguments as JSON: ${String(args.__parse_error).slice(0, 500)}` }
@@ -145,13 +146,13 @@ async function executeTool(
     return executeBuiltinTool(name, args, { projectPath: project.path, signal })
   }
   if (name === 'use_skill') {
-    return skills.call(name, args)
+    return skills.call(name, args, project.id, disabled.skill)
   }
-  if (mcp.findTool(name)) {
-    return mcp.callTool(name, args)
+  if (mcp.findTool(name, project.id, disabled.mcp)) {
+    return mcp.callTool(name, args, project.id, disabled.mcp)
   }
   if (name === 'lsp_diagnostics') {
-    return lsp.callTool(name, args, project.path)
+    return lsp.callTool(name, args, project.path, project.id, disabled.lsp)
   }
   if (extensions.findTool(name)) {
     return extensions.callTool(name, args, project.path)
@@ -165,8 +166,9 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
     await onEvent(event)
   }
 
-  await mcp.ready()
-  const system = systemMessage(project)
+  const disabled = listChatDisabled(chat.id)
+  await mcp.ready(project.id, disabled.mcp)
+  const system = systemMessage(project, disabled)
   let history = listMessages(chat.id)
   let messages = trimHistory(system, history)
   let partial = ''
@@ -182,9 +184,9 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
 
       const tools = [
         ...builtinToolDefs,
-        ...skills.toolDefs(),
-        ...mcp.toolDefs(),
-        ...lsp.toolDefs(),
+        ...skills.toolDefs(project.id, disabled.skill),
+        ...mcp.toolDefs(project.id, disabled.mcp),
+        ...lsp.toolDefs(project.id, disabled.lsp),
         ...extensions.toolDefs()
       ]
       let result: StreamResult | null = null
@@ -256,7 +258,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
             call: { id: call.id, name: call.function.name, arguments: call.function.arguments }
           })
           const started = Date.now()
-          const toolResult = await executeTool(call.function.name, args, project, signal)
+          const toolResult = await executeTool(call.function.name, args, project, signal, disabled)
           insertMessage({
             chatId: chat.id,
             role: 'tool',
