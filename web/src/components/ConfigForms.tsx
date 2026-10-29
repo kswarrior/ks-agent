@@ -119,7 +119,7 @@ export function AddSkillForm({ projects, onDone, onCancel }: FormProps) {
     setBusy(true)
     setError(null)
     try {
-      await createSkill({ name, description, content, overwrite })
+      await createSkill({ name, description, content, projects: projectIds, overwrite })
       await onDone()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -158,6 +158,7 @@ export function AddSkillForm({ projects, onDone, onCancel }: FormProps) {
           placeholder="What this skill helps the agent do"
         />
       </label>
+      <ProjectScopeField projects={projects} value={projectIds} onChange={setProjectIds} />
       <label className="field">
         <span>Instructions</span>
         <textarea
@@ -181,7 +182,7 @@ export function AddSkillForm({ projects, onDone, onCancel }: FormProps) {
   )
 }
 
-export function AddMcpForm({ onDone, onCancel }: FormProps) {
+export function AddMcpForm({ projects, onDone, onCancel }: FormProps) {
   const [name, setName] = useState('')
   const [transport, setTransport] = useState<'stdio' | 'http' | 'sse'>('stdio')
   const [command, setCommand] = useState('')
@@ -189,6 +190,7 @@ export function AddMcpForm({ onDone, onCancel }: FormProps) {
   const [env, setEnv] = useState('')
   const [url, setUrl] = useState('')
   const [headers, setHeaders] = useState('')
+  const [projectIds, setProjectIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -199,6 +201,7 @@ export function AddMcpForm({ onDone, onCancel }: FormProps) {
       await createMcpServer({
         name,
         transport,
+        projects: projectIds,
         ...(transport === 'stdio'
           ? { command, args: splitLines(args), env: parsePairs(env, '=') }
           : { url, headers: parsePairs(headers, ':') })
@@ -293,6 +296,7 @@ export function AddMcpForm({ onDone, onCancel }: FormProps) {
           </label>
         </>
       )}
+      <ProjectScopeField projects={projects} value={projectIds} onChange={setProjectIds} />
       <FormActions
         busy={busy}
         disabled={!name.trim() || (transport === 'stdio' ? !command.trim() : !/^https?:\/\//i.test(url.trim()))}
@@ -303,12 +307,13 @@ export function AddMcpForm({ onDone, onCancel }: FormProps) {
   )
 }
 
-export function AddLspForm({ onDone, onCancel }: FormProps) {
+export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
   const [name, setName] = useState('')
   const [command, setCommand] = useState('')
   const [args, setArgs] = useState('')
   const [extensions, setExtensions] = useState('')
   const [languageId, setLanguageId] = useState('')
+  const [projectIds, setProjectIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -324,7 +329,8 @@ export function AddLspForm({ onDone, onCancel }: FormProps) {
           .split(/[\s,]+/)
           .map((item) => item.trim())
           .filter(Boolean),
-        languageId: languageId.trim() || undefined
+        languageId: languageId.trim() || undefined,
+        projects: projectIds
       })
       await onDone()
     } catch (caught) {
