@@ -88,8 +88,7 @@ code {
   border-bottom: 1px solid var(--line);
 }
 
-.brand-mark,
-.empty-mark {
+.brand-mark {
   display: block;
   width: 36px;
   height: 36px;
@@ -441,11 +440,6 @@ code {
   max-width: 480px;
   margin: 0;
   color: var(--muted);
-}
-
-.empty-mark {
-  width: 54px;
-  height: 54px;
 }
 
 .messages {

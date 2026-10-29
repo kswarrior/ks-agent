@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Chat, LiveState, Message, ModelEntry, Project } from '../types'
-import { Logo } from './Logo'
 import { Markdown } from './Markdown'
 import { SelectMenu } from './SelectMenu'
 
@@ -130,7 +129,6 @@ export function ChatView({
           </div>
         ) : (
           <div className="empty-state">
-            <Logo className="empty-mark" />
             <h1>Build anything, extend everything</h1>
             <p>Create a project in the sidebar, add a provider and model in Settings, then start chatting.</p>
           </div>
