@@ -1,3 +1,10 @@
 {
-  "mcpServers": {}
+  "mcpServers": {
+    "context7": {
+      "transport": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "args": [],
+      "timeoutMs": 300000
+    }
+  }
 }
