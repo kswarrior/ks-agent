@@ -821,7 +821,10 @@ async function findFilesTool(args: Record<string, unknown>, ctx: ToolContext): P
     const name = entry.path.split('/').pop() ?? entry.path
     let score = -1
     if (match === 'glob') {
-      if (matchesGlob(entry.path, needle) || matchesGlob(name, needle)) score = 0
+      const globPath = ignoreCase ? entry.path.toLowerCase() : entry.path
+      const globName = ignoreCase ? name.toLowerCase() : name
+      const globQuery = ignoreCase ? needle.toLowerCase() : needle
+      if (matchesGlob(globPath, globQuery) || matchesGlob(globName, globQuery)) score = 0
     } else if (match === 'regex') {
       if (re && (re.test(name) || re.test(entry.path))) score = 0
     } else {
@@ -934,7 +937,9 @@ async function copyFileTool(args: Record<string, unknown>, ctx: ToolContext): Pr
   if (stat.isDirectory()) {
     fs.cpSync(absFrom, absTo, {
       recursive: true,
+      dereference: true,
       filter: (source) => {
+        if (path.resolve(source) === absFromResolved) return true
         try {
           return !fs.lstatSync(source).isSymbolicLink()
         } catch {

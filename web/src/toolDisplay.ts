@@ -99,6 +99,16 @@ export function describeTool(
       return { primary: argsString(args, 'pattern'), detail: path || displayPath('.', rootPath) }
     case 'find_files':
       return { primary: argsString(args, 'query'), detail: path || displayPath('.', rootPath) }
+    case 'read_multiple_files': {
+      const paths = Array.isArray(args.paths)
+        ? args.paths.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        : []
+      if (!paths.length) return { primary: '', detail: '' }
+      return {
+        primary: `${paths.length} file${paths.length === 1 ? '' : 's'}`,
+        detail: paths.map((file) => displayPath(file, rootPath)).join(', ')
+      }
+    }
     case 'tree':
       return {
         primary: path === '/' || (rootPath && path === trimRoot(rootPath)) ? 'project root' : baseName(path),
