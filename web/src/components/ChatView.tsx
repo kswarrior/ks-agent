@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   Chat,
   ChatExtensionsState,
+  ChatSummary,
   ExtensionKind,
   FailureInfo,
   LiveState,
@@ -37,9 +38,21 @@ function formatTokens(value: number): string {
   return String(value)
 }
 
-function estimateContextTokens(messages: Message[], live: LiveState | null): number {
+function estimateContextTokens(
+  messages: Message[],
+  live: LiveState | null,
+  summary: ChatSummary | null
+): number {
   let chars = 0
-  for (const message of messages) {
+  let visible = messages
+  if (summary) {
+    const cutoff = messages.findIndex((message) => message.id === summary.coveredMessageId)
+    if (cutoff >= 0) {
+      visible = messages.slice(cutoff + 1)
+      chars += summary.summary.length + MESSAGE_OVERHEAD_CHARS
+    }
+  }
+  for (const message of visible) {
     chars += message.content.length + MESSAGE_OVERHEAD_CHARS
     if (message.toolCalls) chars += JSON.stringify(message.toolCalls).length
   }
@@ -387,6 +400,115 @@ function RetryCard({ retry, now }: { retry: RetryStatus; now: number }) {
         {retry.message}
       </p>
     </div>
+  )
+}
+
+function summaryTime(value: number): string {
+  return new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function SummaryCard({
+  summary,
+  disabled,
+  onSave,
+  onDelete
+}: {
+  summary: ChatSummary
+  disabled: boolean
+  onSave: (text: string) => Promise<void>
+  onDelete: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(summary.summary)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!editing) setDraft(summary.summary)
+  }, [summary.summary, editing])
+
+  const cancel = () => {
+    setDraft(summary.summary)
+    setError(null)
+    setEditing(false)
+  }
+
+  const save = () => {
+    const text = draft.trim()
+    if (!text) {
+      setError('Summary cannot be empty.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    void onSave(text)
+      .then(() => setEditing(false))
+      .catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)))
+      .finally(() => setSaving(false))
+  }
+
+  return (
+    <details className="chat-summary" open>
+      <summary>
+        <span className="chat-summary-badge">Handoff</span>
+        <span className="chat-summary-title">Conversation summary</span>
+        <span className="chat-summary-meta">
+          Older messages compacted · updated {summaryTime(summary.updatedAt)}
+        </span>
+      </summary>
+      <div className="chat-summary-body">
+        {error && <div className="error-banner small">{error}</div>}
+        {editing ? (
+          <>
+            <textarea
+              className="chat-summary-editor"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              rows={14}
+              spellCheck={false}
+              aria-label="Conversation summary"
+            />
+            <div className="chat-summary-actions">
+              <button type="button" className="btn ghost small" onClick={cancel} disabled={saving}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary small"
+                onClick={save}
+                disabled={saving || !draft.trim()}
+              >
+                {saving ? 'Saving…' : 'Save summary'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="chat-summary-text">
+              <Markdown text={summary.summary} />
+            </div>
+            <div className="chat-summary-actions">
+              <button
+                type="button"
+                className="btn ghost small"
+                onClick={() => setEditing(true)}
+                disabled={disabled}
+              >
+                Edit
+              </button>
+              <button type="button" className="btn danger small" onClick={onDelete} disabled={disabled}>
+                Remove
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </details>
   )
 }
 
