@@ -1064,6 +1064,17 @@ code {
   font-size: 12px;
 }
 
+.error-banner.with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.error-banner.with-action .btn {
+  flex: none;
+}
+
 .boot-error {
   position: fixed;
   left: 50%;
@@ -2404,6 +2415,22 @@ code {
   letter-spacing: 0.02em;
 }
 
+.run-report-continue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.run-report-continue .btn {
+  flex: none;
+}
+
 @media (max-width: 640px) {
   .run-report {
     margin: 6px 0 14px;
@@ -2431,6 +2458,12 @@ code {
   .run-report-local {
     flex-basis: 100%;
     margin-left: 0;
+  }
+
+  .run-report-continue,
+  .error-banner.with-action {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .run-change code {

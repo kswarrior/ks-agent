@@ -326,6 +326,7 @@ export function ChatView({
 }) {
   const [draft, setDraft] = useState('')
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const rootPath = project?.path ?? ''
 
   useEffect(() => {
@@ -378,6 +379,16 @@ export function ChatView({
     setDraft('')
     onSend(content)
   }
+
+  const continueRun = () => {
+    const composer = composerRef.current
+    if (!composer) return
+    composer.focus()
+    composer.setSelectionRange(composer.value.length, composer.value.length)
+    composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  const stopped = runReport?.status === 'stopped'
 
   if (!project) {
     return (
@@ -493,7 +504,7 @@ export function ChatView({
               return null
             })}
 
-            {runReport && <RunReport key={runReport.id} report={runReport} />}
+            {runReport && <RunReport key={runReport.id} report={runReport} onContinue={continueRun} />}
 
             {(streaming || live) && (
               <div className="msg assistant live">
@@ -530,12 +541,28 @@ export function ChatView({
             <div ref={bottomRef} />
           </div>
 
-          {error && <div className="error-banner">{error}</div>}
+          {error && (
+            <div className={`error-banner ${!streaming && modelId && !stopped ? 'with-action' : ''}`}>
+              <span>{error}</span>
+              {!streaming && modelId && !stopped && (
+                <button type="button" className="btn ghost small" onClick={continueRun}>
+                  Continue
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="composer">
             <textarea
+              ref={composerRef}
               value={draft}
-              placeholder={modelId ? 'Describe a task… (Enter to send, Shift+Enter for newline)' : 'Add a provider and model in Settings first'}
+              placeholder={
+                !modelId
+                  ? 'Add a provider and model in Settings first'
+                  : !streaming && (stopped || error)
+                    ? 'Add instructions to continue from here… (Enter to send)'
+                    : 'Describe a task… (Enter to send, Shift+Enter for newline)'
+              }
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
