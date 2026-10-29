@@ -7,6 +7,7 @@ import {
 } from '../api'
 import type { ModelEntry, ProviderPublic } from '../types'
 import { Modal } from './Modal'
+import { SelectMenu } from './SelectMenu'
 
 type SettingsTab = 'providers' | 'models'
 type SettingsView = 'list' | 'add-provider' | 'add-model'
@@ -134,14 +135,14 @@ export function SettingsModal({
       <p className="muted">Models are grouped under a provider. Add a provider first if the list is empty.</p>
       <label className="field">
         <span>Provider</span>
-        <select value={providerId} onChange={(event) => setProviderId(event.target.value)}>
-          {providers.length === 0 && <option value="">Add a provider first</option>}
-          {providers.map((provider) => (
-            <option key={provider.id} value={provider.id}>
-              {provider.name}
-            </option>
-          ))}
-        </select>
+        <SelectMenu
+          value={providerId}
+          options={providers.map((provider) => ({ value: provider.id, label: provider.name }))}
+          onChange={setProviderId}
+          placeholder={providers.length === 0 ? 'Add a provider first' : 'Select provider'}
+          disabled={providers.length === 0}
+          ariaLabel="Provider"
+        />
       </label>
       <label className="field">
         <span>Label</span>

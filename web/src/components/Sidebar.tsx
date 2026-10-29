@@ -1,4 +1,5 @@
 import type { Chat, Project } from '../types'
+import { SelectMenu } from './SelectMenu'
 
 export function Sidebar({
   projects,
@@ -66,23 +67,18 @@ export function Sidebar({
               </button>
             </span>
           </div>
-          <select
-            className="project-select sidebar-project-select"
+          <SelectMenu
+            className="sidebar-project-select"
             value={activeProjectId ?? ''}
-            onChange={(event) => {
-              const next = projects.find((project) => project.id === event.target.value)
+            options={projects.map((project) => ({ value: project.id, label: project.name }))}
+            onChange={(id) => {
+              const next = projects.find((project) => project.id === id)
               if (next) onSelectProject(next)
             }}
+            placeholder="No projects yet"
             disabled={projects.length === 0}
-            aria-label="Project"
-          >
-            {projects.length === 0 && <option value="">No projects yet</option>}
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+            ariaLabel="Project"
+          />
         </div>
 
         <div className="sidebar-section grow">

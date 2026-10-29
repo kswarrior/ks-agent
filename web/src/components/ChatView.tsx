@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Chat, LiveState, Message, ModelEntry, Project } from '../types'
 import { Markdown } from './Markdown'
+import { SelectMenu } from './SelectMenu'
 
 function formatArgs(raw: string): string {
   try {
@@ -233,21 +234,15 @@ export function ChatView({
               disabled={!modelId}
             />
             <div className="composer-actions">
-              <select
-                className="model-select composer-model"
+              <SelectMenu
+                className="composer-model"
                 value={modelId}
-                onChange={(event) => onModelChange(event.target.value)}
+                options={models.map((model) => ({ value: model.id, label: model.name }))}
+                onChange={onModelChange}
+                placeholder="No models"
                 disabled={streaming || models.length === 0}
-                title="Model"
-                aria-label="Model"
-              >
-                {models.length === 0 && <option value="">No models</option>}
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Model"
+              />
               {streaming ? (
                 <button className="btn danger" onClick={onStop}>
                   Stop
