@@ -266,7 +266,8 @@ app.patch('/api/providers/:id', async (c) => {
   if (!/^https?:\/\//i.test(baseUrl)) return c.json(errorJson('baseUrl must start with http:// or https://'), 400)
   const apiKey =
     body.apiKey === undefined ? provider.apiKey : typeof body.apiKey === 'string' ? body.apiKey.trim() : ''
-  return c.json(publicProvider(updateProvider(provider.id, name, baseUrl, apiKey)))
+  const updated = updateProvider(provider.id, name, baseUrl, apiKey) ?? provider
+  return c.json(publicProvider(updated))
 })
 
 app.delete('/api/providers/:id', (c) => {
