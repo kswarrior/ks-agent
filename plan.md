@@ -131,14 +131,17 @@ the Extensions modal. MCP and LSP never receive provider API keys.
 1. **Discover** — on server start (and on explicit reload) the registry reads
    its config, validates names, and reports invalid entries with an error
    instead of crashing the server.
-2. **Advertise** — the system prompt lists installed skills, MCP server/tool
-   counts and configured language servers. Tool definitions are injected into
-   every provider request, so the model can call them directly.
+2. **Advertise** — the system prompt lists only the skills, MCP server/tool
+   counts and language servers enabled for the active project and not disabled
+   in the current chat. Tool definitions are filtered the same way for every
+   provider request.
 3. **Start lazily** — MCP servers warm up in the background (and are awaited
    once per agent run); language servers start only when a file with a matching
    extension needs diagnostics. Failures are captured per server.
 4. **Call** — tools run inside the active project: MCP receives the JSON
    arguments from the model, LSP reads the file through the project path jail.
+   Project scope and chat toggles are enforced again at execution time, so a
+   scoped-out or disabled item cannot be called.
 5. **Shutdown/reload** — SIGINT/SIGTERM stops every MCP/LSP child; reload
    stops old children, re-reads config, then restarts MCP connections.
 
@@ -148,6 +151,33 @@ registry, so changes apply without a server restart. Skills found only in a
 fallback folder are shown as read-only; create a same-named skill in
 `.ks-agent/skills` to override it. `/api/health` reports the discovered counts
 as `skills`, `mcpServers` and `lspServers`.
+
+### Project scope and per-chat toggles
+
+Every skill, MCP server and language server carries a `projects` list. An empty
+list means **all projects**; otherwise the item is enabled only for the listed
+project ids. The add forms in the Extensions modal have an "All projects" box
+plus one checkbox per project, and every card shows its scope.
+
+- Skills persist scope in frontmatter: `projects: all` or
+  `projects: id1, id2`.
+- MCP and LSP persist it as a `projects` array on the JSON entry.
+- The server filters the system prompt, tool definitions and execution by the
+  active project, so a scoped-out item is neither advertised nor callable.
+- Each chat can additionally disable any project-enabled item without touching
+  the project config. Only disabled rows are stored, in
+  `chat_disabled_extensions(chat_id, kind, name)` where `kind` is
+  `skill`, `mcp` or `lsp`. Missing rows mean enabled, so new chats and new
+  extensions default to on.
+- `GET /api/chats/:id/extensions` returns only items enabled for the chat's
+  project, each with an `enabled` flag for the chat.
+- `PATCH /api/chats/:id/extensions` with
+  `{ "kind": "skill" | "mcp" | "lsp", "name": "...", "enabled": false }`
+  writes or removes the disabled row.
+- The composer's **Tools** menu, immediately left of the model picker, lists
+  only project-enabled items grouped into Skills / MCP servers / Language
+  servers. Checking or unchecking an item toggles it for the current chat; the
+  trigger shows the active/total count.
 
 ### Agent config layout
 
@@ -172,11 +202,16 @@ scanned as fallbacks.
 ---
 name: debugging
 description: Use when debugging or reproducing an error
+projects: all
 ---
 
 # Debugging
 Step-by-step workflow the agent must follow.
 ```
+
+`projects: all` (or omitting the line) enables the skill everywhere; use
+`projects: id1, id2` to restrict it. The add form writes this line
+automatically.
 
 ### MCP format
 
@@ -189,14 +224,16 @@ Step-by-step workflow the agent must follow.
     },
     "remote": {
       "url": "https://example.com/mcp",
-      "headers": { "Authorization": "Bearer ..." }
+      "headers": { "Authorization": "Bearer ..." },
+      "projects": ["project-id"]
     }
   }
 }
 ```
 
 `transport` may be `stdio`, `http` (Streamable HTTP) or `sse`; it is inferred
-from `command`/`url` when omitted.
+from `command`/`url` when omitted. Omitting `projects` (or using an empty array)
+enables the server for all projects.
 
 ### LSP format
 
@@ -207,11 +244,15 @@ from `command`/`url` when omitted.
       "command": "typescript-language-server",
       "args": ["--stdio"],
       "extensions": [".ts", ".tsx", ".js"],
-      "languageId": "typescript"
+      "languageId": "typescript",
+      "projects": ["project-id"]
     }
   }
 }
 ```
+
+Omitting `projects` (or using an empty array) enables the server for all
+projects.
 
 Diagnostics are returned as `file:line:column severity: message (code) [source]`.
 Only diagnostics for the requested file are waited on; a server that reports
@@ -247,9 +288,11 @@ agent loop, a real built-in tool (`write_file`), provider retry recovery, the
 extension host calling a temporary mock extension, skills discovery +
 `use_skill`, MCP tool calls over stdio, Streamable HTTP and legacy SSE, LSP
 diagnostics over `didOpen` and `didChange` from a mock language server,
-background runs with event replay, stop/abort handling, persistence, extension
-discovery with **no default extensions**, opt-in Minecraft/Android example
-scaffolds, and static UI serving.
+project-scoped skill/MCP/LSP creation and filtering, per-chat extension
+disables (including blocked tool calls and re-enabling), background runs with
+event replay, stop/abort handling, persistence, extension discovery with **no
+default extensions**, opt-in Minecraft/Android example scaffolds, and static UI
+serving.
 
 ## Progress log
 
