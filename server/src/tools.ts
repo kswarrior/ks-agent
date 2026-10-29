@@ -932,7 +932,16 @@ async function copyFileTool(args: Record<string, unknown>, ctx: ToolContext): Pr
   }
   fs.mkdirSync(path.dirname(absTo), { recursive: true })
   if (stat.isDirectory()) {
-    fs.cpSync(absFrom, absTo, { recursive: true })
+    fs.cpSync(absFrom, absTo, {
+      recursive: true,
+      filter: (source) => {
+        try {
+          return !fs.lstatSync(source).isSymbolicLink()
+        } catch {
+          return false
+        }
+      }
+    })
     return { ok: true, output: `Copied directory ${from} -> ${to}` }
   }
   fs.copyFileSync(absFrom, absTo)

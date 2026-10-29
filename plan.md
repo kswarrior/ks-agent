@@ -44,11 +44,12 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] System prompt with project scope + tool rules
 - [x] Context trimming (message count + character budget)
 - [x] Built-in tools:
-  - [x] `read_file`, `write_file`, `edit_file`
-  - [x] `list_dir`, `glob`, `grep`, `get_file_info`
-  - [x] `delete_file`, `move_file`
+  - [x] `read_file`, `read_multiple_files`, `write_file`, `edit_file`, `apply_patch`, `append_file`
+  - [x] `list_dir`, `tree`, `find_files` (filename search), `glob`, `grep`, `get_file_info`
+  - [x] `create_dir`, `copy_file`, `delete_file`, `move_file`
   - [x] `run_shell` with path jail, command guard, timeout, output cap
   - [x] `update_plan` (writes/checks off `plan.md` in the project)
+  - [x] `git_init`, `git_status`, `git_diff`, `git_log`, `git_branch`, `git_commit`, `git_push`, `git_pull`
 - [x] Path jail: `..`, absolute paths, symlink escapes rejected
 - [x] Shell guard: traversal, `~`, `$HOME`, private hosts, dangerous commands
 
