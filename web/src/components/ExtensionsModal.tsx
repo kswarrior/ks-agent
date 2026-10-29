@@ -135,9 +135,23 @@ export function ExtensionsModal({
       footer={
         <>
           <span className="muted small">{TAB_HINT[tab]}</span>
-          <button className="btn primary" onClick={() => void reload()} disabled={busy}>
-            {busy ? 'Reloading…' : TAB_BUTTON[tab]}
-          </button>
+          {tab !== 'extensions' && view === 'list' && (
+            <button
+              className="btn ghost"
+              onClick={() => {
+                setView('add')
+                setError(null)
+              }}
+              disabled={busy}
+            >
+              {ADD_BUTTON[tab]}
+            </button>
+          )}
+          {view === 'list' && (
+            <button className="btn primary" onClick={() => void reload()} disabled={busy}>
+              {busy ? 'Working…' : TAB_BUTTON[tab]}
+            </button>
+          )}
         </>
       }
     >
@@ -148,6 +162,7 @@ export function ExtensionsModal({
             className={`settings-tab ${tab === entry.id ? 'active' : ''}`}
             onClick={() => {
               setTab(entry.id)
+              setView('list')
               setError(null)
             }}
             role="tab"
@@ -197,69 +212,109 @@ export function ExtensionsModal({
         </>
       )}
 
-      {tab === 'skills' && (
-        <>
-          {skills.length === 0 ? (
-            <div className="extension-tab-empty">
-              <strong>{TAB_EMPTY.skills.title}</strong>
-              <p className="muted">{TAB_EMPTY.skills.body}</p>
-            </div>
-          ) : (
-            <div className="extension-grid">
-              {skills.map((skill) => (
-                <div className="extension-card" key={skill.name}>
-                  <div className="extension-head">
-                    <strong>{skill.name}</strong>
-                    <span className="status ready">skill</span>
+      {tab === 'skills' &&
+        (view === 'add' ? (
+          <AddSkillForm
+            onDone={async () => {
+              await onRefreshSkills()
+              setView('list')
+            }}
+            onCancel={() => setView('list')}
+          />
+        ) : (
+          <>
+            {skills.length === 0 ? (
+              <div className="extension-tab-empty">
+                <strong>{TAB_EMPTY.skills.title}</strong>
+                <p className="muted">{TAB_EMPTY.skills.body}</p>
+              </div>
+            ) : (
+              <div className="extension-grid">
+                {skills.map((skill) => (
+                  <div className="extension-card" key={skill.name}>
+                    <div className="extension-head">
+                      <strong>{skill.name}</strong>
+                      <span className="status ready">skill</span>
+                    </div>
+                    <p className="muted">{skill.description || 'No description.'}</p>
+                    <div className="muted small" title={skill.path}>
+                      {skill.path}
+                    </div>
+                    <div className="extension-card-actions">
+                      {skill.writable ? (
+                        <button
+                          className="btn ghost small"
+                          onClick={() => setConfirmDelete({ kind: 'skills', name: skill.name })}
+                          disabled={busy}
+                        >
+                          Delete
+                        </button>
+                      ) : (
+                        <span className="muted small">Read-only (override it to edit)</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="muted">{skill.description || 'No description.'}</p>
-                  <div className="muted small" title={skill.path}>
-                    {skill.path}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+                ))}
+              </div>
+            )}
+          </>
+        ))}
 
-      {tab === 'mcp' && (
-        <>
-          {mcpServers.length === 0 ? (
-            <div className="extension-tab-empty">
-              <strong>{TAB_EMPTY.mcp.title}</strong>
-              <p className="muted">{TAB_EMPTY.mcp.body}</p>
-            </div>
-          ) : (
-            <div className="extension-grid">
-              {mcpServers.map((server) => (
-                <div className="extension-card" key={server.name}>
-                  <div className="extension-head">
-                    <div>
-                      <strong>{server.name}</strong>
-                      <span className="muted small"> {server.transport}</span>
+      {tab === 'mcp' &&
+        (view === 'add' ? (
+          <AddMcpForm
+            onDone={async () => {
+              await onRefreshMcp()
+              setView('list')
+            }}
+            onCancel={() => setView('list')}
+          />
+        ) : (
+          <>
+            {mcpServers.length === 0 ? (
+              <div className="extension-tab-empty">
+                <strong>{TAB_EMPTY.mcp.title}</strong>
+                <p className="muted">{TAB_EMPTY.mcp.body}</p>
+              </div>
+            ) : (
+              <div className="extension-grid">
+                {mcpServers.map((server) => (
+                  <div className="extension-card" key={server.name}>
+                    <div className="extension-head">
+                      <div>
+                        <strong>{server.name}</strong>
+                        <span className="muted small"> {server.transport}</span>
+                      </div>
+                      <span className={`status ${server.status}`}>{server.status}</span>
                     </div>
-                    <span className={`status ${server.status}`}>{server.status}</span>
-                  </div>
-                  {server.error && <div className="error-banner small">{server.error}</div>}
-                  <div className="muted small">
-                    {server.tools.length} tool{server.tools.length === 1 ? '' : 's'}
-                  </div>
-                  {server.tools.length > 0 && (
-                    <div className="chips">
-                      {server.tools.map((tool) => (
-                        <span className="chip" key={tool.name} title={tool.description}>
-                          {tool.name}
-                        </span>
-                      ))}
+                    {server.error && <div className="error-banner small">{server.error}</div>}
+                    <div className="muted small">
+                      {server.tools.length} tool{server.tools.length === 1 ? '' : 's'}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+                    {server.tools.length > 0 && (
+                      <div className="chips">
+                        {server.tools.map((tool) => (
+                          <span className="chip" key={tool.name} title={tool.description}>
+                            {tool.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="extension-card-actions">
+                      <button
+                        className="btn ghost small"
+                        onClick={() => setConfirmDelete({ kind: 'mcp', name: server.name })}
+                        disabled={busy}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ))}
 
       {tab === 'lsp' && (
         <>
