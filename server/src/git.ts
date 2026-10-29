@@ -101,7 +101,13 @@ export async function gitStatus(projectPath: string): Promise<string> {
   const branch = await runGit(projectPath, ['rev-parse', '--abbrev-ref', 'HEAD'])
   const porcelain = await runGit(projectPath, ['status', '--porcelain=v1', '--branch'])
   const shortstat = await runGit(projectPath, ['diff', '--shortstat'])
-  const head = branch.code === 0 ? branch.output.trim().split('\n')[0].slice(0, 200) : '(no commits)'
+  const branchLine = porcelain.output.trim().split('\n')[0] ?? ''
+  const porcelainBranch = branchLine
+    .replace(/^## /, '')
+    .replace(/^No commits yet on /, '')
+    .split('...')[0]
+    .trim()
+  const head = branch.code === 0 ? branch.output.trim().split('\n')[0].slice(0, 200) : porcelainBranch || '(no commits)'
   const files = porcelain.output.trim()
   const lines = files ? files.split('\n').slice(0, 100) : []
   const more = files && files.split('\n').length > 100 ? `\n[... +${files.split('\n').length - 100} more]` : ''
