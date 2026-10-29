@@ -1,3 +1,4 @@
+import { parseRetryAfter, ProviderError } from './errors.js'
 import type { ToolDef } from './types.js'
 
 export interface LLMMessage {
@@ -70,7 +71,7 @@ interface RawDelta {
 
 interface RawChunk {
   choices?: Array<{ delta?: RawDelta; message?: RawDelta; finish_reason?: string | null }>
-  error?: { message?: string }
+  error?: { message?: string; code?: string; type?: string }
 }
 
 /**
@@ -152,13 +153,24 @@ export async function streamCompletion(options: StreamOptions): Promise<StreamRe
 
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      throw new Error(`Provider error ${res.status}: ${text.slice(0, 2000) || res.statusText}`)
+      throw new ProviderError({
+        status: res.status,
+        statusText: res.statusText,
+        body: text,
+        retryAfterMs: parseRetryAfter(res.headers)
+      })
     }
 
     const contentType = res.headers.get('content-type') ?? ''
     if (!contentType.includes('text/event-stream') || !res.body) {
       const json = (await res.json()) as RawChunk
-      if (json.error?.message) throw new Error(json.error.message)
+      if (json.error) {
+        throw new ProviderError({
+          status: 0,
+          title: 'Provider stream error',
+          body: JSON.stringify(json.error)
+        })
+      }
       const choice = json.choices?.[0]
       applyDelta(choice?.delta ?? choice?.message)
       finishReason = choice?.finish_reason ?? null
@@ -194,7 +206,13 @@ export async function streamCompletion(options: StreamOptions): Promise<StreamRe
         } catch {
           continue
         }
-        if (parsed.error?.message) throw new Error(parsed.error.message)
+        if (parsed.error) {
+          throw new ProviderError({
+            status: 0,
+            title: 'Provider stream error',
+            body: JSON.stringify(parsed.error)
+          })
+        }
         const choice = parsed.choices?.[0]
         if (!choice) continue
         applyDelta(choice.delta)
