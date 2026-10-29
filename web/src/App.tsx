@@ -165,6 +165,20 @@ export default function App() {
           }))
         )
       }
+
+      const chatId = activeChatIdRef.current
+      if (chatId) {
+        void api
+          .listMessages(chatId)
+          .then((list) => {
+            if (activeChatIdRef.current !== chatId) return
+            setMessages(list)
+            setLive((current) => (current ? { ...current, content: '', tools: [] } : current))
+          })
+          .catch(() => {
+            // live tool cards remain visible until the next refresh
+          })
+      }
     } else if (event.type === 'error') {
       setError(event.error)
       setSteps((current) => {
