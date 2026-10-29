@@ -151,21 +151,21 @@ export function ChatView({
       </header>
 
       {!chat ? (
-        <div className="empty-state">
-          <h1>No chat selected</h1>
-          <p>Create a chat in the sidebar to start a task.</p>
-        </div>
+        loading ? (
+          <div className="messages">
+            <MessageSkeleton />
+          </div>
+        ) : (
+          <div className="empty-state">
+            <h1>No chat selected</h1>
+            <p>Create a chat in the sidebar to start a task.</p>
+          </div>
+        )
       ) : (
         <>
           <div className="messages">
             {loading ? (
-              <div className="skeleton-stack" role="status" aria-label="Loading messages" aria-busy="true">
-                <div className="skeleton skeleton-message" style={{ width: '62%', marginLeft: 'auto' }} />
-                <div className="skeleton skeleton-line" style={{ width: '84%' }} />
-                <div className="skeleton skeleton-line" style={{ width: '70%' }} />
-                <div className="skeleton skeleton-line" style={{ width: '48%' }} />
-                <div className="skeleton skeleton-message" style={{ width: '76%' }} />
-              </div>
+              <MessageSkeleton />
             ) : (
               <>
             {messages.length === 0 && !live && (

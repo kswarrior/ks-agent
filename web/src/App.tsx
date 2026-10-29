@@ -21,6 +21,9 @@ export default function App() {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
+  const [projectsLoading, setProjectsLoading] = useState(true)
+  const [chatsLoading, setChatsLoading] = useState(false)
+  const [messagesLoading, setMessagesLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -115,6 +118,7 @@ export default function App() {
         const list = await api.listMessages(chatId)
         if (subscription.cancelled) return
         setMessages(list)
+        setMessagesLoading(false)
         const status = await api.getChatRun(chatId)
         if (subscription.cancelled || !status.active) return
         setStreaming(true)
@@ -134,6 +138,7 @@ export default function App() {
         if (!subscription.cancelled) {
           setStreaming(false)
           setLive(null)
+          setMessagesLoading(false)
           try {
             const list = await api.listMessages(chatId)
             if (!subscription.cancelled && activeChatIdRef.current === chatId) setMessages(list)
@@ -165,6 +170,8 @@ export default function App() {
         if (projectList.length) setActiveProjectId((current) => current ?? projectList[0].id)
       } catch (caught) {
         if (!cancelled) setBootError(caught instanceof Error ? caught.message : String(caught))
+      } finally {
+        if (!cancelled) setProjectsLoading(false)
       }
     })()
     return () => {
@@ -176,9 +183,11 @@ export default function App() {
     if (!activeProjectId) {
       setChats([])
       setActiveChatId(null)
+      setChatsLoading(false)
       return
     }
     let cancelled = false
+    setChatsLoading(true)
     void api
       .listChats(activeProjectId)
       .then((list) => {
@@ -188,6 +197,9 @@ export default function App() {
       })
       .catch((caught) => {
         if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
+      })
+      .finally(() => {
+        if (!cancelled) setChatsLoading(false)
       })
     return () => {
       cancelled = true
@@ -200,8 +212,10 @@ export default function App() {
       setMessages([])
       setLive(null)
       setStreaming(false)
+      setMessagesLoading(false)
       return
     }
+    setMessagesLoading(true)
     void attachRun(activeChatId)
     return () => {
       detachRun()
@@ -346,6 +360,8 @@ export default function App() {
         activeProjectId={activeProjectId}
         chats={chats}
         activeChatId={activeChatId}
+        projectsLoading={projectsLoading}
+        chatsLoading={chatsLoading}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onSelectProject={selectProject}
@@ -367,6 +383,7 @@ export default function App() {
         modelId={modelId}
         live={live}
         streaming={streaming}
+        loading={projectsLoading || chatsLoading || messagesLoading}
         error={error}
         onModelChange={setModelId}
         onSend={send}

@@ -5,7 +5,7 @@ const root = process.env.KS_ROOT_DIR ? path.resolve(process.env.KS_ROOT_DIR) : p
 
 export const config = {
   root,
-  port: Number(process.env.PORT || 8787),
+  port: Number(process.env.PORT || 8080),
   dataDir: path.resolve(process.env.KS_DATA_DIR || path.join(root, 'storage')),
   projectsDir: path.resolve(process.env.KS_PROJECTS_DIR || path.join(root, 'project')),
   extensionsDir: path.resolve(process.env.KS_EXTENSIONS_DIR || path.join(root, 'extensions')),
