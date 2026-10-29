@@ -1020,6 +1020,21 @@ async function main() {
   )
   console.log('PASS LSP diagnostics tool')
 
+  fs.writeFileSync(
+    path.join(project.path, 'broken.ts'),
+    'export const value: number = 1\nconst stillWrong: string = value\n'
+  )
+  const lspAgain = await sendMessage(chat.id, 'check diagnostics again', model.id)
+  const lspAgainTool = lspAgain.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'lsp_diagnostics'
+  )
+  assert(lspAgainTool, 'agent did not call lsp_diagnostics again', lspAgain.text.slice(0, 1500))
+  assert(
+    lspAgainTool.result.output.includes('Mock type error'),
+    `LSP didChange diagnostics missing: ${lspAgainTool.result.output}`
+  )
+  console.log('PASS LSP didChange diagnostics')
+
   const slowChat = await api('POST', `/api/projects/${project.id}/chats`, {
     title: 'slow chat',
     modelId: model.id
