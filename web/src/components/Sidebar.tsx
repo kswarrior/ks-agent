@@ -71,18 +71,22 @@ export function Sidebar({
               </button>
             </span>
           </div>
-          <SelectMenu
-            className="sidebar-project-select"
-            value={activeProjectId ?? ''}
-            options={projects.map((project) => ({ value: project.id, label: project.name }))}
-            onChange={(id) => {
-              const next = projects.find((project) => project.id === id)
-              if (next) onSelectProject(next)
-            }}
-            placeholder="No projects yet"
-            disabled={projects.length === 0}
-            ariaLabel="Project"
-          />
+          {projectsLoading ? (
+            <div className="skeleton skeleton-select" aria-hidden="true" />
+          ) : (
+            <SelectMenu
+              className="sidebar-project-select"
+              value={activeProjectId ?? ''}
+              options={projects.map((project) => ({ value: project.id, label: project.name }))}
+              onChange={(id) => {
+                const next = projects.find((project) => project.id === id)
+                if (next) onSelectProject(next)
+              }}
+              placeholder="No projects yet"
+              disabled={projects.length === 0}
+              ariaLabel="Project"
+            />
+          )}
         </div>
 
         <div className="sidebar-section grow">
@@ -93,9 +97,20 @@ export function Sidebar({
             </button>
           </div>
           <div className="chat-list">
-            {!activeProject && <p className="empty-hint">Select a project.</p>}
-            {activeProject && chats.length === 0 && <p className="empty-hint">No chats in this project.</p>}
-            {chats.map((chat) => (
+            {(projectsLoading || (activeProject && chatsLoading)) && (
+              <div className="skeleton-list" role="status" aria-label="Loading chats" aria-busy="true">
+                {[0, 1, 2, 3].map((index) => (
+                  <div className="skeleton skeleton-row" key={index} />
+                ))}
+              </div>
+            )}
+            {!projectsLoading && !chatsLoading && !activeProject && (
+              <p className="empty-hint">Select a project.</p>
+            )}
+            {!projectsLoading && !chatsLoading && activeProject && chats.length === 0 && (
+              <p className="empty-hint">No chats in this project.</p>
+            )}
+            {!chatsLoading && chats.map((chat) => (
               <div
                 key={chat.id}
                 className={`chat-item ${chat.id === activeChatId ? 'active' : ''}`}

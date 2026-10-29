@@ -47,6 +47,18 @@ function ToolCard({
   )
 }
 
+function MessageSkeleton() {
+  return (
+    <div className="skeleton-stack" role="status" aria-label="Loading messages" aria-busy="true">
+      <div className="skeleton skeleton-message" style={{ width: '62%', marginLeft: 'auto' }} />
+      <div className="skeleton skeleton-line" style={{ width: '84%' }} />
+      <div className="skeleton skeleton-line" style={{ width: '70%' }} />
+      <div className="skeleton skeleton-line" style={{ width: '48%' }} />
+      <div className="skeleton skeleton-message" style={{ width: '76%' }} />
+    </div>
+  )
+}
+
 export function ChatView({
   project,
   chat,
@@ -111,11 +123,17 @@ export function ChatView({
           </button>
           <div className="main-title">KS Agent</div>
         </header>
-        <div className="empty-state">
-          <div className="empty-mark">KS</div>
-          <h1>Build anything, extend everything</h1>
-          <p>Create a project in the sidebar, add a provider and model in Settings, then start chatting.</p>
-        </div>
+        {loading ? (
+          <div className="messages">
+            <MessageSkeleton />
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-mark">KS</div>
+            <h1>Build anything, extend everything</h1>
+            <p>Create a project in the sidebar, add a provider and model in Settings, then start chatting.</p>
+          </div>
+        )}
       </main>
     )
   }
