@@ -531,6 +531,9 @@ export function ChatView({
   models,
   modelId,
   chatExtensions,
+  summary,
+  summaryBusy,
+  summaryError,
   live,
   streaming,
   steps,
@@ -540,6 +543,9 @@ export function ChatView({
   retryStatus,
   onModelChange,
   onToggleChatExtension,
+  onSaveSummary,
+  onDeleteSummary,
+  onDismissSummaryError,
   onSend,
   onStop,
   onOpenSidebar
@@ -550,6 +556,9 @@ export function ChatView({
   models: ModelEntry[]
   modelId: string
   chatExtensions: ChatExtensionsState | null
+  summary: ChatSummary | null
+  summaryBusy: boolean
+  summaryError: string | null
   live: LiveState | null
   streaming: boolean
   steps: RunStep[]
@@ -559,6 +568,9 @@ export function ChatView({
   retryStatus: RetryStatus | null
   onModelChange: (id: string) => void
   onToggleChatExtension: (kind: ExtensionKind, name: string, enabled: boolean) => Promise<void>
+  onSaveSummary: (text: string) => Promise<void>
+  onDeleteSummary: () => void
+  onDismissSummaryError: () => void
   onSend: (content: string) => void
   onStop: () => void
   onOpenSidebar: () => void
@@ -623,7 +635,10 @@ export function ChatView({
   }, [messages])
 
   const contextWindow = models.find((model) => model.id === modelId)?.contextWindow ?? DEFAULT_CONTEXT_WINDOW
-  const contextTokens = useMemo(() => estimateContextTokens(messages, live), [messages, live])
+  const contextTokens = useMemo(
+    () => estimateContextTokens(messages, live, summary),
+    [messages, live, summary]
+  )
   const contextRatio = contextWindow > 0 ? contextTokens / contextWindow : 0
   const contextPercent = Math.max(0, Math.round(contextRatio * 100))
   const contextLevel =
@@ -686,7 +701,9 @@ export function ChatView({
         {chat && (
           <div
             className={`context-meter ${contextLevel}`}
-            title={`Estimated context usage: ${contextTokens.toLocaleString()} of ${contextWindow.toLocaleString()} tokens (${contextPercent}%)`}
+            title={`Estimated context usage: ${contextTokens.toLocaleString()} of ${contextWindow.toLocaleString()} tokens (${contextPercent}%)${
+              summary ? '. Older messages are represented by the conversation summary.' : ''
+            }`}
             aria-label={`Context usage ${contextPercent}%`}
           >
             <span className="context-meter-dot" aria-hidden="true" />
@@ -716,6 +733,22 @@ export function ChatView({
               <MessageSkeleton />
             ) : (
               <>
+            {summary && (
+              <SummaryCard
+                summary={summary}
+                disabled={streaming}
+                onSave={onSaveSummary}
+                onDelete={onDeleteSummary}
+              />
+            )}
+
+            {summaryBusy && (
+              <div className="chat-summary-working" role="status">
+                <span className="chat-summary-working-dot" aria-hidden="true" />
+                Summarizing older messages into a handoff summary…
+              </div>
+            )}
+
             {messages.length === 0 && !live && (
               <div className="empty-chat">
                 <h2>What should we build?</h2>
@@ -840,6 +873,15 @@ export function ChatView({
             )}
             <div ref={bottomRef} />
           </div>
+
+          {summaryError && (
+            <div className="error-banner with-action">
+              <span>Context summary failed: {summaryError}. Older messages will be trimmed instead.</span>
+              <button type="button" className="btn ghost small" onClick={onDismissSummaryError}>
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {error && !failure && (
             <div className={`error-banner ${!streaming && modelId && !stopped ? 'with-action' : ''}`}>
