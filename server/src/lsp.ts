@@ -17,6 +17,7 @@ interface LanguageServerConfig {
   languageId: string
   env: Record<string, string>
   initializationOptions?: Record<string, unknown>
+  installCommand?: string
   projects: string[]
 }
 
@@ -115,6 +116,7 @@ function normalizeServer(name: string, raw: unknown): LanguageServerConfig {
   if (!command) throw new Error('language server requires command')
   const extensions = normalizeExtensions(obj.extensions ?? obj.fileExtensions)
   if (extensions.length === 0) throw new Error('language server requires extensions')
+  const installCommand = asString(obj.installCommand ?? obj.install).trim()
   return {
     name,
     command,
@@ -125,6 +127,7 @@ function normalizeServer(name: string, raw: unknown): LanguageServerConfig {
     initializationOptions: Object.keys(asRecord(obj.initializationOptions)).length
       ? asRecord(obj.initializationOptions)
       : undefined,
+    ...(installCommand ? { installCommand } : {}),
     projects: normalizeProjects(obj.projects)
   }
 }
@@ -166,6 +169,7 @@ function serverToConfig(server: LanguageServerConfig): Record<string, unknown> {
     languageId: server.languageId,
     ...(Object.keys(server.env).length ? { env: server.env } : {}),
     ...(server.initializationOptions ? { initializationOptions: server.initializationOptions } : {}),
+    ...(server.installCommand ? { installCommand: server.installCommand } : {}),
     ...(server.projects.length ? { projects: server.projects } : {})
   }
 }
@@ -187,6 +191,10 @@ function validateLspInput(obj: Record<string, unknown>): void {
         throw new ConfigError('env must use non-empty string keys and values.')
       }
     }
+  }
+  const installCommand = obj.installCommand ?? obj.install
+  if (installCommand !== undefined && (typeof installCommand !== 'string' || installCommand.length > 2000)) {
+    throw new ConfigError('installCommand must be a string of at most 2000 characters.')
   }
 }
 
