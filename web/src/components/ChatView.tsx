@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Chat, LiveState, Message, ModelEntry, Project, RunStep } from '../types'
+import type {
+  Chat,
+  ChatExtensionsState,
+  ExtensionKind,
+  LiveState,
+  Message,
+  ModelEntry,
+  Project,
+  RunStep
+} from '../types'
 import {
   absolutePath,
   argsString,
@@ -8,6 +17,7 @@ import {
   shortenPath,
   toolLabel
 } from '../toolDisplay'
+import { ChatExtensionsMenu } from './ChatExtensionsMenu'
 import { Markdown } from './Markdown'
 import { ModelSelect } from './ModelSelect'
 import { StepMenu } from './StepMenu'
@@ -299,12 +309,14 @@ export function ChatView({
   messages,
   models,
   modelId,
+  chatExtensions,
   live,
   streaming,
   steps,
   loading,
   error,
   onModelChange,
+  onToggleChatExtension,
   onSend,
   onStop,
   onOpenSidebar
@@ -314,12 +326,14 @@ export function ChatView({
   messages: Message[]
   models: ModelEntry[]
   modelId: string
+  chatExtensions: ChatExtensionsState | null
   live: LiveState | null
   streaming: boolean
   steps: RunStep[]
   loading: boolean
   error: string | null
   onModelChange: (id: string) => void
+  onToggleChatExtension: (kind: ExtensionKind, name: string, enabled: boolean) => Promise<void>
   onSend: (content: string) => void
   onStop: () => void
   onOpenSidebar: () => void
@@ -574,6 +588,11 @@ export function ChatView({
               disabled={!modelId}
             />
             <div className="composer-actions">
+              <ChatExtensionsMenu
+                extensions={chatExtensions}
+                disabled={streaming}
+                onToggle={onToggleChatExtension}
+              />
               <ModelSelect
                 className="composer-model"
                 value={modelId}
