@@ -585,7 +585,7 @@ function startMockProvider() {
   })
 }
 
-async function api(method, url, body) {
+async function rawApi(method, url, body) {
   const res = await fetch(`http://127.0.0.1:${serverPort}${url}`, {
     method,
     headers: { 'content-type': 'application/json' },
@@ -598,8 +598,15 @@ async function api(method, url, body) {
   } catch {
     // keep text
   }
-  if (!res.ok) throw new Error(`${method} ${url} -> ${res.status}: ${text.slice(0, 500)}`)
-  return data
+  return { status: res.status, data, text }
+}
+
+async function api(method, url, body) {
+  const result = await rawApi(method, url, body)
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`${method} ${url} -> ${result.status}: ${result.text.slice(0, 500)}`)
+  }
+  return result.data
 }
 
 async function readEvents(response) {
