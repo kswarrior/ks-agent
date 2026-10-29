@@ -145,7 +145,7 @@ export function StepMenu({
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title={streaming ? 'Show live steps' : 'Show steps'}
+        title={streaming ? 'Show live steps' : plan ? 'Show plan steps' : 'Show steps'}
       >
         {streaming ? (
           <span className="step-live-dot" aria-hidden="true" />
@@ -186,7 +186,7 @@ export function StepMenu({
             ref={popupRef}
             className="step-popup"
             role="dialog"
-            aria-label="Run steps"
+            aria-label={plan ? 'Plan steps' : 'Run steps'}
             style={{
               right: Math.max(8, window.innerWidth - rect.right),
               bottom: window.innerHeight - rect.top + 8
