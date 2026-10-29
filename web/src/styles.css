@@ -13,6 +13,9 @@
   --green: #56d68b;
   --red: #ff6b6b;
   --amber: #f0b35b;
+  --tool-running: #b99a5a;
+  --tool-done: #6a9e7b;
+  --tool-failed: #b96b6b;
   --radius: 12px;
   --sidebar: 286px;
   font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -631,10 +634,23 @@ code {
 
 /* ------------------------------------------------------------ tool cards */
 .tool-card {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--bg-soft);
+  border: 0;
+  border-left: 2px solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
+}
+
+.tool-card.running {
+  border-left-color: var(--tool-running);
+}
+
+.tool-card.done {
+  border-left-color: var(--tool-done);
+}
+
+.tool-card.failed {
+  border-left-color: var(--tool-failed);
 }
 
 .tool-card summary {
@@ -650,44 +666,6 @@ code {
 
 .tool-card summary::-webkit-details-marker {
   display: none;
-}
-
-.tool-status {
-  width: 9px;
-  height: 9px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.tool-card.running .tool-status {
-  background: var(--amber);
-  box-shadow: 0 0 0 3px rgba(240, 179, 91, 0.14);
-  animation: tool-pulse 1.1s ease-in-out infinite;
-}
-
-.tool-card.done .tool-status {
-  background: var(--green);
-}
-
-.tool-card.failed .tool-status {
-  background: var(--red);
-}
-
-@keyframes tool-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tool-card.running .tool-status {
-    animation: none;
-  }
 }
 
 .tool-name {
