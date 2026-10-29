@@ -22,8 +22,8 @@ npm start            # http://localhost:8080 (or $PORT)
 Then in the UI:
 
 1. Create a project: sidebar → `+` → "my-project" (auto-mkdirs `project/my-project`)
-2. Add a provider: Settings → Providers → Add (base URL + API key, keys masked server-side)
-3. Add a model: Settings → Models → Add (pick provider + model id, e.g. `deepseek-chat`, `gpt-4o-mini`, `llama3.2`; set the context window, default 128,000)
+2. Add a provider: Settings → Providers → Add (base URL + API key, keys masked server-side). Edit existing providers, replace the key or clear it.
+3. Add a model: Settings → Models → Add (pick provider + model id, e.g. `deepseek-chat`, `gpt-4o-mini`, `llama3.2`; set the context window, default 128,000). Edit models from the same card list.
 4. Pick a model in the composer and send — streaming + plan + preview live
 
 Ollama (local): base URL `http://localhost:11434/v1` — no key, no cost, offline.
@@ -75,8 +75,8 @@ docker run --rm --network none --memory=512m --cpus=1 -v <projectPath>:/workspac
 - Settings → Retry: on/off, limited or unlimited attempts, backoff, jitter, Retry-After, network/5xx and custom status codes
 - Provider errors show the HTTP status, provider code/message and response details; live retries show the attempt count and countdown
 - Plans, activities, and previews persisted per chat
-- Skills, knowledge, MCP servers, and LSP servers (global or per-project)
-- Rename/delete chats via ⋮ menu — all confirmations use in-app dialogs
+- Skills, knowledge, MCP servers, and LSP servers (global or per-project), all editable from the Extensions modal
+- Edit a chat's title and model from the ⋮ menu or the pencil in the chat header; all confirmations use in-app dialogs
 - Responsive: sidebar becomes a drawer on phones (☰ toggles it)
 - Built-in tools: file read/write/edit/patch, directory tree, glob, grep, find, git (init/status/diff/log/branch/commit/push/pull), shell with path jail
 - Provider presets (OpenAI, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Moonshot, NVIDIA NIM, Ollama, LM Studio) + custom
@@ -110,6 +110,10 @@ Step-by-step workflow the agent must follow.
 
 `projects: all` (or omitting) enables everywhere; use `projects: id1, id2` to restrict.
 
+Skills can be renamed (including flat `<name>.md` skills), edited, scoped and
+deleted from **Extensions → Skills**; renaming updates the frontmatter name and
+moves the folder or file in one step.
+
 ### MCP servers
 
 `.ks-agent/mcp.json`:
@@ -119,6 +123,8 @@ Step-by-step workflow the agent must follow.
   "mcpServers": {
     "example": {
       "command": ["node", "server.mjs"],
+      "cwd": ".",
+      "installCommand": "npm i -g example-mcp",
       "projects": ["project-id"]
     }
   }
@@ -126,6 +132,12 @@ Step-by-step workflow the agent must follow.
 ```
 
 Transports: `stdio`, `http` (Streamable HTTP), `sse` (legacy). Inferred from `command`/`url` when omitted. Empty `projects` = all projects.
+
+The Extensions → MCP form and cards support editing the command/URL, scope,
+environment, headers, working directory and install command. **Install** runs
+`POST /api/mcp/:name/install` in the foreground; **Background install** sends
+`{ "background": true }` and returns immediately, logging failures and reloading
+the server when the command finishes.
 
 ### LSP servers
 
@@ -157,14 +169,18 @@ has two independent scopes:
   personal context).
 - **Project knowledge** applies only to the selected project. Use **Generate
   summary** to scan the project tree and key config files, optionally with a
-  model, or write/edit notes manually.
+  model, or write/edit notes manually. Generation runs in the background, so it
+  continues if the panel is closed; reopening the panel reconnects to a running
+  job and shows when the summary is ready.
 
 Both scopes can be enabled or disabled globally and toggled per chat from the
 Tools menu. Only enabled, chat-enabled entries are injected into the agent
 system prompt. Generated summaries are updated in place on regeneration. APIs:
 `GET/POST /api/knowledge` (`?scope=global` for user knowledge), `GET/POST /api/projects/:id/knowledge`,
 `PATCH/PUT/DELETE /api/knowledge/:id`, and
-`POST /api/projects/:id/knowledge/summary` (also `/generate`).
+`POST /api/projects/:id/knowledge/summary` (also `/generate`; pass
+`{"background":true}` for a `202` job, then poll
+`GET /api/projects/:id/knowledge/summary/status`).
 
 ### Extension authoring
 
