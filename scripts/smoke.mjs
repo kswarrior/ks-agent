@@ -644,6 +644,21 @@ async function main() {
   )
   console.log('PASS stop / abort path')
 
+  const titleChat = await api('POST', `/api/projects/${project.id}/chats`, { modelId: model.id })
+  const titleRes = await fetch(`http://127.0.0.1:${serverPort}/api/chats/${titleChat.id}/messages`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ content: 'Please fix the slow login bug', modelId: model.id })
+  })
+  assert(titleRes.status === 202, `auto-title run did not start: ${titleRes.status}`)
+  const titleBody = await titleRes.json()
+  assert(
+    titleBody.title === 'Fix the slow login bug',
+    `unexpected auto chat title: ${JSON.stringify(titleBody.title)}`
+  )
+  await api('POST', `/api/chats/${titleChat.id}/stop`)
+  console.log('PASS auto chat title')
+
   const backgroundChat = await api('POST', `/api/projects/${project.id}/chats`, {
     title: 'background chat',
     modelId: model.id

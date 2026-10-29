@@ -158,3 +158,6 @@ extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
 - 2026-10-29: Stopped and error runs now expose a Continue action in the task
   report (and error banner). It focuses the composer so the user can add
   instructions and resume from the current chat context.
+- 2026-10-29: New chats now get a concise title automatically from the first
+  prompt. The title is cleaned and shortened server-side and returned with the
+  run start response so the sidebar updates immediately. Smoke covers it.
