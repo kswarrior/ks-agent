@@ -1375,11 +1375,22 @@ async function main() {
     command: process.execPath,
     args: [lspServerPath],
     extensions: ['.ts'],
-    languageId: 'typescript'
+    languageId: 'typescript',
+    installCommand: 'npm i -g typescript-language-server'
   })
   assert(
-    addedLsp.some((entry) => entry.name === 'mockaddedlsp' && entry.extensions.includes('.ts')),
-    'added language server is not listed'
+    addedLsp.some(
+      (entry) =>
+        entry.name === 'mockaddedlsp' &&
+        entry.extensions.includes('.ts') &&
+        entry.installCommand === 'npm i -g typescript-language-server'
+    ),
+    `added language server is not listed with its install command: ${JSON.stringify(addedLsp)}`
+  )
+  assert(
+    JSON.parse(fs.readFileSync(lspConfigPath, 'utf8')).languageServers.mockaddedlsp.installCommand ===
+      'npm i -g typescript-language-server',
+    'install command was not persisted to lsp.json'
   )
   const afterLspDelete = await api('DELETE', '/api/lsp/mockaddedlsp')
   assert(!afterLspDelete.some((entry) => entry.name === 'mockaddedlsp'), 'deleted language server is still listed')

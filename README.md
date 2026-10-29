@@ -137,6 +137,7 @@ Transports: `stdio`, `http` (Streamable HTTP), `sse` (legacy). Inferred from `co
       "args": ["--stdio"],
       "extensions": [".ts", ".tsx", ".js"],
       "languageId": "typescript",
+      "installCommand": "npm i -g typescript-language-server typescript",
       "projects": ["project-id"]
     }
   }

@@ -4,25 +4,29 @@
       "command": "typescript-language-server",
       "args": ["--stdio"],
       "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
-      "languageId": "typescript"
+      "languageId": "typescript",
+      "installCommand": "npm i -g typescript-language-server typescript"
     },
     "python": {
       "command": "pyright-langserver",
       "args": ["--stdio"],
       "extensions": [".py", ".pyi"],
-      "languageId": "python"
+      "languageId": "python",
+      "installCommand": "pip install pyright"
     },
     "go": {
       "command": "gopls",
       "args": [],
       "extensions": [".go"],
-      "languageId": "go"
+      "languageId": "go",
+      "installCommand": "go install golang.org/x/tools/gopls@latest"
     },
     "rust": {
       "command": "rust-analyzer",
       "args": [],
       "extensions": [".rs"],
-      "languageId": "rust"
+      "languageId": "rust",
+      "installCommand": "rustup component add rust-analyzer"
     }
   }
 }
