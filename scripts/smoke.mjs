@@ -233,11 +233,101 @@ function sse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`)
 }
 
+function readBody(req) {
+  return new Promise((resolve) => {
+    let raw = ''
+    req.on('data', (chunk) => {
+      raw += chunk.toString()
+    })
+    req.on('end', () => resolve(raw))
+  })
+}
+
+function mcpResult(message) {
+  if (message.method === 'initialize') {
+    return {
+      protocolVersion: '2024-11-05',
+      capabilities: { tools: {} },
+      serverInfo: { name: 'mock-mcp-http', version: '1.0.0' }
+    }
+  }
+  if (message.method === 'tools/list') {
+    return {
+      tools: [
+        {
+          name: 'echo',
+          description: 'Echo text over HTTP',
+          inputSchema: {
+            type: 'object',
+            properties: { text: { type: 'string' } },
+            required: ['text']
+          }
+        }
+      ]
+    }
+  }
+  if (message.method === 'tools/call') {
+    return {
+      content: [{ type: 'text', text: `http-echo: ${String(message.params?.arguments?.text ?? '')}` }]
+    }
+  }
+  return null
+}
+
 function startMockProvider() {
   return new Promise((resolve) => {
     let retryAttempts = 0
+    let sseClient = null
     mock = http.createServer((req, res) => {
-      if (!req.url?.endsWith('/chat/completions')) {
+      const url = req.url ?? ''
+      if (url === '/sse') {
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive'
+        })
+        sseClient = res
+        res.write('event: endpoint\ndata: /sse-message\n\n')
+        req.on('close', () => {
+          if (sseClient === res) sseClient = null
+        })
+        return
+      }
+      if (url === '/sse-message' || url === '/mcp') {
+        void readBody(req).then((raw) => {
+          let message
+          try {
+            message = JSON.parse(raw)
+          } catch {
+            res.writeHead(400)
+            res.end('bad json')
+            return
+          }
+          if (message.id === undefined) {
+            res.writeHead(202)
+            res.end()
+            return
+          }
+          const result = mcpResult(message)
+          if (!result) {
+            res.writeHead(200, { 'content-type': 'application/json' })
+            res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'unknown method' } }))
+            return
+          }
+          if (url === '/sse-message') {
+            if (sseClient) {
+              sseClient.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: message.id, result })}\n\n`)
+            }
+            res.writeHead(202)
+            res.end()
+            return
+          }
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }))
+        })
+        return
+      }
+      if (!url.endsWith('/chat/completions')) {
         res.writeHead(404)
         res.end('not found')
         return
@@ -309,7 +399,14 @@ function startMockProvider() {
           return
         }
 
-        if (lastUser.includes('mcp') && !hasTool('call_mcp')) {
+        const mcpCall = lastUser.includes('mcp http')
+          ? { id: 'call_mcp_http', name: 'mcp_mockhttp_echo', text: 'hello-http' }
+          : lastUser.includes('mcp sse')
+            ? { id: 'call_mcp_sse', name: 'mcp_mocksse_echo', text: 'hello-sse' }
+            : lastUser.includes('mcp')
+              ? { id: 'call_mcp', name: 'mcp_mockmcp_echo', text: 'hello-mcp' }
+              : null
+        if (mcpCall && !hasTool(mcpCall.id)) {
           sse(res, {
             choices: [
               {
@@ -318,11 +415,11 @@ function startMockProvider() {
                   tool_calls: [
                     {
                       index: 0,
-                      id: 'call_mcp',
+                      id: mcpCall.id,
                       type: 'function',
                       function: {
-                        name: 'mcp_mockmcp_echo',
-                        arguments: JSON.stringify({ text: 'hello-mcp' })
+                        name: mcpCall.name,
+                        arguments: JSON.stringify({ text: mcpCall.text })
                       }
                     }
                   ]
@@ -580,6 +677,20 @@ let serverPort = 0
 async function main() {
   const mockPort = await startMockProvider()
   serverPort = await freePort()
+  fs.writeFileSync(
+    mcpConfigPath,
+    JSON.stringify(
+      {
+        mcpServers: {
+          mockmcp: { command: process.execPath, args: [mcpServerPath] },
+          mockhttp: { url: `http://127.0.0.1:${mockPort}/mcp` },
+          mocksse: { url: `http://127.0.0.1:${mockPort}/sse` }
+        }
+      },
+      null,
+      2
+    )
+  )
 
   child = spawn(process.execPath, [path.join(repo, 'dist-server', 'index.js')], {
     cwd: repo,
@@ -848,6 +959,28 @@ async function main() {
   )
   console.log('PASS MCP stdio server + tool call')
 
+  const mcpHttpRun = await sendMessage(chat.id, 'use mcp http to echo', model.id)
+  const mcpHttpTool = mcpHttpRun.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'mcp_mockhttp_echo'
+  )
+  assert(mcpHttpTool, 'agent did not call mcp_mockhttp_echo', mcpHttpRun.text.slice(0, 1500))
+  assert(
+    mcpHttpTool.result.ok === true && mcpHttpTool.result.output.includes('http-echo: hello-http'),
+    `mock Streamable HTTP MCP tool failed: ${mcpHttpTool.result.output}`
+  )
+  console.log('PASS MCP Streamable HTTP server + tool call')
+
+  const mcpSseRun = await sendMessage(chat.id, 'use mcp sse to echo', model.id)
+  const mcpSseTool = mcpSseRun.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'mcp_mocksse_echo'
+  )
+  assert(mcpSseTool, 'agent did not call mcp_mocksse_echo', mcpSseRun.text.slice(0, 1500))
+  assert(
+    mcpSseTool.result.ok === true && mcpSseTool.result.output.includes('http-echo: hello-sse'),
+    `mock legacy SSE MCP tool failed: ${mcpSseTool.result.output}`
+  )
+  console.log('PASS MCP legacy SSE server + tool call')
+
   const lspRun = await sendMessage(chat.id, 'check diagnostics', model.id)
   const lspTool = lspRun.events.find(
     (event) => event.type === 'tool_end' && event.call.name === 'lsp_diagnostics'
@@ -947,10 +1080,17 @@ async function main() {
   )
 
   const mcpList = await api('POST', '/api/mcp/reload')
-  const mockMcp = mcpList.find((server) => server.name === 'mockmcp')
-  assert(mockMcp, `MCP API missed mockmcp: ${JSON.stringify(mcpList)}`)
-  assert(mockMcp.status === 'ready', `mockmcp is not ready: ${mockMcp.error ?? mockMcp.status}`)
-  assert(mockMcp.tools.some((tool) => tool.name === 'echo'), 'mockmcp echo tool was not listed')
+  for (const [name, transport] of [
+    ['mockmcp', 'stdio'],
+    ['mockhttp', 'http'],
+    ['mocksse', 'sse']
+  ]) {
+    const server = mcpList.find((entry) => entry.name === name)
+    assert(server, `MCP API missed ${name}: ${JSON.stringify(mcpList)}`)
+    assert(server.transport === transport, `${name} transport is ${server.transport}, expected ${transport}`)
+    assert(server.status === 'ready', `${name} is not ready: ${server.error ?? server.status}`)
+    assert(server.tools.some((tool) => tool.name === 'echo'), `${name} echo tool was not listed`)
+  }
 
   const lspList = await api('POST', '/api/lsp/reload')
   const mockLsp = lspList.find((server) => server.name === 'mocklsp')
