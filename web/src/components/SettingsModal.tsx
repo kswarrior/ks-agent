@@ -29,7 +29,9 @@ export function SettingsModal({
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!providerId && providers[0]) setProviderId(providers[0].id)
+    if (!providers.some((provider) => provider.id === providerId)) {
+      setProviderId(providers[0]?.id ?? '')
+    }
   }, [providerId, providers])
 
   const run = async (task: () => Promise<unknown>) => {

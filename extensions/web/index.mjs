@@ -140,6 +140,12 @@ serve({
         'src/styles.css',
         `:root { color-scheme: dark; font-family: system-ui, sans-serif; }\nbody { margin: 0; background: #000; color: #eee; }\n.app { min-height: 100vh; display: grid; place-content: center; gap: 1rem; text-align: center; }\nbutton { padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #333; background: #111; color: #eee; cursor: pointer; }\n`
       )
+      writeFile(root, 'src/sum.ts', `export function sum(a: number, b: number): number {\n  return a + b\n}\n`)
+      writeFile(
+        root,
+        'src/sum.test.ts',
+        `import { describe, expect, it } from 'vitest'\nimport { sum } from './sum'\n\ndescribe('sum', () => {\n  it('adds numbers', () => {\n    expect(sum(2, 3)).toBe(5)\n  })\n})\n`
+      )
       return ok(`Scaffolded ${pkgName} in ${path.relative(project, root) || '.'}\nNext: ext_web_install, then ext_web_build or ext_web_start.`)
     }
 
