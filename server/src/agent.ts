@@ -134,10 +134,10 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
         callbacks: {
           onContent: (text) => {
             partial += text
-            void emit({ type: 'token', text })
+            void emit({ type: 'token', text }).catch(() => {})
           },
           onReasoning: (text) => {
-            void emit({ type: 'reasoning', text })
+            void emit({ type: 'reasoning', text }).catch(() => {})
           }
         }
       })

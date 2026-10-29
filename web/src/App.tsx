@@ -130,6 +130,7 @@ export default function App() {
   }
 
   const createProject = async (name: string, path: string) => {
+    if (streaming) return
     const project = await api.createProject({ name, path: path.trim() || undefined })
     setProjects((current) => [...current, project])
     setActiveProjectId(project.id)
@@ -137,7 +138,7 @@ export default function App() {
   }
 
   const createChat = async () => {
-    if (!activeProjectId) return
+    if (!activeProjectId || streaming) return
     try {
       const chat = await api.createChat(activeProjectId, { modelId: modelId || null })
       setChats((current) => [chat, ...current])

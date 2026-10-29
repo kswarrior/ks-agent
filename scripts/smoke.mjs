@@ -95,6 +95,18 @@ function startMockProvider() {
           connection: 'keep-alive'
         })
 
+        if (lastUser.includes('slow')) {
+          sse(res, { choices: [{ delta: { role: 'assistant', content: 'partial response' }, finish_reason: null }] })
+          const timer = setTimeout(() => {
+            sse(res, { choices: [{ delta: { content: ' finished' }, finish_reason: null }] })
+            sse(res, { choices: [{ delta: {}, finish_reason: 'stop' }] })
+            res.write('data: [DONE]\n\n')
+            res.end()
+          }, 5000)
+          res.on('close', () => clearTimeout(timer))
+          return
+        }
+
         if (lastUser.includes('scaffold') && !hasTool('call_web')) {
           sse(res, {
             choices: [
