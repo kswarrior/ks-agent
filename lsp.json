@@ -1,0 +1,28 @@
+{
+  "languageServers": {
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "extensions": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+      "languageId": "typescript"
+    },
+    "python": {
+      "command": "pyright-langserver",
+      "args": ["--stdio"],
+      "extensions": [".py", ".pyi"],
+      "languageId": "python"
+    },
+    "go": {
+      "command": "gopls",
+      "args": [],
+      "extensions": [".go"],
+      "languageId": "go"
+    },
+    "rust": {
+      "command": "rust-analyzer",
+      "args": [],
+      "extensions": [".rs"],
+      "languageId": "rust"
+    }
+  }
+}

@@ -31,6 +31,9 @@ import {
 } from './db.js'
 import { extensions } from './extensions.js'
 import { cleanRelative, resolveInProject } from './fsx.js'
+import { lsp } from './lsp.js'
+import { mcp } from './mcp.js'
+import { skills } from './skills.js'
 import type { AgentEvent, ProviderPublic } from './types.js'
 
 const app = new Hono()
@@ -131,7 +134,10 @@ app.get('/api/health', (c) =>
     name: 'ks-agent',
     version: '0.2.0',
     projects: listProjects().length,
-    extensions: extensions.list().length
+    extensions: extensions.list().length,
+    skills: skills.count(),
+    mcpServers: mcp.count(),
+    lspServers: lsp.count()
   })
 )
 
@@ -141,6 +147,9 @@ app.get('/api/config', (c) =>
     maxToolOutput: config.maxToolOutput,
     dockerJail: config.dockerJail,
     projectsDir: config.projectsDir,
+    skillsDirs: config.skillsDirs,
+    mcpConfigPath: config.mcpConfigPath,
+    lspConfigPath: config.lspConfigPath,
     extensions: extensions.list()
   })
 )
@@ -430,6 +439,21 @@ app.get('/api/extensions/:name', (c) => {
   return c.json(found)
 })
 
+// ------------------------------------------------------------------- skills
+app.get('/api/skills', (c) => c.json(skills.list()))
+
+app.post('/api/skills/reload', (c) => c.json(skills.discover()))
+
+// ---------------------------------------------------------------------- mcp
+app.get('/api/mcp', (c) => c.json(mcp.list()))
+
+app.post('/api/mcp/reload', async (c) => c.json(await mcp.reload()))
+
+// ---------------------------------------------------------------------- lsp
+app.get('/api/lsp', (c) => c.json(lsp.list()))
+
+app.post('/api/lsp/reload', (c) => c.json(lsp.reload()))
+
 app.all('/api/*', (c) => c.json(errorJson(`unknown API route: ${c.req.method} ${c.req.path}`, 404), 404))
 
 // ------------------------------------------------------------------ static
@@ -442,12 +466,15 @@ if (fs.existsSync(config.distDir)) {
   )
 }
 
+void mcp.ready()
+
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`[ks-agent] http://localhost:${info.port}`)
   console.log(`[ks-agent] projects: ${config.projectsDir}`)
   console.log(
     `[ks-agent] extensions: ${extensions.list().map((extension) => extension.name).join(', ') || '(none)'}`
   )
+  console.log(`[ks-agent] skills: ${skills.count()}; mcp servers: ${mcp.count()}; lsp servers: ${lsp.count()}`)
 })
 
 async function shutdown(signal: string): Promise<void> {
@@ -455,6 +482,8 @@ async function shutdown(signal: string): Promise<void> {
   for (const run of runs.values()) {
     if (!run.done) run.controller.abort()
   }
+  mcp.stopAll()
+  lsp.stopAll()
   await extensions.stopAll()
   server.close(() => process.exit(0))
   setTimeout(() => process.exit(0), 2000).unref()

@@ -63,6 +63,36 @@ export interface ExtensionInfo {
   error?: string
 }
 
+export interface SkillInfo {
+  name: string
+  description: string
+  path: string
+  source: string
+}
+
+export interface McpToolInfo {
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+}
+
+export interface McpServerInfo {
+  name: string
+  transport: 'stdio' | 'http' | 'sse'
+  tools: McpToolInfo[]
+  status: 'stopped' | 'starting' | 'ready' | 'error'
+  error?: string
+}
+
+export interface LspServerInfo {
+  name: string
+  command: string
+  extensions: string[]
+  languageId: string
+  status: 'stopped' | 'starting' | 'ready' | 'error'
+  error?: string
+}
+
 export type AgentEvent =
   | { type: 'step'; step: number; maxSteps: number }
   | { type: 'assistant_start'; step: number }

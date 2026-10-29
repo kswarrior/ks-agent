@@ -172,7 +172,13 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
       await emit({ type: 'assistant_start', step })
       partial = ''
 
-      const tools = [...builtinToolDefs, ...extensions.toolDefs()]
+      const tools = [
+        ...builtinToolDefs,
+        ...skills.toolDefs(),
+        ...mcp.toolDefs(),
+        ...lsp.toolDefs(),
+        ...extensions.toolDefs()
+      ]
       let result: StreamResult | null = null
       for (let attempt = 0; ; attempt++) {
         let outputStarted = false
