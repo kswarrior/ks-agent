@@ -12,9 +12,13 @@ const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ks-agent-smoke-'))
 const projectsDir = path.join(temp, 'projects')
 const dataDir = path.join(temp, 'data')
 const extensionsDir = path.join(temp, 'extensions')
+const skillsDir = path.join(temp, 'skills')
+const mcpConfigPath = path.join(temp, 'mcp.json')
+const lspConfigPath = path.join(temp, 'lsp.json')
 fs.mkdirSync(projectsDir, { recursive: true })
 fs.mkdirSync(dataDir, { recursive: true })
 fs.mkdirSync(extensionsDir, { recursive: true })
+fs.mkdirSync(skillsDir, { recursive: true })
 fs.copyFileSync(path.join(repo, 'extensions', 'sdk.mjs'), path.join(extensionsDir, 'sdk.mjs'))
 const mockExtensionDir = path.join(extensionsDir, 'mock')
 fs.mkdirSync(mockExtensionDir, { recursive: true })
@@ -64,6 +68,118 @@ serve({
   }
 })
 `
+)
+
+const smokeSkillDir = path.join(skillsDir, 'smoke-skill')
+fs.mkdirSync(smokeSkillDir, { recursive: true })
+fs.writeFileSync(
+  path.join(smokeSkillDir, 'SKILL.md'),
+  `---
+name: smoke-skill
+description: Smoke-test skill that tells the agent to answer SKILL_OK
+---
+
+# Smoke Skill
+
+When this skill is loaded, include SKILL_OK in your answer.
+`
+)
+
+const mcpServerPath = path.join(temp, 'mcp-server.mjs')
+fs.writeFileSync(
+  mcpServerPath,
+  `import readline from 'node:readline'
+const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n')
+readline.createInterface({ input: process.stdin }).on('line', (line) => {
+  let message
+  try {
+    message = JSON.parse(line)
+  } catch {
+    return
+  }
+  if (message.id === undefined) return
+  if (message.method === 'initialize') {
+    send({ jsonrpc: '2.0', id: message.id, result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'mock-mcp', version: '1.0.0' } } })
+  } else if (message.method === 'tools/list') {
+    send({ jsonrpc: '2.0', id: message.id, result: { tools: [{ name: 'echo', description: 'Echo text back', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }] } })
+  } else if (message.method === 'tools/call') {
+    const text = String(message.params?.arguments?.text ?? '')
+    send({ jsonrpc: '2.0', id: message.id, result: { content: [{ type: 'text', text: 'mcp-echo: ' + text }] } })
+  } else {
+    send({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'unknown method ' + message.method } })
+  }
+})
+`
+)
+fs.writeFileSync(
+  mcpConfigPath,
+  JSON.stringify(
+    {
+      mcpServers: {
+        mockmcp: { command: process.execPath, args: [mcpServerPath] }
+      }
+    },
+    null,
+    2
+  )
+)
+
+const lspServerPath = path.join(temp, 'lsp-server.mjs')
+fs.writeFileSync(
+  lspServerPath,
+  `const send = (message) => {
+  const body = JSON.stringify(message)
+  process.stdout.write('Content-Length: ' + Buffer.byteLength(body) + '\\r\\n\\r\\n' + body)
+}
+let buffer = Buffer.alloc(0)
+process.stdin.on('data', (chunk) => {
+  buffer = Buffer.concat([buffer, chunk])
+  for (;;) {
+    const headerEnd = buffer.indexOf('\\r\\n\\r\\n')
+    if (headerEnd === -1) return
+    const header = buffer.subarray(0, headerEnd).toString('ascii')
+    const length = Number(/Content-Length:\\s*(\\d+)/i.exec(header)?.[1] ?? 0)
+    const start = headerEnd + 4
+    if (buffer.length < start + length) return
+    const body = buffer.subarray(start, start + length).toString('utf8')
+    buffer = buffer.subarray(start + length)
+    let message
+    try {
+      message = JSON.parse(body)
+    } catch {
+      continue
+    }
+    if (message.method === 'initialize' && message.id !== undefined) {
+      send({ jsonrpc: '2.0', id: message.id, result: { capabilities: { textDocumentSync: 1 } } })
+    } else if (message.method === 'textDocument/didOpen') {
+      send({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri: message.params.textDocument.uri, diagnostics: [{ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 10 } }, severity: 1, source: 'mock-lsp', message: 'Mock type error' }] } })
+    } else if (message.method === 'shutdown' && message.id !== undefined) {
+      send({ jsonrpc: '2.0', id: message.id, result: null })
+    } else if (message.method === 'exit') {
+      process.exit(0)
+    } else if (message.id !== undefined) {
+      send({ jsonrpc: '2.0', id: message.id, result: null })
+    }
+  }
+})
+`
+)
+fs.writeFileSync(
+  lspConfigPath,
+  JSON.stringify(
+    {
+      languageServers: {
+        mocklsp: {
+          command: process.execPath,
+          args: [lspServerPath],
+          extensions: ['.ts'],
+          languageId: 'typescript'
+        }
+      }
+    },
+    null,
+    2
+  )
 )
 
 const logs = []
@@ -162,6 +278,90 @@ function startMockProvider() {
             res.end()
           }, 5000)
           res.on('close', () => clearTimeout(timer))
+          return
+        }
+
+        if (lastUser.includes('skill') && !hasTool('call_skill')) {
+          sse(res, {
+            choices: [
+              {
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'call_skill',
+                      type: 'function',
+                      function: {
+                        name: 'use_skill',
+                        arguments: JSON.stringify({ name: 'smoke-skill' })
+                      }
+                    }
+                  ]
+                },
+                finish_reason: null
+              }
+            ]
+          })
+          sse(res, { choices: [{ delta: {}, finish_reason: 'tool_calls' }] })
+          res.write('data: [DONE]\n\n')
+          res.end()
+          return
+        }
+
+        if (lastUser.includes('mcp') && !hasTool('call_mcp')) {
+          sse(res, {
+            choices: [
+              {
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'call_mcp',
+                      type: 'function',
+                      function: {
+                        name: 'mcp_mockmcp_echo',
+                        arguments: JSON.stringify({ text: 'hello-mcp' })
+                      }
+                    }
+                  ]
+                },
+                finish_reason: null
+              }
+            ]
+          })
+          sse(res, { choices: [{ delta: {}, finish_reason: 'tool_calls' }] })
+          res.write('data: [DONE]\n\n')
+          res.end()
+          return
+        }
+
+        if (lastUser.includes('diagnostics') && !hasTool('call_lsp')) {
+          sse(res, {
+            choices: [
+              {
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'call_lsp',
+                      type: 'function',
+                      function: {
+                        name: 'lsp_diagnostics',
+                        arguments: JSON.stringify({ path: 'broken.ts' })
+                      }
+                    }
+                  ]
+                },
+                finish_reason: null
+              }
+            ]
+          })
+          sse(res, { choices: [{ delta: {}, finish_reason: 'tool_calls' }] })
+          res.write('data: [DONE]\n\n')
+          res.end()
           return
         }
 
@@ -390,6 +590,9 @@ async function main() {
       KS_DATA_DIR: dataDir,
       KS_PROJECTS_DIR: projectsDir,
       KS_EXTENSIONS_DIR: extensionsDir,
+      KS_SKILLS_DIR: skillsDir,
+      KS_MCP_CONFIG: mcpConfigPath,
+      KS_LSP_CONFIG: lspConfigPath,
       KS_MAX_STEPS: '10'
     },
     stdio: ['ignore', 'pipe', 'pipe']
