@@ -184,8 +184,10 @@ plus one checkbox per project, and every card shows its scope.
   skill/MCP/LSP with its project scope, chat toggle and runtime availability
   (including missing binaries). The system prompt tells the agent to call it
   whenever the user asks what is enabled or disabled, instead of guessing.
-- The Tools menu marks language servers whose binary failed to start as
-  unavailable, so per-chat selection reflects what can actually be queried.
+- The Tools menu marks language servers whose binary is missing or failed to
+  start as unavailable. Commands are checked on `PATH` before first use, so a
+  missing `pyright-langserver` or `typescript-language-server` is visible right
+  away instead of only after a failed diagnostics call.
 
 ### Agent config layout
 
@@ -383,6 +385,7 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   with project scope, chat enabled/disabled state and LSP/MCP runtime
   availability (for example a missing `pyright-langserver`). The agent is
   instructed to call it when asked to check the selection instead of repeating
-  stale counts. The Tools menu now flags unavailable language servers, and
-  smoke asserts disabled items disappear from the system prompt and tool
-  definitions while the status tool still reports them.
+  stale counts. The Tools menu now flags unavailable language servers, missing
+  binaries are detected from `PATH` before first use, and smoke asserts
+  disabled items disappear from the system prompt and tool definitions while
+  the status tool still reports them.

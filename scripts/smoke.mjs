@@ -1241,6 +1241,19 @@ async function main() {
     !JSON.parse(fs.readFileSync(lspConfigPath, 'utf8')).languageServers.mockaddedlsp,
     'deleted language server remains in config'
   )
+
+  const missingLspList = await api('POST', '/api/lsp', {
+    name: 'missinglsp',
+    command: 'ks-agent-definitely-missing-lsp',
+    extensions: ['.zz'],
+    languageId: 'zz'
+  })
+  const missingLsp = missingLspList.find((entry) => entry.name === 'missinglsp')
+  assert(
+    missingLsp?.status === 'error' && missingLsp.error.includes('Command not found'),
+    `missing language server binary was not detected: ${JSON.stringify(missingLsp)}`
+  )
+  await api('DELETE', '/api/lsp/missinglsp')
   console.log('PASS skills / MCP / LSP APIs + reload')
 
   const scopedSkill = await api('POST', '/api/skills', {

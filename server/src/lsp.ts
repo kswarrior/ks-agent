@@ -45,6 +45,7 @@ function commandAvailable(command: string): boolean {
       : ['']
   for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
     if (!dir) continue
+    if (executable(path.join(dir, value))) return true
     for (const extension of extensions) {
       if (executable(path.join(dir, `${value}${extension}`))) return true
     }
