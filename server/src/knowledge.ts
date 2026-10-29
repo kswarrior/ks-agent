@@ -234,9 +234,7 @@ function deterministicSummary(project: Project, snapshot: ProjectSnapshot): stri
         ...Object.keys(parsed.dependencies ?? {}),
         ...Object.keys(parsed.devDependencies ?? {})
       ].slice(0, 15)
-    } catch {
-      // Truncated or invalid package.json; keep the scan summary.
-    }
+    } catch {}
   }
 
   const buildLines = scripts.length
