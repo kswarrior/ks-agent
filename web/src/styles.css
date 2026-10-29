@@ -508,7 +508,7 @@ code {
   border-color: transparent;
   padding-left: 4px;
   padding-right: 4px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .msg.assistant.live {
@@ -516,11 +516,11 @@ code {
 }
 
 .msg.assistant .tool-card {
-  margin-top: 3px;
+  margin-top: 2px;
 }
 
 .msg.assistant .tool-card + .tool-card {
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .muted {
