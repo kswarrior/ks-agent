@@ -57,21 +57,24 @@ function displayPath(file: string): string {
 }
 
 function describeTool(name: string, args: Record<string, unknown>): { primary: string; detail: string } {
-  const path = displayPath(argsString(args, 'path'))
+  const rawPath = argsString(args, 'path')
+  const path = rawPath ? displayPath(rawPath) : ''
   switch (name) {
     case 'run_shell':
       return { primary: argsString(args, 'command'), detail: '' }
     case 'grep':
-      return { primary: argsString(args, 'pattern'), detail: path }
     case 'glob':
-      return { primary: argsString(args, 'pattern'), detail: path }
+      return { primary: argsString(args, 'pattern'), detail: path || '/' }
     case 'move_file': {
-      const from = displayPath(argsString(args, 'from'))
-      const to = displayPath(argsString(args, 'to'))
-      return { primary: baseName(from), detail: `${from} → ${to}` }
+      const rawFrom = argsString(args, 'from')
+      const rawTo = argsString(args, 'to')
+      if (!rawFrom && !rawTo) return { primary: '', detail: '' }
+      const from = displayPath(rawFrom)
+      const to = rawTo ? displayPath(rawTo) : ''
+      return { primary: baseName(from), detail: to ? `${from} → ${to}` : from }
     }
     case 'list_dir':
-      return { primary: baseName(path), detail: path }
+      return { primary: path === '/' ? 'project root' : baseName(path), detail: path || '/' }
     default:
       if (!path) return { primary: '', detail: '' }
       return { primary: baseName(path), detail: path }
