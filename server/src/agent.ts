@@ -3,6 +3,9 @@ import { config } from './config.js'
 import { insertMessage, listMessages } from './db.js'
 import { extensions } from './extensions.js'
 import { streamCompletion, type LLMMessage, type StreamResult } from './llm.js'
+import { lsp } from './lsp.js'
+import { mcp } from './mcp.js'
+import { skills } from './skills.js'
 import { BUILTIN_TOOL_NAMES, builtinToolDefs, executeBuiltinTool } from './tools.js'
 import type { AgentEvent, Chat, Message, ModelEntry, Project, Provider, ToolCall, ToolResult } from './types.js'
 
@@ -26,7 +29,7 @@ const PRIMARY_SYSTEM_PROMPT = `You are KS Agent, a precise coding agent working 
 1. Understand the request and inspect the project (tree, find_files, glob, grep, read_file).
 2. For multi-step or unclear work, use update_plan to track 3-6 high-level phases such as explore, reproduce, fix, test and verify. You may explore first and write the plan once you understand the problem, or write it immediately for a clear task. Do not turn individual tool calls into plan steps. Update the done flags as phases finish.
 3. Make focused edits. Preserve existing style and conventions. Use apply_patch for multi-hunk changes, append_file for additions, and copy_file/create_dir for structure.
-4. Run builds/tests with run_shell and fix real failures.
+4. Run builds/tests with run_shell and fix real failures. Use lsp_diagnostics on edited source files when a language server is configured.
 5. Use the native git_* tools for status, diff, log, branches and commits instead of shell git.
 6. Finish with a short summary of what changed and how it was verified.
 
@@ -35,11 +38,18 @@ const PRIMARY_SYSTEM_PROMPT = `You are KS Agent, a precise coding agent working 
 - Do not overwrite unrelated work. Do not delete without checking references.
 - Keep tool output small: use offset/limit, include filters, and max_results.
 - If a command or edit fails, read the error, fix the cause, and retry.
+- Skills are reusable instruction sets. Call use_skill before work that matches
+  an installed skill and follow its workflow.
 - Extension tools are named ext_<extension>_<tool>. They run in isolated child
   processes and receive the project path. Use them for stack-specific work
-  (web, Minecraft, Android, ...).`
+  (web, Minecraft, Android, ...).
+- MCP tools are named mcp_<server>_<tool> and come from configured MCP servers.
+  Prefer them for integrations they provide.
+- LSP diagnostics come from lsp_diagnostics. Treat reported errors as real
+  failures and fix them before finishing.`
 
 function systemMessage(project: Project): LLMMessage {
+  const extra = [skills.promptSection(), mcp.promptSection(), lsp.promptSection()].filter(Boolean).join('\n\n')
   return {
     role: 'system',
     content: `${PRIMARY_SYSTEM_PROMPT}
@@ -49,7 +59,7 @@ function systemMessage(project: Project): LLMMessage {
 - Root: ${project.path}
 - Platform: ${os.platform()} ${os.release()}
 - Date: ${new Date().toISOString()}
-- Shell: ${process.env.SHELL || '/bin/bash'}`
+- Shell: ${process.env.SHELL || '/bin/bash'}${extra ? `\n\n${extra}` : ''}`
   }
 }
 
@@ -126,6 +136,15 @@ async function executeTool(
   if (BUILTIN_TOOL_NAMES.has(name)) {
     return executeBuiltinTool(name, args, { projectPath: project.path, signal })
   }
+  if (name === 'use_skill') {
+    return skills.call(name, args)
+  }
+  if (mcp.findTool(name)) {
+    return mcp.callTool(name, args)
+  }
+  if (name === 'lsp_diagnostics') {
+    return lsp.callTool(name, args, project.path)
+  }
   if (extensions.findTool(name)) {
     return extensions.callTool(name, args, project.path)
   }
@@ -138,6 +157,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
     await onEvent(event)
   }
 
+  await mcp.ready()
   const system = systemMessage(project)
   let history = listMessages(chat.id)
   let messages = trimHistory(system, history)
