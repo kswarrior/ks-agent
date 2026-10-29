@@ -289,7 +289,7 @@ export class ExtensionHost {
       cwd: entry.dir,
       env: {
         PATH: process.env.PATH ?? '',
-        HOME: process.env.HOME ?? entry.dir,
+        HOME: entry.dir,
         LANG: process.env.LANG ?? 'C.UTF-8',
         NODE_ENV: 'production',
         KS_EXTENSION: name,
