@@ -1,8 +1,14 @@
 import os from 'node:os'
 import { config } from './config.js'
 import { insertMessage, listChatDisabled, listMessages } from './db.js'
+import { describeFailure } from './errors.js'
 import { extensions } from './extensions.js'
 import { streamCompletion, type LLMMessage, type StreamResult } from './llm.js'
+import {
+  getRetrySettings,
+  isRetryableProviderError,
+  retryDelayMs
+} from './retry.js'
 import { lsp } from './lsp.js'
 import { mcp } from './mcp.js'
 import { isProjectEnabled } from './scope.js'
@@ -206,20 +212,6 @@ function trimHistory(system: LLMMessage, history: Message[]): LLMMessage[] {
   return [system, ...mapped.slice(start)]
 }
 
-function isRetryableProviderError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  if (error.name === 'AbortError') return false
-  if (error.name === 'TimeoutError') return true
-  const match = /Provider error (\d{3})/.exec(error.message)
-  if (match) {
-    const status = Number(match[1])
-    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500
-  }
-  return /fetch failed|network|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket hang up|UND_ERR/i.test(
-    error.message
-  )
-}
-
 function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -287,6 +279,8 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
   let history = listMessages(chat.id)
   let messages = trimHistory(system, history)
   let partial = ''
+  let providerAttempts = 0
+  const retrySettings = getRetrySettings()
   const runStartedAt = Date.now()
 
   await extensions.runHook('agent.start', project.path, { chatId: chat.id })
@@ -309,6 +303,7 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
       ]
       let result: StreamResult | null = null
       for (let attempt = 0; ; attempt++) {
+        providerAttempts = attempt + 1
         let outputStarted = false
         partial = ''
         try {
@@ -333,18 +328,30 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
           })
           break
         } catch (error) {
-          if (
-            signal.aborted ||
-            outputStarted ||
-            attempt >= config.providerRetries ||
-            !isRetryableProviderError(error)
-          ) {
-            throw error
-          }
-          const delay = Math.min(config.providerRetryDelayMs * 2 ** attempt, 10_000)
+          const allowed =
+            retrySettings.enabled &&
+            !signal.aborted &&
+            !outputStarted &&
+            isRetryableProviderError(error, retrySettings) &&
+            (retrySettings.unlimited || attempt < retrySettings.maxRetries)
+          if (!allowed) throw error
+
+          const delay = retryDelayMs(error, attempt, retrySettings)
+          const failure = describeFailure(error, { attempts: providerAttempts, retryable: true })
+          const maxAttempts = retrySettings.unlimited ? null : retrySettings.maxRetries
+          await emit({
+            type: 'retry',
+            attempt: providerAttempts,
+            maxAttempts,
+            unlimited: retrySettings.unlimited,
+            delayMs: delay,
+            nextAt: Date.now() + delay,
+            ...failure
+          })
           console.warn(
-            `[agent] provider error, retrying in ${delay}ms (${attempt + 1}/${config.providerRetries}):`,
-            error instanceof Error ? error.message : String(error)
+            `[agent] ${failure.error}; retrying in ${delay}ms (${
+              retrySettings.unlimited ? `${providerAttempts}/∞` : `${providerAttempts}/${maxAttempts}`
+            })`
           )
           await waitForRetry(delay, signal)
         }
