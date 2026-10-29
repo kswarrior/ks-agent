@@ -1240,6 +1240,10 @@ code {
   font-size: 11px;
 }
 
+.chat-tools-count.warn {
+  color: var(--red);
+}
+
 .chat-extensions-popup {
   width: 330px;
   max-width: calc(100vw - 16px);

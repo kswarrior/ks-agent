@@ -156,7 +156,14 @@ export function ChatExtensionsMenu({
           <circle cx="8" cy="18" r="2" fill="var(--bg-elev)" />
         </svg>
         <span>Tools</span>
-        <span className="chat-tools-count">
+        <span
+          className={`chat-tools-count ${unavailableCount ? 'warn' : ''}`}
+          title={
+            unavailableCount
+              ? `${unavailableCount} enabled item${unavailableCount === 1 ? '' : 's'} unavailable`
+              : undefined
+          }
+        >
           {enabledCount}/{total}
         </span>
       </button>
