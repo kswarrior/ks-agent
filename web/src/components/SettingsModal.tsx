@@ -228,6 +228,7 @@ export function SettingsModal({
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '')
   const [modelName, setModelName] = useState('')
   const [modelId, setModelId] = useState('')
+  const [modelContextWindow, setModelContextWindow] = useState(String(DEFAULT_CONTEXT_WINDOW))
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [retrySettings, setRetrySettings] = useState<RetrySettings | null>(null)
@@ -239,6 +240,9 @@ export function SettingsModal({
 
   const selectedPreset = PROVIDER_PRESETS.find((preset) => preset.id === selectedPresetId) ?? CUSTOM_PRESET
   const isLocalEndpoint = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(baseUrl)
+  const modelContextValue = Math.round(Number(modelContextWindow))
+  const modelContextValid =
+    Number.isFinite(modelContextValue) && modelContextValue >= 1_000 && modelContextValue <= 10_000_000
 
   useEffect(() => {
     if (!providers.some((provider) => provider.id === providerId)) {
@@ -478,9 +482,15 @@ export function SettingsModal({
       onSubmit={(event) => {
         event.preventDefault()
         void run(async () => {
-          await createModel({ providerId, name: modelName, modelId })
+          await createModel({
+            providerId,
+            name: modelName,
+            modelId,
+            contextWindow: modelContextValue
+          })
           setModelName('')
           setModelId('')
+          setModelContextWindow(String(DEFAULT_CONTEXT_WINDOW))
           setView('list')
         })
       }}
@@ -514,6 +524,19 @@ export function SettingsModal({
           placeholder="deepseek-chat"
         />
       </label>
+      <label className="field">
+        <span>Context window (tokens)</span>
+        <input
+          type="number"
+          min={1_000}
+          max={10_000_000}
+          step={1_000}
+          value={modelContextWindow}
+          onChange={(event) => setModelContextWindow(event.target.value)}
+          placeholder="128000"
+        />
+        <small className="muted">Used by the chat header context meter. Default 128,000 tokens.</small>
+      </label>
       <div className="settings-form-actions">
         <button type="button" className="btn ghost" onClick={back}>
           Cancel
@@ -521,7 +544,7 @@ export function SettingsModal({
         <button
           className="btn primary"
           type="submit"
-          disabled={busy || !providerId || !modelName.trim() || !modelId.trim()}
+          disabled={busy || !providerId || !modelName.trim() || !modelId.trim() || !modelContextValid}
         >
           Add model
         </button>
@@ -812,13 +835,18 @@ export function SettingsModal({
           </div>
           <div className="settings-cards">
             {models.map((model) => (
-              <div className="settings-card" key={model.id}>
+              <div className="settings-card model-card" key={model.id}>
                 <div className="settings-card-main">
                   <strong>{model.name}</strong>
                   <span className="muted small">
                     {model.modelId} · {model.providerName ?? 'provider'}
                   </span>
                 </div>
+                <ModelContextEditor
+                  model={model}
+                  disabled={busy}
+                  onSave={(contextWindow) => run(() => updateModelContext(model.id, contextWindow))}
+                />
                 <button className="btn ghost small" disabled={busy} onClick={() => run(() => deleteModel(model.id))}>
                   Delete
                 </button>
