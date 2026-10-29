@@ -6,13 +6,17 @@ import type {
   ExtensionInfo,
   ExtensionKind,
   KnowledgeEntry,
+  KnowledgeJob,
+  LspServerDetail,
   LspServerInfo,
+  McpServerDetail,
   McpServerInfo,
   Message,
   ModelEntry,
   Project,
   ProviderPublic,
   RetrySettings,
+  SkillDetail,
   SkillInfo
 } from './types'
 
@@ -90,6 +94,13 @@ export const generateProjectKnowledge = (projectId: string, modelId?: string) =>
     `/api/projects/${projectId}/knowledge/summary`,
     json('POST', modelId ? { modelId } : {})
   )
+export const startProjectKnowledge = (projectId: string, modelId?: string) =>
+  req<KnowledgeJob>(
+    `/api/projects/${projectId}/knowledge/summary`,
+    json('POST', { background: true, ...(modelId ? { modelId } : {}) })
+  )
+export const getProjectKnowledgeJob = (projectId: string) =>
+  req<{ job: KnowledgeJob | null }>(`/api/projects/${projectId}/knowledge/summary/status`)
 
 export const startChatRun = (chatId: string, content: string, modelId: string) =>
   req<{ ok: true; chatId: string; title?: string }>(`/api/chats/${chatId}/messages`, json('POST', { content, modelId }))

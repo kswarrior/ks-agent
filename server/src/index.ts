@@ -827,11 +827,15 @@ app.patch('/api/skills/:name', async (c) => {
   if (body.content !== undefined && typeof body.content !== 'string') {
     return c.json(errorJson('content must be a string'), 400)
   }
+  if (body.name !== undefined && typeof body.name !== 'string') {
+    return c.json(errorJson('name must be a string'), 400)
+  }
   const projects = body.projects === undefined ? undefined : readProjectIds(body.projects)
   if (projects === null) return c.json(errorJson('projects must be a list of existing project ids'), 400)
   try {
     return c.json(
       skills.update(c.req.param('name'), {
+        name: body.name as string | undefined,
         description: body.description as string | undefined,
         content: body.content as string | undefined,
         projects

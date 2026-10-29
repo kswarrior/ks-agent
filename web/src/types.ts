@@ -99,6 +99,19 @@ export interface ChatKnowledgeInfo {
   updatedAt: number
 }
 
+export type KnowledgeJobStatus = 'running' | 'completed' | 'error'
+
+export interface KnowledgeJob {
+  id: string
+  projectId: string
+  modelId?: string
+  status: KnowledgeJobStatus
+  startedAt: number
+  finishedAt?: number
+  entryId?: string
+  error?: string
+}
+
 export type ExtensionKind = 'skill' | 'mcp' | 'lsp' | 'knowledge'
 
 export interface SkillInfo {
@@ -108,6 +121,10 @@ export interface SkillInfo {
   source: string
   writable: boolean
   projects: string[]
+}
+
+export interface SkillDetail extends SkillInfo {
+  content: string
 }
 
 export interface McpToolInfo {
@@ -122,7 +139,18 @@ export interface McpServerInfo {
   tools: McpToolInfo[]
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
+  installCommand?: string
   projects: string[]
+}
+
+export interface McpServerDetail extends McpServerInfo {
+  command?: string
+  args: string[]
+  env: Record<string, string>
+  cwd?: string
+  url?: string
+  headers: Record<string, string>
+  timeoutMs: number
 }
 
 export interface LspServerInfo {
@@ -134,6 +162,12 @@ export interface LspServerInfo {
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
   projects: string[]
+}
+
+export interface LspServerDetail extends LspServerInfo {
+  args: string[]
+  env: Record<string, string>
+  initializationOptions?: Record<string, unknown>
 }
 
 export interface ChatExtensionsState {
