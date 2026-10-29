@@ -197,9 +197,10 @@ abstract class BaseMcpClient {
       this.error = undefined
       void version
     } catch (error) {
-      this.status = 'error'
-      this.error = error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error ? error.message : String(error)
       this.stop()
+      this.status = 'error'
+      this.error = message
       throw error
     }
   }
@@ -806,7 +807,6 @@ export class McpRegistry {
       : new HttpMcpClient(entry.config)
     const promise = client.start().catch((error) => {
       console.warn(`[mcp:${name}] ${error instanceof Error ? error.message : String(error)}`)
-      this.running.delete(name)
     })
     this.running.set(name, { client, promise })
     return promise

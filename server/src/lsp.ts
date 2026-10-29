@@ -209,9 +209,10 @@ class LspClient {
       this.status = 'ready'
       this.error = undefined
     } catch (error) {
-      this.status = 'error'
-      this.error = error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error ? error.message : String(error)
       this.stop()
+      this.status = 'error'
+      this.error = message
       throw error
     }
   }

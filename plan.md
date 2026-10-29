@@ -218,10 +218,11 @@ copy, move, delete, unified-diff patch, shell), all native git tools (including
 a real push/pull to a temp bare remote), provider key masking, the streaming
 agent loop, a real built-in tool (`write_file`), provider retry recovery, the
 extension host calling a temporary mock extension, skills discovery +
-`use_skill`, a stdio MCP server + `mcp_<server>_<tool>` call, LSP diagnostics
-from a mock language server, background runs with event replay, stop/abort
-handling, persistence, extension discovery with **no default extensions**,
-opt-in Minecraft/Android example scaffolds, and static UI serving.
+`use_skill`, MCP tool calls over stdio, Streamable HTTP and legacy SSE, LSP
+diagnostics over `didOpen` and `didChange` from a mock language server,
+background runs with event replay, stop/abort handling, persistence, extension
+discovery with **no default extensions**, opt-in Minecraft/Android example
+scaffolds, and static UI serving.
 
 ## Progress log
 
@@ -268,4 +269,5 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   `mcp_<server>_<tool>` tools. LSP spawns configured language servers from
   `lsp.json` on demand and returns diagnostics through `lsp_diagnostics`.
   All three have reload APIs and status/tool panels in the Extensions modal.
-  Smoke now exercises each path with temporary mock skill/MCP/LSP servers.
+  Smoke exercises skills, all three MCP transports (stdio, Streamable HTTP,
+  legacy SSE) and LSP didOpen/didChange against temporary mock servers.
