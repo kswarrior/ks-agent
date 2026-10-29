@@ -414,3 +414,8 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   install command field. Language server cards display the install command with
   a Copy button, `.ks-agent/lsp.json` entries for the bundled servers include
   one, and smoke asserts the value round-trips through the API and config file.
+- 2026-10-29: Language server cards now have an Install button next to Delete
+  that runs the server's `installCommand` (POST `/api/lsp/:name/install`) and
+  refreshes status, with failures shown in the modal. The Add language server
+  form has an "Install automatically after adding" checkbox (enabled once an
+  install command is present), and smoke covers successful and failed installs.
