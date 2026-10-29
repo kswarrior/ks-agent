@@ -197,7 +197,7 @@ function ChevronIcon() {
   )
 }
 
-export function RunReport({ report }: { report: RunReportData }) {
+export function RunReport({ report, onContinue }: { report: RunReportData; onContinue?: () => void }) {
   const [open, setOpen] = useState(true)
   const visibleChanges = report.changes.slice(0, 4)
 
@@ -271,6 +271,15 @@ export function RunReport({ report }: { report: RunReportData }) {
             Local · no extra tokens
           </span>
         </div>
+
+        {report.status === 'stopped' && onContinue && (
+          <div className="run-report-continue">
+            <span>Add instructions below and continue from this point.</span>
+            <button type="button" className="btn primary small" onClick={onContinue}>
+              Continue
+            </button>
+          </div>
+        )}
       </div>
     </details>
   )
