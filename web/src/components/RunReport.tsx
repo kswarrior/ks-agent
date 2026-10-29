@@ -23,6 +23,10 @@ export interface RunReportData {
 
 const CHANGE_ACTIONS: Record<string, ChangeAction> = {
   write_file: 'Created',
+  create_dir: 'Created',
+  copy_file: 'Created',
+  append_file: 'Edited',
+  apply_patch: 'Edited',
   edit_file: 'Edited',
   delete_file: 'Deleted',
   move_file: 'Moved'
@@ -64,7 +68,7 @@ function collectChanges(messages: Message[], rootPath: string): RunReportChange[
       if (!action) continue
       const args = parseToolArgs(call.function.arguments)
       const rawPath =
-        call.function.name === 'move_file'
+        call.function.name === 'move_file' || call.function.name === 'copy_file'
           ? argsString(args, 'to')
           : argsString(args, 'path')
       if (!rawPath) continue
