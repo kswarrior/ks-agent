@@ -150,3 +150,8 @@ extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
   Gemini, NVIDIA NIM, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together,
   Fireworks, Cerebras, Moonshot, Ollama, LM Studio) plus a Custom option that
   starts with empty fields. Selecting a preset prefills name and base URL.
+- 2026-10-29: The Steps popover now mirrors the AI's `update_plan` checklist
+  instead of the agent loop or individual tool calls. It shows all planned
+  phases with gray pending, yellow running and green complete dots. Agents can
+  explore first and plan later, or plan immediately; plans are high-level phases
+  such as explore, reproduce, fix, test and verify.
