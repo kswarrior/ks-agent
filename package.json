@@ -1,0 +1,39 @@
+{
+  "name": "ks-agent",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first coding agent with process-isolated extensions",
+  "scripts": {
+    "dev:server": "tsx watch server/src/index.ts",
+    "dev:web": "vite",
+    "build": "tsc -p server/tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit && tsc -p server/tsconfig.json --noEmit",
+    "start": "node dist-server/index.js",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.17",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "better-sqlite3": "^9.6.0",
+    "hono": "^4.13.5",
+    "node-pty": "^1.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.20.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
+  }
+}
