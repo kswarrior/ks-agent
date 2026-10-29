@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Message, RunStep } from '../types'
-import { describeTool, parseToolArgs, toolLabel } from '../toolDisplay'
+import type { Message } from '../types'
+import { parseToolArgs } from '../toolDisplay'
 
 type PlanStep = { text: string; done: boolean }
 type PlanSnapshot = { title: string; steps: PlanStep[] }
@@ -34,58 +34,17 @@ function latestPlan(messages: Message[]): PlanSnapshot | null {
   return null
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)} ms`
-  if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`
-  if (ms < 60_000) return `${Math.round(ms / 1000)}s`
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`
-}
-
-function stepSnippet(step: RunStep): string {
-  const text = step.content.trim()
-  if (text) {
-    const line = text.split('\n').map((entry) => entry.trim()).find(Boolean) ?? ''
-    return line.replace(/^[#>*\-\s]+/, '').slice(0, 140)
-  }
-  if (step.tools.length) {
-    return `${step.tools.length} tool ${step.tools.length === 1 ? 'call' : 'calls'}`
-  }
-  return step.status === 'running' ? 'Waiting for output…' : 'No text output'
-}
-
-function stepStatusLabel(step: RunStep): string {
-  if (step.status === 'error') return 'Failed'
-  if (step.status === 'done') return 'Done'
-  return 'Running'
-}
-
-export function StepMenu({
-  messages,
-  steps,
-  streaming
-}: {
-  messages: Message[]
-  steps: RunStep[]
-  streaming: boolean
-}) {
+export function StepMenu({ messages, streaming }: { messages: Message[]; streaming: boolean }) {
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState<DOMRect | null>(null)
-  const [now, setNow] = useState(() => Date.now())
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
   const activeRef = useRef<HTMLLIElement | null>(null)
 
-  const ordered = [...steps].sort((a, b) => a.step - b.step)
-  const latest = ordered[ordered.length - 1]
-  const currentStep = latest?.step ?? 0
   const plan = useMemo(() => latestPlan(messages), [messages])
   const completedPlanSteps = plan?.steps.filter((step) => step.done).length ?? 0
   const activePlanIndex = plan && streaming ? plan.steps.findIndex((step) => !step.done) : -1
-  const countLabel = plan
-    ? `${completedPlanSteps}/${plan.steps.length}`
-    : ordered.length > 0
-      ? String(currentStep)
-      : ''
+  const countLabel = plan ? `${completedPlanSteps}/${plan.steps.length}` : ''
 
   const position = () => {
     const next = triggerRef.current?.getBoundingClientRect()
@@ -120,21 +79,15 @@ export function StepMenu({
   }, [open])
 
   useEffect(() => {
-    if (steps.length === 0 && !streaming && !plan) setOpen(false)
-  }, [steps.length, streaming, plan])
-
-  useEffect(() => {
-    if (!open || !streaming) return
-    const timer = window.setInterval(() => setNow(Date.now()), 500)
-    return () => window.clearInterval(timer)
-  }, [open, streaming])
+    if (!plan) setOpen(false)
+  }, [plan])
 
   useEffect(() => {
     if (!open) return
     activeRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [open, plan, ordered.length, latest?.status, latest?.content.length, latest?.tools.length])
+  }, [open, plan])
 
-  if (ordered.length === 0 && !streaming && !plan) return null
+  if (!plan) return null
 
   return (
     <div className="step-menu">
@@ -145,7 +98,7 @@ export function StepMenu({
         onClick={() => setOpen((current) => !current)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title={streaming ? 'Show live steps' : plan ? 'Show plan steps' : 'Show steps'}
+        title={streaming ? 'Show live plan' : 'Show plan steps'}
       >
         {streaming ? (
           <span className="step-live-dot" aria-hidden="true" />
@@ -164,7 +117,7 @@ export function StepMenu({
           </svg>
         )}
         <span>Steps</span>
-        {countLabel && <span className="step-btn-count">{countLabel}</span>}
+        <span className="step-btn-count">{countLabel}</span>
         <svg
           className="step-caret"
           viewBox="0 0 24 24"
@@ -186,14 +139,14 @@ export function StepMenu({
             ref={popupRef}
             className="step-popup"
             role="dialog"
-            aria-label={plan ? 'Plan steps' : 'Run steps'}
+            aria-label="Plan steps"
             style={{
               right: Math.max(8, window.innerWidth - rect.right),
               bottom: window.innerHeight - rect.top + 8
             }}
           >
             <div className="step-popup-head">
-              <span>{plan ? 'Plan' : 'Run steps'}</span>
+              <span>Plan</span>
               <span className="step-popup-meta">
                 {streaming && (
                   <span className="step-live">
@@ -201,83 +154,25 @@ export function StepMenu({
                     Live
                   </span>
                 )}
-                {countLabel && <span>{countLabel}</span>}
+                <span>{countLabel}</span>
               </span>
             </div>
-            {plan ? (
-              <>
-                {plan.title !== 'Plan' && <div className="plan-title">{plan.title}</div>}
-                <ol className="step-list plan-list">
-                  {plan.steps.map((step, index) => {
-                    const status = step.done ? 'done' : index === activePlanIndex ? 'running' : 'pending'
-                    return (
-                      <li
-                        key={`${index}-${step.text}`}
-                        ref={status === 'running' ? activeRef : undefined}
-                        className={`plan-item ${status}`}
-                      >
-                        <span className={`plan-dot ${status}`} aria-hidden="true" />
-                        <span className="plan-text">{step.text}</span>
-                      </li>
-                    )
-                  })}
-                </ol>
-              </>
-            ) : ordered.length === 0 ? (
-              <div className="step-empty">Waiting for the first step…</div>
-            ) : (
-              <ol className="step-list">
-                {ordered.map((step) => {
-                  const isActive = step.step === latest?.step
-                  const duration =
-                    step.status === 'running' ? Math.max(0, now - step.startedAt) : step.durationMs ?? 0
-                  return (
-                    <li
-                      key={step.step}
-                      ref={isActive ? activeRef : undefined}
-                      className={`step-item ${isActive ? 'active' : ''} ${step.status}`}
-                    >
-                      <span className="step-item-num">{step.step}</span>
-                      <div className="step-item-main">
-                        <div className="step-item-row">
-                          <span className="step-item-title">Step {step.step}</span>
-                          <span className={`step-item-state ${step.status}`}>{stepStatusLabel(step)}</span>
-                          {duration > 0 && <span className="step-item-time">{formatDuration(duration)}</span>}
-                        </div>
-                        <span className="step-item-snippet">{stepSnippet(step)}</span>
-                        {step.tools.length > 0 && (
-                          <div className="step-item-tools">
-                            {step.tools.map((tool) => {
-                              const label = toolLabel(tool.name, tool.status === 'running')
-                              const { primary, detail } = describeTool(
-                                tool.name,
-                                parseToolArgs(tool.arguments)
-                              )
-                              const text = primary ? `${label} ${primary}` : label
-                              return (
-                                <span
-                                  className={`step-tool ${tool.status}`}
-                                  key={tool.id}
-                                  title={detail || text}
-                                >
-                                  {tool.status === 'running' && (
-                                    <span className="step-tool-dot" aria-hidden="true" />
-                                  )}
-                                  {text}
-                                  {tool.status !== 'running' && typeof tool.durationMs === 'number' && (
-                                    <span className="step-tool-time">{formatDuration(tool.durationMs)}</span>
-                                  )}
-                                </span>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  )
-                })}
-              </ol>
-            )}
+            {plan.title !== 'Plan' && <div className="plan-title">{plan.title}</div>}
+            <ol className="step-list plan-list">
+              {plan.steps.map((step, index) => {
+                const status = step.done ? 'done' : index === activePlanIndex ? 'running' : 'pending'
+                return (
+                  <li
+                    key={`${index}-${step.text}`}
+                    ref={status === 'running' ? activeRef : undefined}
+                    className={`plan-item ${status}`}
+                  >
+                    <span className={`plan-dot ${status}`} aria-hidden="true" />
+                    <span className="plan-text">{step.text}</span>
+                  </li>
+                )
+              })}
+            </ol>
           </div>,
           document.body
         )}

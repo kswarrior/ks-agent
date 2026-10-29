@@ -557,7 +557,7 @@ export function ChatView({
                 ariaLabel="Model"
               />
               <div className="composer-right">
-                <StepMenu messages={messages} steps={steps} streaming={streaming} />
+                <StepMenu messages={messages} streaming={streaming} />
                 {streaming ? (
                   <button className="icon-action" onClick={onStop} aria-label="Stop" title="Stop">
                     <svg viewBox="0 0 24 24" aria-hidden="true">

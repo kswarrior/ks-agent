@@ -318,7 +318,7 @@ export const builtinToolDefs: ToolDef[] = [
     function: {
       name: 'update_plan',
       description:
-        'Create or replace plan.md in the project with a checkbox plan. Use it to track multi-step work, and call it again with done:true as steps complete.',
+        'Create or replace plan.md with a short checklist of high-level phases (for example explore, reproduce, fix, test). Use it for multi-step work and call it again with updated done flags as phases finish. Do not list individual tool calls as plan steps.',
       parameters: {
         type: 'object',
         properties: {
