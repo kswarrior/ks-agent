@@ -5,8 +5,9 @@ import readline from 'node:readline'
 import { config } from './config.js'
 import { readJsonConfig, writeJsonConfig } from './configFile.js'
 import { ConfigError } from './errors.js'
+import { outputTail, runInstallCommand } from './install.js'
 import { isProjectEnabled, normalizeProjects } from './scope.js'
-import type { McpServerInfo, McpToolInfo, ToolDef, ToolResult } from './types.js'
+import type { McpServerDetail, McpServerInfo, McpToolInfo, ToolDef, ToolResult } from './types.js'
 
 type Transport = 'stdio' | 'http' | 'sse'
 
@@ -19,6 +20,7 @@ interface ServerConfig {
   cwd?: string
   url?: string
   headers: Record<string, string>
+  installCommand?: string
   enabled: boolean
   timeoutMs: number
   projects: string[]
@@ -109,6 +111,7 @@ function normalizeServer(name: string, raw: unknown): ServerConfig {
   if (transport !== 'stdio' && !/^https?:\/\//i.test(url)) throw new Error('http/sse server requires an http(s) url')
   const args = Array.isArray(obj.args) ? obj.args.filter((arg): arg is string => typeof arg === 'string') : []
   const timeoutMs = Math.min(900_000, Math.max(1000, Number(obj.timeoutMs) || CALL_TIMEOUT))
+  const installCommand = asString(obj.installCommand ?? obj.install).trim()
   return {
     name,
     transport,
@@ -118,6 +121,7 @@ function normalizeServer(name: string, raw: unknown): ServerConfig {
     cwd: asString(obj.cwd) || undefined,
     url: url || undefined,
     headers: stringMap(obj.headers),
+    ...(installCommand ? { installCommand } : {}),
     enabled: obj.enabled !== false,
     timeoutMs,
     projects: normalizeProjects(obj.projects)
@@ -166,6 +170,7 @@ function serverToConfig(server: ServerConfig): Record<string, unknown> {
   if (server.cwd) value.cwd = server.cwd
   if (server.url) value.url = server.url
   if (Object.keys(server.headers).length) value.headers = server.headers
+  if (server.installCommand) value.installCommand = server.installCommand
   if (server.projects.length) value.projects = server.projects
   return value
 }
@@ -804,6 +809,10 @@ export class McpRegistry {
     validateStringMap(obj.headers, 'headers')
     const command = asString(obj.command).trim()
     const url = asString(obj.url).trim()
+    const installCommand = obj.installCommand ?? obj.install
+    if (installCommand !== undefined && (typeof installCommand !== 'string' || installCommand.length > 2000)) {
+      throw new ConfigError('installCommand must be a string of at most 2000 characters.')
+    }
     if (command.length > 2000 || url.length > 4000) throw new ConfigError('command or url is too long.')
     let server: ServerConfig
     try {
@@ -824,6 +833,74 @@ export class McpRegistry {
   async add(input: unknown): Promise<McpServerInfo[]> {
     this.addConfig(input)
     await this.reload()
+    return this.list()
+  }
+
+  updateConfig(name: string, input: unknown): string {
+    const key = name.trim().toLowerCase()
+    if (!NAME_RE.test(key)) throw new ConfigError('Invalid MCP server name.')
+    const obj = asRecord(input)
+    validateArgs(obj.args)
+    validateStringMap(obj.env, 'env')
+    validateStringMap(obj.headers, 'headers')
+    const installCommand = obj.installCommand ?? obj.install
+    if (installCommand !== undefined && (typeof installCommand !== 'string' || installCommand.length > 2000)) {
+      throw new ConfigError('installCommand must be a string of at most 2000 characters.')
+    }
+    const root = readJsonConfig(config.mcpConfigPath)
+    const servers = configServerMap(root)
+    const current = servers[key]
+    if (!current || typeof current !== 'object') throw new ConfigError(`MCP server "${name}" was not found.`, 404)
+    const command = asString(obj.command).trim()
+    const url = asString(obj.url).trim()
+    if (command.length > 2000 || url.length > 4000) throw new ConfigError('command or url is too long.')
+    let server: ServerConfig
+    try {
+      server = normalizeServer(key, { ...asRecord(current), ...obj, name: key })
+    } catch (error) {
+      throw new ConfigError(error instanceof Error ? error.message : String(error))
+    }
+    servers[key] = serverToConfig(server)
+    root.mcpServers = servers
+    if (root.servers) delete root.servers
+    writeJsonConfig(config.mcpConfigPath, root)
+    return key
+  }
+
+  async update(name: string, input: unknown): Promise<McpServerInfo[]> {
+    this.updateConfig(name, input)
+    await this.reload()
+    return this.list()
+  }
+
+  async install(name: string, background = false): Promise<McpServerInfo[]> {
+    const key = name.trim().toLowerCase()
+    const entry = this.entries.get(key)
+    if (!entry?.config) throw new ConfigError(`MCP server "${name}" was not found.`, 404)
+    const installCommand = entry.config.installCommand?.trim()
+    if (!installCommand) {
+      throw new ConfigError(`MCP server "${name}" has no install command. Add one to .ks-agent/mcp.json.`, 400)
+    }
+    if (background) {
+      void runInstallCommand(installCommand)
+        .then(async (result) => {
+          if (!result.ok) {
+            console.warn(`[mcp:${key}] install failed: ${outputTail(result.output) || 'command exited with an error'}`)
+            return
+          }
+          await this.reload()
+        })
+        .catch((error) => {
+          console.warn(`[mcp:${key}] install failed: ${error instanceof Error ? error.message : String(error)}`)
+        })
+      return this.list()
+    }
+    const result = await runInstallCommand(installCommand)
+    await this.reload()
+    if (!result.ok) {
+      const detail = outputTail(result.output)
+      throw new ConfigError(`Install failed for "${name}": ${detail || 'command exited with an error'}`, 500)
+    }
     return this.list()
   }
 
@@ -896,25 +973,41 @@ export class McpRegistry {
     return null
   }
 
+  private info(entry: Entry): McpServerInfo {
+    const running = this.running.get(entry.name)
+    const client = running?.client
+    return {
+      name: entry.name,
+      transport: entry.config?.transport ?? 'stdio',
+      tools: client?.tools ?? [],
+      status: entry.error ? 'error' : client?.status ?? 'stopped',
+      ...(entry.config?.installCommand ? { installCommand: entry.config.installCommand } : {}),
+      projects: entry.config?.projects ?? [],
+      ...(entry.error
+        ? { error: entry.error }
+        : client?.error
+          ? { error: client.error }
+          : {})
+    }
+  }
+
   list(): McpServerInfo[] {
-    return [...this.entries.values()]
-      .map((entry) => {
-        const running = this.running.get(entry.name)
-        const client = running?.client
-        return {
-          name: entry.name,
-          transport: entry.config?.transport ?? 'stdio',
-          tools: client?.tools ?? [],
-          status: entry.error ? 'error' : client?.status ?? 'stopped',
-          projects: entry.config?.projects ?? [],
-          ...(entry.error
-            ? { error: entry.error }
-            : client?.error
-              ? { error: client.error }
-              : {})
-        }
-      })
-      .sort((a, b) => a.name.localeCompare(b.name))
+    return [...this.entries.values()].map((entry) => this.info(entry)).sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  get(name: string): McpServerDetail | null {
+    const entry = this.entries.get(name.trim().toLowerCase())
+    if (!entry?.config) return null
+    return {
+      ...this.info(entry),
+      command: entry.config.command,
+      args: entry.config.args,
+      env: entry.config.env,
+      cwd: entry.config.cwd,
+      url: entry.config.url,
+      headers: entry.config.headers,
+      timeoutMs: entry.config.timeoutMs
+    }
   }
 
   private ensureStarted(name: string): Promise<void> {

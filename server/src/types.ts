@@ -140,6 +140,10 @@ export interface SkillInfo {
   projects: string[]
 }
 
+export interface SkillDetail extends SkillInfo {
+  content: string
+}
+
 export interface McpToolInfo {
   name: string
   description: string
@@ -152,7 +156,18 @@ export interface McpServerInfo {
   tools: McpToolInfo[]
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
+  installCommand?: string
   projects: string[]
+}
+
+export interface McpServerDetail extends McpServerInfo {
+  command?: string
+  args: string[]
+  env: Record<string, string>
+  cwd?: string
+  url?: string
+  headers: Record<string, string>
+  timeoutMs: number
 }
 
 export interface LspServerInfo {
@@ -164,6 +179,12 @@ export interface LspServerInfo {
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
   projects: string[]
+}
+
+export interface LspServerDetail extends LspServerInfo {
+  args: string[]
+  env: Record<string, string>
+  initializationOptions?: Record<string, unknown>
 }
 
 export interface ChatExtensionsState {
