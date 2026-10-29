@@ -290,8 +290,17 @@ export function ChatView({
     return ids
   }, [messages])
 
+  const persistedToolCallIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const message of messages) {
+      if (message.role !== 'assistant' || !message.toolCalls) continue
+      for (const call of message.toolCalls) ids.add(call.id)
+    }
+    return ids
+  }, [messages])
+
   const visibleTools = (tools: LiveState['tools']) =>
-    tools.filter((tool) => tool.name !== 'update_plan')
+    tools.filter((tool) => tool.name !== 'update_plan' && !persistedToolCallIds.has(tool.id))
 
   const send = () => {
     const content = draft.trim()
@@ -390,6 +399,7 @@ export function ChatView({
                           args={call.function.arguments}
                           output={result?.content}
                           ok={result ? true : undefined}
+                          running={streaming && !result}
                           rootPath={project.path}
                         />
                       )
