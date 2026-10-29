@@ -648,7 +648,9 @@ export function ChatView({
                     rootPath={project.path}
                   />
                 ))}
-                {streaming && !live?.reasoning.trim() && (
+                {streaming && failure && <FailureCard failure={failure} onContinue={continueRun} />}
+                {streaming && !failure && retryStatus && <RetryCard retry={retryStatus} now={now} />}
+                {streaming && !failure && !retryStatus && !live?.reasoning.trim() && (
                   <div className="thinking" role="status" aria-label="Thinking" aria-live="polite">
                     <span>Thinking</span>
                     <span className="thinking-dots" aria-hidden="true">
@@ -660,12 +662,18 @@ export function ChatView({
                 )}
               </div>
             )}
+
+            {failure && !streaming && (
+              <div className="msg assistant">
+                <FailureCard failure={failure} onContinue={continueRun} />
+              </div>
+            )}
               </>
             )}
             <div ref={bottomRef} />
           </div>
 
-          {error && (
+          {error && !failure && (
             <div className={`error-banner ${!streaming && modelId && !stopped ? 'with-action' : ''}`}>
               <span>{error}</span>
               {!streaming && modelId && !stopped && (

@@ -3,14 +3,35 @@ import {
   createModel,
   createProvider,
   deleteModel,
-  deleteProvider
+  deleteProvider,
+  getRetrySettings,
+  resetRetrySettings,
+  updateRetrySettings
 } from '../api'
-import type { ModelEntry, ProviderPublic } from '../types'
+import type { ModelEntry, ProviderPublic, RetrySettings } from '../types'
 import { Modal } from './Modal'
 import { SelectMenu } from './SelectMenu'
 
-type SettingsTab = 'providers' | 'models'
+type SettingsTab = 'providers' | 'models' | 'retry'
 type SettingsView = 'list' | 'provider-picker' | 'add-provider' | 'add-model'
+
+const RETRY_STATUS_CODES = [408, 409, 425, 429]
+
+function parseStatusCodes(value: string): { codes: number[]; invalid: string[] } {
+  const parts = value.split(/[\s,]+/).filter(Boolean)
+  const codes: number[] = []
+  const invalid: string[] = []
+  for (const part of parts) {
+    const code = Number(part)
+    if (Number.isInteger(code) && code >= 400 && code <= 599) {
+      if (!codes.includes(code)) codes.push(code)
+    } else {
+      invalid.push(part)
+    }
+  }
+  codes.sort((a, b) => a - b)
+  return { codes, invalid }
+}
 
 type ProviderPreset = {
   id: string
@@ -152,6 +173,12 @@ export function SettingsModal({
   const [modelId, setModelId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [retrySettings, setRetrySettings] = useState<RetrySettings | null>(null)
+  const [retryDraft, setRetryDraft] = useState<RetrySettings | null>(null)
+  const [retryCodes, setRetryCodes] = useState('')
+  const [retryLoading, setRetryLoading] = useState(true)
+  const [retrySaving, setRetrySaving] = useState(false)
+  const [retrySaved, setRetrySaved] = useState(false)
 
   const selectedPreset = PROVIDER_PRESETS.find((preset) => preset.id === selectedPresetId) ?? CUSTOM_PRESET
   const isLocalEndpoint = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(baseUrl)
@@ -161,6 +188,27 @@ export function SettingsModal({
       setProviderId(providers[0]?.id ?? '')
     }
   }, [providerId, providers])
+
+  useEffect(() => {
+    let cancelled = false
+    setRetryLoading(true)
+    void getRetrySettings()
+      .then((settings) => {
+        if (cancelled) return
+        setRetrySettings(settings)
+        setRetryDraft(settings)
+        setRetryCodes(settings.retryOnStatusCodes.join(', '))
+      })
+      .catch((caught) => {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
+      })
+      .finally(() => {
+        if (!cancelled) setRetryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const run = async (task: () => Promise<unknown>) => {
     setBusy(true)
@@ -202,6 +250,79 @@ export function SettingsModal({
     setApiKey('')
     setError(null)
     setView('add-provider')
+  }
+
+  const updateRetry = <K extends keyof RetrySettings>(key: K, value: RetrySettings[K]) => {
+    setRetrySaved(false)
+    setRetryDraft((current) => (current ? { ...current, [key]: value } : current))
+  }
+
+  const parsedCodes = parseStatusCodes(retryCodes)
+
+  const toggleStatusCode = (code: number) => {
+    const next = parsedCodes.codes.includes(code)
+      ? parsedCodes.codes.filter((entry) => entry !== code)
+      : [...parsedCodes.codes, code]
+    next.sort((a, b) => a - b)
+    setRetrySaved(false)
+    setRetryCodes(next.join(', '))
+  }
+
+  const retryDirty =
+    Boolean(retryDraft && retrySettings) &&
+    (JSON.stringify({ ...retryDraft, retryOnStatusCodes: parsedCodes.codes }) !==
+      JSON.stringify(retrySettings) ||
+      retryCodes !== retrySettings?.retryOnStatusCodes.join(', '))
+
+  const saveRetry = async () => {
+    if (!retryDraft) return
+    if (parsedCodes.invalid.length) {
+      setError(`Invalid HTTP status code: ${parsedCodes.invalid.join(', ')}. Use 400–599.`)
+      return
+    }
+    if (retryDraft.baseDelayMs < 100 || retryDraft.baseDelayMs > 120_000) {
+      setError('Initial delay must be between 100 and 120000 ms.')
+      return
+    }
+    if (retryDraft.maxDelayMs < retryDraft.baseDelayMs || retryDraft.maxDelayMs > 600_000) {
+      setError('Max delay must be at least the initial delay and at most 600000 ms.')
+      return
+    }
+    if (retryDraft.maxRetries < 0 || retryDraft.maxRetries > 100) {
+      setError('Retries must be between 0 and 100, or use unlimited.')
+      return
+    }
+    setRetrySaving(true)
+    setError(null)
+    setRetrySaved(false)
+    try {
+      const saved = await updateRetrySettings({ ...retryDraft, retryOnStatusCodes: parsedCodes.codes })
+      setRetrySettings(saved)
+      setRetryDraft(saved)
+      setRetryCodes(saved.retryOnStatusCodes.join(', '))
+      setRetrySaved(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setRetrySaving(false)
+    }
+  }
+
+  const resetRetry = async () => {
+    setRetrySaving(true)
+    setError(null)
+    setRetrySaved(false)
+    try {
+      const saved = await resetRetrySettings()
+      setRetrySettings(saved)
+      setRetryDraft(saved)
+      setRetryCodes(saved.retryOnStatusCodes.join(', '))
+      setRetrySaved(true)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setRetrySaving(false)
+    }
   }
 
   const addProvider = (
