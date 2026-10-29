@@ -316,40 +316,74 @@ export function ExtensionsModal({
           </>
         ))}
 
-      {tab === 'lsp' && (
-        <>
-          {lspServers.length === 0 ? (
-            <div className="extension-tab-empty">
-              <strong>{TAB_EMPTY.lsp.title}</strong>
-              <p className="muted">{TAB_EMPTY.lsp.body}</p>
-            </div>
-          ) : (
-            <div className="extension-grid">
-              {lspServers.map((server) => (
-                <div className="extension-card" key={server.name}>
-                  <div className="extension-head">
-                    <div>
-                      <strong>{server.name}</strong>
-                      <span className="muted small"> {server.languageId}</span>
+      {tab === 'lsp' &&
+        (view === 'add' ? (
+          <AddLspForm
+            onDone={async () => {
+              await onRefreshLsp()
+              setView('list')
+            }}
+            onCancel={() => setView('list')}
+          />
+        ) : (
+          <>
+            {lspServers.length === 0 ? (
+              <div className="extension-tab-empty">
+                <strong>{TAB_EMPTY.lsp.title}</strong>
+                <p className="muted">{TAB_EMPTY.lsp.body}</p>
+              </div>
+            ) : (
+              <div className="extension-grid">
+                {lspServers.map((server) => (
+                  <div className="extension-card" key={server.name}>
+                    <div className="extension-head">
+                      <div>
+                        <strong>{server.name}</strong>
+                        <span className="muted small"> {server.languageId}</span>
+                      </div>
+                      <span className={`status ${server.status}`}>{server.status}</span>
                     </div>
-                    <span className={`status ${server.status}`}>{server.status}</span>
+                    {server.error && <div className="error-banner small">{server.error}</div>}
+                    <code className="muted small">{server.command}</code>
+                    {server.extensions.length > 0 && (
+                      <div className="chips">
+                        {server.extensions.map((extension) => (
+                          <span className="chip" key={extension}>
+                            {extension}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="extension-card-actions">
+                      <button
+                        className="btn ghost small"
+                        onClick={() => setConfirmDelete({ kind: 'lsp', name: server.name })}
+                        disabled={busy}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  {server.error && <div className="error-banner small">{server.error}</div>}
-                  <code className="muted small">{server.command}</code>
-                  {server.extensions.length > 0 && (
-                    <div className="chips">
-                      {server.extensions.map((extension) => (
-                        <span className="chip" key={extension}>
-                          {extension}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+                ))}
+              </div>
+            )}
+          </>
+        ))}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={`Remove ${confirmDelete.name}?`}
+          message={
+            confirmDelete.kind === 'skills'
+              ? `This deletes .ks-agent/skills/${confirmDelete.name}/SKILL.md permanently.`
+              : confirmDelete.kind === 'mcp'
+                ? `This removes ${confirmDelete.name} from .ks-agent/mcp.json and stops its tools.`
+                : `This removes ${confirmDelete.name} from .ks-agent/lsp.json.`
+          }
+          confirmLabel="Delete"
+          onConfirm={() => void remove()}
+          onClose={() => setConfirmDelete(null)}
+        />
       )}
     </Modal>
   )

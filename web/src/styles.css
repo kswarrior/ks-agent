@@ -1894,6 +1894,13 @@ code {
   gap: 8px;
 }
 
+.extension-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 2px;
+}
+
 .status {
   padding: 2px 7px;
   border-radius: 999px;
