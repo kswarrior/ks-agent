@@ -1209,6 +1209,24 @@ async function main() {
     modelId: model.id
   })
 
+  const editChat = await api('POST', `/api/projects/${project.id}/chats`, { title: 'edit me' })
+  const editedChat = await api('PATCH', `/api/chats/${editChat.id}`, {
+    title: 'edited chat title',
+    modelId: model.id
+  })
+  assert(
+    editedChat.title === 'edited chat title' && editedChat.modelId === model.id,
+    `chat title/model edit failed: ${JSON.stringify(editedChat)}`
+  )
+  const clearedChatModel = await api('PATCH', `/api/chats/${editChat.id}`, { modelId: null })
+  assert(clearedChatModel.modelId === null, 'chat model could not be cleared')
+  const invalidChatModel = await rawApi('PATCH', `/api/chats/${editChat.id}`, { modelId: 'missing-model' })
+  assert(invalidChatModel.status === 404, `chat edit accepted a missing model: ${invalidChatModel.status}`)
+  const emptyChatTitle = await rawApi('PATCH', `/api/chats/${editChat.id}`, { title: '   ' })
+  assert(emptyChatTitle.status === 400, `chat edit accepted an empty title: ${emptyChatTitle.status}`)
+  await api('DELETE', `/api/chats/${editChat.id}`)
+  console.log('PASS chat edit (title + model, validation)')
+
   const first = await sendMessage(chat.id, 'create hello.txt', model.id)
   const toolEnd = first.events.find((event) => event.type === 'tool_end')
   assert(toolEnd, 'agent did not emit tool_end', first.text.slice(0, 1000))
@@ -1481,8 +1499,44 @@ async function main() {
     fs.existsSync(path.join(skillsDir, 'smoke-created-skill', 'SKILL.md')),
     'created skill file is missing'
   )
-  await api('DELETE', '/api/skills/smoke-created-skill')
-  assert(!fs.existsSync(path.join(skillsDir, 'smoke-created-skill')), 'deleted skill folder still exists')
+  const renamedSkill = await api('PATCH', '/api/skills/smoke-created-skill', {
+    name: 'smoke-renamed-skill',
+    description: 'Renamed skill'
+  })
+  assert(
+    renamedSkill.name === 'smoke-renamed-skill' && renamedSkill.description === 'Renamed skill',
+    `skill rename failed: ${JSON.stringify(renamedSkill)}`
+  )
+  assert(
+    !fs.existsSync(path.join(skillsDir, 'smoke-created-skill')),
+    'old skill folder still exists after rename'
+  )
+  const renamedSkillFile = fs.readFileSync(path.join(skillsDir, 'smoke-renamed-skill', 'SKILL.md'), 'utf8')
+  assert(renamedSkillFile.includes('name: smoke-renamed-skill'), 'renamed skill frontmatter was not updated')
+  await api('POST', '/api/skills', {
+    name: 'smoke-conflict-skill',
+    description: 'Conflict target',
+    content: '# Conflict'
+  })
+  const conflictRename = await rawApi('PATCH', '/api/skills/smoke-skill', { name: 'smoke-conflict-skill' })
+  assert(conflictRename.status === 409, `skill rename did not reject a conflict: ${conflictRename.status}`)
+  await api('DELETE', '/api/skills/smoke-conflict-skill')
+  await api('DELETE', '/api/skills/smoke-renamed-skill')
+  assert(!fs.existsSync(path.join(skillsDir, 'smoke-renamed-skill')), 'deleted skill folder still exists')
+
+  fs.writeFileSync(
+    path.join(skillsDir, 'flat-skill.md'),
+    '---\nname: flat-skill\ndescription: Flat file skill\n---\n\n# Flat\nReturn FLAT_OK.\n'
+  )
+  await api('POST', '/api/skills/reload')
+  const renamedFlat = await api('PATCH', '/api/skills/flat-skill', { name: 'flat-skill-renamed' })
+  assert(renamedFlat.name === 'flat-skill-renamed', 'flat skill rename failed')
+  assert(!fs.existsSync(path.join(skillsDir, 'flat-skill.md')), 'old flat skill file still exists')
+  assert(
+    fs.existsSync(path.join(skillsDir, 'flat-skill-renamed.md')),
+    'renamed flat skill file is missing'
+  )
+  await api('DELETE', '/api/skills/flat-skill-renamed')
 
   const mcpList = await api('POST', '/api/mcp/reload')
   for (const [name, transport] of [
