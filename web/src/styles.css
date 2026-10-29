@@ -1114,9 +1114,112 @@ code {
 .composer-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   padding-top: 6px;
+}
+
+.chat-tools-menu {
+  position: relative;
+  flex: none;
+}
+
+.chat-tools-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.chat-tools-btn:hover:not(:disabled),
+.chat-tools-btn.open {
+  border-color: var(--accent);
+}
+
+.chat-tools-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.chat-tools-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.chat-tools-count {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chat-extensions-popup {
+  width: 330px;
+  max-width: calc(100vw - 16px);
+  max-height: min(60vh, 460px);
+  padding: 8px;
+}
+
+.chat-extensions-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 5px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-tools-section {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat-tools-section:last-child {
+  border-bottom: 0;
+}
+
+.chat-tools-title {
+  padding: 2px 5px 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chat-tools-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 5px;
+  border-radius: 7px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chat-tools-row:hover {
+  background: var(--bg-hover);
+}
+
+.chat-tools-row input {
+  accent-color: var(--accent);
+}
+
+.chat-tools-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-tools-detail {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .composer-model {
@@ -1848,6 +1951,29 @@ code {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 4px;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.check-row input {
+  accent-color: var(--accent);
+}
+
+.scope-options {
+  display: grid;
+  gap: 4px;
+  max-height: 132px;
+  padding: 8px 10px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg-soft);
 }
 
 /* ----------------------------------------------------------- extensions */
