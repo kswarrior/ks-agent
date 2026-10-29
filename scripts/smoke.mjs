@@ -441,7 +441,7 @@ async function main() {
 
   const globbed = await okTool('glob', { pattern: '**/*.ts' })
   assert(globbed.includes('src/index.ts') && globbed.includes('src/utils/math.ts'), `glob missed files: ${globbed}`)
-  const grepped = await okTool('grep', { pattern: 'export const diff', include: '*.ts' })
+  const grepped = await okTool('grep', { pattern: 'export const sum', include: '*.ts' })
   assert(grepped.includes('src/utils/math.ts'), `grep missed math.ts: ${grepped}`)
   const listed = await okTool('list_dir', { path: 'src' })
   assert(listed.includes('utils/'), `list_dir missed utils: ${listed}`)
