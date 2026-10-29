@@ -1561,7 +1561,7 @@ async function main() {
     `project knowledge was not created correctly: ${JSON.stringify(projectKnowledge)}`
   )
 
-  const globalKnowledgeList = await api('GET', '/api/knowledge')
+  const globalKnowledgeList = await api('GET', '/api/knowledge?scope=global')
   assert(
     globalKnowledgeList.some((entry) => entry.id === globalKnowledge.id),
     'global knowledge was not listed'

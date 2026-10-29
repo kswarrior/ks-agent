@@ -162,7 +162,7 @@ has two independent scopes:
 Both scopes can be enabled or disabled globally and toggled per chat from the
 Tools menu. Only enabled, chat-enabled entries are injected into the agent
 system prompt. Generated summaries are updated in place on regeneration. APIs:
-`GET/POST /api/knowledge`, `GET/POST /api/projects/:id/knowledge`,
+`GET/POST /api/knowledge` (`?scope=global` for user knowledge), `GET/POST /api/projects/:id/knowledge`,
 `PATCH/PUT/DELETE /api/knowledge/:id`, and
 `POST /api/projects/:id/knowledge/summary` (also `/generate`).
 

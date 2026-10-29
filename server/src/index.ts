@@ -315,21 +315,25 @@ app.patch('/api/chats/:id/extensions', async (c) => {
   const name = kind === 'knowledge' ? rawName : rawName.toLowerCase()
   if (!name) return c.json(errorJson('name is required'), 400)
   if (typeof body?.enabled !== 'boolean') return c.json(errorJson('enabled must be a boolean'), 400)
-  const available =
-    kind === 'skill'
-      ? skills.listForProject(project.id).some((skill) => skill.name === name)
-      : kind === 'knowledge'
-        ? knowledge
-            .listForProject(project.id)
-            .some((entry) => entry.enabled && entry.id === name)
-        : kind === 'mcp'
-          ? mcp.listForProject(project.id).some((server) => server.name === name)
-          : lsp.listForProject(project.id).some((server) => server.name === name)
+  let resolvedName = name
+  let available = false
+  if (kind === 'skill') {
+    available = skills.listForProject(project.id).some((skill) => skill.name === name)
+  } else if (kind === 'knowledge') {
+    const entries = knowledge.listForProject(project.id).filter((entry) => entry.enabled)
+    const entry = entries.find((item) => item.id === name) ?? entries.find((item) => item.title === name)
+    available = Boolean(entry)
+    resolvedName = entry?.id ?? name
+  } else if (kind === 'mcp') {
+    available = mcp.listForProject(project.id).some((server) => server.name === name)
+  } else {
+    available = lsp.listForProject(project.id).some((server) => server.name === name)
+  }
   if (!available) {
     return c.json(errorJson(`${kind} "${name}" is not enabled for this project`, 404), 404)
   }
-  setChatExtensionEnabled(chat.id, kind as ExtensionKind, name, body.enabled)
-  return c.json({ ok: true, kind, name, enabled: body.enabled })
+  setChatExtensionEnabled(chat.id, kind as ExtensionKind, resolvedName, body.enabled)
+  return c.json({ ok: true, kind, name: resolvedName, enabled: body.enabled })
 })
 
 app.delete('/api/chats/:id', (c) => {
@@ -634,7 +638,8 @@ app.get('/api/knowledge', (c) => {
     if (!getProject(projectId)) return c.json(errorJson('project not found', 404), 404)
     return c.json(listProjectKnowledge(projectId))
   }
-  return c.json(listGlobalKnowledge())
+  if (c.req.query('scope') === 'global') return c.json(listGlobalKnowledge())
+  return c.json(listKnowledge())
 })
 
 app.get('/api/knowledge/all', (c) => c.json(listKnowledge()))
@@ -649,11 +654,16 @@ app.post('/api/knowledge', async (c) => {
   }
 
   let scope: 'global' | 'project'
-  if (body.scope === 'global') scope = 'global'
+  if (body.scope === 'global' || body.scope === 'user') scope = 'global'
   else if (body.scope === 'project' || body.projectId !== undefined) scope = 'project'
   else scope = 'global'
-  if (body.scope !== undefined && body.scope !== 'global' && body.scope !== 'project') {
-    return c.json(errorJson('scope must be global or project'), 400)
+  if (
+    body.scope !== undefined &&
+    body.scope !== 'global' &&
+    body.scope !== 'user' &&
+    body.scope !== 'project'
+  ) {
+    return c.json(errorJson('scope must be global, user or project'), 400)
   }
 
   let projectId: string | null = null
