@@ -370,6 +370,30 @@ async function main() {
   assert(fs.existsSync(path.join(project.path, 'webapp', 'package.json')), 'extension did not write webapp/package.json')
   console.log('PASS extension host + real extension tool')
 
+  const slowChat = await api('POST', `/api/projects/${project.id}/chats`, {
+    title: 'slow chat',
+    modelId: model.id
+  })
+  const slowPromise = sendMessage(slowChat.id, 'slow task', model.id)
+  await sleep(1000)
+  let stopped = false
+  for (let attempt = 0; attempt < 10 && !stopped; attempt++) {
+    try {
+      await api('POST', `/api/chats/${slowChat.id}/stop`)
+      stopped = true
+    } catch {
+      await sleep(100)
+    }
+  }
+  assert(stopped, 'stop endpoint did not find the active run')
+  const slow = await slowPromise
+  assert(
+    slow.events.some((event) => event.type === 'done' && event.aborted === true),
+    'agent did not emit an aborted done event',
+    slow.text.slice(0, 1000)
+  )
+  console.log('PASS stop / abort path')
+
   const messages = await api('GET', `/api/chats/${chat.id}/messages`)
   assert(messages.some((message) => message.role === 'user'), 'user message not persisted')
   assert(messages.some((message) => message.role === 'assistant'), 'assistant message not persisted')

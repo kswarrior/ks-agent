@@ -39,8 +39,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] OpenAI-compatible chat-completions streaming client
 - [x] Incremental content / reasoning / tool-call delta parsing
 - [x] Agent loop: stream → execute tools → feed results → repeat
-- [~] Max-step guard, abort handling, partial-message persistence
-      (implemented; stop path not covered by the smoke test yet)
+- [x] Max-step guard, abort handling, partial-message persistence
 - [x] System prompt with project scope + tool rules
 - [x] Context trimming (message count + character budget)
 - [x] Built-in tools:
@@ -117,13 +116,14 @@ npm run smoke        # isolated end-to-end test (build first)
 
 The smoke test verifies: health, project creation, path/shell guards, provider
 key masking, the streaming agent loop, a real built-in tool (`write_file`), the
-extension host calling the real `web` extension, persistence, extension
-discovery, Minecraft/Android scaffolding, and static UI serving.
+extension host calling the real `web` extension, stop/abort handling,
+persistence, extension discovery, Minecraft/Android scaffolding, and static UI
+serving.
 
 ## Progress log
 
 - 2026-10-29: Fresh implementation started at repo root. `old/` is kept only as
   reference; nothing in it is imported by the new code.
 - 2026-10-29: Phases 0–4 MVP implemented. `npm run typecheck`, `npm run build`
-  and `npm run smoke` all pass. Next: abort-path test, Docker jail, PTY, Git,
-  MCP/LSP, provider retries.
+  and `npm run smoke` all pass, including the stop/abort path. Next: Docker jail,
+  PTY, Git, MCP/LSP, provider retries.
