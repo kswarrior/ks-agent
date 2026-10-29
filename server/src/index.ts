@@ -34,7 +34,16 @@ import { cleanRelative, resolveInProject } from './fsx.js'
 import type { AgentEvent, ProviderPublic } from './types.js'
 
 const app = new Hono()
-const activeRuns = new Map<string, AbortController>()
+
+interface RunState {
+  chatId: string
+  controller: AbortController
+  events: AgentEvent[]
+  done: boolean
+  startedAt: number
+}
+
+const runs = new Map<string, RunState>()
 
 function errorJson(message: string, status = 400) {
   return { error: message, status }
@@ -172,7 +181,9 @@ app.patch('/api/chats/:id', async (c) => {
 app.delete('/api/chats/:id', (c) => {
   const chat = getChat(c.req.param('id'))
   if (!chat) return c.json(errorJson('chat not found', 404), 404)
-  activeRuns.get(chat.id)?.abort()
+  const run = runs.get(chat.id)
+  if (run && !run.done) run.controller.abort()
+  runs.delete(chat.id)
   removeChat(chat.id)
   return c.json({ ok: true })
 })

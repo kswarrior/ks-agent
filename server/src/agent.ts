@@ -2,7 +2,7 @@ import os from 'node:os'
 import { config } from './config.js'
 import { insertMessage, listMessages } from './db.js'
 import { extensions } from './extensions.js'
-import { streamCompletion, type LLMMessage } from './llm.js'
+import { streamCompletion, type LLMMessage, type StreamResult } from './llm.js'
 import { BUILTIN_TOOL_NAMES, builtinToolDefs, executeBuiltinTool } from './tools.js'
 import type { AgentEvent, Chat, Message, ModelEntry, Project, Provider, ToolCall, ToolResult } from './types.js'
 
@@ -152,23 +152,49 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
       partial = ''
 
       const tools = [...builtinToolDefs, ...extensions.toolDefs()]
-      const result = await streamCompletion({
-        baseUrl: provider.baseUrl,
-        apiKey: provider.apiKey,
-        model: model.modelId,
-        messages,
-        tools,
-        signal,
-        callbacks: {
-          onContent: (text) => {
-            partial += text
-            void emit({ type: 'token', text }).catch(() => {})
-          },
-          onReasoning: (text) => {
-            void emit({ type: 'reasoning', text }).catch(() => {})
+      let result: StreamResult | null = null
+      for (let attempt = 0; ; attempt++) {
+        let outputStarted = false
+        partial = ''
+        try {
+          result = await streamCompletion({
+            baseUrl: provider.baseUrl,
+            apiKey: provider.apiKey,
+            model: model.modelId,
+            messages,
+            tools,
+            signal,
+            callbacks: {
+              onContent: (text) => {
+                outputStarted = true
+                partial += text
+                void emit({ type: 'token', text }).catch(() => {})
+              },
+              onReasoning: (text) => {
+                outputStarted = true
+                void emit({ type: 'reasoning', text }).catch(() => {})
+              }
+            }
+          })
+          break
+        } catch (error) {
+          if (
+            signal.aborted ||
+            outputStarted ||
+            attempt >= config.providerRetries ||
+            !isRetryableProviderError(error)
+          ) {
+            throw error
           }
+          const delay = Math.min(config.providerRetryDelayMs * 2 ** attempt, 10_000)
+          console.warn(
+            `[agent] provider error, retrying in ${delay}ms (${attempt + 1}/${config.providerRetries}):`,
+            error instanceof Error ? error.message : String(error)
+          )
+          await waitForRetry(delay, signal)
         }
-      })
+      }
+      if (!result) throw new Error('Provider returned no result')
 
       if (result.toolCalls.length) {
         const toolCalls: ToolCall[] = result.toolCalls.map((call, index) => ({
