@@ -155,3 +155,6 @@ extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
   phases with gray pending, yellow running and green complete dots. Agents can
   explore first and plan later, or plan immediately; plans are high-level phases
   such as explore, reproduce, fix, test and verify.
+- 2026-10-29: Stopped and error runs now expose a Continue action in the task
+  report (and error banner). It focuses the composer so the user can add
+  instructions and resume from the current chat context.
