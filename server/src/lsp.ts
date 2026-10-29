@@ -613,7 +613,7 @@ export class LspRegistry {
     if (!current || typeof current !== 'object') {
       throw new ConfigError(`Language server "${name}" was not found.`, 404)
     }
-    const merged = { ...asRecord(current), ...obj, name: key }
+    const merged: Record<string, unknown> = { ...asRecord(current), ...obj, name: key }
     validateLspInput(merged)
     const command = asString(merged.command).trim()
     if (!command || command.length > 2000) {
