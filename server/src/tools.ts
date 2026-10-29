@@ -255,6 +255,51 @@ export const builtinToolDefs: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'create_dir',
+      description: 'Create a directory (and parents) inside the project. Succeeds if it already exists.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Directory path relative to the project root' }
+        },
+        required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'copy_file',
+      description: 'Copy a file or directory inside the project. Fails if the destination exists unless overwrite is true.',
+      parameters: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', description: 'Source path relative to the project root' },
+          to: { type: 'string', description: 'Destination path relative to the project root' },
+          overwrite: { type: 'boolean', description: 'Replace an existing destination (default false)' }
+        },
+        required: ['from', 'to']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'append_file',
+      description: 'Append text to a file inside the project (creates it if missing, max 2 MB total). Use for logs or adding without reading the whole file.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'File path relative to the project root' },
+          content: { type: 'string', description: 'Text to append' }
+        },
+        required: ['path', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'run_shell',
       description:
         'Run a shell command inside the project directory. Use for installs, builds, tests, git, servers. Commands that escape the project or attack the host are rejected. Long output is truncated.',
@@ -292,6 +337,118 @@ export const builtinToolDefs: ToolDef[] = [
           }
         },
         required: ['title', 'steps']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_init',
+      description: 'Initialize a git repository in the project (if not already initialized) and set the initial branch.',
+      parameters: {
+        type: 'object',
+        properties: {
+          branch: { type: 'string', description: 'Initial branch name (default "main")' }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_status',
+      description: 'Show native git status for the project: branch, changed files and short diff stat.',
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_diff',
+      description: 'Show native git diff for the project (stat + capped unified diff). Supports staged, ref, a single file, or stat_only.',
+      parameters: {
+        type: 'object',
+        properties: {
+          staged: { type: 'boolean', description: 'Show staged (--staged) diff (default false)' },
+          ref: { type: 'string', description: 'Optional ref to diff against (branch or SHA)' },
+          file: { type: 'string', description: 'Optional single file relative to the project root' },
+          stat_only: { type: 'boolean', description: 'Only show --stat (default false)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_log',
+      description: 'Show recent native git commits (%h %ad %an %s).',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'integer', description: 'Commits to show 1-100 (default 20)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_branch',
+      description: 'List, create or checkout git branches in the project.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['list', 'create', 'checkout'], description: 'Action (default "list")' },
+          name: { type: 'string', description: 'Branch name for create/checkout' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_commit',
+      description: 'Stage files (all by default) and create a git commit in the project.',
+      parameters: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'Commit message (1-2000 chars)' },
+          files: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional relative files to stage (max 100); omit to stage all changes'
+          }
+        },
+        required: ['message']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_push',
+      description: 'Push the current branch to a git remote (never force-pushes).',
+      parameters: {
+        type: 'object',
+        properties: {
+          remote: { type: 'string', description: 'Remote name (default "origin")' },
+          branch: { type: 'string', description: 'Optional branch to push' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'git_pull',
+      description: 'Pull from a git remote with --ff-only (never creates merge commits).',
+      parameters: {
+        type: 'object',
+        properties: {
+          remote: { type: 'string', description: 'Remote name (default "origin")' },
+          branch: { type: 'string', description: 'Optional branch to pull' }
+        }
       }
     }
   }
