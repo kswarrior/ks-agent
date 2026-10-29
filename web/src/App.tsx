@@ -689,6 +689,8 @@ export default function App() {
           mcpServers={mcpServers}
           lspServers={lspServers}
           projects={projects}
+          models={models}
+          activeProjectId={activeProjectId}
           onClose={() => {
             setShowExtensions(false)
             if (activeChatId) void refreshChatExtensions(activeChatId)

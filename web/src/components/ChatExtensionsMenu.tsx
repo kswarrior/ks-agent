@@ -5,6 +5,7 @@ import type { ChatExtensionsState, ExtensionKind } from '../types'
 type Item = {
   kind: ExtensionKind
   name: string
+  label?: string
   detail?: string
   enabled: boolean
   warning?: boolean
@@ -13,6 +14,7 @@ type Item = {
 
 const KIND_LABEL: Record<ExtensionKind, string> = {
   skill: 'Skills',
+  knowledge: 'Knowledge',
   mcp: 'MCP servers',
   lsp: 'Language servers'
 }
@@ -40,6 +42,16 @@ export function ChatExtensionsMenu({
         kind: 'skill',
         name: skill.name,
         enabled: skill.enabled
+      }))
+    },
+    {
+      kind: 'knowledge' as const,
+      items: (extensions?.knowledge ?? []).map<Item>((entry) => ({
+        kind: 'knowledge',
+        name: entry.id,
+        label: entry.title,
+        detail: `${entry.scope === 'global' ? 'all projects' : 'this project'} · ${entry.source}`,
+        enabled: entry.enabled
       }))
     },
     {
@@ -147,7 +159,7 @@ export function ChatExtensionsMenu({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label="Chat tools"
-        title="Skills, MCP and LSP for this chat"
+        title="Skills, knowledge, MCP and LSP for this chat"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M4 6h16M4 12h16M4 18h16" />
@@ -188,7 +200,9 @@ export function ChatExtensionsMenu({
               <span className="muted small">Project-enabled only. Uncheck to disable in this chat.</span>
             </div>
             {total === 0 ? (
-              <div className="select-empty">No skills, MCP servers or language servers are enabled for this project.</div>
+              <div className="select-empty">
+                No skills, knowledge, MCP servers or language servers are enabled for this project.
+              </div>
             ) : (
               sections.map((section) =>
                 section.items.length ? (
@@ -204,7 +218,7 @@ export function ChatExtensionsMenu({
                             disabled={pending === key}
                             onChange={(event) => void toggle(item, event.target.checked)}
                           />
-                          <span className="chat-tools-name">{item.name}</span>
+                          <span className="chat-tools-name">{item.label ?? item.name}</span>
                           {item.detail && (
                             <span
                               className={`chat-tools-detail ${item.warning ? 'warn' : ''}`}
