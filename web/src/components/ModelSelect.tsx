@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ModelEntry } from '../types'
+import { SelectMenu } from './SelectMenu'
 
 export function ModelSelect({
   value,
@@ -73,6 +74,7 @@ export function ModelSelect({
     position()
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node
+      if (target instanceof Element && target.closest('.select-popup')) return
       if (!triggerRef.current?.contains(target) && !popupRef.current?.contains(target)) {
         setOpen(false)
       }
@@ -155,19 +157,17 @@ export function ModelSelect({
                 aria-label="Search models"
                 autoFocus
               />
-              <select
+              <SelectMenu
                 className="model-provider-select"
                 value={providerId}
-                onChange={(event) => setProviderId(event.target.value)}
-                aria-label="Filter by provider"
-              >
-                <option value="">All providers</option>
-                {providers.map((provider) => (
-                  <option value={provider.id} key={provider.id}>
-                    {provider.name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'All providers' },
+                  ...providers.map((provider) => ({ value: provider.id, label: provider.name }))
+                ]}
+                onChange={setProviderId}
+                placeholder="All providers"
+                ariaLabel="Filter by provider"
+              />
             </div>
 
             <div className="model-list">
