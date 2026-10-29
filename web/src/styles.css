@@ -861,34 +861,97 @@ code {
   height: 36px;
 }
 
-.settings-section {
-  margin-bottom: 26px;
-}
-
-.settings-section h3 {
-  margin: 0 0 4px;
-  font-size: 14px;
-}
-
-.settings-section > .muted {
-  margin: 0 0 10px;
-}
-
-.list {
+.settings-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
 }
 
-.list-row {
+.settings-tab {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.settings-tab:hover {
+  color: var(--text);
+}
+
+.settings-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.settings-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 11px;
+  margin-bottom: 12px;
+}
+
+.settings-toolbar h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.settings-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 12px;
   background: var(--bg-soft);
+}
+
+.settings-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-card-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.settings-subhead h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 /* ----------------------------------------------------------- extensions */
