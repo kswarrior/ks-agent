@@ -905,9 +905,9 @@ function KsAgent() {
     sendingRef.current.add(chatId)
     try {
       if (isPure) {
-        await api.continueChat(chatId, '', selectedModelId, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current, resolveThinking())
+        await api.continueChat(chatId, '', selectedModelId, 'solo', selectedContextModeRef.current, selectedMaxTokensRef.current, resolveThinking())
       } else {
-        await api.continueChat(chatId, extraContent, selectedModelId, selectedModeRef.current, selectedContextModeRef.current, selectedMaxTokensRef.current, resolveThinking())
+        await api.continueChat(chatId, extraContent, selectedModelId, 'solo', selectedContextModeRef.current, selectedMaxTokensRef.current, resolveThinking())
       }
       // For pure continue preserve plan/activities so AI picks up where it left off
       if (!isPure) {
@@ -1048,7 +1048,7 @@ function KsAgent() {
       const ctxMode = opts?.contextMode ?? selectedContextModeRef.current ?? 'qa'
       const tok = opts?.maxTokens !== undefined ? opts.maxTokens : selectedMaxTokensRef.current
       const thinking = opts?.thinking ?? resolveThinking()
-      await api.sendMessage(chatId, content, selectedModelId, selectedModeRef.current, ctxMode, tok, thinking)
+      await api.sendMessage(chatId, content, selectedModelId, 'solo', ctxMode, tok, thinking)
       // Reset plan + activities for this chat so the next prompt starts
       // fresh from Understand → Explore → Planning → Executing.
       // Without this, hasExplore stays true and old plan (done) makes UI
@@ -1203,8 +1203,6 @@ function KsAgent() {
             models={models}
             selectedModelId={selectedModelId}
             onSelectModel={setSelectedModelId}
-            selectedMode={selectedMode as any}
-            onSelectMode={setSelectedMode}
             selectedContextMode={selectedContextMode as any}
             onSelectContextMode={setSelectedContextMode}
             maxTokens={selectedMaxTokens}
