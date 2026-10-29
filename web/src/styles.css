@@ -1305,6 +1305,10 @@ code {
   white-space: nowrap;
 }
 
+.chat-tools-detail.warn {
+  color: var(--red);
+}
+
 .composer-model {
   flex: 0 1 240px;
   width: 240px;

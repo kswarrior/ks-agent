@@ -7,6 +7,8 @@ type Item = {
   name: string
   detail?: string
   enabled: boolean
+  warning?: boolean
+  title?: string
 }
 
 const KIND_LABEL: Record<ExtensionKind, string> = {
@@ -42,21 +44,39 @@ export function ChatExtensionsMenu({
     },
     {
       kind: 'mcp' as const,
-      items: (extensions?.mcpServers ?? []).map<Item>((server) => ({
-        kind: 'mcp',
-        name: server.name,
-        detail: `${server.transport} · ${server.tools.length} tool${server.tools.length === 1 ? '' : 's'}`,
-        enabled: server.enabled
-      }))
+      items: (extensions?.mcpServers ?? []).map<Item>((server) => {
+        const detail = `${server.transport} · ${server.tools.length} tool${server.tools.length === 1 ? '' : 's'}`
+        const unavailable = server.status === 'error'
+        return {
+          kind: 'mcp',
+          name: server.name,
+          detail: unavailable ? `${detail} · unavailable` : detail,
+          enabled: server.enabled,
+          warning: unavailable,
+          title: server.error
+        }
+      })
     },
     {
       kind: 'lsp' as const,
-      items: (extensions?.lspServers ?? []).map<Item>((server) => ({
-        kind: 'lsp',
-        name: server.name,
-        detail: server.extensions.join(', '),
-        enabled: server.enabled
-      }))
+      items: (extensions?.lspServers ?? []).map<Item>((server) => {
+        const status =
+          server.status === 'error'
+            ? ' · unavailable'
+            : server.status === 'ready'
+              ? ' · running'
+              : server.status === 'starting'
+                ? ' · starting'
+                : ''
+        return {
+          kind: 'lsp',
+          name: server.name,
+          detail: `${server.extensions.join(', ')}${status}`,
+          enabled: server.enabled,
+          warning: server.status === 'error',
+          title: server.error
+        }
+      })
     }
   ]
   const total = sections.reduce((sum, section) => sum + section.items.length, 0)
@@ -179,7 +199,14 @@ export function ChatExtensionsMenu({
                             onChange={(event) => void toggle(item, event.target.checked)}
                           />
                           <span className="chat-tools-name">{item.name}</span>
-                          {item.detail && <span className="chat-tools-detail">{item.detail}</span>}
+                          {item.detail && (
+                            <span
+                              className={`chat-tools-detail ${item.warning ? 'warn' : ''}`}
+                              title={item.title}
+                            >
+                              {item.detail}
+                            </span>
+                          )}
                         </label>
                       )
                     })}

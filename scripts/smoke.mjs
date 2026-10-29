@@ -195,6 +195,7 @@ function fail(message, detail) {
 
 let child = null
 let mock = null
+let lastProviderBody = null
 
 function cleanup() {
   if (child && child.exitCode === null) {
@@ -345,6 +346,7 @@ function startMockProvider() {
           res.end('bad json')
           return
         }
+        lastProviderBody = body
         const messages = Array.isArray(body.messages) ? body.messages : []
         const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
         const hasTool = (id) => messages.some((message) => message.role === 'tool' && message.tool_call_id === id)
@@ -368,6 +370,34 @@ function startMockProvider() {
             res.end()
           }, 5000)
           res.on('close', () => clearTimeout(timer))
+          return
+        }
+
+        if (lastUser.includes('inspect extensions') && !hasTool('call_extensions')) {
+          sse(res, {
+            choices: [
+              {
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'call_extensions',
+                      type: 'function',
+                      function: {
+                        name: 'list_chat_extensions',
+                        arguments: '{}'
+                      }
+                    }
+                  ]
+                },
+                finish_reason: null
+              }
+            ]
+          })
+          sse(res, { choices: [{ delta: {}, finish_reason: 'tool_calls' }] })
+          res.write('data: [DONE]\n\n')
+          res.end()
           return
         }
 
