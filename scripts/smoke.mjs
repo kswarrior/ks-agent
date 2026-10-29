@@ -771,6 +771,8 @@ async function main() {
   assert(unsafeCommand('cat ../secret', project.path), 'shell guard allowed traversal')
   assert(unsafeCommand('rm -rf /', project.path), 'shell guard allowed rm -rf /')
   assert(unsafeCommand('npm run build', project.path) === null, 'shell guard blocked a safe command')
+  const otherProject = await api('POST', '/api/projects', { name: 'smoke-other' })
+  assert(otherProject.id && otherProject.id !== project.id, 'second project was not created')
   console.log('PASS project create + path/shell guards')
 
   process.env.KS_DATA_DIR = path.join(temp, 'tool-data')
