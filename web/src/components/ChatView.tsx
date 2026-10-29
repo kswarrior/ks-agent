@@ -130,7 +130,7 @@ export function ChatView({
           </div>
         ) : (
           <div className="empty-state">
-            <div className="empty-mark">KS</div>
+            <Logo className="empty-mark" />
             <h1>Build anything, extend everything</h1>
             <p>Create a project in the sidebar, add a provider and model in Settings, then start chatting.</p>
           </div>
