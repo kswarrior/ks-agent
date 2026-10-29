@@ -321,6 +321,7 @@ export default function App() {
         if (!subscription.cancelled) {
           setStreaming(false)
           setLive(null)
+          setSummaryBusy(false)
           setMessagesLoading(false)
           try {
             const [list, savedSummary] = await Promise.all([
