@@ -1590,11 +1590,25 @@ async function main() {
     'knowledge edit was not persisted'
   )
 
+  await okTool('write_file', {
+    path: 'package.json',
+    content: JSON.stringify(
+      { name: 'smoke-summary', scripts: { build: 'vite build' }, dependencies: { react: '^18.0.0' } },
+      null,
+      2
+    )
+  })
   const projectSummary = await api('POST', `/api/projects/${project.id}/knowledge/summary`, {})
   assert(projectSummary.source === 'generated', 'project summary was not marked generated')
   assert(
     projectSummary.content.includes('## Overview') && projectSummary.content.includes('## Key Files'),
     `project summary is missing expected sections: ${projectSummary.content.slice(0, 300)}`
+  )
+  assert(
+    projectSummary.content.includes('npm run build') &&
+      projectSummary.content.includes('vite build') &&
+      projectSummary.content.includes('react'),
+    `project summary did not extract package metadata: ${projectSummary.content.slice(0, 600)}`
   )
   const regeneratedSummary = await api('POST', `/api/projects/${project.id}/knowledge/generate`, {})
   assert(regeneratedSummary.id === projectSummary.id, 'regenerating the project summary created a duplicate')
