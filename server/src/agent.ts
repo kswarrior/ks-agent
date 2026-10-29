@@ -2712,11 +2712,7 @@ export async function executeTool(name: string, argsJson: string, ctx: ToolConte
     }
 
     case 'delegate_task': {
-      const task = String((args as any).task ?? '').trim()
-      if (!task) return err('task is required (5-5000 chars)')
-      if (task.length < 5) return err('task too short (min 5)')
-      if (task.length > 5000) return err('task too long (max 5000)')
-      const modeRaw = String((args as any).mode ?? 'general').trim().toLowerCase()
+      return err('delegate_task removed (single-agent mode)')
       const allowed = new Set(['research','explore','fix','write','general'])
       const mode = allowed.has(modeRaw) ? modeRaw as any : 'general'
       const worktree = Boolean((args as any).worktree)
