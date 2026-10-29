@@ -398,7 +398,6 @@ export default function App() {
     setError(null)
     setLive({ content: '', reasoning: '', tools: [], step: 0 })
     setSteps([])
-    setMaxSteps(0)
     setStreaming(true)
 
     const optimistic: Message = {
