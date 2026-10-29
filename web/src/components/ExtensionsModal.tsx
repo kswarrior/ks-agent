@@ -10,21 +10,24 @@ import {
   reloadSkills
 } from '../api'
 import { copyText } from '../clipboard'
-import type { ExtensionInfo, LspServerInfo, McpServerInfo, Project, SkillInfo } from '../types'
+import type { ExtensionInfo, LspServerInfo, McpServerInfo, ModelEntry, Project, SkillInfo } from '../types'
 import { AddLspForm, AddMcpForm, AddSkillForm } from './ConfigForms'
+import { KnowledgePanel } from './KnowledgePanel'
 import { ConfirmModal, Modal } from './Modal'
 
-type ExtensionTab = 'extensions' | 'skills' | 'mcp' | 'lsp'
+type ExtensionTab = 'extensions' | 'skills' | 'knowledge' | 'mcp' | 'lsp'
+type ConfigTab = 'skills' | 'mcp' | 'lsp'
 type ExtensionView = 'list' | 'add'
 
 const TABS: { id: ExtensionTab; label: string }[] = [
   { id: 'extensions', label: 'Extensions' },
   { id: 'skills', label: 'Skills' },
+  { id: 'knowledge', label: 'Knowledge' },
   { id: 'mcp', label: 'MCP' },
   { id: 'lsp', label: 'LSP' }
 ]
 
-const TAB_EMPTY: Record<Exclude<ExtensionTab, 'extensions'>, { title: string; body: string }> = {
+const TAB_EMPTY: Record<ConfigTab, { title: string; body: string }> = {
   skills: {
     title: 'No skills found',
     body: 'Add a folder with a SKILL.md (name + description frontmatter) under .ks-agent/skills/, skills/ or .opencode/skills.'
@@ -42,6 +45,7 @@ const TAB_EMPTY: Record<Exclude<ExtensionTab, 'extensions'>, { title: string; bo
 const TAB_HINT: Record<ExtensionTab, string> = {
   extensions: 'Each extension runs in its own process and receives only the active project path.',
   skills: 'Skills are reusable instructions the agent loads on demand with use_skill.',
+  knowledge: 'User knowledge follows every project; project knowledge is specific to the active project.',
   mcp: 'MCP tools are exposed to the agent as mcp_<server>_<tool>.',
   lsp: 'Language servers are started on demand for the file being checked.'
 }
@@ -49,11 +53,12 @@ const TAB_HINT: Record<ExtensionTab, string> = {
 const TAB_BUTTON: Record<ExtensionTab, string> = {
   extensions: 'Reload extensions',
   skills: 'Reload skills',
+  knowledge: 'Refresh knowledge',
   mcp: 'Reload MCP servers',
   lsp: 'Reload language servers'
 }
 
-const ADD_BUTTON: Record<Exclude<ExtensionTab, 'extensions'>, string> = {
+const ADD_BUTTON: Record<ConfigTab, string> = {
   skills: 'Add skill',
   mcp: 'Add MCP server',
   lsp: 'Add language server'
@@ -94,6 +99,8 @@ export function ExtensionsModal({
   mcpServers,
   lspServers,
   projects,
+  models,
+  activeProjectId,
   onClose,
   onRefreshExtensions,
   onRefreshSkills,
@@ -105,6 +112,8 @@ export function ExtensionsModal({
   mcpServers: McpServerInfo[]
   lspServers: LspServerInfo[]
   projects: Project[]
+  models: ModelEntry[]
+  activeProjectId: string | null
   onClose: () => void
   onRefreshExtensions: () => Promise<void>
   onRefreshSkills: () => Promise<void>
@@ -117,15 +126,13 @@ export function ExtensionsModal({
   const [installing, setInstalling] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [confirmDelete, setConfirmDelete] = useState<{ kind: Exclude<ExtensionTab, 'extensions'>; name: string } | null>(
-    null
-  )
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: ConfigTab; name: string } | null>(null)
 
   const refreshTab = async (target: ExtensionTab) => {
     if (target === 'extensions') await onRefreshExtensions()
     else if (target === 'skills') await onRefreshSkills()
     else if (target === 'mcp') await onRefreshMcp()
-    else await onRefreshLsp()
+    else if (target === 'lsp') await onRefreshLsp()
   }
 
   const reload = async () => {
@@ -187,7 +194,7 @@ export function ExtensionsModal({
       footer={
         <>
           <span className="muted small">{TAB_HINT[tab]}</span>
-          {tab !== 'extensions' && view === 'list' && (
+          {tab !== 'extensions' && tab !== 'knowledge' && view === 'list' && (
             <button
               className="btn ghost"
               onClick={() => {
@@ -200,7 +207,7 @@ export function ExtensionsModal({
               {ADD_BUTTON[tab]}
             </button>
           )}
-          {view === 'list' && (
+          {view === 'list' && tab !== 'knowledge' && (
             <button className="btn primary" onClick={() => void reload()} disabled={busy}>
               {busy ? 'Working…' : TAB_BUTTON[tab]}
             </button>
@@ -266,6 +273,8 @@ export function ExtensionsModal({
           </div>
         </>
       )}
+
+      {tab === 'knowledge' && <KnowledgePanel projectId={activeProjectId} models={models} />}
 
       {tab === 'skills' &&
         (view === 'add' ? (
