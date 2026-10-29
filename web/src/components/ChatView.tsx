@@ -222,13 +222,16 @@ export function ChatView({
                 )
               }
               if (message.role === 'assistant') {
-                const calls = message.toolCalls ?? []
+                const calls = (message.toolCalls ?? []).filter((call) => call.function.name !== 'update_plan')
+                const hiddenOnly =
+                  !message.content &&
+                  calls.length === 0 &&
+                  (message.toolCalls?.length ?? 0) > 0
+                if (hiddenOnly) return null
                 return (
                   <div className="msg assistant" key={message.id}>
                     {message.content && <Markdown text={message.content} />}
-                    {calls
-                      .filter((call) => call.function.name !== 'update_plan')
-                      .map((call) => {
+                    {calls.map((call) => {
                       const result = toolResults.get(call.id)
                       return (
                         <ToolCard
