@@ -773,6 +773,11 @@ async function main() {
   await failTool('git_branch', { action: 'create', name: 'bad name' })
   console.log('PASS git tools (init/status/diff/log/branch/commit/push/pull + guards)')
 
+  fs.writeFileSync(
+    path.join(project.path, 'broken.ts'),
+    'export const value: number = 1\nconst wrong: string = value\n'
+  )
+
   const provider = await api('POST', '/api/providers', {
     name: 'mock',
     baseUrl: `http://127.0.0.1:${mockPort}/v1`,
@@ -822,6 +827,37 @@ async function main() {
     'extension did not write extension.txt'
   )
   console.log('PASS extension host + temp extension tool')
+
+  const skillRun = await sendMessage(chat.id, 'use the skill for this task', model.id)
+  const skillTool = skillRun.events.find((event) => event.type === 'tool_end' && event.call.name === 'use_skill')
+  assert(skillTool, 'agent did not call use_skill', skillRun.text.slice(0, 1500))
+  assert(
+    skillTool.result.ok === true && skillTool.result.output.includes('SKILL_OK'),
+    `smoke skill was not loaded: ${skillTool.result.output}`
+  )
+  console.log('PASS skill discovery + use_skill')
+
+  const mcpRun = await sendMessage(chat.id, 'use mcp to echo', model.id)
+  const mcpTool = mcpRun.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'mcp_mockmcp_echo'
+  )
+  assert(mcpTool, 'agent did not call mcp_mockmcp_echo', mcpRun.text.slice(0, 1500))
+  assert(
+    mcpTool.result.ok === true && mcpTool.result.output.includes('mcp-echo: hello-mcp'),
+    `mock MCP tool failed: ${mcpTool.result.output}`
+  )
+  console.log('PASS MCP stdio server + tool call')
+
+  const lspRun = await sendMessage(chat.id, 'check diagnostics', model.id)
+  const lspTool = lspRun.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'lsp_diagnostics'
+  )
+  assert(lspTool, 'agent did not call lsp_diagnostics', lspRun.text.slice(0, 1500))
+  assert(
+    lspTool.result.output.includes('Mock type error') && lspTool.result.output.includes('broken.ts:2'),
+    `mock LSP diagnostics missing: ${lspTool.result.output}`
+  )
+  console.log('PASS LSP diagnostics tool')
 
   const slowChat = await api('POST', `/api/projects/${project.id}/chats`, {
     title: 'slow chat',
