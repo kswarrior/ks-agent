@@ -432,6 +432,8 @@ async function main() {
   assert(byRegex.includes('src/utils/math.ts'), `find_files regex missed math.ts: ${byRegex}`)
   const byDir = await okTool('find_files', { query: 'utils', type: 'dir' })
   assert(byDir.includes('src/utils/'), `find_files dir search missed src/utils: ${byDir}`)
+  const byUpper = await okTool('find_files', { query: 'MATH.TS' })
+  assert(byUpper.includes('src/utils/math.ts'), `find_files case-insensitive search missed math.ts: ${byUpper}`)
   await failTool('find_files', { query: 'math', path: '../' })
   const tree = await okTool('tree', { path: '.', depth: 3 })
   assert(
@@ -463,6 +465,12 @@ async function main() {
   )
   await failTool('copy_file', { from: 'src/utils/math.ts', to: 'src/utils/math.copy.ts' })
   await okTool('copy_file', { from: 'src/utils/math.ts', to: 'src/utils/math.copy.ts', overwrite: true })
+  await okTool('copy_file', { from: 'src/utils', to: 'src/utils-copy' })
+  assert(
+    fs.readFileSync(path.join(project.path, 'src', 'utils-copy', 'math.ts'), 'utf8').includes('export const diff'),
+    'copy_file directory copy failed'
+  )
+  await okTool('delete_file', { path: 'src/utils-copy', recursive: true })
   const multi = await okTool('read_multiple_files', { paths: ['src/index.ts', 'docs/readme.md'] })
   assert(
     multi.includes('=== src/index.ts ===') && multi.includes('=== docs/readme.md ==='),
