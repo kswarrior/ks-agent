@@ -248,6 +248,7 @@ export function ExtensionsModal({
                     <div className="muted small" title={skill.path}>
                       {skill.path}
                     </div>
+                    <div className="muted small">Projects: {scopeLabel(skill.projects, projects)}</div>
                     <div className="extension-card-actions">
                       {skill.writable ? (
                         <button
@@ -271,6 +272,7 @@ export function ExtensionsModal({
       {tab === 'mcp' &&
         (view === 'add' ? (
           <AddMcpForm
+            projects={projects}
             onDone={async () => {
               await onRefreshMcp()
               setView('list')
@@ -308,6 +310,7 @@ export function ExtensionsModal({
                         ))}
                       </div>
                     )}
+                    <div className="muted small">Projects: {scopeLabel(server.projects, projects)}</div>
                     <div className="extension-card-actions">
                       <button
                         className="btn ghost small"
@@ -327,6 +330,7 @@ export function ExtensionsModal({
       {tab === 'lsp' &&
         (view === 'add' ? (
           <AddLspForm
+            projects={projects}
             onDone={async () => {
               await onRefreshLsp()
               setView('list')
@@ -362,6 +366,7 @@ export function ExtensionsModal({
                         ))}
                       </div>
                     )}
+                    <div className="muted small">Projects: {scopeLabel(server.projects, projects)}</div>
                     <div className="extension-card-actions">
                       <button
                         className="btn ghost small"
