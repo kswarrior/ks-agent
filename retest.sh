@@ -49,10 +49,15 @@ stop_agent() {
       kill_by_pattern KILL "node dist-server/index.js" || true
       sleep 0.5
     fi
-    [[ $stopped -eq 0 ]] && echo "Stopped KS Agent"
+    if [[ $stopped -eq 0 ]]; then
+      echo "Stopped KS Agent"
+    fi
     stopped=1
   fi
-  [[ $stopped -eq 0 ]] && echo "Nothing to stop"
+  if [[ $stopped -eq 0 ]]; then
+    echo "Nothing to stop"
+  fi
+  return 0
 }
 
 if [[ "${1:-}" == "stop" ]]; then
