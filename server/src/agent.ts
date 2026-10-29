@@ -1,6 +1,12 @@
 import os from 'node:os'
 import { config } from './config.js'
-import { insertMessage, listChatDisabled, listMessages } from './db.js'
+import {
+  getChatSummary,
+  insertMessage,
+  listChatDisabled,
+  listMessages,
+  saveChatSummary
+} from './db.js'
 import { describeFailure } from './errors.js'
 import { extensions } from './extensions.js'
 import { streamCompletion, type LLMMessage, type StreamResult } from './llm.js'
@@ -14,7 +20,18 @@ import { mcp } from './mcp.js'
 import { isProjectEnabled } from './scope.js'
 import { skills } from './skills.js'
 import { BUILTIN_TOOL_NAMES, builtinToolDefs, executeBuiltinTool } from './tools.js'
-import type { AgentEvent, Chat, Message, ModelEntry, Project, Provider, ToolCall, ToolDef, ToolResult } from './types.js'
+import type {
+  AgentEvent,
+  Chat,
+  ChatSummary,
+  Message,
+  ModelEntry,
+  Project,
+  Provider,
+  ToolCall,
+  ToolDef,
+  ToolResult
+} from './types.js'
 
 export interface RunAgentOptions {
   chat: Chat
@@ -198,18 +215,144 @@ function messageToLLM(message: Message): LLMMessage {
   return out
 }
 
-function trimHistory(system: LLMMessage, history: Message[]): LLMMessage[] {
-  const mapped = history.map(messageToLLM)
-  let start = 0
-  const charCount = () => mapped.slice(start).reduce((sum, msg) => sum + msg.content.length + 64, 0)
-  while (
-    mapped.length - start > config.maxHistoryMessages ||
-    charCount() > config.maxContextChars
-  ) {
-    start++
-    while (start < mapped.length && mapped[start].role === 'tool') start++
+const CONTEXT_CHARS_PER_TOKEN = 4
+const SUMMARY_TRIGGER_RATIO = 0.8
+const SUMMARY_TARGET_RATIO = 0.35
+const SUMMARY_MAX_TOKENS = 2000
+const MIN_CONTEXT_CHARS = 4000
+
+const SUMMARY_SYSTEM_PROMPT = `You maintain a rolling handoff summary for a coding agent conversation.
+
+Merge the previous summary with the new transcript. Keep facts that are still true, update anything that changed, and drop details that are no longer useful.
+
+Return the summary in exactly this format:
+
+## Objective
+One or two sentences describing the current goal.
+
+## Important Details
+- Constraints, decisions, commands, paths, versions, credentials names, errors and user preferences that matter.
+
+## Work State
+### Completed
+- Finished work, with verification that was run.
+
+### Active
+- Work currently in progress and the exact point reached.
+
+### Blocked
+- Current blockers, or "- None".
+
+## Next Move
+1. The immediate next concrete actions.
+
+## Relevant Files
+- Exact file paths and what they contain or need.
+
+Rules:
+- Preserve exact file paths, commands, identifiers and error messages.
+- Do not invent facts. If something is unknown, say so.
+- Do not include code blocks or long logs.
+- Keep the summary concise: aim for 300-800 words.`
+
+function llmMessageChars(message: LLMMessage): number {
+  const calls = message.tool_calls ? JSON.stringify(message.tool_calls).length : 0
+  return message.content.length + calls + (message.tool_call_id?.length ?? 0) + 16
+}
+
+function groupHistory(history: Message[]): Message[][] {
+  const groups: Message[][] = []
+  for (let index = 0; index < history.length; index++) {
+    const message = history[index]
+    if (message.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0) {
+      const group = [message]
+      let next = index + 1
+      while (next < history.length && history[next].role === 'tool') {
+        group.push(history[next])
+        next++
+      }
+      groups.push(group)
+      index = next - 1
+      continue
+    }
+    if (message.role === 'tool' && groups.length > 0) {
+      groups[groups.length - 1].push(message)
+      continue
+    }
+    groups.push([message])
   }
-  return [system, ...mapped.slice(start)]
+  return groups
+}
+
+function groupChars(group: Message[]): number {
+  return group.reduce((sum, message) => sum + llmMessageChars(messageToLLM(message)), 0)
+}
+
+function historyAfterSummary(history: Message[], summary: ChatSummary | null): Message[] {
+  if (!summary) return history
+  const index = history.findIndex((message) => message.id === summary.coveredMessageId)
+  return index >= 0 ? history.slice(index + 1) : history
+}
+
+function systemWithSummary(system: LLMMessage, summary: ChatSummary | null): LLMMessage {
+  if (!summary) return system
+  return {
+    role: 'system',
+    content: `${system.content}
+
+## Conversation summary (older messages; authoritative handoff)
+${summary.summary}`
+  }
+}
+
+function contextChars(system: LLMMessage, groups: Message[][]): number {
+  return groups.reduce((sum, group) => sum + groupChars(group), llmMessageChars(system))
+}
+
+function trimHistory(system: LLMMessage, history: Message[], maxChars: number): LLMMessage[] {
+  const groups = groupHistory(history)
+  let start = 0
+  let chars = contextChars(system, groups)
+  let count = history.length
+  while (
+    start < groups.length - 1 &&
+    (count > config.maxHistoryMessages || chars > maxChars)
+  ) {
+    chars -= groupChars(groups[start])
+    count -= groups[start].length
+    start++
+  }
+  return [system, ...groups.slice(start).flatMap((group) => group.map(messageToLLM))]
+}
+
+function summarizeTranscript(group: Message[], maxChars: number, maxMessageChars: number): string {
+  const lines: string[] = []
+  let used = 0
+  for (const message of group) {
+    const parts: string[] = []
+    if (message.role === 'assistant') {
+      if (message.content) parts.push(message.content)
+      for (const call of message.toolCalls ?? []) {
+        parts.push(`tool call ${call.function.name}: ${call.function.arguments}`)
+      }
+    } else if (message.role === 'tool') {
+      parts.push(`tool result${message.toolCallId ? ` (${message.toolCallId})` : ''}: ${message.content}`)
+    } else {
+      parts.push(message.content)
+    }
+    let text = parts.filter(Boolean).join('\n') || '(empty)'
+    if (text.length > maxMessageChars) text = `${text.slice(0, maxMessageChars)}\n[...truncated]`
+    const label = message.role.toUpperCase()
+    const line = `${label}: ${text}`
+    if (used + line.length > maxChars) {
+      const remaining = maxChars - used
+      if (remaining > 200) lines.push(`${line.slice(0, remaining)}\n[...truncated]`)
+      break
+    }
+    lines.push(line)
+    used += line.length + 2
+  }
+  return lines.join('\n\n')
 }
 
 function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
