@@ -182,8 +182,26 @@ export function SettingsModal({
   }
 
   const back = () => {
+    setError(null)
+    if (view === 'add-provider') {
+      setView('provider-picker')
+      return
+    }
+    setView('list')
+  }
+
+  const cancel = () => {
     setView('list')
     setError(null)
+  }
+
+  const chooseProvider = (preset: ProviderPreset) => {
+    setSelectedPresetId(preset.id)
+    setProviderName(preset.id === 'custom' ? '' : preset.name)
+    setBaseUrl(preset.baseUrl)
+    setApiKey('')
+    setError(null)
+    setView('add-provider')
   }
 
   const addProvider = (
@@ -194,22 +212,24 @@ export function SettingsModal({
         void run(async () => {
           await createProvider({ name: providerName, baseUrl, apiKey })
           setProviderName('')
+          setBaseUrl('')
           setApiKey('')
           setView('list')
         })
       }}
     >
       <p className="muted">
-        Any OpenAI-compatible endpoint works. For Ollama use <code>http://localhost:11434/v1</code> and leave the key
-        empty. Keys stay in SQLite on the server and are never returned to the browser.
+        {isLocalEndpoint
+          ? 'Local endpoints usually need no API key. Keys stay in SQLite on the server and are never returned to the browser.'
+          : 'Any OpenAI-compatible endpoint works. Keys stay in SQLite on the server and are never returned to the browser.'}
       </p>
       <label className="field">
         <span>Name</span>
         <input
           value={providerName}
           onChange={(event) => setProviderName(event.target.value)}
-          placeholder="OpenAI"
-          autoFocus
+          placeholder={selectedPreset.id === 'custom' ? 'My provider' : selectedPreset.name}
+          autoFocus={selectedPreset.id === 'custom'}
         />
       </label>
       <label className="field">
@@ -217,7 +237,7 @@ export function SettingsModal({
         <input
           value={baseUrl}
           onChange={(event) => setBaseUrl(event.target.value)}
-          placeholder="https://api.openai.com/v1"
+          placeholder={selectedPreset.baseUrl || 'https://api.example.com/v1'}
         />
       </label>
       <label className="field">
@@ -225,20 +245,50 @@ export function SettingsModal({
         <input
           value={apiKey}
           onChange={(event) => setApiKey(event.target.value)}
-          placeholder="sk-…"
+          placeholder={isLocalEndpoint ? 'No key needed for local endpoints' : 'sk-…'}
           type="password"
           autoComplete="off"
+          autoFocus={selectedPreset.id !== 'custom'}
         />
       </label>
       <div className="settings-form-actions">
-        <button type="button" className="btn ghost" onClick={back}>
+        <button type="button" className="btn ghost" onClick={cancel}>
           Cancel
         </button>
-        <button className="btn primary" type="submit" disabled={busy || !providerName.trim()}>
+        <button
+          className="btn primary"
+          type="submit"
+          disabled={busy || !providerName.trim() || !/^https?:\/\//i.test(baseUrl.trim())}
+        >
           Add provider
         </button>
       </div>
     </form>
+  )
+
+  const providerPicker = (
+    <>
+      <p className="muted">Pick a provider to prefill its API endpoint, or choose Custom for any OpenAI-compatible API.</p>
+      <div className="provider-preset-grid">
+        {PROVIDER_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            className={`provider-preset ${preset.id === 'custom' ? 'custom' : ''}`}
+            onClick={() => chooseProvider(preset)}
+          >
+            <span className="provider-preset-mark" aria-hidden="true">
+              {preset.mark}
+            </span>
+            <span className="provider-preset-text">
+              <strong>{preset.name}</strong>
+              <span>{preset.hint}</span>
+              <code>{preset.baseUrl || 'Custom endpoint'}</code>
+            </span>
+          </button>
+        ))}
+      </div>
+    </>
   )
 
   const addModel = (
@@ -327,15 +377,23 @@ export function SettingsModal({
             <button className="icon-btn" onClick={back} aria-label="Back">
               ←
             </button>
-            <h3>{view === 'add-provider' ? 'Add provider' : 'Add model'}</h3>
+            <h3>
+              {view === 'provider-picker'
+                ? 'Add provider'
+                : view === 'add-provider'
+                  ? selectedPreset.id === 'custom'
+                    ? 'Custom provider'
+                    : `Add ${selectedPreset.name}`
+                  : 'Add model'}
+            </h3>
           </div>
-          {view === 'add-provider' ? addProvider : addModel}
+          {view === 'provider-picker' ? providerPicker : view === 'add-provider' ? addProvider : addModel}
         </>
       ) : tab === 'providers' ? (
         <>
           <div className="settings-toolbar">
             <h3>Providers</h3>
-            <button className="btn primary small" onClick={() => setView('add-provider')}>
+            <button className="btn primary small" onClick={() => setView('provider-picker')}>
               + Add
             </button>
           </div>
