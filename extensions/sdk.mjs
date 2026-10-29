@@ -36,8 +36,6 @@ export function serve(handlers) {
       } else if (method === 'tools/list') {
         result = { tools: handlers.tools ?? [] }
       } else if (method === 'tools/call') {
-        const tool = (handlers.tools ?? []).find((entry) => entry.name === params.name)
-        if (!tool) throw new Error(`unknown tool: ${params.name}`)
         if (!handlers.call) throw new Error('extension does not implement tools/call')
         result = await handlers.call(params.name, params.arguments ?? {}, params)
       } else if (method === 'hook') {
