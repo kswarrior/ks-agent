@@ -119,6 +119,7 @@ function sse(res, payload) {
 
 function startMockProvider() {
   return new Promise((resolve) => {
+    let retryAttempts = 0
     mock = http.createServer((req, res) => {
       if (!req.url?.endsWith('/chat/completions')) {
         res.writeHead(404)
@@ -141,6 +142,11 @@ function startMockProvider() {
         const messages = Array.isArray(body.messages) ? body.messages : []
         const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
         const hasTool = (id) => messages.some((message) => message.role === 'tool' && message.tool_call_id === id)
+        if (lastUser.includes('retry') && retryAttempts++ === 0) {
+          res.writeHead(500, { 'content-type': 'text/plain' })
+          res.end('temporary provider failure')
+          return
+        }
         res.writeHead(200, {
           'content-type': 'text/event-stream',
           'cache-control': 'no-cache',
@@ -269,7 +275,12 @@ async function sendMessage(chatId, content, modelId) {
     const text = await res.text()
     throw new Error(`send message -> ${res.status}: ${text.slice(0, 500)}`)
   }
-  return readEvents(res)
+  const eventsRes = await fetch(`http://127.0.0.1:${serverPort}/api/chats/${chatId}/events`)
+  if (!eventsRes.ok) {
+    const text = await eventsRes.text()
+    throw new Error(`subscribe events -> ${eventsRes.status}: ${text.slice(0, 500)}`)
+  }
+  return readEvents(eventsRes)
 }
 
 function callExtension(dir, tool, args, projectPath) {
@@ -411,6 +422,11 @@ async function main() {
   const hello = fs.readFileSync(path.join(project.path, 'hello.txt'), 'utf8')
   assert(hello === 'hello from smoke', `unexpected hello.txt content: ${hello}`)
   console.log('PASS agent loop + built-in tool + persistence')
+
+  const retried = await sendMessage(chat.id, 'retry after a provider error', model.id)
+  assert(!retried.events.some((event) => event.type === 'error'), 'provider retry did not recover')
+  assert(retried.events.some((event) => event.type === 'done'), 'provider retry did not finish')
+  console.log('PASS provider retry')
 
   const second = await sendMessage(chat.id, 'write a note with the extension', model.id)
   const extensionTool = second.events.find(

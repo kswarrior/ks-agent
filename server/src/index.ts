@@ -254,7 +254,10 @@ app.post('/api/chats/:id/messages', async (c) => {
     })
     .finally(() => {
       run.done = true
-      if (runs.get(chat.id) === run) runs.delete(chat.id)
+      const timer = setTimeout(() => {
+        if (runs.get(chat.id) === run) runs.delete(chat.id)
+      }, 5 * 60_000)
+      timer.unref()
     })
 
   return c.json({ ok: true, chatId: chat.id }, 202)
