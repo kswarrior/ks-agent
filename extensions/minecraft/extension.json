@@ -1,0 +1,102 @@
+{
+  "name": "minecraft",
+  "version": "1.0.0",
+  "description": "Paper plugin scaffolding, server lifecycle, and mineflayer bot harness.",
+  "command": ["node", "index.mjs"],
+  "permissions": { "shell": true, "network": true, "projectWrite": true },
+  "timeoutMs": 900000,
+  "tools": [
+    {
+      "name": "plugin_scaffold",
+      "description": "Create a Paper/Spigot plugin Gradle project with a main class, command and plugin.yml.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Plugin folder relative to the project root (default \"plugin\")" },
+          "name": { "type": "string", "description": "Plugin name (default \"ExamplePlugin\")" },
+          "packageName": { "type": "string", "description": "Java package (default com.example.<name>)" },
+          "mcVersion": { "type": "string", "description": "Minecraft/Paper version (default 1.21.4)" },
+          "apiVersion": { "type": "string", "description": "plugin.yml api-version (default 1.21)" }
+        }
+      }
+    },
+    {
+      "name": "plugin_build",
+      "description": "Build the plugin with the Gradle wrapper (or gradle) and report the jar path.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Plugin folder relative to the project root (default \"plugin\")" }
+        }
+      }
+    },
+    {
+      "name": "server_start",
+      "description": "Start a Paper/Spigot server jar in the background with a log file and PID state.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Server folder relative to the project root (default \"server\")" },
+          "jar": { "type": "string", "description": "Server jar filename (default \"server.jar\")" },
+          "memoryMb": { "type": "integer", "description": "Java heap in MB (default 2048)" },
+          "eula": { "type": "boolean", "description": "Write eula=true (only if you accept the Minecraft EULA)" }
+        }
+      }
+    },
+    {
+      "name": "server_stop",
+      "description": "Stop the server started by this extension.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Server folder relative to the project root (default \"server\")" }
+        }
+      }
+    },
+    {
+      "name": "server_status",
+      "description": "Check server process state and show the last log lines.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Server folder relative to the project root (default \"server\")" }
+        }
+      }
+    },
+    {
+      "name": "bot_install",
+      "description": "Install mineflayer in the bot folder.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Bot folder relative to the project root (default \"bot\")" }
+        }
+      }
+    },
+    {
+      "name": "bot_harness",
+      "description": "Write a mineflayer test bot that connects, spawns, and disconnects after a few seconds.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Bot folder relative to the project root (default \"bot\")" },
+          "host": { "type": "string", "description": "Server host (default 127.0.0.1)" },
+          "port": { "type": "integer", "description": "Server port (default 25565)" },
+          "username": { "type": "string", "description": "Bot username (default KS_Bot)" },
+          "version": { "type": "string", "description": "Protocol version, e.g. 1.21.4 (default auto)" }
+        }
+      }
+    },
+    {
+      "name": "bot_run",
+      "description": "Run the generated mineflayer bot for a few seconds and return its output.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Bot folder relative to the project root (default \"bot\")" },
+          "timeoutMs": { "type": "integer", "description": "Max run time (default 20000)" }
+        }
+      }
+    }
+  ]
+}
