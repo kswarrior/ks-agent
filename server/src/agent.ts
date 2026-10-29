@@ -222,12 +222,6 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
           })
           const started = Date.now()
           const toolResult = await executeTool(call.function.name, args, project, signal)
-          await emit({
-            type: 'tool_end',
-            call: { id: call.id, name: call.function.name, arguments: call.function.arguments },
-            result: { ok: toolResult.ok, output: toolResult.output },
-            durationMs: Date.now() - started
-          })
           insertMessage({
             chatId: chat.id,
             role: 'tool',
@@ -238,6 +232,12 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
             role: 'tool',
             content: toolResult.output,
             tool_call_id: call.id
+          })
+          await emit({
+            type: 'tool_end',
+            call: { id: call.id, name: call.function.name, arguments: call.function.arguments },
+            result: { ok: toolResult.ok, output: toolResult.output },
+            durationMs: Date.now() - started
           })
         }
 
