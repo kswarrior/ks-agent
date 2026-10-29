@@ -649,26 +649,41 @@ code {
 }
 
 .tool-status {
-  display: grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 9px;
+  height: 9px;
+  flex: none;
   border-radius: 50%;
-  font-size: 10px;
-  background: var(--bg-hover);
-  color: var(--muted);
+  background: var(--muted);
 }
 
 .tool-card.running .tool-status {
-  color: var(--amber);
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(240, 179, 91, 0.14);
+  animation: tool-pulse 1.1s ease-in-out infinite;
 }
 
 .tool-card.done .tool-status {
-  color: var(--green);
+  background: var(--green);
 }
 
 .tool-card.failed .tool-status {
-  color: var(--red);
+  background: var(--red);
+}
+
+@keyframes tool-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-card.running .tool-status {
+    animation: none;
+  }
 }
 
 .tool-name {

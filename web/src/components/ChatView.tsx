@@ -30,7 +30,12 @@ function ToolCard({
   return (
     <details className={`tool-card ${running ? 'running' : ok === false ? 'failed' : 'done'}`}>
       <summary>
-        <span className="tool-status">{running ? '•' : ok === false ? '!' : '✓'}</span>
+        <span
+          className="tool-status"
+          role="img"
+          aria-label={running ? 'running' : ok === false ? 'failed' : 'done'}
+          title={running ? 'Running' : ok === false ? 'Failed' : 'Done'}
+        />
         <span className="tool-name">{name}</span>
         {typeof durationMs === 'number' && <span className="tool-time">{durationMs} ms</span>}
       </summary>
