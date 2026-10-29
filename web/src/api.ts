@@ -5,6 +5,7 @@ import type {
   ChatSummary,
   ExtensionInfo,
   ExtensionKind,
+  KnowledgeEntry,
   LspServerInfo,
   McpServerInfo,
   Message,
@@ -65,6 +66,30 @@ export const saveChatSummary = (chatId: string, summary: string) =>
 export const deleteChatSummary = (chatId: string) =>
   req<{ ok: true }>(`/api/chats/${chatId}/summary`, { method: 'DELETE' })
 export const stopChat = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/stop`, { method: 'POST' })
+
+export const listGlobalKnowledge = () => req<KnowledgeEntry[]>('/api/knowledge')
+export const listProjectKnowledge = (projectId: string) =>
+  req<KnowledgeEntry[]>(`/api/projects/${projectId}/knowledge`)
+export const createGlobalKnowledge = (body: {
+  title: string
+  content: string
+  enabled?: boolean
+}) => req<KnowledgeEntry>('/api/knowledge', json('POST', { ...body, scope: 'global' }))
+export const createProjectKnowledge = (
+  projectId: string,
+  body: { title: string; content: string; enabled?: boolean }
+) => req<KnowledgeEntry>(`/api/projects/${projectId}/knowledge`, json('POST', body))
+export const updateKnowledge = (
+  id: string,
+  body: { title?: string; content?: string; enabled?: boolean }
+) => req<KnowledgeEntry>(`/api/knowledge/${encodeURIComponent(id)}`, json('PATCH', body))
+export const deleteKnowledge = (id: string) =>
+  req<{ ok: true }>(`/api/knowledge/${encodeURIComponent(id)}`, { method: 'DELETE' })
+export const generateProjectKnowledge = (projectId: string, modelId?: string) =>
+  req<KnowledgeEntry>(
+    `/api/projects/${projectId}/knowledge/summary`,
+    json('POST', modelId ? { modelId } : {})
+  )
 
 export const startChatRun = (chatId: string, content: string, modelId: string) =>
   req<{ ok: true; chatId: string; title?: string }>(`/api/chats/${chatId}/messages`, json('POST', { content, modelId }))

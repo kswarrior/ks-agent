@@ -677,6 +677,12 @@ app.post('/api/knowledge', async (c) => {
   return c.json(entry, 201)
 })
 
+app.get('/api/projects/:id/knowledge', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  return c.json(listProjectKnowledge(project.id))
+})
+
 app.post('/api/projects/:id/knowledge', async (c) => {
   const project = getProject(c.req.param('id'))
   if (!project) return c.json(errorJson('project not found', 404), 404)
