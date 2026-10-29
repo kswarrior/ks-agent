@@ -151,7 +151,7 @@ process.stdin.on('data', (chunk) => {
     }
     if (message.method === 'initialize' && message.id !== undefined) {
       send({ jsonrpc: '2.0', id: message.id, result: { capabilities: { textDocumentSync: 1 } } })
-    } else if (message.method === 'textDocument/didOpen') {
+    } else if (message.method === 'textDocument/didOpen' || message.method === 'textDocument/didChange') {
       send({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri: message.params.textDocument.uri, diagnostics: [{ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 10 } }, severity: 1, source: 'mock-lsp', message: 'Mock type error' }] } })
     } else if (message.method === 'shutdown' && message.id !== undefined) {
       send({ jsonrpc: '2.0', id: message.id, result: null })
@@ -420,6 +420,34 @@ function startMockProvider() {
                       function: {
                         name: mcpCall.name,
                         arguments: JSON.stringify({ text: mcpCall.text })
+                      }
+                    }
+                  ]
+                },
+                finish_reason: null
+              }
+            ]
+          })
+          sse(res, { choices: [{ delta: {}, finish_reason: 'tool_calls' }] })
+          res.write('data: [DONE]\n\n')
+          res.end()
+          return
+        }
+
+        if (lastUser.includes('diagnostics again') && !hasTool('call_lsp_again')) {
+          sse(res, {
+            choices: [
+              {
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'call_lsp_again',
+                      type: 'function',
+                      function: {
+                        name: 'lsp_diagnostics',
+                        arguments: JSON.stringify({ path: 'broken.ts' })
                       }
                     }
                   ]

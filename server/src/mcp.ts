@@ -588,12 +588,32 @@ class HttpMcpClient extends BaseMcpClient {
           }
         }
       } finally {
+        clearTimeout(timer)
         eventName = ''
       }
-      throw new Error('MCP stream ended without a response')
+      throw new Error(
+        timedOut
+          ? `MCP response timed out after ${Math.round(timeoutMs / 1000)}s`
+          : 'MCP stream ended without a response'
+      )
     }
 
-    const text = await response.text()
+    const text = await new Promise<string>((resolveText, rejectText) => {
+      const timer = setTimeout(
+        () => rejectText(new Error(`MCP response timed out after ${Math.round(timeoutMs / 1000)}s`)),
+        timeoutMs
+      )
+      response.text().then(
+        (value) => {
+          clearTimeout(timer)
+          resolveText(value)
+        },
+        (error) => {
+          clearTimeout(timer)
+          rejectText(error instanceof Error ? error : new Error(String(error)))
+        }
+      )
+    })
     if (!text.trim()) throw new Error('MCP server returned an empty response')
     let parsed: unknown
     try {
@@ -634,7 +654,7 @@ class HttpMcpClient extends BaseMcpClient {
         throw new Error(`MCP HTTP request failed (${response.status}): ${(await response.text()).slice(0, 300)}`)
       }
       if (response.status === 202) throw new Error(`MCP server returned no response for ${method}`)
-      return this.readResponse(response, id)
+      return this.readResponse(response, id, timeoutMs)
     })()
   }
 
