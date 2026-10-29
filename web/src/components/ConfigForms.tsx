@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { createLspServer, createMcpServer, createSkill } from '../api'
+import type { Project } from '../types'
 
 type FormProps = {
+  projects: Project[]
   onDone: () => Promise<void>
   onCancel: () => void
 }
@@ -57,10 +59,58 @@ function FormHeader({ title, hint }: { title: string; hint: string }) {
   )
 }
 
-export function AddSkillForm({ onDone, onCancel }: FormProps) {
+function ProjectScopeField({
+  projects,
+  value,
+  onChange
+}: {
+  projects: Project[]
+  value: string[]
+  onChange: (projects: string[]) => void
+}) {
+  const toggle = (id: string) => {
+    if (value.length === 0) {
+      onChange([id])
+      return
+    }
+    onChange(value.includes(id) ? value.filter((projectId) => projectId !== id) : [...value, id])
+  }
+
+  return (
+    <div className="field">
+      <span>Projects</span>
+      <div className="scope-options">
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={value.length === 0}
+            onChange={() => onChange([])}
+          />
+          <span>All projects</span>
+        </label>
+        {projects.map((project) => (
+          <label className="check-row" key={project.id}>
+            <input
+              type="checkbox"
+              checked={value.includes(project.id)}
+              onChange={() => toggle(project.id)}
+            />
+            <span>{project.name}</span>
+          </label>
+        ))}
+      </div>
+      <span className="muted small">
+        Enable this {projects.length === 1 ? 'item' : 'item'} only for the selected projects, or keep All projects.
+      </span>
+    </div>
+  )
+}
+
+export function AddSkillForm({ projects, onDone, onCancel }: FormProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
+  const [projectIds, setProjectIds] = useState<string[]>([])
   const [overwrite, setOverwrite] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

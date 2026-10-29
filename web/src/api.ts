@@ -144,6 +144,7 @@ export const createMcpServer = (body: {
   env?: Record<string, string>
   url?: string
   headers?: Record<string, string>
+  projects?: string[]
 }) => req<McpServerInfo[]>('/api/mcp', json('POST', body))
 export const deleteMcpServer = (name: string) =>
   req<McpServerInfo[]>(`/api/mcp/${encodeURIComponent(name)}`, { method: 'DELETE' })
@@ -157,6 +158,7 @@ export const createLspServer = (body: {
   extensions: string[]
   languageId?: string
   env?: Record<string, string>
+  projects?: string[]
 }) => req<LspServerInfo[]>('/api/lsp', json('POST', body))
 export const deleteLspServer = (name: string) =>
   req<LspServerInfo[]>(`/api/lsp/${encodeURIComponent(name)}`, { method: 'DELETE' })
