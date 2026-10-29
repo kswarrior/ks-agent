@@ -29,6 +29,7 @@ import {
   setChatExtensionEnabled,
   touchChat,
   updateChat,
+  updateModelContext,
   updateProvider
 } from './db.js'
 import { describeFailure, errorStatus } from './errors.js'

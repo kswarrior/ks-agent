@@ -45,6 +45,7 @@ export interface ModelEntry {
   providerId: string
   name: string
   modelId: string
+  contextWindow: number
   createdAt: number
   providerName?: string
 }

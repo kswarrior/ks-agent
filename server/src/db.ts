@@ -76,6 +76,7 @@ function ensureColumn(table: string, column: string, definition: string): void {
 
 ensureColumn('messages', 'model_id', 'TEXT')
 ensureColumn('messages', 'duration_ms', 'INTEGER')
+ensureColumn('models', 'context_window', 'INTEGER NOT NULL DEFAULT 128000')
 
 export function newId(): string {
   return crypto.randomUUID()
@@ -95,7 +96,15 @@ type MessageRow = {
   created_at: number
 }
 type ProviderRow = { id: string; name: string; base_url: string; api_key: string; created_at: number }
-type ModelRow = { id: string; provider_id: string; name: string; model_id: string; created_at: number; provider_name?: string }
+type ModelRow = {
+  id: string
+  provider_id: string
+  name: string
+  model_id: string
+  context_window: number
+  created_at: number
+  provider_name?: string
+}
 
 const project = (r: ProjectRow): Project => ({ id: r.id, name: r.name, path: r.path, createdAt: r.created_at })
 const chat = (r: ChatRow): Chat => ({
@@ -129,6 +138,7 @@ const model = (r: ModelRow): ModelEntry => ({
   providerId: r.provider_id,
   name: r.name,
   modelId: r.model_id,
+  contextWindow: r.context_window ?? 128_000,
   createdAt: r.created_at,
   providerName: r.provider_name
 })
@@ -317,22 +327,28 @@ export function getModel(id: string): ModelEntry | null {
     .get(id) as ModelRow | undefined
   return row ? model(row) : null
 }
-export function insertModel(providerId: string, name: string, modelId: string): ModelEntry {
+export function insertModel(
+  providerId: string,
+  name: string,
+  modelId: string,
+  contextWindow = 128_000
+): ModelEntry {
   const row: ModelRow = {
     id: newId(),
     provider_id: providerId,
     name,
     model_id: modelId,
+    context_window: contextWindow,
     created_at: Date.now()
   }
-  db.prepare('INSERT INTO models (id, provider_id, name, model_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
-    row.id,
-    row.provider_id,
-    row.name,
-    row.model_id,
-    row.created_at
-  )
+  db.prepare(
+    'INSERT INTO models (id, provider_id, name, model_id, context_window, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(row.id, row.provider_id, row.name, row.model_id, row.context_window, row.created_at)
   return model(row)
+}
+export function updateModelContext(id: string, contextWindow: number): ModelEntry | null {
+  db.prepare('UPDATE models SET context_window = ? WHERE id = ?').run(contextWindow, id)
+  return getModel(id)
 }
 export function removeModel(id: string): void {
   db.prepare('DELETE FROM models WHERE id = ?').run(id)
