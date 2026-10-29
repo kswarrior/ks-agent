@@ -10,7 +10,125 @@ import { Modal } from './Modal'
 import { SelectMenu } from './SelectMenu'
 
 type SettingsTab = 'providers' | 'models'
-type SettingsView = 'list' | 'add-provider' | 'add-model'
+type SettingsView = 'list' | 'provider-picker' | 'add-provider' | 'add-model'
+
+type ProviderPreset = {
+  id: string
+  name: string
+  baseUrl: string
+  hint: string
+  mark: string
+}
+
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    hint: 'GPT and o-series models',
+    mark: 'AI'
+  },
+  {
+    id: 'google',
+    name: 'Google Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    hint: 'Gemini via the OpenAI-compatible API',
+    mark: 'G'
+  },
+  {
+    id: 'nvidia',
+    name: 'NVIDIA NIM',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    hint: 'Nemotron and hosted NIM models',
+    mark: 'N'
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com/v1',
+    hint: 'DeepSeek Chat and Reasoner',
+    mark: 'DS'
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    hint: 'Hundreds of models with one key',
+    mark: 'OR'
+  },
+  {
+    id: 'groq',
+    name: 'Groq',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    hint: 'Very fast inference',
+    mark: 'GQ'
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral AI',
+    baseUrl: 'https://api.mistral.ai/v1',
+    hint: 'Mistral and Codestral models',
+    mark: 'M'
+  },
+  {
+    id: 'xai',
+    name: 'xAI',
+    baseUrl: 'https://api.x.ai/v1',
+    hint: 'Grok models',
+    mark: 'X'
+  },
+  {
+    id: 'together',
+    name: 'Together AI',
+    baseUrl: 'https://api.together.xyz/v1',
+    hint: 'Open models at scale',
+    mark: 'T'
+  },
+  {
+    id: 'fireworks',
+    name: 'Fireworks AI',
+    baseUrl: 'https://api.fireworks.ai/inference/v1',
+    hint: 'Fast open-model inference',
+    mark: 'F'
+  },
+  {
+    id: 'cerebras',
+    name: 'Cerebras',
+    baseUrl: 'https://api.cerebras.ai/v1',
+    hint: 'Ultra-fast inference',
+    mark: 'C'
+  },
+  {
+    id: 'moonshot',
+    name: 'Moonshot (Kimi)',
+    baseUrl: 'https://api.moonshot.ai/v1',
+    hint: 'Kimi models',
+    mark: 'K'
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    hint: 'Local models · no key needed',
+    mark: 'OL'
+  },
+  {
+    id: 'lmstudio',
+    name: 'LM Studio',
+    baseUrl: 'http://localhost:1234/v1',
+    hint: 'Local models · no key needed',
+    mark: 'LM'
+  },
+  {
+    id: 'custom',
+    name: 'Custom',
+    baseUrl: '',
+    hint: 'Any OpenAI-compatible endpoint',
+    mark: '+'
+  }
+]
+
+const CUSTOM_PRESET = PROVIDER_PRESETS[PROVIDER_PRESETS.length - 1]
 
 export function SettingsModal({
   providers,
