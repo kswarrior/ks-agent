@@ -8,7 +8,7 @@ import {
   reloadMcpServers,
   reloadSkills
 } from '../api'
-import type { ExtensionInfo, LspServerInfo, McpServerInfo, SkillInfo } from '../types'
+import type { ExtensionInfo, LspServerInfo, McpServerInfo, Project, SkillInfo } from '../types'
 import { AddLspForm, AddMcpForm, AddSkillForm } from './ConfigForms'
 import { ConfirmModal, Modal } from './Modal'
 
@@ -57,11 +57,17 @@ const ADD_BUTTON: Record<Exclude<ExtensionTab, 'extensions'>, string> = {
   lsp: 'Add language server'
 }
 
+function scopeLabel(projectIds: string[], projects: Project[]): string {
+  if (projectIds.length === 0) return 'All projects'
+  return projectIds.map((id) => projects.find((project) => project.id === id)?.name ?? id).join(', ')
+}
+
 export function ExtensionsModal({
   extensions,
   skills,
   mcpServers,
   lspServers,
+  projects,
   onClose,
   onRefreshExtensions,
   onRefreshSkills,
@@ -72,6 +78,7 @@ export function ExtensionsModal({
   skills: SkillInfo[]
   mcpServers: McpServerInfo[]
   lspServers: LspServerInfo[]
+  projects: Project[]
   onClose: () => void
   onRefreshExtensions: () => Promise<void>
   onRefreshSkills: () => Promise<void>
@@ -215,6 +222,7 @@ export function ExtensionsModal({
       {tab === 'skills' &&
         (view === 'add' ? (
           <AddSkillForm
+            projects={projects}
             onDone={async () => {
               await onRefreshSkills()
               setView('list')

@@ -99,9 +99,7 @@ function ProjectScopeField({
           </label>
         ))}
       </div>
-      <span className="muted small">
-        Enable this {projects.length === 1 ? 'item' : 'item'} only for the selected projects, or keep All projects.
-      </span>
+      <span className="muted small">Leave All projects selected to enable it everywhere.</span>
     </div>
   )
 }
@@ -397,6 +395,7 @@ export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
           placeholder=".ts, .tsx, .js, .jsx"
         />
       </label>
+      <ProjectScopeField projects={projects} value={projectIds} onChange={setProjectIds} />
       <FormActions
         busy={busy}
         disabled={!name.trim() || !command.trim() || !extensions.trim()}
