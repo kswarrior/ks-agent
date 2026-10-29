@@ -82,6 +82,7 @@ docker run --rm --network none --memory=512m --cpus=1 -v <projectPath>:/workspac
 - Provider presets (OpenAI, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Moonshot, NVIDIA NIM, Ollama, LM Studio) + custom
 - Auto-titled chats, per-message model/duration footer, run reports attached to their own output
 - Chat header context meter (estimated used/window tokens) colored green, yellow or red by usage
+- Automatic context compaction: near the model window, older messages become an editable handoff summary and are no longer sent to the provider
 
 ## Agent config (`.ks-agent/`)
 

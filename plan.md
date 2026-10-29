@@ -424,3 +424,14 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   a model; existing databases migrate automatically). The header shows estimated
   used/window tokens and a percentage, colored green below 60%, yellow from 60%
   and red from 85%. Smoke covers the default, custom and invalid context window.
+- 2026-10-29: Added automatic context-window compaction. At 80% of the selected
+  model's context window, the agent summarizes the oldest message groups into a
+  persisted handoff summary (`## Objective`, `## Important Details`,
+  `## Work State`, `## Next Move`, `## Relevant Files`), groups assistant tool
+  calls with their tool results, stops sending covered messages, and continues
+  with the summary plus recent history. Summaries merge incrementally, are
+  exposed through `GET/PUT/DELETE /api/chats/:id/summary` and
+  `summary_start`/`summary`/`summary_error` SSE events, and can be edited or
+  removed from the chat. Failed summary calls fall back to `trimHistory`; the
+  context meter accounts for the cutoff. Smoke covers compaction, cutoff
+  filtering, persisted summaries and the summary API.
