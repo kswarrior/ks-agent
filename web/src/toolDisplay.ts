@@ -49,7 +49,7 @@ function trimRoot(rootPath: string): string {
 export function absolutePath(rootPath: string, file: string): string {
   const root = trimRoot(rootPath)
   const clean = file.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+/, '')
-  if (!clean) return root || '/'
+  if (!clean || clean === '.') return root || '/'
   if (root && clean.startsWith(`${root}/`)) return clean
   if (!root) return `/${clean}`
   return `${root}/${clean}`

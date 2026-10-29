@@ -1,16 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Chat, LiveState, Message, ModelEntry, Project, RunStep } from '../types'
-import { describeTool, parseToolArgs, toolLabel } from '../toolDisplay'
+import {
+  absolutePath,
+  argsString,
+  describeTool,
+  parseToolArgs,
+  shortenPath,
+  toolLabel
+} from '../toolDisplay'
 import { Markdown } from './Markdown'
 import { ModelSelect } from './ModelSelect'
 import { StepMenu } from './StepMenu'
 
-function formatArgs(raw: string): string {
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2)
-  } catch {
-    return raw
-  }
+const SPECIAL_ARG_KEYS = new Set(['path', 'old_string', 'new_string', 'content', 'command', 'pattern', 'from', 'to'])
+
+function splitLines(text: string): string[] {
+  return text.replace(/\r\n/g, '\n').split('\n')
+}
+
+function DiffLines({ lines, kind }: { lines: string[]; kind: 'add' | 'del' }) {
+  return (
+    <>
+      {lines.map((line, index) => (
+        <div className={`diff-line ${kind}`} key={`${kind}-${index}`}>
+          <span className="diff-sign">{kind === 'add' ? '+' : '-'}</span>
+          <span className="diff-text">{line || ' '}</span>
+        </div>
+      ))}
+    </>
+  )
+}
+
+function formatArgValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  return String(value)
 }
 
 function ToolCard({
@@ -19,7 +44,8 @@ function ToolCard({
   output,
   ok,
   durationMs,
-  running
+  running,
+  rootPath = ''
 }: {
   name: string
   args: string
@@ -27,9 +53,25 @@ function ToolCard({
   ok?: boolean
   durationMs?: number
   running?: boolean
+  rootPath?: string
 }) {
   const label = toolLabel(name, running)
-  const { primary, detail } = describeTool(name, parseToolArgs(args))
+  const parsedArgs = parseToolArgs(args)
+  const { primary, detail } = describeTool(name, parsedArgs, rootPath || undefined)
+  const rawPath = argsString(parsedArgs, 'path')
+  const rawFrom = argsString(parsedArgs, 'from')
+  const rawTo = argsString(parsedArgs, 'to')
+  const fullPath = rawPath ? (rootPath ? absolutePath(rootPath, rawPath) : detail) : ''
+  const fullFrom = rawFrom ? absolutePath(rootPath, rawFrom) : ''
+  const fullTo = rawTo ? absolutePath(rootPath, rawTo) : ''
+  const oldString = typeof parsedArgs.old_string === 'string' ? parsedArgs.old_string : ''
+  const newString = typeof parsedArgs.new_string === 'string' ? parsedArgs.new_string : ''
+  const content = typeof parsedArgs.content === 'string' ? parsedArgs.content : ''
+  const command = argsString(parsedArgs, 'command')
+  const pattern = argsString(parsedArgs, 'pattern')
+  const extraArgs = Object.entries(parsedArgs).filter(([key]) => !SPECIAL_ARG_KEYS.has(key))
+  const isMetadataResult = ['edit_file', 'write_file', 'delete_file', 'move_file'].includes(name)
+
   return (
     <details className={`tool-card ${running ? 'running' : ok === false ? 'failed' : 'done'}`}>
       <summary>
@@ -37,20 +79,94 @@ function ToolCard({
         {(primary || detail) && (
           <span className="tool-target" title={[primary, detail].filter(Boolean).join(' ')}>
             {primary && <span className="tool-target-name">{primary}</span>}
-            {detail && <span className="tool-target-path">{detail}</span>}
+            {detail && <span className="tool-target-path">{shortenPath(detail)}</span>}
           </span>
         )}
         {typeof durationMs === 'number' && <span className="tool-time">{durationMs} ms</span>}
       </summary>
       <div className="tool-body">
-        <div className="tool-label">arguments</div>
-        <pre>{formatArgs(args)}</pre>
-        {output !== undefined && (
+        {fullPath && (
+          <div className="tool-file-path" title={fullPath}>
+            {fullPath}
+          </div>
+        )}
+
+        {name === 'edit_file' && (oldString || newString) && (
+          <div className="tool-diff" role="group" aria-label="File changes">
+            {oldString && <DiffLines lines={splitLines(oldString)} kind="del" />}
+            {newString && <DiffLines lines={splitLines(newString)} kind="add" />}
+          </div>
+        )}
+
+        {name === 'write_file' && content && (
           <>
-            <div className="tool-label">result</div>
-            <pre>{output || '(empty)'}</pre>
+            <div className="tool-label">new content</div>
+            <div className="tool-diff" role="group" aria-label="New file content">
+              <DiffLines lines={splitLines(content)} kind="add" />
+            </div>
           </>
         )}
+
+        {name === 'delete_file' && fullPath && (
+          <div className="tool-diff" role="group" aria-label="Deleted file">
+            <div className="diff-line del">
+              <span className="diff-sign">-</span>
+              <span className="diff-text">{fullPath}</span>
+            </div>
+          </div>
+        )}
+
+        {name === 'move_file' && (fullFrom || fullTo) && (
+          <div className="tool-diff" role="group" aria-label="Moved file">
+            {fullFrom && (
+              <div className="diff-line del">
+                <span className="diff-sign">-</span>
+                <span className="diff-text">{fullFrom}</span>
+              </div>
+            )}
+            {fullTo && (
+              <div className="diff-line add">
+                <span className="diff-sign">+</span>
+                <span className="diff-text">{fullTo}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {name === 'run_shell' && command && (
+          <div className="tool-command">
+            <span className="tool-command-prompt">$</span>
+            <code>{command}</code>
+          </div>
+        )}
+
+        {(name === 'grep' || name === 'glob') && pattern && (
+          <div className="tool-arg-row">
+            <span className="tool-arg-key">pattern</span>
+            <code className="tool-inline-code">{pattern}</code>
+          </div>
+        )}
+
+        {extraArgs.length > 0 && (
+          <div className="tool-args">
+            {extraArgs.map(([key, value]) => (
+              <div className="tool-arg-row" key={key}>
+                <span className="tool-arg-key">{key}</span>
+                <span className="tool-arg-value">{formatArgValue(value)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {output !== undefined &&
+          (isMetadataResult ? (
+            <div className={`tool-note ${ok === false ? 'error' : 'ok'}`}>{output || '(empty)'}</div>
+          ) : (
+            <>
+              <div className="tool-label">output</div>
+              <pre className={`tool-output ${ok === false ? 'error' : ''}`}>{output || '(empty)'}</pre>
+            </>
+          ))}
       </div>
     </details>
   )
@@ -249,6 +365,7 @@ export function ChatView({
                           args={call.function.arguments}
                           output={result?.content}
                           ok={result ? true : undefined}
+                          rootPath={project.path}
                         />
                       )
                     })}
@@ -289,6 +406,7 @@ export function ChatView({
                     ok={tool.status === 'running' ? undefined : tool.status === 'ok'}
                     durationMs={tool.durationMs}
                     running={tool.status === 'running'}
+                    rootPath={project.path}
                   />
                 ))}
                 {streaming && (
