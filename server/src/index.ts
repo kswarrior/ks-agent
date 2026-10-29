@@ -459,9 +459,7 @@ function projectDataMessages(project: { id: string } | null | undefined, chatId:
 
 type AgentMode = 'solo' | 'swarm' | 'hive' | 'squad' | 'infinity'
 
-function parseAgentMode(raw: unknown): AgentMode {
-  const v = String(raw ?? 'solo').trim().toLowerCase()
-  if (v === 'swarm' || v === 'hive' || v === 'squad' || v === 'infinity' || v === 'solo') return v
+function parseAgentMode(_raw: unknown): AgentMode {
   return 'solo'
 }
 
