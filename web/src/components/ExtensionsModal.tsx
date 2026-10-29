@@ -228,6 +228,7 @@ export function ExtensionsModal({
             <button
               className="btn ghost"
               onClick={() => {
+                setEditTarget(null)
                 setView('add')
                 setError(null)
                 setNotice(null)
@@ -317,6 +318,20 @@ export function ExtensionsModal({
             }}
             onCancel={() => setView('list')}
           />
+        ) : view === 'edit' && editTarget?.kind === 'skills' ? (
+          <EditSkillForm
+            name={editTarget.name}
+            projects={projects}
+            onDone={async () => {
+              await onRefreshSkills()
+              setEditTarget(null)
+              setView('list')
+            }}
+            onCancel={() => {
+              setEditTarget(null)
+              setView('list')
+            }}
+          />
         ) : (
           <>
             {skills.length === 0 ? (
@@ -339,13 +354,27 @@ export function ExtensionsModal({
                     <div className="muted small">Projects: {scopeLabel(skill.projects, projects)}</div>
                     <div className="extension-card-actions">
                       {skill.writable ? (
-                        <button
-                          className="btn ghost small"
-                          onClick={() => setConfirmDelete({ kind: 'skills', name: skill.name })}
-                          disabled={busy}
-                        >
-                          Delete
-                        </button>
+                        <>
+                          <button
+                            className="btn ghost small"
+                            onClick={() => {
+                              setEditTarget({ kind: 'skills', name: skill.name })
+                              setView('edit')
+                              setError(null)
+                              setNotice(null)
+                            }}
+                            disabled={busy}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn ghost small danger"
+                            onClick={() => setConfirmDelete({ kind: 'skills', name: skill.name })}
+                            disabled={busy}
+                          >
+                            Delete
+                          </button>
+                        </>
                       ) : (
                         <span className="muted small">Read-only (override it to edit)</span>
                       )}
@@ -366,6 +395,28 @@ export function ExtensionsModal({
               setView('list')
             }}
             onCancel={() => setView('list')}
+            onError={(message) => {
+              setError(message)
+              setNotice(null)
+            }}
+          />
+        ) : view === 'edit' && editTarget?.kind === 'mcp' ? (
+          <EditMcpForm
+            name={editTarget.name}
+            projects={projects}
+            onDone={async () => {
+              await onRefreshMcp()
+              setEditTarget(null)
+              setView('list')
+            }}
+            onCancel={() => {
+              setEditTarget(null)
+              setView('list')
+            }}
+            onError={(message) => {
+              setError(message)
+              setNotice(null)
+            }}
           />
         ) : (
           <>
@@ -398,12 +449,45 @@ export function ExtensionsModal({
                         ))}
                       </div>
                     )}
+                    {server.installCommand && <InstallCommand command={server.installCommand} />}
                     <div className="muted small">Projects: {scopeLabel(server.projects, projects)}</div>
                     <div className="extension-card-actions">
                       <button
                         className="btn ghost small"
+                        onClick={() => {
+                          setEditTarget({ kind: 'mcp', name: server.name })
+                          setView('edit')
+                          setError(null)
+                          setNotice(null)
+                        }}
+                        disabled={busy || installing !== null}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn small"
+                        onClick={() => void installMcp(server.name, false)}
+                        disabled={busy || installing !== null || !server.installCommand}
+                        title={
+                          server.installCommand
+                            ? `Run: ${server.installCommand}`
+                            : 'Add an install command to enable this'
+                        }
+                      >
+                        {installing === server.name ? 'Installing…' : 'Install'}
+                      </button>
+                      <button
+                        className="btn ghost small"
+                        onClick={() => void installMcp(server.name, true)}
+                        disabled={busy || installing !== null || !server.installCommand}
+                        title="Start the install command without waiting for it to finish"
+                      >
+                        {installing === `bg:${server.name}` ? 'Starting…' : 'Background install'}
+                      </button>
+                      <button
+                        className="btn ghost small danger"
                         onClick={() => setConfirmDelete({ kind: 'mcp', name: server.name })}
-                        disabled={busy}
+                        disabled={busy || installing !== null}
                       >
                         Delete
                       </button>
@@ -424,6 +508,24 @@ export function ExtensionsModal({
               setView('list')
             }}
             onCancel={() => setView('list')}
+            onError={(message) => {
+              setError(message)
+              setNotice(null)
+            }}
+          />
+        ) : view === 'edit' && editTarget?.kind === 'lsp' ? (
+          <EditLspForm
+            name={editTarget.name}
+            projects={projects}
+            onDone={async () => {
+              await onRefreshLsp()
+              setEditTarget(null)
+              setView('list')
+            }}
+            onCancel={() => {
+              setEditTarget(null)
+              setView('list')
+            }}
             onError={(message) => {
               setError(message)
               setNotice(null)
@@ -462,8 +564,20 @@ export function ExtensionsModal({
                     <div className="muted small">Projects: {scopeLabel(server.projects, projects)}</div>
                     <div className="extension-card-actions">
                       <button
+                        className="btn ghost small"
+                        onClick={() => {
+                          setEditTarget({ kind: 'lsp', name: server.name })
+                          setView('edit')
+                          setError(null)
+                          setNotice(null)
+                        }}
+                        disabled={busy || installing !== null}
+                      >
+                        Edit
+                      </button>
+                      <button
                         className="btn small"
-                        onClick={() => void install(server.name)}
+                        onClick={() => void installLsp(server.name)}
                         disabled={busy || installing !== null || !server.installCommand}
                         title={
                           server.installCommand
@@ -474,7 +588,7 @@ export function ExtensionsModal({
                         {installing === server.name ? 'Installing…' : 'Install'}
                       </button>
                       <button
-                        className="btn ghost small"
+                        className="btn ghost small danger"
                         onClick={() => setConfirmDelete({ kind: 'lsp', name: server.name })}
                         disabled={busy || installing !== null}
                       >
