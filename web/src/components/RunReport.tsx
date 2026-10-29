@@ -80,6 +80,30 @@ function collectChanges(messages: Message[], rootPath: string): RunReportChange[
   return [...changes.values()]
 }
 
+function latestPlanTitle(messages: Message[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role !== 'assistant' || !message.toolCalls) continue
+    for (let callIndex = message.toolCalls.length - 1; callIndex >= 0; callIndex -= 1) {
+      const call = message.toolCalls[callIndex]
+      if (call.function.name !== 'update_plan') continue
+      const args = parseToolArgs(call.function.arguments)
+      const title = typeof args.title === 'string' ? args.title.trim() : ''
+      if (title && title.toLowerCase() !== 'plan') return title
+    }
+  }
+  return null
+}
+
+function firstMeaningfulSentence(content: string): string {
+  const text = plainText(content)
+  if (!text) return ''
+  const sentence = text.split(/(?<=[.!?])\s/)[0]?.trim() ?? text
+  if (sentence.length < 8) return ''
+  if (/^(?:done|ok|okay|sure|great|all set|finished)[.!]?$/i.test(sentence)) return ''
+  return sentence
+}
+
 function formatDuration(ms: number): string {
   if (ms < 1000) return '<1s'
   const seconds = ms / 1000
@@ -159,9 +183,13 @@ export function buildRunReport({
         (message.content.trim().length > 0 || (message.toolCalls?.length ?? 0) > 0)
     ).length
 
+  const planTitle = latestPlanTitle(runMessages)
+  const doneTask = firstMeaningfulSentence(finalMessage.content)
+  const task = planTitle || doneTask || plainText(taskMessage.content)
+
   return {
     id: finalMessage.id,
-    task: clip(plainText(taskMessage.content), 280),
+    task: clip(task, 200),
     summary: clip(plainText(finalMessage.content), 240),
     status: stopped ? 'stopped' : 'complete',
     steps: stepCount,
