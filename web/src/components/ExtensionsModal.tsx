@@ -375,10 +375,10 @@ export function ExtensionsModal({
           title={`Remove ${confirmDelete.name}?`}
           message={
             confirmDelete.kind === 'skills'
-              ? `This deletes .ks-agent/skills/${confirmDelete.name}/SKILL.md permanently.`
+              ? `This permanently deletes the skill "${confirmDelete.name}" and its folder.`
               : confirmDelete.kind === 'mcp'
-                ? `This removes ${confirmDelete.name} from .ks-agent/mcp.json and stops its tools.`
-                : `This removes ${confirmDelete.name} from .ks-agent/lsp.json.`
+                ? `This removes "${confirmDelete.name}" from the MCP config and stops its tools.`
+                : `This removes "${confirmDelete.name}" from the LSP config.`
           }
           confirmLabel="Delete"
           onConfirm={() => void remove()}
