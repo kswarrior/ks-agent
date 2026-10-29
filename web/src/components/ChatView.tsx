@@ -26,6 +26,32 @@ import { ModelSelect } from './ModelSelect'
 import { StepMenu } from './StepMenu'
 import { buildRunReports, RunReport } from './RunReport'
 
+const DEFAULT_CONTEXT_WINDOW = 128_000
+const CONTEXT_WARNING_RATIO = 0.6
+const CONTEXT_DANGER_RATIO = 0.85
+const MESSAGE_OVERHEAD_CHARS = 16
+
+function formatTokens(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}k`
+  return String(value)
+}
+
+function estimateContextTokens(messages: Message[], live: LiveState | null): number {
+  let chars = 0
+  for (const message of messages) {
+    chars += message.content.length + MESSAGE_OVERHEAD_CHARS
+    if (message.toolCalls) chars += JSON.stringify(message.toolCalls).length
+  }
+  if (live) {
+    chars += live.content.length
+    for (const tool of live.tools) {
+      chars += tool.arguments.length + (tool.output?.length ?? 0)
+    }
+  }
+  return Math.ceil(chars / 4)
+}
+
 const SPECIAL_ARG_KEYS = new Set([
   'path',
   'paths',
@@ -474,6 +500,13 @@ export function ChatView({
     return ids
   }, [messages])
 
+  const contextWindow = models.find((model) => model.id === modelId)?.contextWindow ?? DEFAULT_CONTEXT_WINDOW
+  const contextTokens = useMemo(() => estimateContextTokens(messages, live), [messages, live])
+  const contextRatio = contextWindow > 0 ? contextTokens / contextWindow : 0
+  const contextPercent = Math.max(0, Math.round(contextRatio * 100))
+  const contextLevel =
+    contextRatio >= CONTEXT_DANGER_RATIO ? 'red' : contextRatio >= CONTEXT_WARNING_RATIO ? 'yellow' : 'green'
+
   const visibleTools = (tools: LiveState['tools']) =>
     tools.filter((tool) => tool.name !== 'update_plan' && !persistedToolCallIds.has(tool.id))
 
@@ -528,6 +561,19 @@ export function ChatView({
           <strong>{chat?.title || 'New chat'}</strong>
           <span>{project.name}</span>
         </div>
+        {chat && (
+          <div
+            className={`context-meter ${contextLevel}`}
+            title={`Estimated context usage: ${contextTokens.toLocaleString()} of ${contextWindow.toLocaleString()} tokens (${contextPercent}%)`}
+            aria-label={`Context usage ${contextPercent}%`}
+          >
+            <span className="context-meter-dot" aria-hidden="true" />
+            <span className="context-meter-value">
+              {formatTokens(contextTokens)} / {formatTokens(contextWindow)}
+            </span>
+            <span className="context-meter-percent">{contextPercent}%</span>
+          </div>
+        )}
       </header>
 
       {!chat ? (

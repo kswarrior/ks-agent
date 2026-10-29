@@ -333,6 +333,54 @@ code {
   font-size: 11px;
 }
 
+.context-meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.context-meter-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.context-meter-value {
+  font-weight: 600;
+}
+
+.context-meter-percent {
+  opacity: 0.75;
+}
+
+.context-meter.green {
+  border-color: rgba(86, 214, 139, 0.28);
+  background: rgba(86, 214, 139, 0.08);
+  color: var(--green);
+}
+
+.context-meter.yellow {
+  border-color: rgba(240, 179, 91, 0.32);
+  background: rgba(240, 179, 91, 0.1);
+  color: var(--amber);
+}
+
+.context-meter.red {
+  border-color: rgba(255, 107, 107, 0.34);
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--red);
+}
+
 .select-menu {
   position: relative;
   display: flex;
@@ -2071,6 +2119,28 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.model-context {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 0 0 132px;
+}
+
+.model-context input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.model-context input:focus {
+  border-color: var(--accent);
 }
 
 .settings-subhead {
