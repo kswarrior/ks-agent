@@ -1857,6 +1857,26 @@ code {
   gap: 10px;
 }
 
+.extension-tab-empty {
+  padding: 44px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  background: var(--bg-soft);
+  text-align: center;
+}
+
+.extension-tab-empty strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.extension-tab-empty p {
+  max-width: 440px;
+  margin: 0 auto;
+  font-size: 12px;
+}
+
 .extension-card {
   display: flex;
   flex-direction: column;

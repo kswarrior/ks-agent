@@ -164,3 +164,6 @@ extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
 - 2026-10-29: Task reports now label the run with the AI's plan title (or the
   first meaningful sentence of its final answer) instead of repeating the raw
   user prompt. The original prompt remains the fallback.
+- 2026-10-29: The Extensions modal now uses the same fixed-height layout as
+  Settings and has tabs for Extensions, Skills, MCP and LSP. Extension reload
+  stays scoped to the Extensions tab; the other tabs show empty states.
