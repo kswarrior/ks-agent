@@ -331,8 +331,73 @@ function truncateKnowledge(value: string): string {
 }
 
 class KnowledgeRegistry {
+  private jobs = new Map<string, SummaryJob>()
+
+  private publicJob(job: SummaryJob): KnowledgeJob {
+    return {
+      id: job.id,
+      projectId: job.projectId,
+      ...(job.modelId ? { modelId: job.modelId } : {}),
+      status: job.status,
+      startedAt: job.startedAt,
+      ...(job.finishedAt ? { finishedAt: job.finishedAt } : {}),
+      ...(job.entryId ? { entryId: job.entryId } : {}),
+      ...(job.error ? { error: job.error } : {})
+    }
+  }
+
   listForProject(projectId: string): KnowledgeEntry[] {
     return listKnowledgeForProject(projectId)
+  }
+
+  getSummaryJob(projectId: string): KnowledgeJob | null {
+    const job = this.jobs.get(projectId)
+    return job ? this.publicJob(job) : null
+  }
+
+  startProjectSummary(project: Project, options: { modelId?: string } = {}): KnowledgeJob {
+    const active = this.jobs.get(project.id)
+    if (active?.status === 'running') return this.publicJob(active)
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), SUMMARY_JOB_TIMEOUT_MS)
+    timer.unref()
+    const job: SummaryJob = {
+      id: randomUUID(),
+      projectId: project.id,
+      ...(options.modelId ? { modelId: options.modelId } : {}),
+      status: 'running',
+      startedAt: Date.now(),
+      controller,
+      timer
+    }
+    this.jobs.set(project.id, job)
+
+    void this.runProjectSummaryJob(project, job, options.modelId)
+    return this.publicJob(job)
+  }
+
+  private async runProjectSummaryJob(project: Project, job: SummaryJob, modelId?: string): Promise<void> {
+    try {
+      const entry = await this.generateProjectSummary(project, {
+        modelId,
+        signal: job.controller.signal
+      })
+      job.status = 'completed'
+      job.entryId = entry.id
+      job.finishedAt = Date.now()
+    } catch (error) {
+      job.status = 'error'
+      job.finishedAt = Date.now()
+      job.error = job.controller.signal.aborted
+        ? 'project summary generation timed out'
+        : error instanceof Error
+          ? error.message
+          : String(error)
+      console.warn(`[knowledge] background summary failed for project ${project.id}: ${job.error}`)
+    } finally {
+      clearTimeout(job.timer)
+    }
   }
 
   promptSection(projectId: string, disabled?: Set<string>): string {

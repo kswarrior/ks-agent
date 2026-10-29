@@ -763,6 +763,9 @@ async function generateProjectKnowledge(c: Context) {
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
   const modelId = typeof body?.modelId === 'string' && body.modelId.trim() ? body.modelId.trim() : undefined
   if (modelId && !getModel(modelId)) return c.json(errorJson('model not found'), 404)
+  if (body?.background === true || c.req.query('background') === 'true') {
+    return c.json(knowledge.startProjectSummary(project, { modelId }), 202)
+  }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 120_000)
   try {
@@ -780,6 +783,12 @@ async function generateProjectKnowledge(c: Context) {
     clearTimeout(timer)
   }
 }
+
+app.get('/api/projects/:id/knowledge/summary/status', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  return c.json({ job: knowledge.getSummaryJob(project.id) })
+})
 
 app.post('/api/projects/:id/knowledge/summary', generateProjectKnowledge)
 app.post('/api/projects/:id/knowledge/generate', generateProjectKnowledge)

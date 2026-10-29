@@ -182,14 +182,32 @@ export class SkillRegistry {
     )
   }
 
+  private removeSkillPath(file: string): void {
+    const folder = path.dirname(file)
+    if (path.basename(file).toLowerCase() === 'skill.md' && path.basename(folder) !== path.basename(this.writableDir())) {
+      fs.rmSync(folder, { recursive: true, force: true })
+    } else {
+      fs.rmSync(file, { force: true })
+    }
+  }
+
   update(
     name: string,
-    fields: { description?: string; content?: string; projects?: string[] }
+    fields: { name?: string; description?: string; content?: string; projects?: string[] }
   ): SkillInfo {
     const skill = this.skills.get(name.trim().toLowerCase())
     if (!skill) throw new ConfigError(`Skill "${name}" was not found.`, 404)
-    if (!isInside(this.writableDir(), skill.path)) {
+    const root = this.writableDir()
+    if (!isInside(root, skill.path)) {
       throw new ConfigError(`Skill "${skill.name}" is read-only. Add a same-named skill to override it first.`, 403)
+    }
+    const targetName = (fields.name ?? skill.name).trim().toLowerCase()
+    if (!NAME_RE.test(targetName)) {
+      throw new ConfigError('Skill name must use lowercase letters, numbers, dashes or underscores (max 64 characters).')
+    }
+    if (targetName !== skill.name) {
+      const existing = this.skills.get(targetName)
+      if (existing) throw new ConfigError(`Skill "${targetName}" already exists.`, 409)
     }
     const description = (fields.description ?? skill.description).replace(/\s+/g, ' ').trim().slice(0, 500)
     if (!description) throw new ConfigError('Skill description is required.')
@@ -199,9 +217,52 @@ export class SkillRegistry {
       throw new ConfigError(`Skill instructions must be under ${MAX_SKILL_BYTES} characters.`)
     }
     const projects = normalizeProjects(fields.projects ?? skill.projects)
-    this.write(skill.path, skill.name, description, content, projects)
+
+    if (targetName === skill.name) {
+      this.write(skill.path, skill.name, description, content, projects)
+    } else {
+      const oldFile = skill.path
+      const oldFolder = path.dirname(oldFile)
+      const folderStyle =
+        path.basename(oldFile).toLowerCase() === 'skill.md' &&
+        path.basename(oldFolder) === skill.name &&
+        oldFolder !== root
+      let newFile: string
+      if (folderStyle) {
+        const newFolder = path.join(root, targetName)
+        newFile = path.join(newFolder, 'SKILL.md')
+        if (fs.existsSync(newFolder)) {
+          throw new ConfigError(`Skill folder "${targetName}" already exists.`, 409)
+        }
+        if (!isInside(root, newFolder)) throw new ConfigError('Invalid skill name.')
+        fs.mkdirSync(newFolder, { recursive: true })
+      } else if (path.dirname(oldFile) === root) {
+        newFile = path.join(root, `${targetName}.md`)
+        if (fs.existsSync(newFile)) {
+          throw new ConfigError(`Skill "${targetName}" already exists.`, 409)
+        }
+        if (!isInside(root, newFile)) throw new ConfigError('Invalid skill name.')
+      } else {
+        throw new ConfigError(`Skill "${skill.name}" cannot be renamed because it is not stored in the writable skills root.`, 403)
+      }
+      try {
+        this.write(newFile, targetName, description, content, projects)
+        this.removeSkillPath(oldFile)
+      } catch (error) {
+        if (folderStyle) {
+          const newFolder = path.dirname(newFile)
+          if (path.basename(newFolder) === targetName) {
+            fs.rmSync(newFolder, { recursive: true, force: true })
+          }
+        } else {
+          fs.rmSync(newFile, { force: true })
+        }
+        throw error
+      }
+    }
+
     this.discover()
-    const updated = this.get(skill.name)
+    const updated = this.get(targetName)
     if (!updated) throw new ConfigError('Skill could not be loaded after saving.')
     return updated
   }
