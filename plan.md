@@ -77,12 +77,16 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Hooks: `project.open`, `agent.start`, `agent.finish`
 - [x] Reload API + extension status in UI
 - [x] `extensions/sdk.mjs` helper for writing extensions in Node
-- [x] Example extension: **web** (scaffold Vite/React, install, build, test,
-      start/stop/status dev server)
-- [x] Example extension: **minecraft** (Paper plugin scaffold, server lifecycle,
-      mineflayer bot harness)
-- [x] Example extension: **android** (Compose scaffold, Gradle build, adb install)
-- [x] Mock-extension smoke test through the real agent loop
+- [x] **No default extensions**: `extensions/` ships empty (only the SDK file);
+      extensions are added later from outside
+- [x] Opt-in examples in `examples/extensions/` (not loaded by the server):
+  - [x] **web** (scaffold Vite/React, install, build, test,
+        start/stop/status dev server)
+  - [x] **minecraft** (Paper plugin scaffold, server lifecycle,
+        mineflayer bot harness)
+  - [x] **android** (Compose scaffold, Gradle build, adb install)
+- [x] Mock-extension smoke test through the real agent loop (temp extension,
+      never shipped)
 
 ## Phase 5 — Developer surfaces
 
@@ -116,14 +120,17 @@ npm run smoke        # isolated end-to-end test (build first)
 
 The smoke test verifies: health, project creation, path/shell guards, provider
 key masking, the streaming agent loop, a real built-in tool (`write_file`), the
-extension host calling the real `web` extension, stop/abort handling,
-persistence, extension discovery, Minecraft/Android scaffolding, and static UI
-serving.
+extension host calling a temporary mock extension, stop/abort handling,
+persistence, extension discovery with **no default extensions**, opt-in
+Minecraft/Android example scaffolds, and static UI serving.
 
 ## Progress log
 
 - 2026-10-29: Fresh implementation started at repo root. `old/` is kept only as
   reference; nothing in it is imported by the new code.
 - 2026-10-29: Phases 0–4 MVP implemented. `npm run typecheck`, `npm run build`
-  and `npm run smoke` all pass, including the stop/abort path. Next: Docker jail,
-  PTY, Git, MCP/LSP, provider retries.
+  and `npm run smoke` all pass, including the stop/abort path.
+- 2026-10-29: Removed bundled extensions from the default load path. The server
+  now starts with zero extensions; web/Minecraft/Android examples live in
+  `examples/extensions/` and are copied into `extensions/` only when wanted.
+  Next: Docker jail, PTY, Git, MCP/LSP, provider retries.

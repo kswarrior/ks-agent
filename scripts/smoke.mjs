@@ -316,7 +316,7 @@ function callExtension(dir, tool, args, projectPath) {
 
     void (async () => {
       try {
-        await request('initialize', { protocolVersion: 1, name: extension })
+        await request('initialize', { protocolVersion: 1, name: path.basename(dir) })
         const result = await request('tools/call', { name: tool, arguments: args, projectPath })
         clearTimeout(timer)
         rl.close()
@@ -350,7 +350,7 @@ async function main() {
       KS_ROOT_DIR: repo,
       KS_DATA_DIR: dataDir,
       KS_PROJECTS_DIR: projectsDir,
-      KS_EXTENSIONS_DIR: path.join(repo, 'extensions'),
+      KS_EXTENSIONS_DIR: extensionsDir,
       KS_MAX_STEPS: '10'
     },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -412,14 +412,17 @@ async function main() {
   assert(hello === 'hello from smoke', `unexpected hello.txt content: ${hello}`)
   console.log('PASS agent loop + built-in tool + persistence')
 
-  const second = await sendMessage(chat.id, 'scaffold a web app', model.id)
-  const webTool = second.events.find(
-    (event) => event.type === 'tool_end' && event.call.name === 'ext_web_scaffold'
+  const second = await sendMessage(chat.id, 'write a note with the extension', model.id)
+  const extensionTool = second.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'ext_mock_write_note'
   )
-  assert(webTool, 'agent did not call ext_web_scaffold', second.text.slice(0, 1500))
-  assert(webTool.result.ok === true, `web scaffold failed: ${webTool.result.output}`)
-  assert(fs.existsSync(path.join(project.path, 'webapp', 'package.json')), 'extension did not write webapp/package.json')
-  console.log('PASS extension host + real extension tool')
+  assert(extensionTool, 'agent did not call ext_mock_write_note', second.text.slice(0, 1500))
+  assert(extensionTool.result.ok === true, `mock extension failed: ${extensionTool.result.output}`)
+  assert(
+    fs.readFileSync(path.join(project.path, 'extension.txt'), 'utf8') === 'from extension',
+    'extension did not write extension.txt'
+  )
+  console.log('PASS extension host + temp extension tool')
 
   const slowChat = await api('POST', `/api/projects/${project.id}/chats`, {
     title: 'slow chat',
@@ -453,17 +456,18 @@ async function main() {
 
   const extensions = await api('GET', '/api/extensions')
   const names = extensions.map((extension) => extension.name)
+  assert(names.includes('mock'), `mock extension not discovered: ${names.join(', ')}`)
+  assert(
+    extensions.find((extension) => extension.name === 'mock').tools.length > 0,
+    'mock extension has no tools'
+  )
   for (const name of ['web', 'minecraft', 'android']) {
-    assert(names.includes(name), `extension ${name} not discovered: ${names.join(', ')}`)
-    assert(
-      extensions.find((extension) => extension.name === name).tools.length > 0,
-      `extension ${name} has no tools`
-    )
+    assert(!names.includes(name), `example extension ${name} was loaded by default`)
   }
-  console.log('PASS extension discovery')
+  console.log('PASS extension discovery (no default extensions)')
 
   const minecraft = await callExtension(
-    'minecraft',
+    path.join(repo, 'examples', 'extensions', 'minecraft'),
     'plugin_scaffold',
     { path: 'mc-plugin', name: 'SmokePlugin', mcVersion: '1.21.4' },
     project.path
@@ -476,7 +480,7 @@ async function main() {
   )
 
   const android = await callExtension(
-    'android',
+    path.join(repo, 'examples', 'extensions', 'android'),
     'scaffold',
     { path: 'android-app', name: 'Smoke App', packageName: 'com.example.smoke' },
     project.path
