@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   createModel,
   createProvider,
@@ -27,6 +27,10 @@ export function SettingsModal({
   const [modelId, setModelId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!providerId && providers[0]) setProviderId(providers[0].id)
+  }, [providerId, providers])
 
   const run = async (task: () => Promise<unknown>) => {
     setBusy(true)

@@ -69,6 +69,7 @@ const BLOCKED_PATTERNS: Array<[RegExp, string]> = [
   [/\b(?:mkfs(?:\.\w+)?|mount|umount|shutdown|reboot|halt|poweroff|init)\b/, 'system-level command'],
   [/\b(?:nc|ncat|netcat)\s+.*\s-l\b/, 'listening socket'],
   [/\bchmod\s+(?:-R\s+)?777\s+\/(?:\s|$)/, 'host-wide chmod'],
+  [/\brm\s+(?:-[a-zA-Z]*[rf][a-zA-Z]*\s+)+(?:\/|~|\$HOME)(?:\s|$)/, 'destructive delete of root/home'],
   [/:\(\)\s*\{\s*:\|:&\s*\};:/, 'fork bomb'],
   [/\b(?:curl|wget)\b[^\n]*(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)/, 'private-host request'],
   [/\b(?:cat|less|head|tail|grep|sed|awk)\b[^\n]*(?:\/etc\/(?:passwd|shadow|sudoers)|\/root\/|\/proc\/self\/environ)/, 'host secret access']
