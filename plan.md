@@ -408,3 +408,9 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   chat's toggles after fast switching. Smoke covers the prompt block,
   unavailable-binary tool filtering and error text.
 - 2026-10-29: Added a Retry tab to Settings backed by `GET/PUT /api/settings/retry` and the SQLite `settings` table. Retry can be disabled, limited (0–100 retries) or unlimited, with initial/max delay, multiplier, jitter, network/timeout and 5xx toggles, additional retryable status codes, and Retry-After support. The agent reads the settings on every run and emits `retry` events with the status, provider code, message, attempt, delay and next timestamp. The chat now replaces the Thinking indicator with a live retry card (`HTTP 429`, attempt count, countdown, provider message) and, when retries are exhausted, an inline failure card showing the HTTP status, provider code, message, total attempts and expandable response details. Smoke covers defaults/validation, structured 400 errors, disabled retry, limited retry and unlimited retry.
+- 2026-10-29: Added optional `installCommand` metadata to LSP servers. The Add
+  language server form now has quick presets for TypeScript, Python, Go and Rust
+  that fill the config and show the matching install command, plus an optional
+  install command field. Language server cards display the install command with
+  a Copy button, `.ks-agent/lsp.json` entries for the bundled servers include
+  one, and smoke asserts the value round-trips through the API and config file.
