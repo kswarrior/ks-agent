@@ -316,7 +316,6 @@ export default function App() {
 
       <ChatView
         project={activeProject}
-        projects={projects}
         chat={activeChat}
         messages={messages}
         models={models}
@@ -324,7 +323,6 @@ export default function App() {
         live={live}
         streaming={streaming}
         error={error}
-        onSelectProject={selectProject}
         onModelChange={setModelId}
         onSend={send}
         onStop={stop}

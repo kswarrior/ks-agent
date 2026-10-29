@@ -48,7 +48,6 @@ function ToolCard({
 
 export function ChatView({
   project,
-  projects,
   chat,
   messages,
   models,
@@ -56,14 +55,12 @@ export function ChatView({
   live,
   streaming,
   error,
-  onSelectProject,
   onModelChange,
   onSend,
   onStop,
   onOpenSidebar
 }: {
   project: Project | null
-  projects: Project[]
   chat: Chat | null
   messages: Message[]
   models: ModelEntry[]
@@ -71,7 +68,6 @@ export function ChatView({
   live: LiveState | null
   streaming: boolean
   error: string | null
-  onSelectProject: (project: Project) => void
   onModelChange: (id: string) => void
   onSend: (content: string) => void
   onStop: () => void
@@ -131,22 +127,6 @@ export function ChatView({
           <strong>{chat?.title || 'New chat'}</strong>
           <span>{project.name}</span>
         </div>
-        <select
-          className="project-select"
-          value={project.id}
-          onChange={(event) => {
-            const next = projects.find((entry) => entry.id === event.target.value)
-            if (next) onSelectProject(next)
-          }}
-          title="Project"
-          aria-label="Project"
-        >
-          {projects.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.name}
-            </option>
-          ))}
-        </select>
       </header>
 
       {!chat ? (

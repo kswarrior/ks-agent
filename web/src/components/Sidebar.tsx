@@ -51,38 +51,38 @@ export function Sidebar({
 
         <div className="sidebar-section">
           <div className="section-title">
-            <span>Projects</span>
-            <button className="icon-btn" onClick={onCreateProject} title="New project">
-              +
-            </button>
-          </div>
-          <div className="project-list">
-            {projects.length === 0 && <p className="empty-hint">No projects yet. Create one to start.</p>}
-            {projects.map((project) => (
-              <div
-                key={project.id}
-                className={`project-item ${project.id === activeProjectId ? 'active' : ''}`}
-                onClick={() => onSelectProject(project)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') onSelectProject(project)
-                }}
+            <span>Project</span>
+            <span className="section-actions">
+              <button className="icon-btn" onClick={onCreateProject} title="New project">
+                +
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => activeProject && onDeleteProject(activeProject)}
+                title="Remove project"
+                disabled={!activeProject}
               >
-                <div className="project-name">{project.name}</div>
-                <button
-                  className="icon-btn tiny"
-                  title="Remove project"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onDeleteProject(project)
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+                ×
+              </button>
+            </span>
           </div>
+          <select
+            className="project-select sidebar-project-select"
+            value={activeProjectId ?? ''}
+            onChange={(event) => {
+              const next = projects.find((project) => project.id === event.target.value)
+              if (next) onSelectProject(next)
+            }}
+            disabled={projects.length === 0}
+            aria-label="Project"
+          >
+            {projects.length === 0 && <option value="">No projects yet</option>}
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="sidebar-section grow">

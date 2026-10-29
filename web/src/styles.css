@@ -135,6 +135,17 @@ code {
   text-transform: uppercase;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebar-project-select {
+  width: 100%;
+  max-width: none;
+}
+
 .project-list,
 .chat-list {
   display: flex;
