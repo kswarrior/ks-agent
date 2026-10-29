@@ -772,6 +772,58 @@ code {
   font-size: 11px;
 }
 
+.thinking {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  animation: thinking-glow 1.6s ease-in-out infinite;
+}
+
+.thinking-dots {
+  display: inline-flex;
+}
+
+.thinking-dots span {
+  display: inline-block;
+  animation: thinking-dot 1.2s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.thinking-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes thinking-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+    text-shadow: 0 0 0 rgba(255, 255, 255, 0);
+  }
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+  }
+}
+
+@keyframes thinking-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
 .tool-body {
   border-top: 1px solid var(--line);
   padding: 8px 10px;
@@ -1413,7 +1465,9 @@ code {
 @media (prefers-reduced-motion: reduce) {
   .skeleton,
   .tool-card.running::before,
-  .tool-status.is-running {
+  .tool-status.is-running,
+  .thinking,
+  .thinking-dots span {
     animation: none;
   }
 }
