@@ -85,54 +85,58 @@ export default function App() {
     } else if (event.type === 'reasoning') {
       setLive((current) => (current ? { ...current, reasoning: current.reasoning + event.text } : current))
     } else if (event.type === 'tool_start') {
-      setLive((current) =>
-        current
-          ? {
-              ...current,
-              tools: [
-                ...current.tools,
-                {
-                  id: event.call.id,
-                  name: event.call.name,
-                  arguments: event.call.arguments,
-                  status: 'running'
-                }
-              ]
-            }
-          : current
-      )
-      setSteps((current) =>
-        updateLastStep(current, (step) => ({
-          ...step,
-          tools: [...step.tools, { id: event.call.id, name: event.call.name, status: 'running' }]
-        }))
-      )
+      if (event.call.name !== 'update_plan') {
+        setLive((current) =>
+          current
+            ? {
+                ...current,
+                tools: [
+                  ...current.tools,
+                  {
+                    id: event.call.id,
+                    name: event.call.name,
+                    arguments: event.call.arguments,
+                    status: 'running'
+                  }
+                ]
+              }
+            : current
+        )
+        setSteps((current) =>
+          updateLastStep(current, (step) => ({
+            ...step,
+            tools: [...step.tools, { id: event.call.id, name: event.call.name, status: 'running' }]
+          }))
+        )
+      }
     } else if (event.type === 'tool_end') {
-      setLive((current) =>
-        current
-          ? {
-              ...current,
-              tools: current.tools.map((tool) =>
-                tool.id === event.call.id
-                  ? {
-                      ...tool,
-                      status: event.result.ok ? 'ok' : 'error',
-                      output: event.result.output,
-                      durationMs: event.durationMs
-                    }
-                  : tool
-              )
-            }
-          : current
-      )
-      setSteps((current) =>
-        updateLastStep(current, (step) => ({
-          ...step,
-          tools: step.tools.map((tool) =>
-            tool.id === event.call.id ? { ...tool, status: event.result.ok ? 'ok' : 'error' } : tool
-          )
-        }))
-      )
+      if (event.call.name !== 'update_plan') {
+        setLive((current) =>
+          current
+            ? {
+                ...current,
+                tools: current.tools.map((tool) =>
+                  tool.id === event.call.id
+                    ? {
+                        ...tool,
+                        status: event.result.ok ? 'ok' : 'error',
+                        output: event.result.output,
+                        durationMs: event.durationMs
+                      }
+                    : tool
+                )
+              }
+            : current
+        )
+        setSteps((current) =>
+          updateLastStep(current, (step) => ({
+            ...step,
+            tools: step.tools.map((tool) =>
+              tool.id === event.call.id ? { ...tool, status: event.result.ok ? 'ok' : 'error' } : tool
+            )
+          }))
+        )
+      }
     } else if (event.type === 'error') {
       setError(event.error)
       setSteps((current) =>
