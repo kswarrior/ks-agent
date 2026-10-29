@@ -787,18 +787,407 @@ async function updatePlanTool(args: Record<string, unknown>, ctx: ToolContext): 
   return { ok: true, output: `Updated plan.md\n\n${content}` }
 }
 
+async function findFilesTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const query = str(args, 'query').trim()
+  if (!query) return fail('query is required')
+  if (query.length > 300) return fail('query is too long (max 300 chars)')
+  const base = str(args, 'path', '.') || '.'
+  if (!resolve(ctx, base)) return fail(`Refusing path outside project: ${base}`)
+  const type = str(args, 'type', 'file').toLowerCase()
+  if (!['file', 'dir', 'any'].includes(type)) return fail('type must be "file", "dir" or "any"')
+  const match = str(args, 'match', 'contains').toLowerCase()
+  if (!['contains', 'glob', 'regex'].includes(match)) return fail('match must be "contains", "glob" or "regex"')
+  const ignoreCase = bool(args, 'ignore_case', true)
+  const limit = int(args, 'limit', 100, 1, 1000)
+  const offset = int(args, 'offset', 0, 0, 100_000)
+
+  let re: RegExp | null = null
+  if (match === 'regex') {
+    try {
+      re = new RegExp(query, ignoreCase ? 'i' : '')
+    } catch (error) {
+      return fail(`Invalid regex: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  const needle = query.replace(/\\/g, '/')
+  const lowered = needle.toLowerCase()
+  const entries = walkEntries(ctx.projectPath, base, { maxFiles: 50_000 })
+  const scored: Array<{ path: string; dir: boolean; score: number }> = []
+
+  for (const entry of entries) {
+    if (type === 'file' && entry.dir) continue
+    if (type === 'dir' && !entry.dir) continue
+    const name = entry.path.split('/').pop() ?? entry.path
+    let score = -1
+    if (match === 'glob') {
+      if (matchesGlob(entry.path, needle) || matchesGlob(name, needle)) score = 0
+    } else if (match === 'regex') {
+      if (re && (re.test(name) || re.test(entry.path))) score = 0
+    } else {
+      const haystack = ignoreCase ? name.toLowerCase() : name
+      const target = ignoreCase ? lowered : needle
+      if (haystack === target) score = 0
+      else if (haystack.startsWith(target)) score = 1
+      else if (haystack.includes(target)) score = 2
+      else {
+        const full = ignoreCase ? entry.path.toLowerCase() : entry.path
+        if (full.includes(target)) score = 3
+      }
+    }
+    if (score >= 0) scored.push({ path: entry.path, dir: entry.dir, score })
+  }
+
+  scored.sort((a, b) => a.score - b.score || a.path.localeCompare(b.path))
+  const total = scored.length
+  const page = scored.slice(offset, offset + limit)
+  if (!page.length) {
+    return {
+      ok: true,
+      output: total
+        ? `No more results at offset ${offset} (${total} total matches for "${query}")`
+        : `No files or directories matching "${query}" in ${base}`
+    }
+  }
+  const body = page.map((entry) => `${entry.path}${entry.dir ? '/' : ''}`).join('\n')
+  const suffix =
+    total > offset + page.length ? `\n[... ${total - offset - page.length} more; use offset=${offset + page.length}]` : ''
+  return { ok: true, output: `Found ${page.length} of ${total} match(es) for "${query}" in ${base}\n${body}${suffix}` }
+}
+
+async function treeTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const rel = str(args, 'path', '.') || '.'
+  const abs = resolve(ctx, rel)
+  if (!abs) return fail(`Refusing path outside project: ${rel}`)
+  const stat = fs.statSync(abs)
+  if (!stat.isDirectory()) return fail(`${rel} is not a directory`)
+  const maxDepth = int(args, 'depth', 3, 1, 10)
+  const maxEntries = int(args, 'limit', 500, 1, 5000)
+  const lines: string[] = []
+  let truncated = false
+
+  const walk = (dir: string, prefix: string, depthLeft: number): void => {
+    if (truncated) return
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    entries = entries
+      .filter((entry) => !entry.isSymbolicLink() && !(entry.isDirectory() && DEFAULT_SKIP_DIRS.has(entry.name)))
+      .sort((a, b) => Number(b.isDirectory()) - Number(a.isDirectory()) || a.name.localeCompare(b.name))
+    for (let i = 0; i < entries.length; i++) {
+      if (lines.length >= maxEntries) {
+        truncated = true
+        return
+      }
+      const entry = entries[i]
+      const last = i === entries.length - 1
+      const isDir = entry.isDirectory()
+      lines.push(`${prefix}${last ? '└── ' : '├── '}${entry.name}${isDir ? '/' : ''}`)
+      if (isDir && depthLeft > 1) {
+        walk(path.join(dir, entry.name), `${prefix}${last ? '    ' : '│   '}`, depthLeft - 1)
+      }
+    }
+  }
+
+  lines.push(rel === '.' ? '.' : `${rel.replace(/\/+$/, '')}/`)
+  walk(abs, '', maxDepth)
+  const suffix = truncated ? `\n[... truncated at ${maxEntries} entries]` : ''
+  return { ok: true, output: `${lines.join('\n')}${suffix}` }
+}
+
+async function createDirTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const rel = str(args, 'path')
+  if (!rel) return fail('path is required')
+  const abs = resolve(ctx, rel)
+  if (!abs) return fail(`Refusing path outside project: ${rel}`)
+  if (fs.existsSync(abs)) {
+    if (!fs.statSync(abs).isDirectory()) return fail(`${rel} exists and is not a directory`)
+    return { ok: true, output: `Directory already exists: ${rel}` }
+  }
+  fs.mkdirSync(abs, { recursive: true })
+  return { ok: true, output: `Created directory ${rel}` }
+}
+
+async function copyFileTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const from = str(args, 'from')
+  const to = str(args, 'to')
+  if (!from || !to) return fail('from and to are required')
+  const absFrom = resolve(ctx, from)
+  const absTo = resolve(ctx, to)
+  if (!absFrom || !absTo) return fail('Refusing path outside project')
+  if (path.resolve(absFrom) === path.resolve(absTo)) return fail('from and to are the same path')
+  const stat = fs.statSync(absFrom)
+  const absFromResolved = path.resolve(absFrom)
+  const absToResolved = path.resolve(absTo)
+  if (stat.isDirectory() && (absToResolved === absFromResolved || absToResolved.startsWith(absFromResolved + path.sep))) {
+    return fail('Cannot copy a directory into itself')
+  }
+  const overwrite = bool(args, 'overwrite')
+  if (fs.existsSync(absTo)) {
+    if (!overwrite) return fail(`Destination already exists: ${to} (use overwrite:true)`)
+    fs.rmSync(absTo, { recursive: true, force: true })
+  }
+  fs.mkdirSync(path.dirname(absTo), { recursive: true })
+  if (stat.isDirectory()) {
+    fs.cpSync(absFrom, absTo, { recursive: true })
+    return { ok: true, output: `Copied directory ${from} -> ${to}` }
+  }
+  fs.copyFileSync(absFrom, absTo)
+  return { ok: true, output: `Copied ${stat.size} bytes from ${from} -> ${to}` }
+}
+
+async function appendFileTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const rel = str(args, 'path')
+  const content = str(args, 'content')
+  if (!rel) return fail('path is required')
+  if (!content) return fail('content is required')
+  const abs = resolve(ctx, rel)
+  if (!abs) return fail(`Refusing path outside project: ${rel}`)
+  let existing = 0
+  try {
+    existing = fs.statSync(abs).size
+  } catch {
+    existing = 0
+  }
+  const added = Buffer.byteLength(content, 'utf8')
+  if (existing + added > 2 * 1024 * 1024) return fail('resulting file would exceed 2 MB')
+  fs.mkdirSync(path.dirname(abs), { recursive: true })
+  fs.appendFileSync(abs, content, 'utf8')
+  return { ok: true, output: `Appended ${added} bytes to ${rel} (now ${existing + added} bytes)` }
+}
+
+async function readMultipleFilesTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const rawPaths = Array.isArray(args.paths) ? args.paths : []
+  const paths = rawPaths.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  if (!paths.length) return fail('paths must contain at least one file path')
+  if (paths.length > 30) return fail('too many paths (max 30)')
+  const offset = int(args, 'offset', 1, 1, 1_000_000)
+  const limit = int(args, 'limit', 200, 1, 1000)
+  const sections: string[] = []
+  let failures = 0
+
+  for (const rel of paths) {
+    const abs = resolve(ctx, rel)
+    if (!abs) {
+      failures++
+      sections.push(`=== ${rel} ===\n[error: path outside project]`)
+      continue
+    }
+    try {
+      const stat = fs.statSync(abs)
+      if (stat.isDirectory()) throw new Error('is a directory; use list_dir or tree')
+      const buffer = fs.readFileSync(abs)
+      ensureText(buffer, rel)
+      const all = buffer.toString('utf8').split('\n')
+      const selected = all.slice(offset - 1, offset - 1 + limit)
+      const numbered = selected.map((line, index) => `${offset + index}: ${line}`).join('\n')
+      const suffix = offset - 1 + selected.length < all.length ? `\n[... ${all.length} lines total]` : ''
+      sections.push(`=== ${rel} ===\n${numbered}${suffix}`)
+    } catch (error) {
+      failures++
+      const message = error instanceof Error ? error.message : String(error)
+      sections.push(`=== ${rel} ===\n[error: ${message}]`)
+    }
+  }
+
+  return { ok: failures === 0, output: truncate(sections.join('\n\n')) }
+}
+
+interface PatchHunk {
+  oldStart: number
+  oldCount: number
+  newStart: number
+  newCount: number
+  lines: string[]
+}
+
+function parsePatchHunks(patch: string): PatchHunk[] {
+  const lines = patch.replace(/\r\n/g, '\n').split('\n')
+  const hunks: PatchHunk[] = []
+  let index = 0
+  while (index < lines.length) {
+    const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(lines[index])
+    if (!header) {
+      index++
+      continue
+    }
+    const hunkLines: string[] = []
+    index++
+    while (index < lines.length) {
+      const line = lines[index]
+      if (line.startsWith('@@ ') || line.startsWith('diff --git ')) break
+      if (line === '' || line === '\\ No newline at end of file') {
+        index++
+        continue
+      }
+      const marker = line[0]
+      if (marker !== ' ' && marker !== '+' && marker !== '-') break
+      hunkLines.push(line)
+      index++
+    }
+    hunks.push({
+      oldStart: Number(header[1]),
+      oldCount: header[2] === undefined ? 1 : Number(header[2]),
+      newStart: Number(header[3]),
+      newCount: header[4] === undefined ? 1 : Number(header[4]),
+      lines: hunkLines
+    })
+  }
+  return hunks
+}
+
+async function applyPatchTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const rel = str(args, 'path')
+  const patch = str(args, 'patch')
+  if (!rel) return fail('path is required')
+  if (!patch.trim()) return fail('patch is required')
+  const abs = resolve(ctx, rel)
+  if (!abs) return fail(`Refusing path outside project: ${rel}`)
+  const hunks = parsePatchHunks(patch)
+  if (!hunks.length) return fail('no valid hunks found; patch must contain @@ -old,count +new,count @@ headers')
+  const exists = fs.existsSync(abs)
+  if (exists && fs.statSync(abs).isDirectory()) return fail(`${rel} is a directory`)
+  const original = exists ? fs.readFileSync(abs) : Buffer.from('')
+  ensureText(original, rel)
+  const resultLines = original.toString('utf8').split('\n')
+  let lineOffset = 0
+  let insertions = 0
+  let deletions = 0
+
+  for (const hunk of hunks) {
+    const expected: string[] = []
+    const replacement: string[] = []
+    for (const raw of hunk.lines) {
+      const marker = raw[0]
+      const text = raw.slice(1)
+      if (marker === ' ') {
+        expected.push(text)
+        replacement.push(text)
+      } else if (marker === '-') {
+        expected.push(text)
+        deletions++
+      } else {
+        replacement.push(text)
+        insertions++
+      }
+    }
+    const start = Math.max(0, (hunk.oldStart === 0 ? 0 : hunk.oldStart - 1) + lineOffset)
+    const actual = resultLines.slice(start, start + expected.length)
+    const mismatch = expected.findIndex((line, index) => actual[index] !== line)
+    if (actual.length !== expected.length || mismatch !== -1) {
+      const badIndex = mismatch === -1 ? actual.length : mismatch
+      const wanted = expected[badIndex] ?? '(missing line)'
+      const got = actual[badIndex] ?? '(missing line)'
+      return fail(
+        `Patch context mismatch in ${rel} at line ${start + badIndex + 1}: expected ${JSON.stringify(wanted)} but found ${JSON.stringify(got)}`
+      )
+    }
+    resultLines.splice(start, expected.length, ...replacement)
+    lineOffset += replacement.length - expected.length
+  }
+
+  const next = resultLines.join('\n')
+  if (Buffer.byteLength(next, 'utf8') > 2 * 1024 * 1024) return fail('patched content would exceed 2 MB')
+  fs.mkdirSync(path.dirname(abs), { recursive: true })
+  fs.writeFileSync(abs, next, 'utf8')
+  return {
+    ok: true,
+    output: `Patched ${rel}: ${hunks.length} hunk(s), ${insertions} insertion(s), ${deletions} deletion(s), ${resultLines.length} lines`
+  }
+}
+
+async function gitTool(label: string, run: () => Promise<string>): Promise<ToolResult> {
+  try {
+    return { ok: true, output: truncate(await run()) }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return fail(`${label} failed: ${message}`)
+  }
+}
+
+async function gitInitTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  return gitTool('git_init', () => gitInit(ctx.projectPath, str(args, 'branch', 'main') || 'main'))
+}
+
+async function gitStatusTool(_args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  return gitTool('git_status', () => gitStatus(ctx.projectPath))
+}
+
+async function gitDiffTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  return gitTool('git_diff', () =>
+    gitDiff(ctx.projectPath, {
+      staged: bool(args, 'staged'),
+      ref: str(args, 'ref') || undefined,
+      file: str(args, 'file') || undefined,
+      statOnly: bool(args, 'stat_only')
+    })
+  )
+}
+
+async function gitLogTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  return gitTool('git_log', () => gitLog(ctx.projectPath, int(args, 'limit', 20, 1, 100)))
+}
+
+async function gitBranchTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const action = str(args, 'action', 'list').toLowerCase() || 'list'
+  const name = str(args, 'name')
+  return gitTool('git_branch', async () => {
+    if (action === 'list') return gitBranches(ctx.projectPath)
+    if (!name) throw new Error('name is required for create/checkout')
+    if (action === 'create') return gitCreateBranch(ctx.projectPath, name, true)
+    if (action === 'checkout') return gitCheckout(ctx.projectPath, name)
+    throw new Error('action must be list, create or checkout')
+  })
+}
+
+async function gitCommitTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const message = str(args, 'message')
+  if (!message.trim()) return fail('message is required')
+  return gitTool('git_commit', () => gitCommit(ctx.projectPath, message, args.files))
+}
+
+async function gitPushTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  return gitTool('git_push', () =>
+    gitPush(ctx.projectPath, str(args, 'remote', 'origin') || 'origin', str(args, 'branch') || undefined)
+  )
+}
+
+async function gitPullTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  return gitTool('git_pull', () =>
+    gitPull(ctx.projectPath, str(args, 'remote', 'origin') || 'origin', str(args, 'branch') || undefined)
+  )
+}
+
 const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>> = {
   read_file: readFileTool,
+  read_multiple_files: readMultipleFilesTool,
   write_file: writeFileTool,
   edit_file: editFileTool,
+  apply_patch: applyPatchTool,
   list_dir: listDirTool,
+  tree: treeTool,
+  find_files: findFilesTool,
   glob: globTool,
   grep: grepTool,
   get_file_info: fileInfoTool,
+  create_dir: createDirTool,
+  copy_file: copyFileTool,
   delete_file: deleteFileTool,
   move_file: moveFileTool,
+  append_file: appendFileTool,
   run_shell: runShellTool,
-  update_plan: updatePlanTool
+  update_plan: updatePlanTool,
+  git_init: gitInitTool,
+  git_status: gitStatusTool,
+  git_diff: gitDiffTool,
+  git_log: gitLogTool,
+  git_branch: gitBranchTool,
+  git_commit: gitCommitTool,
+  git_push: gitPushTool,
+  git_pull: gitPullTool
 }
 
 export async function executeBuiltinTool(
