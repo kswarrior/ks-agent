@@ -39,7 +39,7 @@ import {
   touchChat,
   updateChat,
   updateKnowledge,
-  updateModelContext,
+  updateModel,
   updateProvider
 } from './db.js'
 import { describeFailure, errorStatus } from './errors.js'
@@ -565,12 +565,29 @@ app.patch('/api/models/:id', async (c) => {
   const model = getModel(c.req.param('id'))
   if (!model) return c.json(errorJson('model not found', 404), 404)
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
-  if (body?.contextWindow === undefined) return c.json(errorJson('contextWindow is required'), 400)
-  const contextWindow = parseContextWindow(body.contextWindow)
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  const providerId =
+    body.providerId === undefined
+      ? undefined
+      : typeof body.providerId === 'string'
+        ? body.providerId
+        : ''
+  if (providerId !== undefined && (!providerId || !getProvider(providerId))) {
+    return c.json(errorJson('valid providerId is required'), 400)
+  }
+  const name = body.name === undefined ? undefined : safeName(body.name)
+  if (name !== undefined && !name) return c.json(errorJson('name is required'), 400)
+  const modelId =
+    body.modelId === undefined ? undefined : typeof body.modelId === 'string' ? body.modelId.trim() : ''
+  if (modelId !== undefined && !modelId) return c.json(errorJson('modelId is required'), 400)
+  const contextWindow = body.contextWindow === undefined ? undefined : parseContextWindow(body.contextWindow)
   if (contextWindow === null) {
     return c.json(errorJson('contextWindow must be an integer between 1000 and 10000000'), 400)
   }
-  return c.json(updateModelContext(model.id, contextWindow))
+  if (providerId === undefined && name === undefined && modelId === undefined && contextWindow === undefined) {
+    return c.json(errorJson('no model fields to update'), 400)
+  }
+  return c.json(updateModel(model.id, { providerId, name, modelId, contextWindow }))
 })
 
 app.delete('/api/models/:id', (c) => {
@@ -786,6 +803,37 @@ app.post('/api/skills', async (c) => {
   }
 })
 
+app.get('/api/skills/:name', (c) => {
+  const skill = skills.getDetail(c.req.param('name'))
+  if (!skill) return c.json(errorJson('skill not found', 404), 404)
+  return c.json(skill)
+})
+
+app.patch('/api/skills/:name', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  if (body.description !== undefined && typeof body.description !== 'string') {
+    return c.json(errorJson('description must be a string'), 400)
+  }
+  if (body.content !== undefined && typeof body.content !== 'string') {
+    return c.json(errorJson('content must be a string'), 400)
+  }
+  const projects = body.projects === undefined ? undefined : readProjectIds(body.projects)
+  if (projects === null) return c.json(errorJson('projects must be a list of existing project ids'), 400)
+  try {
+    return c.json(
+      skills.update(c.req.param('name'), {
+        description: body.description as string | undefined,
+        content: body.content as string | undefined,
+        projects
+      })
+    )
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
 app.delete('/api/skills/:name', (c) => {
   try {
     skills.remove(c.req.param('name'))
@@ -814,6 +862,37 @@ app.post('/api/mcp', async (c) => {
   }
 })
 
+app.get('/api/mcp/:name', (c) => {
+  const server = mcp.get(c.req.param('name'))
+  if (!server) return c.json(errorJson('MCP server not found', 404), 404)
+  return c.json(server)
+})
+
+app.patch('/api/mcp/:name', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  if (!body || typeof body !== 'object') return c.json(errorJson('JSON body required'), 400)
+  const input = body as Record<string, unknown>
+  const projects = input.projects === undefined ? undefined : readProjectIds(input.projects)
+  if (projects === null) return c.json(errorJson('projects must be a list of existing project ids'), 400)
+  try {
+    return c.json(await mcp.update(c.req.param('name'), { ...input, ...(projects === undefined ? {} : { projects }) }))
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
+app.post('/api/mcp/:name/install', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const background = body?.background === true || c.req.query('background') === 'true'
+  try {
+    return c.json(await mcp.install(c.req.param('name'), background))
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
 app.delete('/api/mcp/:name', async (c) => {
   try {
     return c.json(await mcp.remove(c.req.param('name')))
@@ -835,6 +914,26 @@ app.post('/api/lsp', async (c) => {
   if (!projects) return c.json(errorJson('projects must be a list of existing project ids'), 400)
   try {
     return c.json(lsp.add({ ...(body as Record<string, unknown>), projects }), 201)
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
+app.get('/api/lsp/:name', (c) => {
+  const server = lsp.get(c.req.param('name'))
+  if (!server) return c.json(errorJson('language server not found', 404), 404)
+  return c.json(server)
+})
+
+app.patch('/api/lsp/:name', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  if (!body || typeof body !== 'object') return c.json(errorJson('JSON body required'), 400)
+  const input = body as Record<string, unknown>
+  const projects = input.projects === undefined ? undefined : readProjectIds(input.projects)
+  if (projects === null) return c.json(errorJson('projects must be a list of existing project ids'), 400)
+  try {
+    return c.json(lsp.update(c.req.param('name'), { ...input, ...(projects === undefined ? {} : { projects }) }))
   } catch (error) {
     const failure = configErrorJson(error)
     return c.json(failure.body, failure.status)

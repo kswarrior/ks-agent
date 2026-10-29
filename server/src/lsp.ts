@@ -638,7 +638,7 @@ export class LspRegistry {
     const entry = this.entries.get(name.trim().toLowerCase())
     if (!entry?.config) return null
     return {
-      ...this.list().find((server) => server.name === entry.name) as LspServerInfo,
+      ...(this.list().find((server) => server.name === entry.name) as LspServerInfo),
       args: entry.config.args,
       env: entry.config.env,
       initializationOptions: entry.config.initializationOptions
