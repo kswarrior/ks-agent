@@ -217,9 +217,11 @@ built-in file tool (name search, tree, glob, grep, list, info, plan, append,
 copy, move, delete, unified-diff patch, shell), all native git tools (including
 a real push/pull to a temp bare remote), provider key masking, the streaming
 agent loop, a real built-in tool (`write_file`), provider retry recovery, the
-extension host calling a temporary mock extension, background runs with event
-replay, stop/abort handling, persistence, extension discovery with **no default
-extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
+extension host calling a temporary mock extension, skills discovery +
+`use_skill`, a stdio MCP server + `mcp_<server>_<tool>` call, LSP diagnostics
+from a mock language server, background runs with event replay, stop/abort
+handling, persistence, extension discovery with **no default extensions**,
+opt-in Minecraft/Android example scaffolds, and static UI serving.
 
 ## Progress log
 
@@ -259,3 +261,11 @@ extensions**, opt-in Minecraft/Android example scaffolds, and static UI serving.
 - 2026-10-29: The Extensions modal now uses the same fixed-height layout as
   Settings and has tabs for Extensions, Skills, MCP and LSP. Extension reload
   stays scoped to the Extensions tab; the other tabs show empty states.
+- 2026-10-29: Skills, MCP and LSP are now fully wired. Skills are discovered
+  from `skills/` and `.opencode/skills` (folder `SKILL.md` with frontmatter),
+  indexed in the system prompt and loaded with `use_skill`. MCP supports stdio,
+  Streamable HTTP and legacy SSE servers from `mcp.json`, exposing
+  `mcp_<server>_<tool>` tools. LSP spawns configured language servers from
+  `lsp.json` on demand and returns diagnostics through `lsp_diagnostics`.
+  All three have reload APIs and status/tool panels in the Extensions modal.
+  Smoke now exercises each path with temporary mock skill/MCP/LSP servers.
