@@ -11,6 +11,7 @@ import type {
   ChatExtensionsState,
   ExtensionInfo,
   ExtensionKind,
+  FailureInfo,
   LiveState,
   LspServerInfo,
   McpServerInfo,
@@ -18,6 +19,7 @@ import type {
   ModelEntry,
   Project,
   ProviderPublic,
+  RetryStatus,
   RunStep,
   SkillInfo
 } from './types'
@@ -66,6 +68,8 @@ export default function App() {
   const [steps, setSteps] = useState<RunStep[]>([])
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failure, setFailure] = useState<FailureInfo | null>(null)
+  const [retryStatus, setRetryStatus] = useState<RetryStatus | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [chatsLoading, setChatsLoading] = useState(false)
@@ -109,14 +113,35 @@ export default function App() {
     } else if (event.type === 'step') {
       setLive((current) => (current ? { ...current, step: event.step } : current))
       setSteps((current) => beginStep(current, event.step))
+    } else if (event.type === 'retry') {
+      setFailure(null)
+      setError(null)
+      setRetryStatus({
+        attempt: event.attempt,
+        maxAttempts: event.maxAttempts,
+        delayMs: event.delayMs,
+        nextAt: event.nextAt,
+        unlimited: event.unlimited,
+        message: event.message,
+        status: event.status,
+        code: event.code,
+        title: event.title,
+        details: event.details,
+        retryAfterMs: event.retryAfterMs,
+        attempts: event.attempts,
+        retryable: event.retryable
+      })
     } else if (event.type === 'token') {
+      setRetryStatus(null)
       setLive((current) => (current ? { ...current, content: current.content + event.text } : current))
       setSteps((current) =>
         updateLastStep(current, (step) => ({ ...step, content: step.content + event.text }))
       )
     } else if (event.type === 'reasoning') {
+      setRetryStatus(null)
       setLive((current) => (current ? { ...current, reasoning: current.reasoning + event.text } : current))
     } else if (event.type === 'tool_start') {
+      setRetryStatus(null)
       if (event.call.name !== 'update_plan') {
         setLive((current) =>
           current
@@ -198,12 +223,25 @@ export default function App() {
           })
       }
     } else if (event.type === 'error') {
+      setRetryStatus(null)
       setError(event.error)
+      setFailure({
+        message: event.message || event.error,
+        status: event.status,
+        code: event.code,
+        title: event.title,
+        details: event.details,
+        retryAfterMs: event.retryAfterMs,
+        attempts: event.attempts,
+        retryable: event.retryable
+      })
       setSteps((current) => {
         const now = Date.now()
         return current.map((step) => (step.status === 'running' ? finishStep(step, 'error', now) : step))
       })
     } else if (event.type === 'done') {
+      setRetryStatus(null)
+      setFailure(null)
       setSteps((current) => {
         const now = Date.now()
         return current.map((step) => (step.status === 'running' ? finishStep(step, 'done', now) : step))

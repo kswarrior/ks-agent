@@ -10,6 +10,7 @@ import type {
   ModelEntry,
   Project,
   ProviderPublic,
+  RetrySettings,
   SkillInfo
 } from './types'
 
@@ -118,6 +119,12 @@ export const listModels = () => req<ModelEntry[]>('/api/models')
 export const createModel = (body: { providerId: string; name: string; modelId: string }) =>
   req<ModelEntry>('/api/models', json('POST', body))
 export const deleteModel = (id: string) => req<{ ok: true }>(`/api/models/${id}`, { method: 'DELETE' })
+
+export const getRetrySettings = () => req<RetrySettings>('/api/settings/retry')
+export const updateRetrySettings = (body: RetrySettings) =>
+  req<RetrySettings>('/api/settings/retry', json('PUT', body))
+export const resetRetrySettings = () =>
+  req<RetrySettings>('/api/settings/retry/reset', { method: 'POST' })
 
 export const listExtensions = () => req<ExtensionInfo[]>('/api/extensions')
 export const reloadExtensions = () => req<ExtensionInfo[]>('/api/extensions/reload', { method: 'POST' })
