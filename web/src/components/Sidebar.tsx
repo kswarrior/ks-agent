@@ -1,4 +1,5 @@
 import type { Chat, Project } from '../types'
+import { Logo } from './Logo'
 import { SelectMenu } from './SelectMenu'
 
 export function Sidebar({
@@ -44,10 +45,10 @@ export function Sidebar({
     <>
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand">
-          <div className="brand-mark">KS</div>
+          <Logo className="brand-mark" />
           <div>
             <strong>KS Agent</strong>
-            <span>extension-first coding agent</span>
+            <span>coding agent by KS Warrior</span>
           </div>
           <button className="icon-btn mobile-only" onClick={onClose} aria-label="Close sidebar">
             ×
@@ -156,7 +157,6 @@ export function Sidebar({
           <button className="side-btn" onClick={onOpenSettings}>
             <span className="dot" /> Settings
           </button>
-          <div className="side-note">local-first · sqlite · extensions</div>
         </div>
       </aside>
       {open && <div className="sidebar-scrim mobile-only" onClick={onClose} />}

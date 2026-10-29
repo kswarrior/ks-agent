@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Chat, LiveState, Message, ModelEntry, Project } from '../types'
+import { Logo } from './Logo'
 import { Markdown } from './Markdown'
 import { SelectMenu } from './SelectMenu'
 
