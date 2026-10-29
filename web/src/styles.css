@@ -8,8 +8,8 @@
   --line-strong: #2d2d36;
   --text: #f2f2f4;
   --muted: #8b8b96;
-  --accent: #8b7cff;
-  --accent-soft: rgba(139, 124, 255, 0.14);
+  --accent: #ffffff;
+  --accent-soft: rgba(255, 255, 255, 0.08);
   --green: #56d68b;
   --red: #ff6b6b;
   --amber: #f0b35b;
@@ -95,8 +95,8 @@ code {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent), #4d3fd1);
-  color: #fff;
+  background: var(--accent);
+  color: #000;
   font-weight: 800;
   letter-spacing: -0.04em;
   flex: 0 0 auto;
@@ -175,7 +175,7 @@ code {
 .project-item.active,
 .chat-item.active {
   background: var(--accent-soft);
-  border-color: rgba(139, 124, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.24);
 }
 
 .project-name,
@@ -264,7 +264,7 @@ code {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--text);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
@@ -419,12 +419,12 @@ code {
 }
 
 .select-option.active {
-  color: var(--accent);
+  color: var(--text);
 }
 
 .select-check {
   flex: none;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .select-empty {
@@ -499,8 +499,8 @@ code {
 .msg.user {
   margin-left: auto;
   max-width: min(760px, 88%);
-  background: #14131f;
-  border-color: #2a2744;
+  background: #111113;
+  border-color: #2a2a2e;
 }
 
 .msg.assistant {
@@ -537,7 +537,7 @@ code {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--accent-soft);
-  color: #b9b1ff;
+  color: #d4d4d8;
   font-size: 11px;
 }
 
@@ -586,7 +586,9 @@ code {
 }
 
 .markdown a {
-  color: #a99fff;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .markdown h1,
@@ -815,12 +817,12 @@ code {
 
 .btn.primary {
   border-color: transparent;
-  background: var(--accent);
-  color: #fff;
+  background: #ffffff;
+  color: #000000;
 }
 
 .btn.primary:hover:not(:disabled) {
-  background: #9a8dff;
+  background: #e4e4e6;
 }
 
 .btn.danger {
@@ -982,7 +984,7 @@ code {
 
 .settings-tab.active {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--text);
 }
 
 .settings-toolbar {
