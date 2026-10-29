@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { createLspServer, createMcpServer, createSkill } from '../api'
+import { createLspServer, createMcpServer, createSkill, installLspServer } from '../api'
 import type { Project } from '../types'
 
 type FormProps = {
   projects: Project[]
   onDone: () => Promise<void>
   onCancel: () => void
+  onError?: (message: string) => void
 }
 
 const LSP_PRESETS = [
@@ -344,13 +345,14 @@ export function AddMcpForm({ projects, onDone, onCancel }: FormProps) {
   )
 }
 
-export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
+export function AddLspForm({ projects, onDone, onCancel, onError }: FormProps) {
   const [name, setName] = useState('')
   const [command, setCommand] = useState('')
   const [args, setArgs] = useState('')
   const [extensions, setExtensions] = useState('')
   const [languageId, setLanguageId] = useState('')
   const [installCommand, setInstallCommand] = useState('')
+  const [autoInstall, setAutoInstall] = useState(false)
   const [projectIds, setProjectIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -380,6 +382,15 @@ export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
         installCommand: installCommand.trim() || undefined,
         projects: projectIds
       })
+      if (autoInstall && installCommand.trim()) {
+        try {
+          await installLspServer(name.trim())
+        } catch (caught) {
+          await onDone()
+          onError?.(caught instanceof Error ? caught.message : String(caught))
+          return
+        }
+      }
       await onDone()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -472,6 +483,18 @@ export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
         <small className="muted">Shown on the server card. Run it on the host if the command is missing.</small>
       </label>
       <ProjectScopeField projects={projects} value={projectIds} onChange={setProjectIds} />
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={autoInstall}
+          onChange={(event) => setAutoInstall(event.target.checked)}
+          disabled={!installCommand.trim() || busy}
+        />
+        <span>Install automatically after adding</span>
+      </label>
+      {!installCommand.trim() && (
+        <span className="muted small">Add an install command to enable automatic installation.</span>
+      )}
       <FormActions
         busy={busy}
         disabled={!name.trim() || !command.trim() || !extensions.trim()}

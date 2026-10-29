@@ -3,6 +3,7 @@ import {
   deleteLspServer,
   deleteMcpServer,
   deleteSkill,
+  installLspServer,
   reloadExtensions,
   reloadLspServers,
   reloadMcpServers,
@@ -113,6 +114,7 @@ export function ExtensionsModal({
   const [tab, setTab] = useState<ExtensionTab>('extensions')
   const [view, setView] = useState<ExtensionView>('list')
   const [busy, setBusy] = useState(false)
+  const [installing, setInstalling] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ kind: Exclude<ExtensionTab, 'extensions'>; name: string } | null>(
     null
@@ -138,6 +140,19 @@ export function ExtensionsModal({
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
       setBusy(false)
+    }
+  }
+
+  const install = async (name: string) => {
+    setInstalling(name)
+    setError(null)
+    try {
+      await installLspServer(name)
+      await onRefreshLsp()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setInstalling(null)
     }
   }
 
@@ -361,6 +376,7 @@ export function ExtensionsModal({
               setView('list')
             }}
             onCancel={() => setView('list')}
+            onError={(message) => setError(message)}
           />
         ) : (
           <>
