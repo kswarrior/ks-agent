@@ -180,6 +180,12 @@ plus one checkbox per project, and every card shows its scope.
   only project-enabled items grouped into Skills / MCP servers / Language
   servers. Checking or unchecking an item toggles it for the current chat; the
   trigger shows the active/total count.
+- The agent gets a `list_chat_extensions` tool that reports every configured
+  skill/MCP/LSP with its project scope, chat toggle and runtime availability
+  (including missing binaries). The system prompt tells the agent to call it
+  whenever the user asks what is enabled or disabled, instead of guessing.
+- The Tools menu marks language servers whose binary failed to start as
+  unavailable, so per-chat selection reflects what can actually be queried.
 
 ### Agent config layout
 
@@ -291,7 +297,8 @@ extension host calling a temporary mock extension, skills discovery +
 `use_skill`, MCP tool calls over stdio, Streamable HTTP and legacy SSE, LSP
 diagnostics over `didOpen` and `didChange` from a mock language server,
 project-scoped skill/MCP/LSP creation and filtering, per-chat extension
-disables (including blocked tool calls and re-enabling), background runs with
+disables (including blocked tool calls, tool/prompt filtering and re-enabling),
+the agent's `list_chat_extensions` status report, background runs with
 event replay, stop/abort handling, persistence (including assistant
 model/duration metadata), extension discovery with **no default extensions**,
 opt-in Minecraft/Android example scaffolds, and static UI serving.
@@ -371,3 +378,11 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   opencode-style footer with Copy, provider · model, and time taken. Existing
   SQLite databases are migrated automatically with the new `model_id` and
   `duration_ms` message columns; smoke asserts both fields round-trip.
+- 2026-10-29: Made per-chat skill/MCP/LSP selection fully visible to the agent.
+  Added the `list_chat_extensions` tool, which reports all configured items
+  with project scope, chat enabled/disabled state and LSP/MCP runtime
+  availability (for example a missing `pyright-langserver`). The agent is
+  instructed to call it when asked to check the selection instead of repeating
+  stale counts. The Tools menu now flags unavailable language servers, and
+  smoke asserts disabled items disappear from the system prompt and tool
+  definitions while the status tool still reports them.
