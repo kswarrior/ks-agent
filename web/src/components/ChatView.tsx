@@ -3,10 +3,12 @@ import type {
   Chat,
   ChatExtensionsState,
   ExtensionKind,
+  FailureInfo,
   LiveState,
   Message,
   ModelEntry,
   Project,
+  RetryStatus,
   RunStep
 } from '../types'
 import {
@@ -292,6 +294,76 @@ function ThinkingBlock({ reasoning, streaming }: { reasoning: string; streaming:
   )
 }
 
+function failureBadge(failure: FailureInfo): string {
+  if (failure.status) return `HTTP ${failure.status}`
+  if (failure.code) return failure.code
+  return 'ERROR'
+}
+
+function waitLabel(ms: number): string {
+  if (ms <= 100) return 'now'
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
+}
+
+function FailureCard({ failure, onContinue }: { failure: FailureInfo; onContinue: () => void }) {
+  const attempts = failure.attempts ?? 0
+  return (
+    <div className="agent-failure" role="alert">
+      <div className="agent-failure-head">
+        <span className="agent-failure-code">{failureBadge(failure)}</span>
+        <strong>{failure.title || 'Request failed'}</strong>
+        {attempts > 1 && (
+          <span className="agent-failure-attempts">
+            {attempts} attempts
+          </span>
+        )}
+      </div>
+      <p className="agent-failure-message">{failure.message}</p>
+      {failure.code && failure.status ? (
+        <p className="agent-failure-meta">
+          Provider code: <code>{failure.code}</code>
+        </p>
+      ) : null}
+      {failure.retryAfterMs ? (
+        <p className="agent-failure-meta">The provider asked to wait {waitLabel(failure.retryAfterMs)}.</p>
+      ) : null}
+      {failure.details && (
+        <details className="agent-failure-details">
+          <summary>Response details</summary>
+          <pre>{failure.details}</pre>
+        </details>
+      )}
+      <div className="agent-failure-actions">
+        <button type="button" className="btn ghost small" onClick={onContinue}>
+          Continue
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function RetryCard({ retry, now }: { retry: RetryStatus; now: number }) {
+  const remaining = Math.max(0, retry.nextAt - now)
+  const attemptLabel =
+    retry.maxAttempts === null
+      ? `retry ${retry.attempt}, unlimited`
+      : `retry ${retry.attempt} of ${retry.maxAttempts}`
+  return (
+    <div className="agent-retry" role="status" aria-live="polite">
+      <div className="agent-retry-head">
+        <span className="agent-retry-badge">{retry.status ? `HTTP ${retry.status}` : 'RETRY'}</span>
+        <strong>
+          Retrying in {waitLabel(remaining)} · {attemptLabel}
+        </strong>
+      </div>
+      <p className="agent-retry-message">
+        {retry.title ? `${retry.title}: ` : ''}
+        {retry.message}
+      </p>
+    </div>
+  )
+}
+
 function MessageSkeleton() {
   return (
     <div className="skeleton-stack" role="status" aria-label="Loading messages" aria-busy="true">
@@ -316,6 +388,8 @@ export function ChatView({
   steps,
   loading,
   error,
+  failure,
+  retryStatus,
   onModelChange,
   onToggleChatExtension,
   onSend,
@@ -333,6 +407,8 @@ export function ChatView({
   steps: RunStep[]
   loading: boolean
   error: string | null
+  failure: FailureInfo | null
+  retryStatus: RetryStatus | null
   onModelChange: (id: string) => void
   onToggleChatExtension: (kind: ExtensionKind, name: string, enabled: boolean) => Promise<void>
   onSend: (content: string) => void
@@ -340,9 +416,17 @@ export function ChatView({
   onOpenSidebar: () => void
 }) {
   const [draft, setDraft] = useState('')
+  const [now, setNow] = useState(Date.now())
   const bottomRef = useRef<HTMLDivElement | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const rootPath = project?.path ?? ''
+
+  useEffect(() => {
+    if (!retryStatus) return
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 200)
+    return () => clearInterval(timer)
+  }, [retryStatus])
 
   useEffect(() => {
     setDraft('')
