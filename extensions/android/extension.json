@@ -1,0 +1,72 @@
+{
+  "name": "android",
+  "version": "1.0.0",
+  "description": "Scaffold a Kotlin/Compose Android app, build with Gradle, install and launch with adb.",
+  "command": ["node", "index.mjs"],
+  "permissions": { "shell": true, "network": true, "projectWrite": true },
+  "timeoutMs": 900000,
+  "tools": [
+    {
+      "name": "scaffold",
+      "description": "Create a minimal Kotlin + Jetpack Compose Android app (Gradle Kotlin DSL).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \"android\")" },
+          "name": { "type": "string", "description": "App display name (default \"KS App\")" },
+          "packageName": { "type": "string", "description": "Application id (default com.example.ksapp)" },
+          "force": { "type": "boolean", "description": "Overwrite existing build files" }
+        }
+      }
+    },
+    {
+      "name": "build",
+      "description": "Build the debug APK with the Gradle wrapper (or gradle).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \"android\")" }
+        }
+      }
+    },
+    {
+      "name": "devices",
+      "description": "List connected Android devices and emulators (adb devices -l).",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "install",
+      "description": "Install the built debug APK on the connected device (adb install -r).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \"android\")" }
+        }
+      }
+    },
+    {
+      "name": "launch",
+      "description": "Launch the app main activity on the connected device.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \"android\")" },
+          "packageName": { "type": "string", "description": "Application id (default read from build.gradle.kts)" }
+        }
+      }
+    },
+    {
+      "name": "logs",
+      "description": "Show recent logcat lines for the app.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "lines": { "type": "integer", "description": "Number of lines (default 100, max 1000)" }
+        }
+      }
+    }
+  ]
+}
