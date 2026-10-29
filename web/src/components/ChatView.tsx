@@ -18,17 +18,31 @@ function splitLines(text: string): string[] {
   return text.replace(/\r\n/g, '\n').split('\n')
 }
 
-function DiffLines({ lines, kind }: { lines: string[]; kind: 'add' | 'del' }) {
+function DiffLines({
+  lines,
+  kind,
+  startLine = 1
+}: {
+  lines: string[]
+  kind: 'add' | 'del'
+  startLine?: number
+}) {
   return (
     <>
       {lines.map((line, index) => (
         <div className={`diff-line ${kind}`} key={`${kind}-${index}`}>
+          <span className="diff-num">{startLine + index}</span>
           <span className="diff-sign">{kind === 'add' ? '+' : '-'}</span>
           <span className="diff-text">{line || ' '}</span>
         </div>
       ))}
     </>
   )
+}
+
+function changedLine(output?: string): number {
+  const match = /\bline (\d+)\b/i.exec(output ?? '')
+  return match ? Number(match[1]) : 1
 }
 
 function formatArgValue(value: unknown): string {
