@@ -556,8 +556,10 @@ code {
 }
 
 .reasoning pre {
+  max-height: 260px;
   margin: 0;
   padding: 0 10px 10px;
+  overflow-y: auto;
   white-space: pre-wrap;
   font-family: inherit;
 }
