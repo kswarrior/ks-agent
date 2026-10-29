@@ -208,6 +208,67 @@ async function sendMessage(chatId, content, modelId) {
   return readEvents(res)
 }
 
+function callExtension(extension, tool, args, projectPath) {
+  return new Promise((resolve, reject) => {
+    const dir = path.join(repo, 'extensions', extension)
+    const child = spawn(process.execPath, [path.join(dir, 'index.mjs')], {
+      cwd: dir,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    const pending = new Map()
+    const errors = []
+    let seq = 0
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error(`extension ${extension} timed out\n${errors.join('\n')}`))
+    }, 30_000)
+
+    const rl = readline.createInterface({ input: child.stdout })
+    rl.on('line', (line) => {
+      let message
+      try {
+        message = JSON.parse(line)
+      } catch {
+        return
+      }
+      const entry = pending.get(message.id)
+      if (!entry) return
+      pending.delete(message.id)
+      if (message.error) entry.reject(new Error(message.error.message))
+      else entry.resolve(message.result)
+    })
+    child.stderr.on('data', (chunk) => errors.push(chunk.toString()))
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+
+    const request = (method, params) => {
+      const id = ++seq
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
+      return new Promise((resolveRequest, rejectRequest) => {
+        pending.set(id, { resolve: resolveRequest, reject: rejectRequest })
+      })
+    }
+
+    void (async () => {
+      try {
+        await request('initialize', { protocolVersion: 1, name: extension })
+        const result = await request('tools/call', { name: tool, arguments: args, projectPath })
+        clearTimeout(timer)
+        rl.close()
+        child.kill('SIGTERM')
+        resolve(result)
+      } catch (error) {
+        clearTimeout(timer)
+        rl.close()
+        child.kill('SIGTERM')
+        reject(error)
+      }
+    })()
+  })
+}
+
 function assert(condition, message, detail) {
   if (!condition) fail(message, detail)
 }
@@ -254,7 +315,12 @@ async function main() {
 
   const project = await api('POST', '/api/projects', { name: 'smoke' })
   assert(project.id && fs.existsSync(project.path), 'project folder was not created')
-  console.log('PASS project create')
+  assert(resolveInProject(project.path, '../escape') === null, 'path jail allowed ../')
+  assert(resolveInProject(project.path, '/etc/passwd') === null, 'path jail allowed an absolute path')
+  assert(unsafeCommand('cat ../secret', project.path), 'shell guard allowed traversal')
+  assert(unsafeCommand('rm -rf /', project.path), 'shell guard allowed rm -rf /')
+  assert(unsafeCommand('npm run build', project.path) === null, 'shell guard blocked a safe command')
+  console.log('PASS project create + path/shell guards')
 
   const provider = await api('POST', '/api/providers', {
     name: 'mock',
@@ -308,6 +374,42 @@ async function main() {
     )
   }
   console.log('PASS extension discovery')
+
+  const minecraft = await callExtension(
+    'minecraft',
+    'plugin_scaffold',
+    { path: 'mc-plugin', name: 'SmokePlugin', mcVersion: '1.21.4' },
+    project.path
+  )
+  assert(minecraft.isError !== true, `minecraft scaffold failed: ${minecraft.content}`)
+  assert(fs.existsSync(path.join(project.path, 'mc-plugin', 'build.gradle')), 'minecraft build.gradle missing')
+  assert(
+    fs.existsSync(path.join(project.path, 'mc-plugin', 'src', 'main', 'resources', 'plugin.yml')),
+    'minecraft plugin.yml missing'
+  )
+
+  const android = await callExtension(
+    'android',
+    'scaffold',
+    { path: 'android-app', name: 'Smoke App', packageName: 'com.example.smoke' },
+    project.path
+  )
+  assert(android.isError !== true, `android scaffold failed: ${android.content}`)
+  const activity = path.join(
+    project.path,
+    'android-app',
+    'app',
+    'src',
+    'main',
+    'java',
+    'com',
+    'example',
+    'smoke',
+    'MainActivity.kt'
+  )
+  assert(fs.existsSync(activity), 'android MainActivity.kt missing')
+  assert(fs.readFileSync(activity, 'utf8').includes('Text("count is $count")'), 'android scaffold interpolation is wrong')
+  console.log('PASS minecraft + android scaffolds')
 
   const staticRes = await fetch(`http://127.0.0.1:${serverPort}/`)
   const html = await staticRes.text()
