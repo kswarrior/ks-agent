@@ -17,9 +17,23 @@ import type {
   RunStep
 } from './types'
 
-function ensureStep(steps: RunStep[], step: number): RunStep[] {
+function finishStep(step: RunStep, status: 'done' | 'error', now: number): RunStep {
+  const toolStatus = status === 'done' ? 'ok' : 'error'
+  return {
+    ...step,
+    status,
+    durationMs: step.durationMs ?? Math.max(0, now - step.startedAt),
+    tools: step.tools.map((tool) => (tool.status === 'running' ? { ...tool, status: toolStatus } : tool))
+  }
+}
+
+function beginStep(steps: RunStep[], step: number): RunStep[] {
   if (steps.some((entry) => entry.step === step)) return steps
-  return [...steps, { step, content: '', tools: [] }]
+  const now = Date.now()
+  return [
+    ...steps.map((entry) => (entry.status === 'running' ? finishStep(entry, 'done', now) : entry)),
+    { step, content: '', tools: [], status: 'running', startedAt: now }
+  ]
 }
 
 function updateLastStep(steps: RunStep[], update: (step: RunStep) => RunStep): RunStep[] {
@@ -72,11 +86,11 @@ export default function App() {
       setLive((current) =>
         current ? { ...current, content: '', reasoning: '', tools: [], step: event.step } : current
       )
-      setSteps((current) => ensureStep(current, event.step))
+      setSteps((current) => beginStep(current, event.step))
     } else if (event.type === 'step') {
       setMaxSteps(event.maxSteps)
       setLive((current) => (current ? { ...current, step: event.step } : current))
-      setSteps((current) => ensureStep(current, event.step))
+      setSteps((current) => beginStep(current, event.step))
     } else if (event.type === 'token') {
       setLive((current) => (current ? { ...current, content: current.content + event.text } : current))
       setSteps((current) =>
@@ -105,7 +119,15 @@ export default function App() {
         setSteps((current) =>
           updateLastStep(current, (step) => ({
             ...step,
-            tools: [...step.tools, { id: event.call.id, name: event.call.name, status: 'running' }]
+            tools: [
+              ...step.tools,
+              {
+                id: event.call.id,
+                name: event.call.name,
+                arguments: event.call.arguments,
+                status: 'running'
+              }
+            ]
           }))
         )
       }
@@ -132,26 +154,28 @@ export default function App() {
           updateLastStep(current, (step) => ({
             ...step,
             tools: step.tools.map((tool) =>
-              tool.id === event.call.id ? { ...tool, status: event.result.ok ? 'ok' : 'error' } : tool
+              tool.id === event.call.id
+                ? {
+                    ...tool,
+                    status: event.result.ok ? 'ok' : 'error',
+                    durationMs: event.durationMs
+                  }
+                : tool
             )
           }))
         )
       }
     } else if (event.type === 'error') {
       setError(event.error)
-      setSteps((current) =>
-        current.map((step) => ({
-          ...step,
-          tools: step.tools.map((tool) => (tool.status === 'running' ? { ...tool, status: 'error' } : tool))
-        }))
-      )
+      setSteps((current) => {
+        const now = Date.now()
+        return current.map((step) => (step.status === 'running' ? finishStep(step, 'error', now) : step))
+      })
     } else if (event.type === 'done') {
-      setSteps((current) =>
-        current.map((step) => ({
-          ...step,
-          tools: step.tools.map((tool) => (tool.status === 'running' ? { ...tool, status: 'ok' } : tool))
-        }))
-      )
+      setSteps((current) => {
+        const now = Date.now()
+        return current.map((step) => (step.status === 'running' ? finishStep(step, 'done', now) : step))
+      })
       if (event.aborted) setError('Stopped by user.')
     }
   }, [])
