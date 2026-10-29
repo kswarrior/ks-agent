@@ -284,6 +284,9 @@ function mcpResult(message) {
 function startMockProvider() {
   return new Promise((resolve) => {
     let retryAttempts = 0
+    let noRetryAttempts = 0
+    let rateLimitAttempts = 0
+    let unlimitedAttempts = 0
     let sseClient = null
     mock = http.createServer((req, res) => {
       const url = req.url ?? ''
@@ -356,7 +359,30 @@ function startMockProvider() {
         const messages = Array.isArray(body.messages) ? body.messages : []
         const lastUser = [...messages].reverse().find((message) => message.role === 'user')?.content ?? ''
         const hasTool = (id) => messages.some((message) => message.role === 'tool' && message.tool_call_id === id)
-        if (lastUser.includes('retry') && retryAttempts++ === 0) {
+        const providerError = (status, message, code) => {
+          res.writeHead(status, {
+            'content-type': 'application/json',
+            'retry-after': '0'
+          })
+          res.end(JSON.stringify({ error: { message, type: 'mock_error', code } }))
+        }
+        if (lastUser.includes('rate limit no retry') && noRetryAttempts++ === 0) {
+          providerError(429, 'Rate limit reached for the mock model', 'rate_limit_exceeded')
+          return
+        }
+        if (lastUser.includes('unlimited retry storm') && unlimitedAttempts++ < 2) {
+          providerError(429, 'Rate limit reached for the mock model', 'rate_limit_exceeded')
+          return
+        }
+        if (lastUser.includes('rate limit retry') && rateLimitAttempts++ === 0) {
+          providerError(429, 'Rate limit reached for the mock model', 'rate_limit_exceeded')
+          return
+        }
+        if (lastUser.includes('bad request test')) {
+          providerError(400, 'Invalid request: missing mock field', 'invalid_request')
+          return
+        }
+        if (lastUser.includes('retry after a provider error') && retryAttempts++ === 0) {
           res.writeHead(500, { 'content-type': 'text/plain' })
           res.end('temporary provider failure')
           return
@@ -1003,6 +1029,30 @@ async function main() {
   })
   console.log('PASS provider/model (key masked)')
 
+  const retryDefaults = await api('GET', '/api/settings/retry')
+  assert(retryDefaults.enabled === true, 'retry should default to enabled')
+  assert(retryDefaults.unlimited === false, 'retry should default to limited')
+  assert(retryDefaults.maxRetries === 2, `unexpected default retries: ${retryDefaults.maxRetries}`)
+  assert(retryDefaults.retryOnStatusCodes.includes(429), 'default retry codes should include 429')
+  const clampedRetry = await api('PUT', '/api/settings/retry', {
+    ...retryDefaults,
+    maxRetries: -5,
+    baseDelayMs: 1,
+    maxDelayMs: 1,
+    multiplier: 99,
+    retryOnStatusCodes: [429, 999, 'bad', 500]
+  })
+  assert(clampedRetry.maxRetries === 0, 'negative retries were not clamped')
+  assert(clampedRetry.baseDelayMs === 100, 'base delay was not clamped')
+  assert(clampedRetry.maxDelayMs === 100, 'max delay was not clamped to the base delay')
+  assert(clampedRetry.multiplier === 10, 'multiplier was not clamped')
+  assert(
+    JSON.stringify(clampedRetry.retryOnStatusCodes) === JSON.stringify([429, 500]),
+    `invalid status codes were not filtered: ${JSON.stringify(clampedRetry.retryOnStatusCodes)}`
+  )
+  await api('PUT', '/api/settings/retry', retryDefaults)
+  console.log('PASS retry settings defaults + validation')
+
   const chat = await api('POST', `/api/projects/${project.id}/chats`, {
     title: 'smoke chat',
     modelId: model.id
@@ -1027,6 +1077,68 @@ async function main() {
   assert(!retried.events.some((event) => event.type === 'error'), 'provider retry did not recover')
   assert(retried.events.some((event) => event.type === 'done'), 'provider retry did not finish')
   console.log('PASS provider retry')
+
+  const badRequest = await sendMessage(chat.id, 'bad request test', model.id)
+  const badFailure = badRequest.events.find((event) => event.type === 'error')
+  assert(badFailure, '400 response did not surface an error event', badRequest.text.slice(0, 1200))
+  assert(badFailure.status === 400, `error event lost the status: ${JSON.stringify(badFailure)}`)
+  assert(badFailure.title === 'Bad Request', `error event lost the title: ${JSON.stringify(badFailure)}`)
+  assert(badFailure.code === 'invalid_request', `error event lost provider code: ${JSON.stringify(badFailure)}`)
+  assert(
+    badFailure.message === 'Invalid request: missing mock field',
+    `error event lost provider message: ${JSON.stringify(badFailure)}`
+  )
+  assert(badFailure.attempts === 1, `400 should not be retried: ${JSON.stringify(badFailure)}`)
+  assert(!badRequest.events.some((event) => event.type === 'retry'), '400 should not emit retry events')
+  console.log('PASS provider error code + message details')
+
+  await api('PUT', '/api/settings/retry', { ...retryDefaults, enabled: false })
+  const disabledRetry = await sendMessage(chat.id, 'rate limit no retry', model.id)
+  const disabledFailure = disabledRetry.events.find((event) => event.type === 'error')
+  assert(disabledFailure, 'disabled retry did not surface the 429 error', disabledRetry.text.slice(0, 1200))
+  assert(disabledFailure.status === 429, `disabled retry lost the 429 status: ${JSON.stringify(disabledFailure)}`)
+  assert(disabledFailure.attempts === 1, `disabled retry should try once: ${JSON.stringify(disabledFailure)}`)
+  assert(!disabledRetry.events.some((event) => event.type === 'retry'), 'disabled retry emitted a retry event')
+  await api('PUT', '/api/settings/retry', retryDefaults)
+  console.log('PASS retry disable setting')
+
+  await api('PUT', '/api/settings/retry', {
+    ...retryDefaults,
+    maxRetries: 1,
+    baseDelayMs: 100,
+    maxDelayMs: 200,
+    jitter: false
+  })
+  const limitedRetry = await sendMessage(chat.id, 'rate limit retry test', model.id)
+  const limitedEvent = limitedRetry.events.find((event) => event.type === 'retry')
+  assert(limitedEvent, 'limited retry did not emit a retry event', limitedRetry.text.slice(0, 1200))
+  assert(limitedEvent.attempt === 1 && limitedEvent.maxAttempts === 1, `unexpected retry attempt: ${JSON.stringify(limitedEvent)}`)
+  assert(limitedEvent.status === 429 && limitedEvent.code === 'rate_limit_exceeded', `retry event lost details: ${JSON.stringify(limitedEvent)}`)
+  assert(limitedEvent.delayMs === 100, `Retry-After=0 should use the 100ms base delay: ${JSON.stringify(limitedEvent)}`)
+  assert(limitedEvent.nextAt >= Date.now() - 5000, 'retry event has no nextAt timestamp')
+  assert(!limitedRetry.events.some((event) => event.type === 'error'), 'limited retry did not recover')
+  assert(limitedRetry.events.some((event) => event.type === 'done'), 'limited retry did not finish')
+  console.log('PASS retry limit + event details')
+
+  await api('PUT', '/api/settings/retry', {
+    ...retryDefaults,
+    unlimited: true,
+    maxRetries: 0,
+    baseDelayMs: 100,
+    maxDelayMs: 200,
+    jitter: false
+  })
+  const unlimitedRetry = await sendMessage(chat.id, 'unlimited retry storm', model.id)
+  const unlimitedEvents = unlimitedRetry.events.filter((event) => event.type === 'retry')
+  assert(unlimitedEvents.length === 2, `unlimited retry should retry twice: ${unlimitedRetry.text.slice(0, 1200)}`)
+  assert(
+    unlimitedEvents.every((event) => event.maxAttempts === null && event.unlimited === true),
+    `unlimited retry events are missing the unlimited flag: ${JSON.stringify(unlimitedEvents)}`
+  )
+  assert(unlimitedEvents[0].attempt === 1 && unlimitedEvents[1].attempt === 2, 'unlimited retry attempts are wrong')
+  assert(!unlimitedRetry.events.some((event) => event.type === 'error'), 'unlimited retry did not recover')
+  await api('PUT', '/api/settings/retry', retryDefaults)
+  console.log('PASS unlimited retry setting')
 
   const second = await sendMessage(chat.id, 'write a note with the extension', model.id)
   const extensionTool = second.events.find(
