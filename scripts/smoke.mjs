@@ -1097,8 +1097,7 @@ async function main() {
     'compacted messages were still sent to the provider'
   )
   const editedSummary = await api('PUT', `/api/chats/${compactChat.id}/summary`, {
-    summary: '## Objective\nEdited handoff summary.',
-    coveredMessageId: savedSummary.coveredMessageId
+    summary: '## Objective\nEdited handoff summary.'
   })
   assert(editedSummary.summary.includes('Edited handoff summary'), 'summary edit was not saved')
   assert(
