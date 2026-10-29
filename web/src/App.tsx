@@ -8,7 +8,9 @@ import { Sidebar } from './components/Sidebar'
 import type {
   AgentEvent,
   Chat,
+  ChatExtensionsState,
   ExtensionInfo,
+  ExtensionKind,
   LiveState,
   LspServerInfo,
   McpServerInfo,
@@ -58,6 +60,7 @@ export default function App() {
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [mcpServers, setMcpServers] = useState<McpServerInfo[]>([])
   const [lspServers, setLspServers] = useState<LspServerInfo[]>([])
+  const [chatExtensions, setChatExtensions] = useState<ChatExtensionsState | null>(null)
   const [modelId, setModelId] = useState('')
   const [live, setLive] = useState<LiveState | null>(null)
   const [steps, setSteps] = useState<RunStep[]>([])
@@ -88,6 +91,10 @@ export default function App() {
   const refreshSkills = useCallback(async () => setSkills(await api.listSkills()), [])
   const refreshMcp = useCallback(async () => setMcpServers(await api.listMcpServers()), [])
   const refreshLsp = useCallback(async () => setLspServers(await api.listLspServers()), [])
+  const refreshChatExtensions = useCallback(
+    async (chatId: string) => setChatExtensions(await api.listChatExtensions(chatId)),
+    []
+  )
 
   const handleEvent = useCallback((event: AgentEvent) => {
     if (event.type === 'assistant_start') {
@@ -339,6 +346,25 @@ export default function App() {
   }, [activeChatId, attachRun, detachRun])
 
   useEffect(() => {
+    if (!activeChatId) {
+      setChatExtensions(null)
+      return
+    }
+    let cancelled = false
+    void api
+      .listChatExtensions(activeChatId)
+      .then((state) => {
+        if (!cancelled) setChatExtensions(state)
+      })
+      .catch(() => {
+        if (!cancelled) setChatExtensions(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeChatId])
+
+  useEffect(() => {
     const chat = chats.find((entry) => entry.id === activeChatId)
     const preferred =
       chat?.modelId && models.some((model) => model.id === chat.modelId) ? chat.modelId : models[0]?.id ?? ''
@@ -470,6 +496,16 @@ export default function App() {
     }
   }
 
+  const toggleChatExtension = async (kind: ExtensionKind, name: string, enabled: boolean) => {
+    if (!activeChatId) return
+    try {
+      await api.setChatExtension(activeChatId, { kind, name, enabled })
+      await refreshChatExtensions(activeChatId)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    }
+  }
+
   const refreshSettings = async () => {
     await Promise.all([refreshProviders(), refreshModels()])
   }
@@ -502,12 +538,14 @@ export default function App() {
         messages={messages}
         models={models}
         modelId={modelId}
+        chatExtensions={chatExtensions}
         live={live}
         streaming={streaming}
         steps={steps}
         loading={projectsLoading || chatsLoading || messagesLoading}
         error={error}
         onModelChange={setModelId}
+        onToggleChatExtension={toggleChatExtension}
         onSend={send}
         onStop={stop}
         onOpenSidebar={() => setSidebarOpen(true)}
@@ -532,7 +570,11 @@ export default function App() {
           skills={skills}
           mcpServers={mcpServers}
           lspServers={lspServers}
-          onClose={() => setShowExtensions(false)}
+          projects={projects}
+          onClose={() => {
+            setShowExtensions(false)
+            if (activeChatId) void refreshChatExtensions(activeChatId)
+          }}
           onRefreshExtensions={refreshExtensions}
           onRefreshSkills={refreshSkills}
           onRefreshMcp={refreshMcp}
