@@ -624,6 +624,7 @@ export class LspRegistry {
           extensions: entry.config?.extensions ?? [],
           languageId: entry.config?.languageId ?? '',
           status,
+          projects: entry.config?.projects ?? [],
           ...(error ? { error } : {})
         }
       })
@@ -641,8 +642,12 @@ export class LspRegistry {
     this.starting.clear()
   }
 
-  promptSection(): string {
-    const servers = this.list()
+  promptSection(projectId?: string, disabled?: Set<string>): string {
+    const servers = this.list().filter(
+      (server) =>
+        (projectId === undefined || isProjectEnabled(server.projects, projectId)) &&
+        !disabled?.has(server.name)
+    )
     if (servers.length === 0) return ''
     const lines = servers.map(
       (server) => `- ${server.name}: ${server.extensions.join(', ')} (${server.command})`
@@ -652,9 +657,14 @@ Use lsp_diagnostics after editing source files to surface type and syntax errors
 ${lines.join('\n')}`
   }
 
-  private serverFor(relPath: string): LanguageServerConfig | null {
+  private serverFor(
+    relPath: string,
+    projectId?: string,
+    disabled?: Set<string>
+  ): LanguageServerConfig | null {
     const ext = path.extname(relPath).toLowerCase()
-    for (const entry of this.entries.values()) {
+    for (const [name, entry] of this.entries) {
+      if (!this.matches(name, entry, projectId, disabled)) continue
       if (entry.config?.extensions.includes(ext)) return entry.config
     }
     return null
@@ -676,7 +686,13 @@ ${lines.join('\n')}`
     return promise
   }
 
-  async callTool(name: string, args: Record<string, unknown>, projectPath: string): Promise<ToolResult> {
+  async callTool(
+    name: string,
+    args: Record<string, unknown>,
+    projectPath: string,
+    projectId?: string,
+    disabled?: Set<string>
+  ): Promise<ToolResult> {
     if (name !== 'lsp_diagnostics') return { ok: false, output: `Unknown LSP tool: ${name}` }
     const rel = typeof args.path === 'string' ? args.path : ''
     if (!rel) return { ok: false, output: 'path is required' }
@@ -689,15 +705,29 @@ ${lines.join('\n')}`
       return { ok: false, output: `File not found: ${rel}` }
     }
     if (!stat.isFile()) return { ok: false, output: `${rel} is not a file` }
-    const server = this.serverFor(rel)
+    const server = this.serverFor(rel, projectId, disabled)
     if (!server) {
+      const ext = path.extname(rel).toLowerCase()
+      const blocked = [...this.entries.entries()].find(
+        ([name, entry]) =>
+          !this.matches(name, entry, projectId, disabled) &&
+          entry.config?.extensions.includes(ext) &&
+          (projectId === undefined || isProjectEnabled(entry.config.projects, projectId))
+      )
+      if (blocked) {
+        return { ok: false, output: `Language server "${blocked[0]}" is disabled in this chat.` }
+      }
       const available = this.list()
-        .filter((entry) => entry.extensions.length)
+        .filter(
+          (entry) =>
+            entry.extensions.length &&
+            (projectId === undefined || isProjectEnabled(entry.projects, projectId))
+        )
         .map((entry) => `${entry.name} (${entry.extensions.join(', ')})`)
         .join('; ')
       return {
         ok: false,
-        output: `No language server configured for ${path.extname(rel) || 'this file'}. Available: ${available || '(none)'}`
+        output: `No language server configured for ${ext || 'this file'}. Available: ${available || '(none)'}`
       }
     }
     try {

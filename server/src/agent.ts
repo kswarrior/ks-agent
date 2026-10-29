@@ -1,6 +1,6 @@
 import os from 'node:os'
 import { config } from './config.js'
-import { insertMessage, listMessages } from './db.js'
+import { insertMessage, listChatDisabled, listMessages } from './db.js'
 import { extensions } from './extensions.js'
 import { streamCompletion, type LLMMessage, type StreamResult } from './llm.js'
 import { lsp } from './lsp.js'
@@ -48,8 +48,16 @@ const PRIMARY_SYSTEM_PROMPT = `You are KS Agent, a precise coding agent working 
 - LSP diagnostics come from lsp_diagnostics. Treat reported errors as real
   failures and fix them before finishing.`
 
-function systemMessage(project: Project): LLMMessage {
-  const extra = [skills.promptSection(), mcp.promptSection(), lsp.promptSection()].filter(Boolean).join('\n\n')
+type DisabledExtensions = ReturnType<typeof listChatDisabled>
+
+function systemMessage(project: Project, disabled: DisabledExtensions): LLMMessage {
+  const extra = [
+    skills.promptSection(project.id, disabled.skill),
+    mcp.promptSection(project.id, disabled.mcp),
+    lsp.promptSection(project.id, disabled.lsp)
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   return {
     role: 'system',
     content: `${PRIMARY_SYSTEM_PROMPT}
