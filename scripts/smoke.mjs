@@ -1025,9 +1025,15 @@ async function main() {
   const model = await api('POST', '/api/models', {
     providerId: provider.id,
     name: 'Mock Model',
-    modelId: 'mock-model'
+    modelId: 'mock-model',
+    contextWindow: 64_000
   })
-  console.log('PASS provider/model (key masked)')
+  assert(model.contextWindow === 64_000, `model context window was not saved: ${model.contextWindow}`)
+  const updatedModel = await api('PATCH', `/api/models/${model.id}`, { contextWindow: 200_000 })
+  assert(updatedModel.contextWindow === 200_000, 'model context window was not updated')
+  const invalidModelContext = await rawApi('PATCH', `/api/models/${model.id}`, { contextWindow: 5 })
+  assert(invalidModelContext.status === 400, 'invalid context window was accepted')
+  console.log('PASS provider/model (key masked, context window)')
 
   const retryDefaults = await api('GET', '/api/settings/retry')
   assert(retryDefaults.enabled === true, 'retry should default to enabled')

@@ -2790,6 +2790,16 @@ code {
     padding: 10px 12px;
   }
 
+  .context-meter {
+    gap: 4px;
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .context-meter-percent {
+    display: none;
+  }
+
   .composer-model {
     flex-basis: 140px;
     width: 140px;
