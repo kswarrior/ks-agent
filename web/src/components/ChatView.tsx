@@ -47,6 +47,24 @@ function ToolCard({
   )
 }
 
+function MenuIcon() {
+  return (
+    <svg
+      className="menu-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M3 12h13" />
+      <path d="M3 18h8" />
+    </svg>
+  )
+}
+
 function MessageSkeleton() {
   return (
     <div className="skeleton-stack" role="status" aria-label="Loading messages" aria-busy="true">
@@ -123,7 +141,7 @@ export function ChatView({
       <main className="main">
         <header className="main-head">
           <button className="icon-btn mobile-only" onClick={onOpenSidebar} aria-label="Open sidebar">
-            ☰
+            <MenuIcon />
           </button>
           <div className="main-title">KS Agent</div>
         </header>
@@ -145,7 +163,7 @@ export function ChatView({
     <main className="main">
       <header className="main-head">
         <button className="icon-btn mobile-only" onClick={onOpenSidebar} aria-label="Open sidebar">
-          ☰
+          <MenuIcon />
         </button>
         <div className="main-title">
           <strong>{chat?.title || 'New chat'}</strong>
