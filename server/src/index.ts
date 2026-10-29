@@ -298,8 +298,8 @@ app.get('/api/chats/:id/run', (c) => {
 
 app.post('/api/chats/:id/stop', (c) => {
   const run = runs.get(c.req.param('id'))
-  if (!run || run.done) return c.json(errorJson('no active run', 404), 404)
-  run.controller.abort()
+  if (!run) return c.json(errorJson('no active run', 404), 404)
+  if (!run.done) run.controller.abort()
   return c.json({ ok: true })
 })
 

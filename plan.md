@@ -31,7 +31,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Messages persistence with tool calls/results
 - [x] Providers CRUD (API keys stored server-side, masked in responses)
 - [x] Models CRUD (provider + model id)
-- [x] SSE streaming endpoint with abort/stop
+- [x] Background agent runs with SSE event replay + abort/stop
 - [x] Input validation and consistent error shape
 
 ## Phase 2 — Agent runtime
@@ -40,6 +40,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Incremental content / reasoning / tool-call delta parsing
 - [x] Agent loop: stream → execute tools → feed results → repeat
 - [x] Max-step guard, abort handling, partial-message persistence
+- [x] Automatic retry with backoff for transient provider failures
 - [x] System prompt with project scope + tool rules
 - [x] Context trimming (message count + character budget)
 - [x] Built-in tools:
@@ -100,7 +101,7 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Path-jail and shell-guard tests (inside `npm run smoke`)
 - [ ] Optional Docker jail (`KS_DOCKER_JAIL=1`)
 - [~] Rate limits / request size limits (basic size caps exist)
-- [ ] Retry with backoff for transient provider failures
+- [x] Retry with backoff for transient provider failures
 - [x] End-to-end smoke script (`npm run smoke`)
 - [ ] README / extension authoring guide
 - [ ] CI workflow for typecheck, build and smoke
@@ -119,10 +120,11 @@ npm run smoke        # isolated end-to-end test (build first)
 ```
 
 The smoke test verifies: health, project creation, path/shell guards, provider
-key masking, the streaming agent loop, a real built-in tool (`write_file`), the
-extension host calling a temporary mock extension, stop/abort handling,
-persistence, extension discovery with **no default extensions**, opt-in
-Minecraft/Android example scaffolds, and static UI serving.
+key masking, the streaming agent loop, a real built-in tool (`write_file`),
+provider retry recovery, the extension host calling a temporary mock extension,
+background runs with event replay, stop/abort handling, persistence, extension
+discovery with **no default extensions**, opt-in Minecraft/Android example
+scaffolds, and static UI serving.
 
 ## Progress log
 
@@ -133,4 +135,6 @@ Minecraft/Android example scaffolds, and static UI serving.
 - 2026-10-29: Removed bundled extensions from the default load path. The server
   now starts with zero extensions; web/Minecraft/Android examples live in
   `examples/extensions/` and are copied into `extensions/` only when wanted.
-  Next: Docker jail, PTY, Git, MCP/LSP, provider retries.
+- 2026-10-29: Agent runs now continue in the background when the UI switches
+  chats; events replay on reconnect. Transient provider failures retry with
+  exponential backoff. Next: Docker jail, PTY, Git, MCP/LSP.
