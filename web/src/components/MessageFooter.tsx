@@ -21,8 +21,10 @@ function CheckIcon() {
 
 async function copyText(text: string): Promise<void> {
   if (navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(text)
-    return
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch {}
   }
   const field = document.createElement('textarea')
   field.value = text
