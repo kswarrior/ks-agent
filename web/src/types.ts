@@ -93,3 +93,9 @@ export interface LiveState {
   tools: LiveTool[]
   step: number
 }
+
+export interface RunStep {
+  step: number
+  content: string
+  tools: { id: string; name: string; status: 'running' | 'ok' | 'error' }[]
+}

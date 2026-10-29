@@ -5,7 +5,29 @@ import { ConfirmModal, Modal, PromptModal } from './components/Modal'
 import { ExtensionsModal } from './components/ExtensionsModal'
 import { SettingsModal } from './components/SettingsModal'
 import { Sidebar } from './components/Sidebar'
-import type { AgentEvent, Chat, ExtensionInfo, LiveState, Message, ModelEntry, Project, ProviderPublic } from './types'
+import type {
+  AgentEvent,
+  Chat,
+  ExtensionInfo,
+  LiveState,
+  Message,
+  ModelEntry,
+  Project,
+  ProviderPublic,
+  RunStep
+} from './types'
+
+function ensureStep(steps: RunStep[], step: number): RunStep[] {
+  if (steps.some((entry) => entry.step === step)) return steps
+  return [...steps, { step, content: '', tools: [] }]
+}
+
+function updateLastStep(steps: RunStep[], update: (step: RunStep) => RunStep): RunStep[] {
+  if (steps.length === 0) return steps
+  const next = steps.slice()
+  next[next.length - 1] = update(next[next.length - 1])
+  return next
+}
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -18,6 +40,8 @@ export default function App() {
   const [extensions, setExtensions] = useState<ExtensionInfo[]>([])
   const [modelId, setModelId] = useState('')
   const [live, setLive] = useState<LiveState | null>(null)
+  const [steps, setSteps] = useState<RunStep[]>([])
+  const [maxSteps, setMaxSteps] = useState(0)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bootError, setBootError] = useState<string | null>(null)
@@ -48,10 +72,16 @@ export default function App() {
       setLive((current) =>
         current ? { ...current, content: '', reasoning: '', tools: [], step: event.step } : current
       )
+      setSteps((current) => ensureStep(current, event.step))
     } else if (event.type === 'step') {
+      setMaxSteps(event.maxSteps)
       setLive((current) => (current ? { ...current, step: event.step } : current))
+      setSteps((current) => ensureStep(current, event.step))
     } else if (event.type === 'token') {
       setLive((current) => (current ? { ...current, content: current.content + event.text } : current))
+      setSteps((current) =>
+        updateLastStep(current, (step) => ({ ...step, content: step.content + event.text }))
+      )
     } else if (event.type === 'reasoning') {
       setLive((current) => (current ? { ...current, reasoning: current.reasoning + event.text } : current))
     } else if (event.type === 'tool_start') {
@@ -71,6 +101,12 @@ export default function App() {
             }
           : current
       )
+      setSteps((current) =>
+        updateLastStep(current, (step) => ({
+          ...step,
+          tools: [...step.tools, { id: event.call.id, name: event.call.name, status: 'running' }]
+        }))
+      )
     } else if (event.type === 'tool_end') {
       setLive((current) =>
         current
@@ -89,10 +125,30 @@ export default function App() {
             }
           : current
       )
+      setSteps((current) =>
+        updateLastStep(current, (step) => ({
+          ...step,
+          tools: step.tools.map((tool) =>
+            tool.id === event.call.id ? { ...tool, status: event.result.ok ? 'ok' : 'error' } : tool
+          )
+        }))
+      )
     } else if (event.type === 'error') {
       setError(event.error)
-    } else if (event.type === 'done' && event.aborted) {
-      setError('Stopped by user.')
+      setSteps((current) =>
+        current.map((step) => ({
+          ...step,
+          tools: step.tools.map((tool) => (tool.status === 'running' ? { ...tool, status: 'error' } : tool))
+        }))
+      )
+    } else if (event.type === 'done') {
+      setSteps((current) =>
+        current.map((step) => ({
+          ...step,
+          tools: step.tools.map((tool) => (tool.status === 'running' ? { ...tool, status: 'ok' } : tool))
+        }))
+      )
+      if (event.aborted) setError('Stopped by user.')
     }
   }, [])
 
@@ -111,6 +167,8 @@ export default function App() {
       const subscription = { chatId, controller, cancelled: false }
       subscriptionRef.current = subscription
       setLive(null)
+      setSteps([])
+      setMaxSteps(0)
       setStreaming(false)
       setError(null)
 
@@ -211,6 +269,8 @@ export default function App() {
       detachRun()
       setMessages([])
       setLive(null)
+      setSteps([])
+      setMaxSteps(0)
       setStreaming(false)
       setMessagesLoading(false)
       return
@@ -299,6 +359,8 @@ export default function App() {
     const projectId = activeChat.projectId
     setError(null)
     setLive({ content: '', reasoning: '', tools: [], step: 0 })
+    setSteps([])
+    setMaxSteps(0)
     setStreaming(true)
 
     const optimistic: Message = {
