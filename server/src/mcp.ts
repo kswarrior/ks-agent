@@ -879,11 +879,16 @@ export class McpRegistry {
     return defs
   }
 
-  findTool(fullName: string): { server: string; tool: string } | null {
+  findTool(
+    fullName: string,
+    projectId?: string,
+    disabled?: Set<string>
+  ): { server: string; tool: string } | null {
     for (const name of this.running.keys()) {
       const entry = this.entries.get(name)
       const running = this.running.get(name)
-      if (!entry?.config || !running || running.client.status !== 'ready') continue
+      if (!entry || !this.matches(name, entry, projectId, disabled)) continue
+      if (!running || running.client.status !== 'ready') continue
       for (const tool of running.client.tools) {
         if (this.toolName(name, tool.name) === fullName) return { server: name, tool: tool.name }
       }
@@ -901,6 +906,7 @@ export class McpRegistry {
           transport: entry.config?.transport ?? 'stdio',
           tools: client?.tools ?? [],
           status: entry.error ? 'error' : client?.status ?? 'stopped',
+          projects: entry.config?.projects ?? [],
           ...(entry.error
             ? { error: entry.error }
             : client?.error
@@ -929,17 +935,21 @@ export class McpRegistry {
     return promise
   }
 
-  async startAll(): Promise<void> {
-    await Promise.allSettled([...this.entries.keys()].map((name) => this.ensureStarted(name)))
+  async startAll(projectId?: string, disabled?: Set<string>): Promise<void> {
+    await Promise.allSettled(
+      [...this.entries.entries()]
+        .filter(([name, entry]) => this.matches(name, entry, projectId, disabled))
+        .map(([name]) => this.ensureStarted(name))
+    )
   }
 
-  async ready(): Promise<void> {
+  async ready(projectId?: string, disabled?: Set<string>): Promise<void> {
     for (const [name, entry] of this.entries) {
-      if (entry.config && !this.running.has(name)) {
+      if (this.matches(name, entry, projectId, disabled) && !this.running.has(name)) {
         void this.ensureStarted(name)
       }
     }
-    await this.startAll()
+    await this.startAll(projectId, disabled)
   }
 
   async reload(): Promise<McpServerInfo[]> {
@@ -956,8 +966,13 @@ export class McpRegistry {
     this.running.clear()
   }
 
-  async callTool(fullName: string, args: Record<string, unknown>): Promise<ToolResult> {
-    const found = this.findTool(fullName)
+  async callTool(
+    fullName: string,
+    args: Record<string, unknown>,
+    projectId?: string,
+    disabled?: Set<string>
+  ): Promise<ToolResult> {
+    const found = this.findTool(fullName, projectId, disabled)
     if (!found) return { ok: false, output: `Unknown MCP tool: ${fullName}` }
     try {
       await this.ensureStarted(found.server)
@@ -974,8 +989,12 @@ export class McpRegistry {
     }
   }
 
-  promptSection(): string {
-    const servers = this.list()
+  promptSection(projectId?: string, disabled?: Set<string>): string {
+    const servers = this.list().filter(
+      (server) =>
+        (projectId === undefined || isProjectEnabled(server.projects, projectId)) &&
+        !disabled?.has(server.name)
+    )
     if (servers.length === 0) return ''
     const lines = servers.map(
       (server) => `- ${server.name} (${server.transport}): ${server.tools.length} tool(s)`
