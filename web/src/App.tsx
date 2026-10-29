@@ -270,6 +270,8 @@ export default function App() {
         setStreaming(false)
       }
       setError(null)
+      setFailure(null)
+      setRetryStatus(null)
 
       try {
         const list = await api.listMessages(chatId)
@@ -378,6 +380,9 @@ export default function App() {
       setSteps([])
       setStreaming(false)
       setMessagesLoading(false)
+      setError(null)
+      setFailure(null)
+      setRetryStatus(null)
       return
     }
     setMessagesLoading(true)
@@ -478,6 +483,8 @@ export default function App() {
     const chatId = activeChat.id
     const projectId = activeChat.projectId
     setError(null)
+    setFailure(null)
+    setRetryStatus(null)
     setLive({ content: '', reasoning: '', tools: [], step: 0 })
     setSteps([])
     setStreaming(true)
@@ -586,6 +593,8 @@ export default function App() {
         steps={steps}
         loading={projectsLoading || chatsLoading || messagesLoading}
         error={error}
+        failure={failure}
+        retryStatus={retryStatus}
         onModelChange={setModelId}
         onToggleChatExtension={toggleChatExtension}
         onSend={send}
