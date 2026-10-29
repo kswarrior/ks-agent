@@ -4,6 +4,8 @@ import http from 'node:http'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
+import readline from 'node:readline'
+import { resolveInProject, unsafeCommand } from '../dist-server/fsx.js'
 
 const repo = process.cwd()
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ks-agent-smoke-'))
