@@ -725,7 +725,14 @@ export function EditMcpForm({ projects, name, onDone, onCancel, onError }: FormP
         installCommand: installCommand.trim(),
         projects: projectIds,
         ...(transport === 'stdio'
-          ? { command, args: splitLines(args), env: parsePairs(env, '='), cwd: cwd.trim() }
+          ? {
+              command,
+              args: splitLines(args),
+              env: parsePairs(env, '='),
+              cwd: cwd.trim(),
+              url: '',
+              headers: {}
+            }
           : { command: '', args: [], env: {}, cwd: '', url, headers: parsePairs(headers, ':') })
       })
       if (autoInstall && installCommand.trim()) {

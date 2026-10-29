@@ -6,7 +6,9 @@ import {
   deleteProvider,
   getRetrySettings,
   resetRetrySettings,
+  updateModel,
   updateModelContext,
+  updateProvider,
   updateRetrySettings
 } from '../api'
 import type { ModelEntry, ProviderPublic, RetrySettings } from '../types'
@@ -14,7 +16,13 @@ import { Modal } from './Modal'
 import { SelectMenu } from './SelectMenu'
 
 type SettingsTab = 'providers' | 'models' | 'retry'
-type SettingsView = 'list' | 'provider-picker' | 'add-provider' | 'add-model'
+type SettingsView =
+  | 'list'
+  | 'provider-picker'
+  | 'add-provider'
+  | 'edit-provider'
+  | 'add-model'
+  | 'edit-model'
 
 const RETRY_STATUS_CODES = [408, 409, 425, 429]
 
@@ -225,10 +233,13 @@ export function SettingsModal({
   const [providerName, setProviderName] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [clearProviderKey, setClearProviderKey] = useState(false)
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
   const [providerId, setProviderId] = useState(providers[0]?.id ?? '')
   const [modelName, setModelName] = useState('')
   const [modelId, setModelId] = useState('')
   const [modelContextWindow, setModelContextWindow] = useState(String(DEFAULT_CONTEXT_WINDOW))
+  const [editingModelId, setEditingModelId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [retrySettings, setRetrySettings] = useState<RetrySettings | null>(null)
@@ -323,8 +334,43 @@ export function SettingsModal({
     setProviderName(preset.id === 'custom' ? '' : preset.name)
     setBaseUrl(preset.baseUrl)
     setApiKey('')
+    setClearProviderKey(false)
+    setEditingProviderId(null)
     setError(null)
     setView('add-provider')
+  }
+
+  const startEditProvider = (provider: ProviderPublic) => {
+    setEditingProviderId(provider.id)
+    setProviderName(provider.name)
+    setBaseUrl(provider.baseUrl)
+    setApiKey('')
+    setClearProviderKey(false)
+    setError(null)
+    setView('edit-provider')
+  }
+
+  const startEditModel = (model: ModelEntry) => {
+    setEditingModelId(model.id)
+    setProviderId(model.providerId)
+    setModelName(model.name)
+    setModelId(model.modelId)
+    setModelContextWindow(String(model.contextWindow))
+    setError(null)
+    setView('edit-model')
+  }
+
+  const cancelProviderForm = () => {
+    setEditingProviderId(null)
+    setClearProviderKey(false)
+    setView('list')
+    setError(null)
+  }
+
+  const cancelModelForm = () => {
+    setEditingModelId(null)
+    setView('list')
+    setError(null)
   }
 
   const updateRetry = <K extends keyof RetrySettings>(key: K, value: RetrySettings[K]) => {
