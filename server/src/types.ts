@@ -29,6 +29,8 @@ export interface Message {
   content: string
   toolCalls: ToolCall[] | null
   toolCallId: string | null
+  modelId: string | null
+  durationMs: number | null
   createdAt: number
 }
 

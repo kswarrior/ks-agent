@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL DEFAULT '',
   tool_calls TEXT,
   tool_call_id TEXT,
+  model_id TEXT,
+  duration_ms INTEGER,
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS providers (
@@ -65,6 +67,16 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_chat_disabled_chat ON chat_disabled_extensions(chat_id);
 `)
 
+function ensureColumn(table: string, column: string, definition: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  if (!columns.some((entry) => entry.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
+}
+
+ensureColumn('messages', 'model_id', 'TEXT')
+ensureColumn('messages', 'duration_ms', 'INTEGER')
+
 export function newId(): string {
   return crypto.randomUUID()
 }
@@ -78,6 +90,8 @@ type MessageRow = {
   content: string
   tool_calls: string | null
   tool_call_id: string | null
+  model_id: string | null
+  duration_ms: number | null
   created_at: number
 }
 type ProviderRow = { id: string; name: string; base_url: string; api_key: string; created_at: number }
