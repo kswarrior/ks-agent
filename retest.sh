@@ -77,19 +77,22 @@ if [[ "${KS_REBUILD:-0}" == "1" || ! -f dist/index.html || ! -f dist-server/inde
   npm run build
 fi
 
-echo "Starting KS Agent on port ${PORT}..."
+echo "Starting KS Agent on port ${PORT} in the background..."
+export PORT KS_DATA_DIR="${KS_DATA_DIR:-$PWD/storage}"
 if command -v setsid >/dev/null 2>&1; then
-  PORT="$PORT" KS_DATA_DIR="${KS_DATA_DIR:-$PWD/storage}" \
-    setsid node dist-server/index.js >"$LOG_FILE" 2>&1 &
+  nohup setsid node dist-server/index.js >"$LOG_FILE" 2>&1 </dev/null &
 else
-  PORT="$PORT" KS_DATA_DIR="${KS_DATA_DIR:-$PWD/storage}" \
-    nohup node dist-server/index.js >"$LOG_FILE" 2>&1 &
+  nohup node dist-server/index.js >"$LOG_FILE" 2>&1 </dev/null &
 fi
 echo $! > "$PID_FILE"
 
 for _ in $(seq 1 30); do
   if curl -fsS "$URL/api/health" >/dev/null 2>&1; then
-    echo "OK: KS Agent is running on http://localhost:${PORT}"
+    NODE_PID=$(pgrep -f "node dist-server/index.js" 2>/dev/null | head -n 1 || true)
+    if [[ -n "$NODE_PID" ]]; then
+      echo "$NODE_PID" > "$PID_FILE"
+    fi
+    echo "OK: KS Agent is running in the background on http://localhost:${PORT} (pid $(cat "$PID_FILE"), log ${LOG_FILE})"
     exit 0
   fi
   if ! kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
