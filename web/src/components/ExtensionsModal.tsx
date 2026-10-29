@@ -115,6 +115,7 @@ export function ExtensionsModal({
   const [view, setView] = useState<ExtensionView>('list')
   const [busy, setBusy] = useState(false)
   const [installing, setInstalling] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ kind: Exclude<ExtensionTab, 'extensions'>; name: string } | null>(
     null
@@ -146,9 +147,11 @@ export function ExtensionsModal({
   const install = async (name: string) => {
     setInstalling(name)
     setError(null)
+    setNotice(null)
     try {
       await installLspServer(name)
       await onRefreshLsp()
+      setNotice(`${name} install command finished.`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
