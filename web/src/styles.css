@@ -2924,6 +2924,15 @@ code {
     max-width: 92%;
   }
 
+  .chat-summary,
+  .chat-summary-working {
+    max-width: 100%;
+  }
+
+  .chat-summary-meta {
+    display: none;
+  }
+
   .main-head {
     padding: 10px 12px;
   }
