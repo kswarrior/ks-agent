@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { config } from './config.js'
+import { config, isInside } from './config.js'
+import { ConfigError } from './errors.js'
 import type { SkillInfo, ToolDef, ToolResult } from './types.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
@@ -118,9 +119,23 @@ export class SkillRegistry {
     return null
   }
 
+  writableDir(): string {
+    return config.skillsDirs[0]
+  }
+
+  private info(skill: LoadedSkill): SkillInfo {
+    return {
+      name: skill.name,
+      description: skill.description,
+      path: skill.path,
+      source: skill.source,
+      writable: isInside(this.writableDir(), skill.path)
+    }
+  }
+
   list(): SkillInfo[] {
     return [...this.skills.values()]
-      .map(({ name, description, path: skillPath, source }) => ({ name, description, path: skillPath, source }))
+      .map((skill) => this.info(skill))
       .sort((a, b) => a.name.localeCompare(b.name))
   }
 
@@ -131,7 +146,51 @@ export class SkillRegistry {
   get(name: string): SkillInfo | null {
     const found = this.skills.get(name.trim().toLowerCase())
     if (!found) return null
-    return { name: found.name, description: found.description, path: found.path, source: found.source }
+    return this.info(found)
+  }
+
+  create(name: string, description: string, content: string, overwrite = false): SkillInfo {
+    const cleanName = name.trim().toLowerCase()
+    if (!NAME_RE.test(cleanName)) {
+      throw new ConfigError('Skill name must use lowercase letters, numbers, dashes or underscores (max 64 characters).')
+    }
+    const cleanDescription = description.replace(/\s+/g, ' ').trim().slice(0, 500)
+    if (!cleanDescription) throw new ConfigError('Skill description is required.')
+    const cleanContent = content.trim()
+    if (!cleanContent) throw new ConfigError('Skill instructions are required.')
+    if (cleanContent.length > MAX_SKILL_BYTES) {
+      throw new ConfigError(`Skill instructions must be under ${MAX_SKILL_BYTES} characters.`)
+    }
+    const root = this.writableDir()
+    const folder = path.join(root, cleanName)
+    const file = path.join(folder, 'SKILL.md')
+    if (!isInside(root, file)) throw new ConfigError('Invalid skill name.')
+    if (fs.existsSync(file) && !overwrite) {
+      throw new ConfigError(`Skill "${cleanName}" already exists.`, 409)
+    }
+    fs.mkdirSync(folder, { recursive: true })
+    const descriptionLine = cleanDescription.replace(/"/g, "'")
+    fs.writeFileSync(file, `---\nname: ${cleanName}\ndescription: "${descriptionLine}"\n---\n\n${cleanContent}\n`, 'utf8')
+    this.discover()
+    const created = this.get(cleanName)
+    if (!created) throw new ConfigError('Skill could not be loaded after saving.')
+    return created
+  }
+
+  remove(name: string): void {
+    const skill = this.skills.get(name.trim().toLowerCase())
+    if (!skill) throw new ConfigError(`Skill "${name}" was not found.`, 404)
+    const root = this.writableDir()
+    if (!isInside(root, skill.path)) {
+      throw new ConfigError(`Skill "${skill.name}" is read-only. Add a same-named skill to override it first.`, 403)
+    }
+    const folder = path.dirname(skill.path)
+    if (path.basename(skill.path).toLowerCase() === 'skill.md' && path.basename(folder) === skill.name) {
+      fs.rmSync(folder, { recursive: true, force: true })
+    } else {
+      fs.rmSync(skill.path, { force: true })
+    }
+    this.discover()
   }
 
   toolDefs(): ToolDef[] {
