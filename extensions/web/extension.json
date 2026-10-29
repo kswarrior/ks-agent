@@ -1,0 +1,83 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "description": "Scaffold, install, build, test and run Vite/React web apps.",
+  "command": ["node", "index.mjs"],
+  "permissions": { "shell": true, "network": true, "projectWrite": true },
+  "timeoutMs": 900000,
+  "tools": [
+    {
+      "name": "scaffold",
+      "description": "Create a Vite + React + TypeScript app in the project (or a subfolder).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "Destination folder relative to the project root (default \".\")" },
+          "name": { "type": "string", "description": "App name used in package.json" },
+          "force": { "type": "boolean", "description": "Overwrite an existing package.json" }
+        }
+      }
+    },
+    {
+      "name": "install",
+      "description": "Run npm install for the web app.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \".\")" }
+        }
+      }
+    },
+    {
+      "name": "build",
+      "description": "Run the production build (npm run build).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \".\")" }
+        }
+      }
+    },
+    {
+      "name": "test",
+      "description": "Run the app test script (npm test -- --run).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \".\")" }
+        }
+      }
+    },
+    {
+      "name": "start",
+      "description": "Start the Vite dev server in the background and return its URL and PID.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \".\")" },
+          "port": { "type": "integer", "description": "Port (default 5173)" }
+        }
+      }
+    },
+    {
+      "name": "stop",
+      "description": "Stop the dev server started by this extension.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \".\")" }
+        }
+      }
+    },
+    {
+      "name": "status",
+      "description": "Check whether the dev server is running and show the last log lines.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string", "description": "App folder relative to the project root (default \".\")" }
+        }
+      }
+    }
+  ]
+}
