@@ -15,6 +15,8 @@ export const config = {
   maxToolOutput: Math.max(1000, Number(process.env.KS_MAX_TOOL_OUTPUT || 40_000)),
   maxContextChars: Math.max(20_000, Number(process.env.KS_MAX_CONTEXT_CHARS || 240_000)),
   maxHistoryMessages: Math.max(10, Number(process.env.KS_MAX_HISTORY_MESSAGES || 120)),
+  providerRetries: Math.max(0, Number(process.env.KS_PROVIDER_RETRIES || 2)),
+  providerRetryDelayMs: Math.max(100, Number(process.env.KS_PROVIDER_RETRY_DELAY_MS || 1000)),
   dockerJail: process.env.KS_DOCKER_JAIL === '1',
   dockerImage: process.env.KS_DOCKER_IMAGE || 'node:20-alpine'
 }

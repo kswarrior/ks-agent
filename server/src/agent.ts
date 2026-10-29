@@ -73,6 +73,34 @@ function trimHistory(system: LLMMessage, history: Message[]): LLMMessage[] {
   return [system, ...mapped.slice(start)]
 }
 
+function isRetryableProviderError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  if (error.name === 'AbortError') return false
+  if (error.name === 'TimeoutError') return true
+  const match = /Provider error (\d{3})/.exec(error.message)
+  if (match) {
+    const status = Number(match[1])
+    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500
+  }
+  return /fetch failed|network|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket hang up|UND_ERR/i.test(
+    error.message
+  )
+}
+
+function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 function parseArguments(raw: string): Record<string, unknown> {
   if (!raw.trim()) return {}
   try {
