@@ -174,6 +174,12 @@ fs.writeFileSync(
           args: [lspServerPath],
           extensions: ['.ts'],
           languageId: 'typescript'
+        },
+        brokenlsp: {
+          command: 'ks-agent-definitely-missing-lsp',
+          args: [],
+          extensions: ['.zz'],
+          languageId: 'zz'
         }
       }
     },
@@ -450,6 +456,34 @@ function startMockProvider() {
                       function: {
                         name: mcpCall.name,
                         arguments: JSON.stringify({ text: mcpCall.text })
+                      }
+                    }
+                  ]
+                },
+                finish_reason: null
+              }
+            ]
+          })
+          sse(res, { choices: [{ delta: {}, finish_reason: 'tool_calls' }] })
+          res.write('data: [DONE]\n\n')
+          res.end()
+          return
+        }
+
+        if (lastUser.includes('broken diagnostics') && !hasTool('call_lsp_broken')) {
+          sse(res, {
+            choices: [
+              {
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'call_lsp_broken',
+                      type: 'function',
+                      function: {
+                        name: 'lsp_diagnostics',
+                        arguments: JSON.stringify({ path: 'broken.zz' })
                       }
                     }
                   ]
@@ -1424,13 +1458,42 @@ async function main() {
   const disabledSystem =
     (lastProviderBody?.messages ?? []).find((message) => message.role === 'system')?.content ?? ''
   const disabledToolNames = (lastProviderBody?.tools ?? []).map((tool) => tool.function.name)
-  assert(!disabledSystem.includes('smoke-skill'), 'disabled skill leaked into the system prompt')
-  assert(!disabledSystem.includes('mocklsp'), 'disabled language server leaked into the system prompt')
+  assert(
+    disabledSystem.includes('Chat tool selection for project') &&
+      disabledSystem.includes('- smoke-skill: disabled in this chat') &&
+      disabledSystem.includes('- mocklsp (') &&
+      disabledSystem.includes('disabled in this chat'),
+    'system prompt did not include the authoritative chat selection'
+  )
+  assert(!disabledSystem.includes('Smoke-test skill'), 'disabled skill leaked into the usable skills section')
+  assert(!disabledSystem.includes('## Skills\n'), 'disabled-only skills section was still advertised')
+  assert(
+    !disabledSystem.includes('Use lsp_diagnostics after editing'),
+    'unavailable/disabled language servers were still advertised as usable'
+  )
+  assert(
+    disabledSystem.includes('- brokenlsp (') && disabledSystem.includes('enabled but unavailable'),
+    'system prompt did not flag the missing language server binary'
+  )
   assert(!disabledToolNames.includes('use_skill'), 'disabled skill tool was still exposed')
-  assert(!disabledToolNames.includes('lsp_diagnostics'), 'disabled language server tool was still exposed')
+  assert(!disabledToolNames.includes('lsp_diagnostics'), 'unusable language server tool was still exposed')
   assert(
     disabledToolNames.includes('list_chat_extensions'),
     'list_chat_extensions tool is missing from the agent tools'
+  )
+
+  fs.writeFileSync(path.join(project.path, 'broken.zz'), 'const broken = true\n')
+  const brokenLspRun = await sendMessage(toggleChat.id, 'check broken diagnostics', model.id)
+  const brokenLspTool = brokenLspRun.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'lsp_diagnostics'
+  )
+  assert(brokenLspTool, 'agent did not attempt lsp_diagnostics for the missing binary')
+  assert(
+    brokenLspTool.result.ok === false &&
+      brokenLspTool.result.output.includes('unavailable') &&
+      brokenLspTool.result.output.includes('Command not found') &&
+      !brokenLspTool.result.output.includes('ENOENT'),
+    `missing language server was not reported as unavailable: ${brokenLspTool.result.output}`
   )
 
   const statusRun = await sendMessage(toggleChat.id, 'inspect extensions', model.id)
@@ -1443,11 +1506,16 @@ async function main() {
       statusTool.result.output.includes('- smoke-skill: disabled in this chat') &&
       statusTool.result.output.includes('- mockmcp (stdio, 1 tool): disabled in this chat') &&
       statusTool.result.output.includes('- mocklsp (') &&
-      statusTool.result.output.includes(': disabled in this chat'),
-    `list_chat_extensions did not report disabled items: ${statusTool.result.output}`
+      statusTool.result.output.includes(': disabled in this chat') &&
+      statusTool.result.output.includes('- brokenlsp (') &&
+      statusTool.result.output.includes('enabled but unavailable') &&
+      statusTool.result.output.includes('usable'),
+    `list_chat_extensions did not report disabled/unavailable items: ${statusTool.result.output}`
   )
   assert(
-    statusTool.result.output.includes('Only project-enabled and chat-enabled items are exposed as tools.'),
+    statusTool.result.output.includes(
+      'Only project-enabled, chat-enabled and usable items are exposed as tools'
+    ),
     'list_chat_extensions is missing its selection note'
   )
 
