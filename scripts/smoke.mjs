@@ -1200,6 +1200,183 @@ async function main() {
   )
   console.log('PASS skills / MCP / LSP APIs + reload')
 
+  const scopedSkill = await api('POST', '/api/skills', {
+    name: 'scoped-skill',
+    description: 'Only enabled for the second smoke project',
+    content: '# Scoped\nReturn SCOPED_OK.',
+    projects: [otherProject.id]
+  })
+  assert(
+    scopedSkill.projects.length === 1 && scopedSkill.projects[0] === otherProject.id,
+    `scoped skill projects are wrong: ${JSON.stringify(scopedSkill.projects)}`
+  )
+  const scopedSkillFile = fs.readFileSync(path.join(skillsDir, 'scoped-skill', 'SKILL.md'), 'utf8')
+  assert(
+    scopedSkillFile.includes(`projects: ${otherProject.id}`),
+    'scoped skill frontmatter is missing the project id'
+  )
+
+  const scopedMcpList = await api('POST', '/api/mcp', {
+    name: 'scopedmcp',
+    transport: 'stdio',
+    command: process.execPath,
+    args: [mcpServerPath],
+    projects: [otherProject.id]
+  })
+  const scopedMcp = scopedMcpList.find((entry) => entry.name === 'scopedmcp')
+  assert(scopedMcp?.status === 'ready', `scoped MCP server did not start: ${JSON.stringify(scopedMcp)}`)
+  assert(
+    scopedMcp.projects.length === 1 && scopedMcp.projects[0] === otherProject.id,
+    'scoped MCP projects are wrong'
+  )
+  const scopedMcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf8'))
+  assert(
+    JSON.stringify(scopedMcpConfig.mcpServers.scopedmcp.projects) === JSON.stringify([otherProject.id]),
+    'scoped MCP config did not persist projects'
+  )
+
+  const scopedLspList = await api('POST', '/api/lsp', {
+    name: 'scopedlsp',
+    command: process.execPath,
+    args: [lspServerPath],
+    extensions: ['.py'],
+    languageId: 'python',
+    projects: [otherProject.id]
+  })
+  const scopedLsp = scopedLspList.find((entry) => entry.name === 'scopedlsp')
+  assert(scopedLsp, 'scoped language server is not listed')
+  assert(
+    scopedLsp.projects.length === 1 && scopedLsp.projects[0] === otherProject.id,
+    'scoped LSP projects are wrong'
+  )
+  const scopedLspConfig = JSON.parse(fs.readFileSync(lspConfigPath, 'utf8'))
+  assert(
+    JSON.stringify(scopedLspConfig.languageServers.scopedlsp.projects) === JSON.stringify([otherProject.id]),
+    'scoped LSP config did not persist projects'
+  )
+
+  const invalidScope = await rawApi('POST', '/api/skills', {
+    name: 'bad-scope-skill',
+    description: 'Invalid project scope',
+    content: '# Bad',
+    projects: ['missing-project-id']
+  })
+  assert(invalidScope.status === 400, `unknown project scope was accepted: ${invalidScope.status}`)
+
+  const projectExtensions = await api('GET', `/api/chats/${chat.id}/extensions`)
+  assert(
+    projectExtensions.skills.some((skill) => skill.name === 'smoke-skill' && skill.enabled),
+    'project chat is missing smoke-skill'
+  )
+  assert(
+    !projectExtensions.skills.some((skill) => skill.name === 'scoped-skill'),
+    'scoped skill leaked into the project chat'
+  )
+  assert(
+    projectExtensions.mcpServers.some((server) => server.name === 'mockmcp' && server.enabled),
+    'project chat is missing mockmcp'
+  )
+  assert(
+    !projectExtensions.mcpServers.some((server) => server.name === 'scopedmcp'),
+    'scoped MCP server leaked into the project chat'
+  )
+  assert(
+    projectExtensions.lspServers.some((server) => server.name === 'mocklsp' && server.enabled),
+    'project chat is missing mocklsp'
+  )
+  assert(
+    !projectExtensions.lspServers.some((server) => server.name === 'scopedlsp'),
+    'scoped language server leaked into the project chat'
+  )
+
+  const otherChat = await api('POST', `/api/projects/${otherProject.id}/chats`, { modelId: model.id })
+  const otherExtensions = await api('GET', `/api/chats/${otherChat.id}/extensions`)
+  assert(
+    otherExtensions.skills.some((skill) => skill.name === 'scoped-skill' && skill.enabled),
+    'scoped skill is missing from the second project chat'
+  )
+  assert(
+    otherExtensions.skills.some((skill) => skill.name === 'smoke-skill' && skill.enabled),
+    'all-project skill is missing from the second project chat'
+  )
+  assert(
+    otherExtensions.mcpServers.some((server) => server.name === 'scopedmcp' && server.enabled),
+    'scoped MCP server is missing from the second project chat'
+  )
+  assert(
+    otherExtensions.lspServers.some((server) => server.name === 'scopedlsp' && server.enabled),
+    'scoped language server is missing from the second project chat'
+  )
+
+  const toggleChat = await api('POST', `/api/projects/${project.id}/chats`, { modelId: model.id })
+  const toggles = [
+    ['skill', 'smoke-skill'],
+    ['mcp', 'mockmcp'],
+    ['lsp', 'mocklsp']
+  ]
+  const extensionsItem = (state, kind, name) =>
+    (kind === 'skill' ? state.skills : kind === 'mcp' ? state.mcpServers : state.lspServers).find(
+      (entry) => entry.name === name
+    )
+  for (const [kind, name] of toggles) {
+    await api('PATCH', `/api/chats/${toggleChat.id}/extensions`, { kind, name, enabled: false })
+  }
+  const disabledState = await api('GET', `/api/chats/${toggleChat.id}/extensions`)
+  for (const [kind, name] of toggles) {
+    assert(
+      extensionsItem(disabledState, kind, name)?.enabled === false,
+      `${kind} ${name} was not disabled in the chat`
+    )
+  }
+  const scopedToggle = await rawApi('PATCH', `/api/chats/${toggleChat.id}/extensions`, {
+    kind: 'skill',
+    name: 'scoped-skill',
+    enabled: false
+  })
+  assert(scopedToggle.status === 404, `chat toggle accepted a project-scoped-out skill: ${scopedToggle.status}`)
+
+  const disabledSkillRun = await sendMessage(toggleChat.id, 'use the skill for this task', model.id)
+  const disabledSkillTool = disabledSkillRun.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'use_skill'
+  )
+  assert(disabledSkillTool, 'agent did not attempt use_skill while it was disabled', disabledSkillRun.text.slice(0, 1500))
+  assert(
+    disabledSkillTool.result.ok === false && disabledSkillTool.result.output.includes('disabled in this chat'),
+    `disabled skill was not blocked: ${disabledSkillTool.result.output}`
+  )
+
+  const disabledMcpRun = await sendMessage(toggleChat.id, 'use mcp to echo', model.id)
+  const disabledMcpTool = disabledMcpRun.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'mcp_mockmcp_echo'
+  )
+  assert(disabledMcpTool, 'agent did not attempt the MCP tool while it was disabled', disabledMcpRun.text.slice(0, 1500))
+  assert(
+    disabledMcpTool.result.ok === false && disabledMcpTool.result.output.includes('Unknown tool'),
+    `disabled MCP tool was not blocked: ${disabledMcpTool.result.output}`
+  )
+
+  const disabledLspRun = await sendMessage(toggleChat.id, 'check diagnostics', model.id)
+  const disabledLspTool = disabledLspRun.events.find(
+    (event) => event.type === 'tool_end' && event.call.name === 'lsp_diagnostics'
+  )
+  assert(disabledLspTool, 'agent did not attempt lsp_diagnostics while it was disabled', disabledLspRun.text.slice(0, 1500))
+  assert(
+    disabledLspTool.result.ok === false && disabledLspTool.result.output.includes('disabled in this chat'),
+    `disabled language server was not blocked: ${disabledLspTool.result.output}`
+  )
+
+  for (const [kind, name] of toggles) {
+    await api('PATCH', `/api/chats/${toggleChat.id}/extensions`, { kind, name, enabled: true })
+  }
+  const enabledState = await api('GET', `/api/chats/${toggleChat.id}/extensions`)
+  for (const [kind, name] of toggles) {
+    assert(
+      extensionsItem(enabledState, kind, name)?.enabled === true,
+      `${kind} ${name} was not re-enabled in the chat`
+    )
+  }
+  console.log('PASS project scoping + per-chat extension toggles')
+
   const minecraft = await callExtension(
     path.join(repo, 'examples', 'extensions', 'minecraft'),
     'plugin_scaffold',

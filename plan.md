@@ -63,8 +63,9 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] Live streaming assistant text + reasoning indicator
 - [x] Tool activity cards (name, args, result, duration)
 - [x] Composer with model picker, send, stop
+- [x] Chat tools menu left of the model picker: per-chat skill/MCP/LSP toggles
 - [x] Settings: providers/models add/delete, masked keys, provider presets + custom
-- [x] Extensions panel: status, tools, reload
+- [x] Extensions panel: status, tools, reload, project scope in add forms
 
 ## Phase 4 — Extension system (the power feature)
 
@@ -98,6 +99,8 @@ implemented but not yet verified. `[ ]` means not done.
 - [x] MCP client (stdio + Streamable HTTP + legacy SSE) so existing MCP servers can be reused
 - [x] LSP diagnostics surfaced as `lsp_diagnostics` tool results
 - [x] Skills / MCP / LSP panels in the Extensions modal (status, tools, reload)
+- [x] Project-scoped skills / MCP / LSP (all projects or a selected subset)
+- [x] Per-chat enable/disable toggles for project-enabled skills / MCP / LSP
 
 ## Phase 6 — Hardening and release
 
@@ -119,9 +122,9 @@ the Extensions modal. MCP and LSP never receive provider API keys.
 
 | Surface | Discovery | Runtime | Agent-facing tool | API / UI |
 | --- | --- | --- | --- | --- |
-| **Skills** | `.ks-agent/skills/<name>/SKILL.md` (primary), `skills/` (legacy), `.opencode/skills/` (fallback), or `KS_SKILLS_DIR` | Markdown + YAML frontmatter (`name`, `description`) parsed at startup/reload; body is returned on demand | `use_skill({ name })` | `GET/POST /api/skills`, `DELETE /api/skills/:name`, `POST /api/skills/reload`; Skills tab |
-| **MCP** | `.ks-agent/mcp.json` (`mcpServers`) or `KS_MCP_CONFIG` | stdio child (newline JSON-RPC) or HTTP (Streamable HTTP / legacy SSE) with `initialize` → `notifications/initialized` → paginated `tools/list`; lazy start, restarted on reload | `mcp_<server>_<tool>` | `GET/POST /api/mcp`, `DELETE /api/mcp/:name`, `POST /api/mcp/reload`; MCP tab |
-| **LSP** | `.ks-agent/lsp.json` (`languageServers`) or `KS_LSP_CONFIG` | Spawned on first diagnostic request for a matching extension; LSP `Content-Length` framing, `initialize`, `didOpen` / `didChange`, then wait for `textDocument/publishDiagnostics` | `lsp_diagnostics({ path })` | `GET/POST /api/lsp`, `DELETE /api/lsp/:name`, `POST /api/lsp/reload`; LSP tab |
+| **Skills** | `.ks-agent/skills/<name>/SKILL.md` (primary), `skills/` (legacy), `.opencode/skills/` (fallback), or `KS_SKILLS_DIR`; frontmatter `projects` sets scope | Markdown + YAML frontmatter (`name`, `description`, `projects`) parsed at startup/reload; body is returned on demand | `use_skill({ name })` | `GET/POST /api/skills`, `DELETE /api/skills/:name`, `POST /api/skills/reload`; Skills tab with project scope |
+| **MCP** | `.ks-agent/mcp.json` (`mcpServers`, optional per-server `projects`) or `KS_MCP_CONFIG` | stdio child (newline JSON-RPC) or HTTP (Streamable HTTP / legacy SSE) with `initialize` → `notifications/initialized` → paginated `tools/list`; lazy start, restarted on reload | `mcp_<server>_<tool>` | `GET/POST /api/mcp`, `DELETE /api/mcp/:name`, `POST /api/mcp/reload`; MCP tab with project scope |
+| **LSP** | `.ks-agent/lsp.json` (`languageServers`, optional per-server `projects`) or `KS_LSP_CONFIG` | Spawned on first diagnostic request for a matching extension; LSP `Content-Length` framing, `initialize`, `didOpen` / `didChange`, then wait for `textDocument/publishDiagnostics` | `lsp_diagnostics({ path })` | `GET/POST /api/lsp`, `DELETE /api/lsp/:name`, `POST /api/lsp/reload`; LSP tab with project scope |
 
 ### Lifecycle
 

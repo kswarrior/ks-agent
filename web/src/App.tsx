@@ -351,6 +351,7 @@ export default function App() {
       return
     }
     let cancelled = false
+    setChatExtensions(null)
     void api
       .listChatExtensions(activeChatId)
       .then((state) => {
