@@ -77,8 +77,26 @@ if [[ "${KS_REBUILD:-0}" == "1" || ! -f dist/index.html || ! -f dist-server/inde
   npm run build
 fi
 
+DATA_DIR="${KS_DATA_DIR:-$PWD/storage}"
+PROJECTS_DIR="${KS_PROJECTS_DIR:-$PWD/project}"
+mkdir -p "$DATA_DIR" "$PROJECTS_DIR"
+export PORT KS_DATA_DIR="$DATA_DIR" KS_PROJECTS_DIR="$PROJECTS_DIR"
+
+DB_FILE="$DATA_DIR/ksagent.db"
+if [[ -f "$DB_FILE" ]]; then
+  BACKUP_DIR="$DATA_DIR/backups"
+  BACKUP_FILE="$BACKUP_DIR/ksagent-$(date +%Y%m%d-%H%M%S).db"
+  mkdir -p "$BACKUP_DIR"
+  if node -e 'const Database = require("better-sqlite3"); const db = new Database(process.argv[1], { readonly: true }); db.backup(process.argv[2]).then(() => db.close()).catch((error) => { console.error(error); process.exit(1); });' "$DB_FILE" "$BACKUP_FILE" 2>/dev/null; then
+    echo "Data backup: ${BACKUP_FILE}"
+  else
+    echo "WARN: could not back up ${DB_FILE}" >&2
+  fi
+  ls -1t "$BACKUP_DIR"/ksagent-*.db 2>/dev/null | tail -n +11 | xargs -r rm -f
+fi
+
 echo "Starting KS Agent on port ${PORT} in the background..."
-export PORT KS_DATA_DIR="${KS_DATA_DIR:-$PWD/storage}"
+echo "Data: ${DATA_DIR} · Projects: ${PROJECTS_DIR}"
 if command -v setsid >/dev/null 2>&1; then
   nohup setsid node dist-server/index.js >"$LOG_FILE" 2>&1 </dev/null &
 else
