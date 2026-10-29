@@ -2,9 +2,16 @@ type ToolMeta = { action: string; running: string }
 
 const TOOL_META: Record<string, ToolMeta> = {
   read_file: { action: 'Read', running: 'Reading' },
+  read_multiple_files: { action: 'Read', running: 'Reading' },
   write_file: { action: 'Write', running: 'Writing' },
   edit_file: { action: 'Edit', running: 'Editing' },
+  apply_patch: { action: 'Patch', running: 'Patching' },
+  append_file: { action: 'Append', running: 'Appending' },
+  create_dir: { action: 'Mkdir', running: 'Creating' },
+  copy_file: { action: 'Copy', running: 'Copying' },
   list_dir: { action: 'List', running: 'Listing' },
+  tree: { action: 'Tree', running: 'Scanning' },
+  find_files: { action: 'Find', running: 'Finding' },
   glob: { action: 'Find', running: 'Finding' },
   grep: { action: 'Search', running: 'Searching' },
   get_file_info: { action: 'Inspect', running: 'Inspecting' },
@@ -12,6 +19,14 @@ const TOOL_META: Record<string, ToolMeta> = {
   move_file: { action: 'Move', running: 'Moving' },
   run_shell: { action: 'Run', running: 'Running' },
   update_plan: { action: 'Plan', running: 'Planning' },
+  git_init: { action: 'Git init', running: 'Initializing' },
+  git_status: { action: 'Git status', running: 'Checking git' },
+  git_diff: { action: 'Git diff', running: 'Diffing' },
+  git_log: { action: 'Git log', running: 'Reading log' },
+  git_branch: { action: 'Git branch', running: 'Branching' },
+  git_commit: { action: 'Git commit', running: 'Committing' },
+  git_push: { action: 'Git push', running: 'Pushing' },
+  git_pull: { action: 'Git pull', running: 'Pulling' },
   'tool result': { action: 'Result', running: 'Working' }
 }
 

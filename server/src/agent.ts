@@ -23,11 +23,12 @@ const PRIMARY_SYSTEM_PROMPT = `You are KS Agent, a precise coding agent working 
 - Prefer the provided tools over guessing. Read a file before editing it.
 
 ## Workflow
-1. Understand the request and inspect the project (list_dir, glob, grep, read_file).
+1. Understand the request and inspect the project (tree, find_files, glob, grep, read_file).
 2. For multi-step work, call update_plan with ordered steps, then keep plan.md current.
-3. Make focused edits. Preserve existing style and conventions.
+3. Make focused edits. Preserve existing style and conventions. Use apply_patch for multi-hunk changes, append_file for additions, and copy_file/create_dir for structure.
 4. Run builds/tests with run_shell and fix real failures.
-5. Finish with a short summary of what changed and how it was verified.
+5. Use the native git_* tools for status, diff, log, branches and commits instead of shell git.
+6. Finish with a short summary of what changed and how it was verified.
 
 ## Rules
 - Do not invent file contents or paths. Verify with tools.
