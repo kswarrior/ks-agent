@@ -29,6 +29,7 @@ import {
   updateChat,
   updateProvider
 } from './db.js'
+import { errorStatus } from './errors.js'
 import { extensions } from './extensions.js'
 import { cleanRelative, resolveInProject } from './fsx.js'
 import { lsp } from './lsp.js'
@@ -50,6 +51,11 @@ const runs = new Map<string, RunState>()
 
 function errorJson(message: string, status = 400) {
   return { error: message, status }
+}
+
+function configErrorJson(error: unknown) {
+  const status = errorStatus(error) as 400 | 403 | 404 | 409 | 413 | 500
+  return { body: errorJson(error instanceof Error ? error.message : String(error), status), status }
 }
 
 function publicProvider(provider: {
@@ -442,15 +448,79 @@ app.get('/api/extensions/:name', (c) => {
 // ------------------------------------------------------------------- skills
 app.get('/api/skills', (c) => c.json(skills.list()))
 
+app.post('/api/skills', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  const name = typeof body.name === 'string' ? body.name : ''
+  const description = typeof body.description === 'string' ? body.description : ''
+  const content = typeof body.content === 'string' ? body.content : ''
+  try {
+    return c.json(skills.create(name, description, content, body.overwrite === true), 201)
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
+app.delete('/api/skills/:name', (c) => {
+  try {
+    skills.remove(c.req.param('name'))
+    return c.json({ ok: true })
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
 app.post('/api/skills/reload', (c) => c.json(skills.discover()))
 
 // ---------------------------------------------------------------------- mcp
 app.get('/api/mcp', (c) => c.json(mcp.list()))
 
+app.post('/api/mcp', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  if (!body || typeof body !== 'object') return c.json(errorJson('JSON body required'), 400)
+  try {
+    return c.json(await mcp.add(body), 201)
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
+app.delete('/api/mcp/:name', async (c) => {
+  try {
+    return c.json(await mcp.remove(c.req.param('name')))
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
 app.post('/api/mcp/reload', async (c) => c.json(await mcp.reload()))
 
 // ---------------------------------------------------------------------- lsp
 app.get('/api/lsp', (c) => c.json(lsp.list()))
+
+app.post('/api/lsp', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  if (!body || typeof body !== 'object') return c.json(errorJson('JSON body required'), 400)
+  try {
+    return c.json(lsp.add(body), 201)
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
+
+app.delete('/api/lsp/:name', (c) => {
+  try {
+    return c.json(lsp.remove(c.req.param('name')))
+  } catch (error) {
+    const failure = configErrorJson(error)
+    return c.json(failure.body, failure.status)
+  }
+})
 
 app.post('/api/lsp/reload', (c) => c.json(lsp.reload()))
 

@@ -68,6 +68,7 @@ export interface SkillInfo {
   description: string
   path: string
   source: string
+  writable: boolean
 }
 
 export interface McpToolInfo {

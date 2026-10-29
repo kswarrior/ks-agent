@@ -115,9 +115,34 @@ export const reloadExtensions = () => req<ExtensionInfo[]>('/api/extensions/relo
 
 export const listSkills = () => req<SkillInfo[]>('/api/skills')
 export const reloadSkills = () => req<SkillInfo[]>('/api/skills/reload', { method: 'POST' })
+export const createSkill = (body: { name: string; description: string; content: string; overwrite?: boolean }) =>
+  req<SkillInfo>('/api/skills', json('POST', body))
+export const deleteSkill = (name: string) =>
+  req<{ ok: true }>(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
 
 export const listMcpServers = () => req<McpServerInfo[]>('/api/mcp')
 export const reloadMcpServers = () => req<McpServerInfo[]>('/api/mcp/reload', { method: 'POST' })
+export const createMcpServer = (body: {
+  name: string
+  transport: 'stdio' | 'http' | 'sse'
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  url?: string
+  headers?: Record<string, string>
+}) => req<McpServerInfo[]>('/api/mcp', json('POST', body))
+export const deleteMcpServer = (name: string) =>
+  req<McpServerInfo[]>(`/api/mcp/${encodeURIComponent(name)}`, { method: 'DELETE' })
 
 export const listLspServers = () => req<LspServerInfo[]>('/api/lsp')
 export const reloadLspServers = () => req<LspServerInfo[]>('/api/lsp/reload', { method: 'POST' })
+export const createLspServer = (body: {
+  name: string
+  command: string
+  args?: string[]
+  extensions: string[]
+  languageId?: string
+  env?: Record<string, string>
+}) => req<LspServerInfo[]>('/api/lsp', json('POST', body))
+export const deleteLspServer = (name: string) =>
+  req<LspServerInfo[]>(`/api/lsp/${encodeURIComponent(name)}`, { method: 'DELETE' })
