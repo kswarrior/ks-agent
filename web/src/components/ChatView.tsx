@@ -293,8 +293,8 @@ export function ChatView({
   }, [messages])
 
   const runReport = useMemo(
-    () => buildRunReport({ messages, steps, streaming, loading, rootPath }),
-    [messages, steps, streaming, loading, rootPath]
+    () => buildRunReport({ messages, steps, streaming, loading, halted: Boolean(error), rootPath }),
+    [messages, steps, streaming, loading, error, rootPath]
   )
 
   const persistedToolCallIds = useMemo(() => {

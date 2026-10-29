@@ -91,12 +91,14 @@ export function buildRunReport({
   steps,
   streaming,
   loading,
+  halted,
   rootPath
 }: {
   messages: Message[]
   steps: RunStep[]
   streaming: boolean
   loading: boolean
+  halted: boolean
   rootPath: string
 }): RunReportData | null {
   if (loading || streaming || messages.length === 0) return null
@@ -136,7 +138,7 @@ export function buildRunReport({
   )
   const pending = calls.some((call) => !resultIds.has(call.id))
   const stopped =
-    pending || /^Stopped after \d+ steps without finishing/im.test(finalMessage.content)
+    halted || pending || /^Stopped after \d+ steps without finishing/im.test(finalMessage.content)
   const changes = collectChanges(runMessages, rootPath)
 
   let durationMs = steps.reduce((total, step) => total + (step.durationMs ?? 0), 0)
@@ -174,6 +176,15 @@ function CheckIcon() {
   )
 }
 
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 7v5" />
+      <path d="M12 16.5v.5" />
+    </svg>
+  )
+}
+
 function ChevronIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -194,7 +205,7 @@ export function RunReport({ report }: { report: RunReportData }) {
     >
       <summary className="run-report-head">
         <span className="run-report-badge" aria-hidden="true">
-          <CheckIcon />
+          {report.status === 'complete' ? <CheckIcon /> : <StopIcon />}
         </span>
         <span className="run-report-heading">
           <span className="run-report-kicker">Task report</span>
