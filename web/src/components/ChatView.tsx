@@ -285,34 +285,37 @@ export function ChatView({
                 disabled={streaming || models.length === 0}
                 ariaLabel="Model"
               />
-              {streaming ? (
-                <button className="icon-action" onClick={onStop} aria-label="Stop" title="Stop">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
-                  </svg>
-                </button>
-              ) : (
-                <button
-                  className="icon-action primary"
-                  onClick={send}
-                  disabled={!draft.trim() || !modelId}
-                  aria-label="Send"
-                  title="Send"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
+              <div className="composer-right">
+                <StepMenu steps={steps} maxSteps={maxSteps} />
+                {streaming ? (
+                  <button className="icon-action" onClick={onStop} aria-label="Stop" title="Stop">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    className="icon-action primary"
+                    onClick={send}
+                    disabled={!draft.trim() || !modelId}
+                    aria-label="Send"
+                    title="Send"
                   >
-                    <path d="M12 19V5" />
-                    <path d="m5 12 7-7 7 7" />
-                  </svg>
-                </button>
-              )}
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 19V5" />
+                      <path d="m5 12 7-7 7 7" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </>
