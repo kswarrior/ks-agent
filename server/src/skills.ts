@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { config, isInside } from './config.js'
 import { ConfigError } from './errors.js'
+import { isProjectEnabled, normalizeProjects } from './scope.js'
 import type { SkillInfo, ToolDef, ToolResult } from './types.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
@@ -14,13 +15,14 @@ interface LoadedSkill extends SkillInfo {
 interface Frontmatter {
   name: string
   description: string
+  projects: string[]
   body: string
 }
 
 function parseFrontmatter(raw: string): Frontmatter {
   const text = raw.replace(/\r\n/g, '\n')
   const match = /^---\n([\s\S]*?)\n---\n?/.exec(text)
-  if (!match) return { name: '', description: '', body: text }
+  if (!match) return { name: '', description: '', projects: [], body: text }
   const fields: Record<string, string> = {}
   for (const line of match[1].split('\n')) {
     const colon = line.indexOf(':')

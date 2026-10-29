@@ -93,12 +93,15 @@ export interface ExtensionInfo {
   error?: string
 }
 
+export type ExtensionKind = 'skill' | 'mcp' | 'lsp'
+
 export interface SkillInfo {
   name: string
   description: string
   path: string
   source: string
   writable: boolean
+  projects: string[]
 }
 
 export interface McpToolInfo {
@@ -113,6 +116,7 @@ export interface McpServerInfo {
   tools: McpToolInfo[]
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
+  projects: string[]
 }
 
 export interface LspServerInfo {
@@ -122,6 +126,13 @@ export interface LspServerInfo {
   languageId: string
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
+  projects: string[]
+}
+
+export interface ChatExtensionsState {
+  skills: Array<SkillInfo & { enabled: boolean }>
+  mcpServers: Array<McpServerInfo & { enabled: boolean }>
+  lspServers: Array<LspServerInfo & { enabled: boolean }>
 }
 
 export interface AgentEvent {

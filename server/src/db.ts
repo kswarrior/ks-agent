@@ -3,7 +3,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { config } from './config.js'
-import type { Chat, Message, ModelEntry, Project, Provider, Role, ToolCall } from './types.js'
+import type { Chat, ExtensionKind, Message, ModelEntry, Project, Provider, Role, ToolCall } from './types.js'
 
 const dbPath = path.join(config.dataDir, 'ksagent.db')
 fs.mkdirSync(path.dirname(dbPath), { recursive: true })
@@ -54,8 +54,15 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chat_disabled_extensions (
+  chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  name TEXT NOT NULL,
+  PRIMARY KEY (chat_id, kind, name)
+);
 CREATE INDEX IF NOT EXISTS idx_chats_project ON chats(project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_disabled_chat ON chat_disabled_extensions(chat_id);
 `)
 
 export function newId(): string {
@@ -161,6 +168,40 @@ export function touchChat(id: string): void {
 }
 export function removeChat(id: string): void {
   db.prepare('DELETE FROM chats WHERE id = ?').run(id)
+}
+
+export function listChatDisabled(chatId: string): Record<ExtensionKind, Set<string>> {
+  const out: Record<ExtensionKind, Set<string>> = {
+    skill: new Set(),
+    mcp: new Set(),
+    lsp: new Set()
+  }
+  const rows = db
+    .prepare('SELECT kind, name FROM chat_disabled_extensions WHERE chat_id = ?')
+    .all(chatId) as Array<{ kind: ExtensionKind; name: string }>
+  for (const row of rows) {
+    if (row.kind in out) out[row.kind].add(row.name)
+  }
+  return out
+}
+
+export function setChatExtensionEnabled(
+  chatId: string,
+  kind: ExtensionKind,
+  name: string,
+  enabled: boolean
+): void {
+  if (enabled) {
+    db.prepare('DELETE FROM chat_disabled_extensions WHERE chat_id = ? AND kind = ? AND name = ?').run(
+      chatId,
+      kind,
+      name
+    )
+    return
+  }
+  db.prepare(
+    'INSERT INTO chat_disabled_extensions (chat_id, kind, name) VALUES (?, ?, ?) ON CONFLICT DO NOTHING'
+  ).run(chatId, kind, name)
 }
 
 export function listMessages(chatId: string): Message[] {
