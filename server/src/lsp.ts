@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { config } from './config.js'
+import { readJsonConfig, writeJsonConfig } from './configFile.js'
+import { ConfigError } from './errors.js'
 import { resolveInProject } from './fsx.js'
 import type { LspServerInfo, ToolDef, ToolResult } from './types.js'
 
@@ -108,6 +110,53 @@ function parseConfig(raw: unknown): Array<{ name: string; value: unknown }> {
     return Object.entries(source as Record<string, unknown>).map(([name, value]) => ({ name, value }))
   }
   return Object.entries(obj).map(([name, value]) => ({ name, value }))
+}
+
+function configServerMap(root: Record<string, unknown>): Record<string, unknown> {
+  if (Array.isArray(root.servers)) {
+    const map: Record<string, unknown> = {}
+    for (const item of root.servers) {
+      const entry = asRecord(item)
+      const name = asString(entry.name)
+      if (name) map[name] = item
+    }
+    return map
+  }
+  if (root.languageServers && typeof root.languageServers === 'object') return asRecord(root.languageServers)
+  if (root.lspServers && typeof root.lspServers === 'object') return asRecord(root.lspServers)
+  if (root.servers && typeof root.servers === 'object') return asRecord(root.servers)
+  return {}
+}
+
+function serverToConfig(server: LanguageServerConfig): Record<string, unknown> {
+  return {
+    command: server.command,
+    args: server.args,
+    extensions: server.extensions,
+    languageId: server.languageId,
+    ...(Object.keys(server.env).length ? { env: server.env } : {}),
+    ...(server.initializationOptions ? { initializationOptions: server.initializationOptions } : {})
+  }
+}
+
+function validateLspInput(obj: Record<string, unknown>): void {
+  if (obj.args !== undefined && (!Array.isArray(obj.args) || obj.args.length > 100 || obj.args.some((item) => typeof item !== 'string' || item.length > 4000))) {
+    throw new ConfigError('args must be an array of up to 100 strings.')
+  }
+  const extensions = obj.extensions ?? obj.fileExtensions
+  if (!Array.isArray(extensions) || extensions.length === 0 || extensions.length > 50) {
+    throw new ConfigError('extensions must be a non-empty array (for example [".ts", ".tsx"]).')
+  }
+  if (obj.env !== undefined) {
+    if (!obj.env || typeof obj.env !== 'object' || Array.isArray(obj.env)) {
+      throw new ConfigError('env must be an object of string values.')
+    }
+    for (const [key, value] of Object.entries(obj.env)) {
+      if (typeof value !== 'string' || !key.trim() || key.length > 200 || value.length > 4000) {
+        throw new ConfigError('env must use non-empty string keys and values.')
+      }
+    }
+  }
 }
 
 function severityLabel(severity: number | undefined): string {
@@ -469,6 +518,49 @@ export class LspRegistry {
 
   count(): number {
     return this.entries.size
+  }
+
+  add(input: unknown): LspServerInfo[] {
+    const obj = asRecord(input)
+    const name = asString(obj.name).trim().toLowerCase()
+    if (!NAME_RE.test(name)) {
+      throw new ConfigError('Language server name must use lowercase letters, numbers, dashes or underscores (max 40 characters).')
+    }
+    validateLspInput(obj)
+    const command = asString(obj.command).trim()
+    if (!command || command.length > 2000) {
+      throw new ConfigError('command is required and must be at most 2000 characters.')
+    }
+    let server: LanguageServerConfig
+    try {
+      server = normalizeServer(name, { ...obj, name })
+    } catch (error) {
+      throw new ConfigError(error instanceof Error ? error.message : String(error))
+    }
+    const root = readJsonConfig(config.lspConfigPath)
+    const servers = configServerMap(root)
+    if (servers[name]) throw new ConfigError(`Language server "${name}" already exists.`, 409)
+    servers[name] = serverToConfig(server)
+    root.languageServers = servers
+    if (root.servers) delete root.servers
+    if (root.lspServers) delete root.lspServers
+    writeJsonConfig(config.lspConfigPath, root)
+    this.discover()
+    return this.list()
+  }
+
+  remove(name: string): LspServerInfo[] {
+    const key = name.trim().toLowerCase()
+    const root = readJsonConfig(config.lspConfigPath)
+    const servers = configServerMap(root)
+    if (!servers[key]) throw new ConfigError(`Language server "${name}" was not found.`, 404)
+    delete servers[key]
+    root.languageServers = servers
+    if (root.servers) delete root.servers
+    if (root.lspServers) delete root.lspServers
+    writeJsonConfig(config.lspConfigPath, root)
+    this.discover()
+    return this.list()
   }
 
   toolDefs(): ToolDef[] {

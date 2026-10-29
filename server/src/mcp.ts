@@ -789,6 +789,58 @@ export class McpRegistry {
     return this.entries.size
   }
 
+  addConfig(input: unknown): string {
+    const obj = asRecord(input)
+    const name = asString(obj.name).trim().toLowerCase()
+    if (!NAME_RE.test(name)) {
+      throw new ConfigError('MCP server name must use lowercase letters, numbers, dashes or underscores (max 40 characters).')
+    }
+    validateArgs(obj.args)
+    validateStringMap(obj.env, 'env')
+    validateStringMap(obj.headers, 'headers')
+    const command = asString(obj.command).trim()
+    const url = asString(obj.url).trim()
+    if (command.length > 2000 || url.length > 4000) throw new ConfigError('command or url is too long.')
+    let server: ServerConfig
+    try {
+      server = normalizeServer(name, { ...obj, name })
+    } catch (error) {
+      throw new ConfigError(error instanceof Error ? error.message : String(error))
+    }
+    const root = readJsonConfig(config.mcpConfigPath)
+    const servers = configServerMap(root)
+    if (servers[name]) throw new ConfigError(`MCP server "${name}" already exists.`, 409)
+    servers[name] = serverToConfig(server)
+    root.mcpServers = servers
+    if (root.servers) delete root.servers
+    writeJsonConfig(config.mcpConfigPath, root)
+    return name
+  }
+
+  async add(input: unknown): Promise<McpServerInfo[]> {
+    this.addConfig(input)
+    await this.reload()
+    return this.list()
+  }
+
+  removeConfig(name: string): string {
+    const key = name.trim().toLowerCase()
+    const root = readJsonConfig(config.mcpConfigPath)
+    const servers = configServerMap(root)
+    if (!servers[key]) throw new ConfigError(`MCP server "${name}" was not found.`, 404)
+    delete servers[key]
+    root.mcpServers = servers
+    if (root.servers) delete root.servers
+    writeJsonConfig(config.mcpConfigPath, root)
+    return key
+  }
+
+  async remove(name: string): Promise<McpServerInfo[]> {
+    this.removeConfig(name)
+    await this.reload()
+    return this.list()
+  }
+
   private toolName(server: string, tool: string): string {
     return `mcp_${server}_${tool}`.replace(/[^a-zA-Z0-9_-]/g, '_')
   }
