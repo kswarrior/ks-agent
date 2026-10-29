@@ -208,7 +208,7 @@ export function KnowledgePanel({
     try {
       const entry = await generateProjectKnowledge(projectId, defaultModel || undefined)
       await load()
-      setNotice(`Project summary generated (${entry.source === 'generated' ? 'saved' : 'updated'}).`)
+      setNotice('Project summary ready.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -362,7 +362,7 @@ export function KnowledgePanel({
                   checked={editor.enabled}
                   onChange={(event) => setEditor({ ...editor, enabled: event.target.checked })}
                 />
-                <span>Enabled globally</span>
+                <span>Enabled for chats</span>
               </label>
               <div className="settings-form-actions">
                 <button type="button" className="btn ghost" onClick={() => setEditor(null)} disabled={busyLabel !== null}>
