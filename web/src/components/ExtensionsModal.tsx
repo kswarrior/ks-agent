@@ -1,6 +1,15 @@
 import { useState } from 'react'
-import { reloadExtensions, reloadLspServers, reloadMcpServers, reloadSkills } from '../api'
+import {
+  deleteLspServer,
+  deleteMcpServer,
+  deleteSkill,
+  reloadExtensions,
+  reloadLspServers,
+  reloadMcpServers,
+  reloadSkills
+} from '../api'
 import type { ExtensionInfo, LspServerInfo, McpServerInfo, SkillInfo } from '../types'
+import { AddLspForm, AddMcpForm, AddSkillForm } from './ConfigForms'
 import { Modal } from './Modal'
 
 type ExtensionTab = 'extensions' | 'skills' | 'mcp' | 'lsp'
