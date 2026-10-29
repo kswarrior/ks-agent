@@ -515,11 +515,11 @@ code {
 }
 
 .msg.assistant .tool-card {
-  margin-top: 6px;
+  margin-top: 3px;
 }
 
 .msg.assistant .tool-card + .tool-card {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .muted {
