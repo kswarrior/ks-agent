@@ -13,7 +13,29 @@ import { ModelSelect } from './ModelSelect'
 import { StepMenu } from './StepMenu'
 import { buildRunReport, RunReport } from './RunReport'
 
-const SPECIAL_ARG_KEYS = new Set(['path', 'old_string', 'new_string', 'content', 'command', 'pattern', 'from', 'to'])
+const SPECIAL_ARG_KEYS = new Set([
+  'path',
+  'paths',
+  'query',
+  'pattern',
+  'match',
+  'type',
+  'old_string',
+  'new_string',
+  'patch',
+  'content',
+  'command',
+  'from',
+  'to',
+  'message',
+  'remote',
+  'branch',
+  'action',
+  'staged',
+  'ref',
+  'file',
+  'stat_only'
+])
 
 function splitLines(text: string): string[] {
   return text.replace(/\r\n/g, '\n').split('\n')
@@ -81,14 +103,27 @@ function ToolCard({
   const fullTo = rawTo ? absolutePath(rootPath, rawTo) : ''
   const location =
     fullPath ||
-    (rootPath && ['grep', 'glob', 'list_dir', 'run_shell'].includes(name) ? rootPath : '')
+    (rootPath &&
+    ['grep', 'glob', 'find_files', 'tree', 'list_dir', 'run_shell', 'git_status', 'git_diff', 'git_log'].includes(name)
+      ? rootPath
+      : '')
   const oldString = typeof parsedArgs.old_string === 'string' ? parsedArgs.old_string : ''
   const newString = typeof parsedArgs.new_string === 'string' ? parsedArgs.new_string : ''
   const content = typeof parsedArgs.content === 'string' ? parsedArgs.content : ''
   const command = argsString(parsedArgs, 'command')
   const pattern = argsString(parsedArgs, 'pattern')
+  const query = argsString(parsedArgs, 'query')
   const extraArgs = Object.entries(parsedArgs).filter(([key]) => !SPECIAL_ARG_KEYS.has(key))
-  const isMetadataResult = ['edit_file', 'write_file', 'delete_file', 'move_file'].includes(name)
+  const isMetadataResult = [
+    'edit_file',
+    'write_file',
+    'apply_patch',
+    'append_file',
+    'create_dir',
+    'copy_file',
+    'delete_file',
+    'move_file'
+  ].includes(name)
   const editStartLine = changedLine(output)
   const addedLines = content ? splitLines(content).length : 0
 
@@ -166,10 +201,10 @@ function ToolCard({
           </div>
         )}
 
-        {(name === 'grep' || name === 'glob') && pattern && (
+        {(name === 'grep' || name === 'glob' || name === 'find_files') && (pattern || query) && (
           <div className="tool-arg-row">
-            <span className="tool-arg-key">pattern</span>
-            <code className="tool-inline-code">{pattern}</code>
+            <span className="tool-arg-key">{name === 'find_files' ? 'query' : 'pattern'}</span>
+            <code className="tool-inline-code">{name === 'find_files' ? query : pattern}</code>
           </div>
         )}
 

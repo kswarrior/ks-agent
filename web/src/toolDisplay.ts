@@ -97,7 +97,15 @@ export function describeTool(
     case 'grep':
     case 'glob':
       return { primary: argsString(args, 'pattern'), detail: path || displayPath('.', rootPath) }
-    case 'move_file': {
+    case 'find_files':
+      return { primary: argsString(args, 'query'), detail: path || displayPath('.', rootPath) }
+    case 'tree':
+      return {
+        primary: path === '/' || (rootPath && path === trimRoot(rootPath)) ? 'project root' : baseName(path),
+        detail: path || displayPath('.', rootPath)
+      }
+    case 'move_file':
+    case 'copy_file': {
       const rawFrom = argsString(args, 'from')
       const rawTo = argsString(args, 'to')
       if (!rawFrom && !rawTo) return { primary: '', detail: '' }
@@ -105,6 +113,19 @@ export function describeTool(
       const to = rawTo ? displayPath(rawTo, rootPath) : ''
       return { primary: baseName(from), detail: to ? `${from} → ${to}` : from }
     }
+    case 'git_commit':
+      return { primary: argsString(args, 'message'), detail: '' }
+    case 'git_branch':
+      return {
+        primary: argsString(args, 'name') || argsString(args, 'action') || 'list',
+        detail: 'branch'
+      }
+    case 'git_push':
+    case 'git_pull':
+      return {
+        primary: [argsString(args, 'remote'), argsString(args, 'branch')].filter(Boolean).join(' ') || 'origin',
+        detail: ''
+      }
     case 'list_dir':
       return {
         primary: path === '/' || (rootPath && path === trimRoot(rootPath)) ? 'project root' : baseName(path),
