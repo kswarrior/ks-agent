@@ -26,6 +26,32 @@ interface Entry {
   error?: string
 }
 
+function executable(file: string): boolean {
+  try {
+    fs.accessSync(file, fs.constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function commandAvailable(command: string): boolean {
+  const value = command.trim()
+  if (!value) return false
+  if (value.includes('/') || value.includes('\\')) return executable(value)
+  const extensions =
+    process.platform === 'win32'
+      ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean)
+      : ['']
+  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (!dir) continue
+    for (const extension of extensions) {
+      if (executable(path.join(dir, `${value}${extension}`))) return true
+    }
+  }
+  return false
+}
+
 interface Pending {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
@@ -608,8 +634,12 @@ export class LspRegistry {
           .filter(([key]) => key.startsWith(`${entry.name}:`))
           .map(([, client]) => client)
         const ready = clients.find((client) => client.status === 'ready')
-        const error = entry.error ?? clients.find((client) => client.error)?.error
-        const status: LspServerInfo['status'] = entry.error
+        const missing = entry.config ? !commandAvailable(entry.config.command) : false
+        const error =
+          entry.error ??
+          clients.find((client) => client.error)?.error ??
+          (missing ? `Command not found: ${entry.config?.command}` : undefined)
+        const status: LspServerInfo['status'] = entry.error || missing
           ? 'error'
           : ready
             ? 'ready'
