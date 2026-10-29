@@ -193,6 +193,34 @@ function startMockProvider() {
           return
         }
 
+        if (lastUser.includes('find') && !hasTool('call_find')) {
+          sse(res, {
+            choices: [
+              {
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: 'call_find',
+                      type: 'function',
+                      function: {
+                        name: 'find_files',
+                        arguments: JSON.stringify({ query: 'hello.txt' })
+                      }
+                    }
+                  ]
+                },
+                finish_reason: null
+              }
+            ]
+          })
+          sse(res, { choices: [{ delta: {}, finish_reason: 'tool_calls' }] })
+          res.write('data: [DONE]\n\n')
+          res.end()
+          return
+        }
+
         if (lastUser.includes('hello') && !hasTool('call_1')) {
           sse(res, {
             choices: [
@@ -568,6 +596,12 @@ async function main() {
   const hello = fs.readFileSync(path.join(project.path, 'hello.txt'), 'utf8')
   assert(hello === 'hello from smoke', `unexpected hello.txt content: ${hello}`)
   console.log('PASS agent loop + built-in tool + persistence')
+
+  const found = await sendMessage(chat.id, 'find the hello file', model.id)
+  const findTool = found.events.find((event) => event.type === 'tool_end' && event.call.name === 'find_files')
+  assert(findTool, 'agent did not call find_files', found.text.slice(0, 1000))
+  assert(findTool.result.ok === true && findTool.result.output.includes('hello.txt'), `find_files failed: ${findTool.result.output}`)
+  console.log('PASS agent loop + find_files tool')
 
   const retried = await sendMessage(chat.id, 'retry after a provider error', model.id)
   assert(!retried.events.some((event) => event.type === 'error'), 'provider retry did not recover')
