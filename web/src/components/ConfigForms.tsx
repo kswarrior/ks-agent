@@ -8,6 +8,45 @@ type FormProps = {
   onCancel: () => void
 }
 
+const LSP_PRESETS = [
+  {
+    label: 'TypeScript',
+    name: 'typescript',
+    command: 'typescript-language-server',
+    args: '--stdio',
+    extensions: '.ts, .tsx, .js, .jsx, .mjs, .cjs',
+    languageId: 'typescript',
+    installCommand: 'npm i -g typescript-language-server typescript'
+  },
+  {
+    label: 'Python',
+    name: 'python',
+    command: 'pyright-langserver',
+    args: '--stdio',
+    extensions: '.py, .pyi',
+    languageId: 'python',
+    installCommand: 'pip install pyright'
+  },
+  {
+    label: 'Go',
+    name: 'go',
+    command: 'gopls',
+    args: '',
+    extensions: '.go',
+    languageId: 'go',
+    installCommand: 'go install golang.org/x/tools/gopls@latest'
+  },
+  {
+    label: 'Rust',
+    name: 'rust',
+    command: 'rust-analyzer',
+    args: '',
+    extensions: '.rs',
+    languageId: 'rust',
+    installCommand: 'rustup component add rust-analyzer'
+  }
+] as const
+
 function splitLines(value: string): string[] {
   return value
     .split('\n')
@@ -311,9 +350,19 @@ export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
   const [args, setArgs] = useState('')
   const [extensions, setExtensions] = useState('')
   const [languageId, setLanguageId] = useState('')
+  const [installCommand, setInstallCommand] = useState('')
   const [projectIds, setProjectIds] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const applyPreset = (preset: (typeof LSP_PRESETS)[number]) => {
+    setName(preset.name)
+    setCommand(preset.command)
+    setArgs(preset.args)
+    setExtensions(preset.extensions)
+    setLanguageId(preset.languageId)
+    setInstallCommand(preset.installCommand)
+  }
 
   const submit = async () => {
     setBusy(true)
@@ -328,6 +377,7 @@ export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
           .map((item) => item.trim())
           .filter(Boolean),
         languageId: languageId.trim() || undefined,
+        installCommand: installCommand.trim() || undefined,
         projects: projectIds
       })
       await onDone()
@@ -351,6 +401,23 @@ export function AddLspForm({ projects, onDone, onCancel }: FormProps) {
         hint="Saved to .ks-agent/lsp.json. Servers start on demand when the agent checks a matching file."
       />
       {error && <div className="error-banner small">{error}</div>}
+      <div className="lsp-presets">
+        <span className="muted small">Common servers — click one to fill the form and show its install command.</span>
+        <div className="lsp-preset-grid">
+          {LSP_PRESETS.map((preset) => (
+            <button
+              key={preset.name}
+              type="button"
+              className="lsp-preset"
+              onClick={() => applyPreset(preset)}
+              disabled={busy}
+            >
+              <strong>{preset.label}</strong>
+              <code>{preset.installCommand}</code>
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="form-row">
         <label className="field">
           <span>Name</span>

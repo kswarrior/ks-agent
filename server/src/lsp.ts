@@ -666,6 +666,7 @@ export class LspRegistry {
           command: entry.config ? [entry.config.command, ...entry.config.args].join(' ') : '',
           extensions: entry.config?.extensions ?? [],
           languageId: entry.config?.languageId ?? '',
+          ...(entry.config?.installCommand ? { installCommand: entry.config.installCommand } : {}),
           status,
           projects: entry.config?.projects ?? [],
           ...(error ? { error } : {})

@@ -126,6 +126,7 @@ export interface LspServerInfo {
   command: string
   extensions: string[]
   languageId: string
+  installCommand?: string
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
   projects: string[]

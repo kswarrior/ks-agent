@@ -164,6 +164,7 @@ export const createLspServer = (body: {
   args?: string[]
   extensions: string[]
   languageId?: string
+  installCommand?: string
   env?: Record<string, string>
   projects?: string[]
 }) => req<LspServerInfo[]>('/api/lsp', json('POST', body))
