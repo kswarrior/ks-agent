@@ -72,6 +72,8 @@ docker run --rm --network none --memory=512m --cpus=1 -v <projectPath>:/workspac
 
 - Projects (auto-mkdir) and per-project chats
 - Streaming responses (SSE) with stop button, auto-retry, and "continue" to resume interrupted replies
+- Settings → Retry: on/off, limited or unlimited attempts, backoff, jitter, Retry-After, network/5xx and custom status codes
+- Provider errors show the HTTP status, provider code/message and response details; live retries show the attempt count and countdown
 - Plans, activities, and previews persisted per chat
 - Skills, MCP servers, and LSP servers (global or per-project)
 - Rename/delete chats via ⋮ menu — all confirmations use in-app dialogs
