@@ -352,3 +352,13 @@ serving.
   skills stay read-only until overridden. The smoke test now also creates and
   deletes a skill, an MCP server and a language server, asserting both the API
   responses and the persisted config files.
+- 2026-10-29: Added project scoping for skills, MCP servers and language
+  servers. Every entry carries `projects` (empty = all); the add forms have an
+  All projects / per-project selector and cards show their scope. The system
+  prompt, tool definitions and tool execution all filter by the active project.
+  Each chat can also disable project-enabled items from a Tools menu left of
+  the model picker; only disabled rows are stored in
+  `chat_disabled_extensions`, and `GET/PATCH /api/chats/:id/extensions` backs
+  the menu. Smoke now creates scoped skill/MCP/LSP entries, asserts filtering
+  per project and chat, verifies disabled calls are blocked, and re-enables
+  them.
