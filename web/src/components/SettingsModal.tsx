@@ -739,6 +739,8 @@ export function SettingsModal({
             {providers.length === 0 && <p className="empty-hint">No providers yet.</p>}
           </div>
         </>
+      ) : tab === 'retry' ? (
+        retryPanel
       ) : (
         <>
           <div className="settings-toolbar">
