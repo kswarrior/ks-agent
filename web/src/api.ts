@@ -1,7 +1,9 @@
 import type {
   AgentEvent,
   Chat,
+  ChatExtensionsState,
   ExtensionInfo,
+  ExtensionKind,
   LspServerInfo,
   McpServerInfo,
   Message,
@@ -46,6 +48,13 @@ export const createChat = (projectId: string, body: { title?: string; modelId?: 
 export const updateChat = (id: string, body: { title?: string; modelId?: string | null }) =>
   req<Chat>(`/api/chats/${id}`, json('PATCH', body))
 export const deleteChat = (id: string) => req<{ ok: true }>(`/api/chats/${id}`, { method: 'DELETE' })
+
+export const listChatExtensions = (chatId: string) =>
+  req<ChatExtensionsState>(`/api/chats/${chatId}/extensions`)
+export const setChatExtension = (
+  chatId: string,
+  body: { kind: ExtensionKind; name: string; enabled: boolean }
+) => req<{ ok: true }>(`/api/chats/${chatId}/extensions`, json('PATCH', body))
 
 export const listMessages = (chatId: string) => req<Message[]>(`/api/chats/${chatId}/messages`)
 export const stopChat = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/stop`, { method: 'POST' })
@@ -115,8 +124,13 @@ export const reloadExtensions = () => req<ExtensionInfo[]>('/api/extensions/relo
 
 export const listSkills = () => req<SkillInfo[]>('/api/skills')
 export const reloadSkills = () => req<SkillInfo[]>('/api/skills/reload', { method: 'POST' })
-export const createSkill = (body: { name: string; description: string; content: string; overwrite?: boolean }) =>
-  req<SkillInfo>('/api/skills', json('POST', body))
+export const createSkill = (body: {
+  name: string
+  description: string
+  content: string
+  projects?: string[]
+  overwrite?: boolean
+}) => req<SkillInfo>('/api/skills', json('POST', body))
 export const deleteSkill = (name: string) =>
   req<{ ok: true }>(`/api/skills/${encodeURIComponent(name)}`, { method: 'DELETE' })
 

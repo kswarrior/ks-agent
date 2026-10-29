@@ -86,6 +86,7 @@ export interface McpServerInfo {
   tools: McpToolInfo[]
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
+  projects: string[]
 }
 
 export interface LspServerInfo {
@@ -95,6 +96,13 @@ export interface LspServerInfo {
   languageId: string
   status: 'stopped' | 'starting' | 'ready' | 'error'
   error?: string
+  projects: string[]
+}
+
+export interface ChatExtensionsState {
+  skills: Array<SkillInfo & { enabled: boolean }>
+  mcpServers: Array<McpServerInfo & { enabled: boolean }>
+  lspServers: Array<LspServerInfo & { enabled: boolean }>
 }
 
 export type AgentEvent =
