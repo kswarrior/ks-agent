@@ -1059,6 +1059,61 @@ async function main() {
   assert(invalidModelContext.status === 400, 'invalid context window was accepted')
   console.log('PASS provider/model (key masked, context window)')
 
+  const compactModel = await api('POST', '/api/models', {
+    providerId: provider.id,
+    name: 'Compaction Model',
+    modelId: 'mock-compact',
+    contextWindow: 10_000
+  })
+  const compactChat = await api('POST', `/api/projects/${project.id}/chats`, {
+    title: 'compaction smoke',
+    modelId: compactModel.id
+  })
+  const longPrompt = `compaction-first-marker ${'context '.repeat(5_000)}`
+  const compactFirst = await sendMessage(compactChat.id, longPrompt, compactModel.id)
+  assert(compactFirst.events.some((event) => event.type === 'done'), 'compaction seed message did not finish')
+  const compactSecond = await sendMessage(compactChat.id, 'compaction second message', compactModel.id)
+  const summaryStart = compactSecond.events.find((event) => event.type === 'summary_start')
+  const summaryEvent = compactSecond.events.find((event) => event.type === 'summary')
+  assert(summaryStart, 'context compaction did not start', compactSecond.text.slice(0, 1000))
+  assert(summaryEvent, 'context compaction did not emit a summary', compactSecond.text.slice(0, 1000))
+  assert(
+    compactSecond.events.some((event) => event.type === 'done'),
+    'compaction run did not finish',
+    compactSecond.text.slice(0, 1000)
+  )
+  const savedSummary = await api('GET', `/api/chats/${compactChat.id}/summary`)
+  assert(savedSummary && savedSummary.summary.includes('Compaction smoke summary'), 'summary was not persisted')
+  assert(savedSummary.coveredMessageId, 'summary cutoff was not persisted')
+  const compactSystem = (lastProviderBody?.messages ?? []).find((message) => message.role === 'system')?.content ?? ''
+  assert(
+    compactSystem.includes('## Conversation summary (older messages; authoritative handoff)'),
+    'summary was not added to the system prompt'
+  )
+  assert(
+    !(lastProviderBody?.messages ?? []).some(
+      (message) => typeof message.content === 'string' && message.content.includes('compaction-first-marker')
+    ),
+    'compacted messages were still sent to the provider'
+  )
+  const editedSummary = await api('PUT', `/api/chats/${compactChat.id}/summary`, {
+    summary: '## Objective\nEdited handoff summary.',
+    coveredMessageId: savedSummary.coveredMessageId
+  })
+  assert(editedSummary.summary.includes('Edited handoff summary'), 'summary edit was not saved')
+  assert(
+    editedSummary.coveredMessageId === savedSummary.coveredMessageId,
+    'summary edit did not keep the cutoff'
+  )
+  const emptySummary = await rawApi('PUT', `/api/chats/${compactChat.id}/summary`, { summary: '   ' })
+  assert(emptySummary.status === 400, 'empty summary was accepted')
+  await api('DELETE', `/api/chats/${compactChat.id}/summary`)
+  const deletedSummary = await api('GET', `/api/chats/${compactChat.id}/summary`)
+  assert(deletedSummary === null, 'summary was not deleted')
+  const missingSummary = await rawApi('GET', '/api/chats/missing-chat/summary')
+  assert(missingSummary.status === 404, 'summary route did not reject a missing chat')
+  console.log('PASS context compaction + summary API')
+
   const retryDefaults = await api('GET', '/api/settings/retry')
   assert(retryDefaults.enabled === true, 'retry should default to enabled')
   assert(retryDefaults.unlimited === false, 'retry should default to limited')
