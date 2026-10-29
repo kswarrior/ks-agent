@@ -419,3 +419,8 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   refreshes status, with failures shown in the modal. The Add language server
   form has an "Install automatically after adding" checkbox (enabled once an
   install command is present), and smoke covers successful and failed installs.
+- 2026-10-29: Added a context-usage meter to the chat header. Models now store a
+  `contextWindow` (default 128,000 tokens, editable in Settings and when adding
+  a model; existing databases migrate automatically). The header shows estimated
+  used/window tokens and a percentage, colored green below 60%, yellow from 60%
+  and red from 85%. Smoke covers the default, custom and invalid context window.

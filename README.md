@@ -23,7 +23,7 @@ Then in the UI:
 
 1. Create a project: sidebar → `+` → "my-project" (auto-mkdirs `project/my-project`)
 2. Add a provider: Settings → Providers → Add (base URL + API key, keys masked server-side)
-3. Add a model: Settings → Models → Add (pick provider + model id, e.g. `deepseek-chat`, `gpt-4o-mini`, `llama3.2`)
+3. Add a model: Settings → Models → Add (pick provider + model id, e.g. `deepseek-chat`, `gpt-4o-mini`, `llama3.2`; set the context window, default 128,000)
 4. Pick a model in the composer and send — streaming + plan + preview live
 
 Ollama (local): base URL `http://localhost:11434/v1` — no key, no cost, offline.
@@ -81,6 +81,7 @@ docker run --rm --network none --memory=512m --cpus=1 -v <projectPath>:/workspac
 - Built-in tools: file read/write/edit/patch, directory tree, glob, grep, find, git (init/status/diff/log/branch/commit/push/pull), shell with path jail
 - Provider presets (OpenAI, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Moonshot, NVIDIA NIM, Ollama, LM Studio) + custom
 - Auto-titled chats, per-message model/duration footer, run reports attached to their own output
+- Chat header context meter (estimated used/window tokens) colored green, yellow or red by usage
 
 ## Agent config (`.ks-agent/`)
 

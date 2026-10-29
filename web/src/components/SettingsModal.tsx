@@ -284,6 +284,20 @@ export function SettingsModal({
     }
   }
 
+  const saveModelContext = async (id: string, contextWindow: number) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await updateModelContext(id, contextWindow)
+      await onRefresh()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      throw caught
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const openTab = (next: SettingsTab) => {
     setTab(next)
     setView('list')
@@ -845,7 +859,7 @@ export function SettingsModal({
                 <ModelContextEditor
                   model={model}
                   disabled={busy}
-                  onSave={(contextWindow) => run(() => updateModelContext(model.id, contextWindow))}
+                  onSave={(contextWindow) => saveModelContext(model.id, contextWindow)}
                 />
                 <button className="btn ghost small" disabled={busy} onClick={() => run(() => deleteModel(model.id))}>
                   Delete
