@@ -131,6 +131,7 @@ export function ExtensionsModal({
   const reload = async () => {
     setBusy(true)
     setError(null)
+    setNotice(null)
     try {
       if (tab === 'extensions') await reloadExtensions()
       else if (tab === 'skills') await reloadSkills()
@@ -163,6 +164,7 @@ export function ExtensionsModal({
     if (!confirmDelete) return
     setBusy(true)
     setError(null)
+    setNotice(null)
     try {
       if (confirmDelete.kind === 'skills') await deleteSkill(confirmDelete.name)
       else if (confirmDelete.kind === 'mcp') await deleteMcpServer(confirmDelete.name)
@@ -191,6 +193,7 @@ export function ExtensionsModal({
               onClick={() => {
                 setView('add')
                 setError(null)
+                setNotice(null)
               }}
               disabled={busy}
             >
@@ -214,6 +217,7 @@ export function ExtensionsModal({
               setTab(entry.id)
               setView('list')
               setError(null)
+              setNotice(null)
             }}
             role="tab"
             aria-selected={tab === entry.id}
@@ -224,6 +228,7 @@ export function ExtensionsModal({
       </div>
 
       {error && <div className="error-banner">{error}</div>}
+      {notice && <div className="extension-notice">{notice}</div>}
 
       {tab === 'extensions' && (
         <>
@@ -379,7 +384,10 @@ export function ExtensionsModal({
               setView('list')
             }}
             onCancel={() => setView('list')}
-            onError={(message) => setError(message)}
+            onError={(message) => {
+              setError(message)
+              setNotice(null)
+            }}
           />
         ) : (
           <>

@@ -2429,6 +2429,12 @@ code {
   margin-top: 2px;
 }
 
+.extension-notice {
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .field small {
   color: var(--muted);
   font-size: 11px;
