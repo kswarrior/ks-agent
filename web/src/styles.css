@@ -236,6 +236,12 @@ code {
   line-height: 1;
 }
 
+.icon-btn-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 .icon-btn:hover {
   background: var(--bg-hover);
   color: var(--text);
