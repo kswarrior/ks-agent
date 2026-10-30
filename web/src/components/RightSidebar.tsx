@@ -859,8 +859,8 @@ function FilesPanel({ project }: { project: Project }) {
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                 )}
-                <button className="btn ghost small" onClick={download}>
-                  Download
+                <button className="btn ghost small" onClick={download} title="Download">
+                  <DownloadIcon className="btn-icon" />
                 </button>
                 <button
                   className="btn ghost small"
@@ -868,11 +868,12 @@ function FilesPanel({ project }: { project: Project }) {
                     setRenameValue(baseName(openFile.path))
                     setRenaming(true)
                   }}
+                  title="Rename"
                 >
-                  Rename
+                  <EditIcon className="btn-icon" />
                 </button>
-                <button className="btn danger small" onClick={() => setConfirmDelete(true)}>
-                  Delete
+                <button className="btn danger small" onClick={() => setConfirmDelete(true)} title="Delete">
+                  <TrashIcon className="btn-icon" />
                 </button>
               </div>
             )}
@@ -922,7 +923,7 @@ function FilesPanel({ project }: { project: Project }) {
           aria-label="Up one level"
           title="Up one level"
         >
-          ↑
+          <ChevronLeftIcon className="icon-btn-icon" />
         </button>
         <div className="files-breadcrumb">
           <button onClick={() => setDir('')}>Project</button>
@@ -934,7 +935,7 @@ function FilesPanel({ project }: { project: Project }) {
           ))}
         </div>
         <button className="icon-btn" onClick={() => void load()} aria-label="Refresh files" title="Refresh">
-          ⟳
+          <RefreshIcon className="icon-btn-icon" />
         </button>
       </div>
 
