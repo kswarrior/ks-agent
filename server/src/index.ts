@@ -1324,6 +1324,94 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   console.log(`[ks-agent] skills: ${skills.count()}; mcp servers: ${mcp.count()}; lsp servers: ${lsp.count()}`)
 })
 
+const wss = new WebSocketServer({ noServer: true })
+
+function clampDimension(value: string | null, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 500 ? parsed : fallback
+}
+
+;(server as unknown as import('node:http').Server).on('upgrade', (req, socket, head) => {
+  try {
+    const host = req.headers.host ?? `localhost:${config.port}`
+    const url = new URL(req.url ?? '', `http://${host}`)
+    const match = url.pathname.match(/^\/api\/projects\/([^/]+)\/terminal$/)
+    if (!match) {
+      socket.destroy()
+      return
+    }
+    const project = getProject(decodeURIComponent(match[1]))
+    if (!project) {
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+      socket.destroy()
+      return
+    }
+    const cols = clampDimension(url.searchParams.get('cols'), 80)
+    const rows = clampDimension(url.searchParams.get('rows'), 24)
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, project.id, project.path, cols, rows)
+    })
+  } catch {
+    try {
+      socket.destroy()
+    } catch {
+      // ignore
+    }
+  }
+})
+
+wss.on('connection', (ws: WebSocket, projectId: string, projectPath: string, cols: number, rows: number) => {
+  const session = getOrCreateTerminal(projectId, projectPath, cols, rows)
+  session.clients.add(ws)
+  if (session.buffer) {
+    try {
+      ws.send(session.buffer)
+    } catch {
+      // ignore
+    }
+  }
+  try {
+    session.pty.resize(cols, rows)
+  } catch {
+    // ignore
+  }
+
+  ws.on('message', (message) => {
+    const text = message.toString()
+    if (text.startsWith('{')) {
+      try {
+        const control = JSON.parse(text) as { type?: string; cols?: number; rows?: number; data?: string }
+        if (
+          control.type === 'resize' &&
+          Number.isInteger(control.cols) &&
+          Number.isInteger(control.rows) &&
+          control.cols! > 0 &&
+          control.cols! <= 500 &&
+          control.rows! > 0 &&
+          control.rows! <= 500
+        ) {
+          session.pty.resize(control.cols!, control.rows!)
+          return
+        }
+        if (control.type === 'data' && typeof control.data === 'string') {
+          session.pty.write(control.data)
+          return
+        }
+      } catch {
+        // fall through to raw write
+      }
+    }
+    try {
+      session.pty.write(text)
+    } catch {
+      // ignore
+    }
+  })
+
+  ws.on('close', () => session.clients.delete(ws))
+  ws.on('error', () => session.clients.delete(ws))
+})
+
 async function shutdown(signal: string): Promise<void> {
   console.log(`[ks-agent] ${signal} received, shutting down`)
   for (const run of runs.values()) {
