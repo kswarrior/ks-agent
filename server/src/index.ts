@@ -82,6 +82,8 @@ interface TerminalSession {
   clients: Set<WebSocket>
   buffer: string
   projectId: string
+  cols: number
+  rows: number
 }
 
 const terminalSessions = new Map<string, TerminalSession>()
@@ -127,7 +129,7 @@ function getOrCreateTerminal(
     cwd,
     env
   })
-  const session: TerminalSession = { pty: shell, clients: new Set(), buffer: '', projectId }
+  const session: TerminalSession = { pty: shell, clients: new Set(), buffer: '', projectId, cols, rows }
   shell.onData((data) => {
     session.buffer += data
     if (session.buffer.length > 200 * 1024) session.buffer = session.buffer.slice(-200 * 1024)
@@ -1390,10 +1392,14 @@ wss.on('connection', (ws: WebSocket, sessionKey: string, projectId: string, proj
       // ignore
     }
   }
-  try {
-    session.pty.resize(cols, rows)
-  } catch {
-    // ignore
+  if (session.cols !== cols || session.rows !== rows) {
+    try {
+      session.pty.resize(cols, rows)
+      session.cols = cols
+      session.rows = rows
+    } catch {
+      // ignore
+    }
   }
 
   ws.on('message', (message) => {
