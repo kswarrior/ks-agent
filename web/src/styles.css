@@ -2336,8 +2336,47 @@ code {
   outline: none;
 }
 
-.model-context input:focus {
-  border-color: var(--accent);
+.model-menu-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  z-index: 50;
+}
+
+.model-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.model-menu-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.model-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.model-menu-item.danger {
+  color: var(--red);
 }
 
 .settings-subhead {

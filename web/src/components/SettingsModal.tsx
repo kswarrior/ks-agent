@@ -884,7 +884,8 @@ export function SettingsModal({
   )
 
   return (
-    <Modal title="Settings" onClose={onClose} wide fullHeight>
+    <>
+      <Modal title="Settings" onClose={onClose} wide fullHeight>
       <div className="settings-tabs" role="tablist" aria-label="Settings">
         <button
           className={`settings-tab ${tab === 'providers' ? 'active' : ''}`}
@@ -1051,5 +1052,21 @@ export function SettingsModal({
         </>
       )}
     </Modal>
+      {contextTarget && (
+        <PromptModal
+          title="Set context window"
+          label="Context window (tokens)"
+          initialValue={String(contextTarget.contextWindow)}
+          onSubmit={(value) => {
+            const next = Math.round(Number(value))
+            if (Number.isFinite(next) && next >= 1_000 && next <= 10_000_000) {
+              void saveModelContext(contextTarget.id, next)
+            }
+            setContextTarget(null)
+          }}
+          onClose={() => setContextTarget(null)}
+        />
+      )}
+    </>
   )
 }
