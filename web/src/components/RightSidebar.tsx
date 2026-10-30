@@ -269,65 +269,30 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-const FILE_ICONS: Record<string, string> = {
-  md: '📝',
-  markdown: '📝',
-  txt: '📄',
-  log: '📄',
-  pdf: '📕',
-  js: '🟨',
-  mjs: '🟨',
-  cjs: '🟨',
-  jsx: '⚛️',
-  ts: '🔷',
-  tsx: '⚛️',
-  json: '📊',
-  html: '🌐',
-  htm: '🌐',
-  css: '🎨',
-  scss: '🎨',
-  less: '🎨',
-  py: '🐍',
-  java: '☕',
-  go: '🐹',
-  rs: '🦀',
-  sh: '🐚',
-  bash: '🐚',
-  zsh: '🐚',
-  yml: '⚙️',
-  yaml: '⚙️',
-  toml: '⚙️',
-  ini: '⚙️',
-  env: '🔐',
-  png: '🖼️',
-  jpg: '🖼️',
-  jpeg: '🖼️',
-  gif: '🖼️',
-  svg: '🖼️',
-  webp: '🖼️',
-  ico: '🖼️',
-  mp3: '🎵',
-  wav: '🎵',
-  ogg: '🎵',
-  mp4: '🎬',
-  mov: '🎬',
-  webm: '🎬',
-  zip: '🗜️',
-  gz: '🗜️',
-  tar: '🗜️',
-  rar: '🗜️',
-  '7z': '🗜️',
-  lock: '🔒'
-}
-
-function fileIcon(name: string): string {
+function getFileIcon(name: string): React.ReactElement {
   const lower = name.toLowerCase()
-  if (lower === 'dockerfile') return '🐳'
-  if (lower === 'makefile') return '🛠️'
-  if (lower === 'package.json' || lower === 'package-lock.json') return '📦'
-  if (lower.startsWith('.env')) return '🔐'
+  if (lower === 'dockerfile') return <DockerIcon className="files-row-icon" />
+  if (lower === 'makefile') return <ConfigIcon className="files-row-icon" />
+  if (lower === 'package.json' || lower === 'package-lock.json') return <PackageIcon className="files-row-icon" />
+  if (lower.startsWith('.env')) return <LockIcon className="files-row-icon" />
   const extension = lower.includes('.') ? lower.split('.').pop() ?? '' : ''
-  return FILE_ICONS[extension] ?? '📄'
+  switch (extension) {
+    case 'md': case 'markdown': case 'txt': case 'log': return <FileIcon className="files-row-icon" />
+    case 'pdf': return <FileIcon className="files-row-icon" />
+    case 'js': case 'mjs': case 'cjs': case 'jsx': case 'ts': case 'tsx': return <CodeIcon className="files-row-icon" />
+    case 'json': return <ConfigIcon className="files-row-icon" />
+    case 'html': case 'htm': return <GlobeIcon className="files-row-icon" />
+    case 'css': case 'scss': case 'less': return <CodeIcon className="files-row-icon" />
+    case 'py': case 'java': case 'go': case 'rs': return <CodeIcon className="files-row-icon" />
+    case 'sh': case 'bash': case 'zsh': return <CodeIcon className="files-row-icon" />
+    case 'yml': case 'yaml': case 'toml': case 'ini': return <ConfigIcon className="files-row-icon" />
+    case 'png': case 'jpg': case 'jpeg': case 'gif': case 'svg': case 'webp': case 'ico': return <ImageIcon className="files-row-icon" />
+    case 'mp3': case 'wav': case 'ogg': return <AudioIcon className="files-row-icon" />
+    case 'mp4': case 'mov': case 'webm': return <VideoIcon className="files-row-icon" />
+    case 'zip': case 'gz': case 'tar': case 'rar': case '7z': return <ArchiveIcon className="files-row-icon" />
+    case 'lock': return <LockIcon className="files-row-icon" />
+    default: return <FileIcon className="files-row-icon" />
+  }
 }
 
 export function RightSidebar({ project, onClose }: { project: Project; onClose: () => void }) {
