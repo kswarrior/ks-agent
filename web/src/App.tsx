@@ -22,6 +22,7 @@ import type {
   Message,
   ModelEntry,
   Project,
+  ProjectCreateMode,
   ProviderPublic,
   RetryStatus,
   RunStep,
@@ -763,53 +764,258 @@ export default function App() {
   )
 }
 
+function folderBaseName(value: string): string {
+  return value.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+}
+
+function FolderPickerModal({
+  initialPath,
+  onSelect,
+  onClose
+}: {
+  initialPath: string
+  onSelect: (path: string) => void
+  onClose: () => void
+}) {
+  const [listing, setListing] = useState<DirectoryListing | null>(null)
+  const [pathInput, setPathInput] = useState(initialPath)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async (target?: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.listDirectories(target)
+      setListing(data)
+      setPathInput(data.path)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load(initialPath)
+  }, [initialPath])
+
+  return (
+    <Modal title="Select project folder" onClose={onClose}>
+      {error && <div className="error-banner">{error}</div>}
+      <form
+        className="folder-picker-path"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (pathInput.trim()) void load(pathInput.trim())
+        }}
+      >
+        <input
+          value={pathInput}
+          onChange={(event) => setPathInput(event.target.value)}
+          placeholder="/path/to/project"
+          aria-label="Folder path"
+          autoFocus
+        />
+        <button className="btn ghost" type="submit" disabled={loading}>
+          Go
+        </button>
+      </form>
+
+      {listing && (
+        <>
+          <div className="folder-picker-shortcuts">
+            <button type="button" className="btn ghost small" onClick={() => void load(listing.home)}>
+              Home
+            </button>
+            <button type="button" className="btn ghost small" onClick={() => void load(listing.projectsDir)}>
+              KS projects
+            </button>
+            <button type="button" className="btn ghost small" onClick={() => void load(listing.root)}>
+              App folder
+            </button>
+          </div>
+          <div className="folder-picker-list">
+            {listing.parent && (
+              <button type="button" className="folder-picker-item parent" onClick={() => void load(listing.parent ?? undefined)}>
+                <span aria-hidden="true">..</span>
+                <span className="muted small">Parent folder</span>
+              </button>
+            )}
+            {listing.directories.map((directory) => (
+              <button
+                type="button"
+                className="folder-picker-item"
+                key={directory.path}
+                onClick={() => void load(directory.path)}
+              >
+                <span>{directory.name}</span>
+              </button>
+            ))}
+            {listing.directories.length === 0 && <p className="empty-hint">No folders here.</p>}
+          </div>
+          {listing.truncated && <p className="muted small">Showing the first 500 folders.</p>}
+        </>
+      )}
+
+      <div className="modal-actions">
+        <button type="button" className="btn ghost" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn primary"
+          disabled={!listing || loading}
+          onClick={() => {
+            if (listing) onSelect(listing.path)
+          }}
+        >
+          {loading ? 'Loading…' : 'Select this folder'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 function CreateProjectModal({
   onClose,
   onCreate
 }: {
   onClose: () => void
-  onCreate: (name: string, path: string) => Promise<void>
+  onCreate: (input: CreateProjectInput) => Promise<void>
 }) {
+  const [mode, setMode] = useState<ProjectCreateMode>('new')
   const [name, setName] = useState('')
   const [path, setPath] = useState('')
+  const [sourcePath, setSourcePath] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const needsSource = mode !== 'new'
+  const usesDestination = mode !== 'link'
+  const canSubmit = Boolean(name.trim()) && (!needsSource || Boolean(sourcePath.trim()))
+
+  const chooseSource = (value: string) => {
+    setSourcePath(value)
+    setError(null)
+    if (!name.trim()) setName(folderBaseName(value))
+  }
+
+  const hint =
+    mode === 'new'
+      ? 'The folder is created under the projects directory. The agent can only read and write inside it.'
+      : mode === 'link'
+        ? 'The project stays in its current location and the agent works directly in that folder.'
+        : mode === 'copy'
+          ? 'A full copy is placed under the projects directory. The original folder is left untouched.'
+          : 'The folder is moved under the projects directory. The original location is removed after the move succeeds.'
+
   return (
-    <Modal title="New project" onClose={onClose}>
-      {error && <div className="error-banner">{error}</div>}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (!name.trim()) return
-          setBusy(true)
-          setError(null)
-          void onCreate(name.trim(), path)
-            .catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)))
-            .finally(() => setBusy(false))
-        }}
-      >
-        <label className="field">
-          <span>Name</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="my-project" autoFocus />
-        </label>
-        <label className="field">
-          <span>Folder (optional)</span>
-          <input value={path} onChange={(event) => setPath(event.target.value)} placeholder="defaults to the project name" />
-        </label>
-        <p className="muted small">
-          The folder is created under the projects directory. The agent can only read and write inside it.
-        </p>
-        <div className="modal-actions">
-          <button type="button" className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn primary" disabled={busy || !name.trim()}>
-            {busy ? 'Creating…' : 'Create project'}
-          </button>
-        </div>
-      </form>
-    </Modal>
+    <>
+      <Modal title="New project" onClose={onClose}>
+        {error && <div className="error-banner">{error}</div>}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!canSubmit) return
+            setBusy(true)
+            setError(null)
+            void onCreate({
+              name: name.trim(),
+              mode,
+              path: path.trim() || undefined,
+              sourcePath: needsSource ? sourcePath.trim() : undefined
+            })
+              .catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)))
+              .finally(() => setBusy(false))
+          }}
+        >
+          <label className="field">
+            <span>Start from</span>
+            <select
+              value={mode}
+              onChange={(event) => {
+                setMode(event.target.value as ProjectCreateMode)
+                setError(null)
+              }}
+            >
+              <option value="new">Create a new folder</option>
+              <option value="link">Use an existing folder in place</option>
+              <option value="copy">Copy an existing folder into projects</option>
+              <option value="move">Move an existing folder into projects</option>
+            </select>
+          </label>
+          {needsSource && (
+            <div className="field">
+              <span>Existing project folder</span>
+              <div className="path-input-row">
+                <input
+                  value={sourcePath}
+                  onChange={(event) => chooseSource(event.target.value)}
+                  placeholder="/home/you/code/project"
+                  autoFocus
+                />
+                <button type="button" className="btn ghost" onClick={() => setPickerOpen(true)}>
+                  Browse…
+                </button>
+              </div>
+            </div>
+          )}
+          <label className="field">
+            <span>Name</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="my-project"
+              autoFocus={!needsSource}
+            />
+          </label>
+          {usesDestination && (
+            <label className="field">
+              <span>{mode === 'new' ? 'Folder (optional)' : 'Destination folder (optional)'}</span>
+              <input
+                value={path}
+                onChange={(event) => setPath(event.target.value)}
+                placeholder={
+                  mode === 'new' ? 'defaults to the project name' : 'defaults to the source folder name'
+                }
+              />
+            </label>
+          )}
+          <p className="muted small">
+            {hint}
+            {usesDestination && ' The destination is relative to the projects directory.'}
+          </p>
+          <div className="modal-actions">
+            <button type="button" className="btn ghost" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn primary" disabled={busy || !canSubmit}>
+              {busy
+                ? 'Working…'
+                : mode === 'new'
+                  ? 'Create project'
+                  : mode === 'link'
+                    ? 'Add project'
+                    : mode === 'copy'
+                      ? 'Copy project'
+                      : 'Move project'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+      {pickerOpen && (
+        <FolderPickerModal
+          initialPath={sourcePath}
+          onSelect={(selected) => {
+            chooseSource(selected)
+            setPickerOpen(false)
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </>
   )
 }
 
