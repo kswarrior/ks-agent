@@ -543,9 +543,9 @@ function safeArchivePath(name: string): string | null {
   const raw = name.replace(/\\/g, '/')
   if (!raw || raw.includes('\0')) return null
   if (raw.startsWith('/') || /^[A-Za-z]:\//.test(raw)) return null
-  const parts = raw.split('/').filter(Boolean)
+  const parts = raw.split('/').filter((part) => part && part !== '.')
   if (parts.length === 0) return null
-  if (parts.some((part) => part === '.' || part === '..')) return null
+  if (parts.some((part) => part === '..')) return null
   return parts.join('/')
 }
 
