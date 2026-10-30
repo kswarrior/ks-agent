@@ -3317,17 +3317,16 @@ code {
 }
 
 .files-action-btn-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
   border-radius: 4px;
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 14px;
   font-weight: 600;
   line-height: 1;
+  flex: 0 0 auto;
 }
 
 .files-action-btn-label {
@@ -3336,6 +3335,9 @@ code {
 
 .files-action-btn-caret {
   flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  display: inline-block;
   color: var(--muted);
   font-size: 9px;
   line-height: 1;
@@ -3376,6 +3378,9 @@ code {
 
 .files-action-icon {
   flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  display: inline-block;
   font-size: 14px;
   line-height: 1;
 }
@@ -3405,6 +3410,9 @@ code {
 
 .files-action-icon {
   flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  display: inline-block;
   font-size: 14px;
   line-height: 1;
 }
