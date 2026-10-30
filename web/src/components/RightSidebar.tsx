@@ -443,10 +443,10 @@ function CreateMenu({
           aria-label="Create new"
         >
           <button className="files-action-item" role="menuitem" onClick={handleNewFile} disabled={busy}>
-            <span className="files-action-icon">📄</span> New file
+            <FileIcon className="files-action-icon" /> New file
           </button>
           <button className="files-action-item" role="menuitem" onClick={handleNewFolder} disabled={busy}>
-            <span className="files-action-icon">📁</span> New folder
+            <FolderIcon className="files-action-icon" /> New folder
           </button>
         </div>,
         document.body
@@ -608,10 +608,10 @@ function UploadMenu({
           aria-label="Upload"
         >
           <button className="files-action-item" role="menuitem" onClick={handleUpload} disabled={busy}>
-            <span className="files-action-icon">⬆️</span> Upload file
+            <UploadIcon className="files-action-icon" /> Upload file
           </button>
           <button className="files-action-item" role="menuitem" onClick={handleUploadUrl} disabled={busy}>
-            <span className="files-action-icon">🔗</span> Upload from URL
+            <LinkIcon className="files-action-icon" /> Upload from URL
           </button>
         </div>,
         document.body
