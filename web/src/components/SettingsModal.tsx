@@ -272,6 +272,7 @@ export function SettingsModal({
   const [databaseSaving, setDatabaseSaving] = useState(false)
   const [databaseSaved, setDatabaseSaved] = useState(false)
   const [openModelMenuId, setOpenModelMenuId] = useState<string | null>(null)
+  const [openProviderMenuId, setOpenProviderMenuId] = useState<string | null>(null)
   const [contextTarget, setContextTarget] = useState<ModelEntry | null>(null)
 
   const selectedPreset = PROVIDER_PRESETS.find((preset) => preset.id === selectedPresetId) ?? CUSTOM_PRESET
@@ -343,6 +344,25 @@ export function SettingsModal({
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [openModelMenuId])
+
+  useEffect(() => {
+    if (!openProviderMenuId) return
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!document.querySelector('.provider-menu-popup')?.contains(target) && !document.querySelector('.provider-menu-trigger')?.contains(target)) {
+        setOpenProviderMenuId(null)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenProviderMenuId(null)
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [openProviderMenuId])
 
   const run = async (task: () => Promise<unknown>) => {
     setBusy(true)
@@ -1108,20 +1128,44 @@ export function SettingsModal({
                     {provider.baseUrl} · {provider.hasKey ? 'key saved' : 'no key'}
                   </span>
                 </div>
-                <button
-                  className="btn ghost small"
-                  disabled={busy}
-                  onClick={() => startEditProvider(provider)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="btn ghost small"
-                  disabled={busy}
-                  onClick={() => run(() => deleteProvider(provider.id))}
-                >
-                  Delete
-                </button>
+                <div className="provider-menu" style={{ position: 'relative' }}>
+                  <button
+                    className="icon-btn provider-menu-trigger"
+                    aria-label="Provider actions"
+                    aria-haspopup="menu"
+                    aria-expanded={openProviderMenuId === provider.id}
+                    disabled={busy}
+                    onClick={() => setOpenProviderMenuId(openProviderMenuId === provider.id ? null : provider.id)}
+                  >
+                    ⋯
+                  </button>
+                  {openProviderMenuId === provider.id && (
+                    <div className="provider-menu-popup" role="menu">
+                      <button
+                        className="model-menu-item"
+                        role="menuitem"
+                        disabled={busy}
+                        onClick={() => {
+                          setOpenProviderMenuId(null)
+                          startEditProvider(provider)
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="model-menu-item danger"
+                        role="menuitem"
+                        disabled={busy}
+                        onClick={() => {
+                          setOpenProviderMenuId(null)
+                          void run(() => deleteProvider(provider.id))
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             {providers.length === 0 && <p className="empty-hint">No providers yet.</p>}
