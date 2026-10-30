@@ -316,11 +316,7 @@ export function relocateDatabase(input: unknown): DatabaseSettings {
       initializeSchema(db)
       dbPath = oldPath
     }
-    try {
-      fs.rmSync(temporary, { force: true })
-    } catch {
-      // best-effort cleanup
-    }
+    removeDatabaseFiles(temporary)
     if (targetCreated) removeDatabaseFiles(targetPath)
     throw error instanceof Error ? error : new Error(String(error))
   }
