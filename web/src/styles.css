@@ -2275,6 +2275,12 @@ code {
   white-space: nowrap;
 }
 
+.settings-card-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .model-context {
   display: flex;
   flex-direction: column;
