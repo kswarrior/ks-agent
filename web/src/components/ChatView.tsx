@@ -628,6 +628,13 @@ export function ChatView({
   }, [chat?.id])
 
   useEffect(() => {
+    const composer = composerRef.current
+    if (!composer) return
+    composer.style.height = 'auto'
+    composer.style.height = `${Math.min(composer.scrollHeight, 220)}px`
+  }, [draft])
+
+  useEffect(() => {
     stickToBottomRef.current = true
   }, [chat?.id])
 
