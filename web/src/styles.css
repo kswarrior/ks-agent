@@ -2916,8 +2916,8 @@ code {
 
 /* -------------------------------------------------------- right sidebar */
 .right-sidebar {
-  width: 340px;
-  flex: 0 0 340px;
+  width: clamp(320px, 28vw, 440px);
+  flex: 0 0 clamp(320px, 28vw, 440px);
   display: flex;
   flex-direction: column;
   min-width: 0;
