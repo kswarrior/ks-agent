@@ -3594,9 +3594,17 @@ code {
 
 .run-change-more {
   align-self: center;
-  padding-left: 2px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
   color: var(--muted);
   font-size: 10.5px;
+  cursor: pointer;
+}
+
+.run-change-more:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .run-report-stats {
