@@ -48,7 +48,7 @@ import {
   updateModel,
   updateProvider
 } from './db.js'
-import { describeFailure, errorStatus } from './errors.js'
+import { ConfigError, describeFailure, errorStatus } from './errors.js'
 import { extensions } from './extensions.js'
 import { cleanRelative, isProbablyBinary, relWithin, resolveInProject, validSegment } from './fsx.js'
 import { knowledge } from './knowledge.js'
@@ -287,6 +287,113 @@ function ensureProjectChat(projectId: string) {
   const existing = listChats(projectId)
   if (existing.length > 0) return existing[0]
   return insertChat(projectId, 'New chat', null)
+}
+
+function registerProject(name: string, projectPath: string): Project {
+  const real = fs.realpathSync(projectPath)
+  const project = insertProject(name, real)
+  ensureProjectChat(project.id)
+  void extensions.runHook('project.open', real, { projectId: project.id, name }).catch((error) => {
+    console.warn('[extensions] project.open hook failed:', error)
+  })
+  return project
+}
+
+function resolveSourceProjectFolder(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new ConfigError('Choose an existing project folder')
+  }
+  const requested = value.trim()
+  if (!path.isAbsolute(requested)) {
+    throw new ConfigError('Project folder must be an absolute path')
+  }
+  let real: string
+  try {
+    real = fs.realpathSync(requested)
+  } catch {
+    throw new ConfigError(`Project folder not found: ${requested}`, 404)
+  }
+  if (!fs.statSync(real).isDirectory()) {
+    throw new ConfigError('Project path is not a folder')
+  }
+  if (real === path.parse(real).root) {
+    throw new ConfigError('The filesystem root cannot be used as a project')
+  }
+  return real
+}
+
+function resolveProjectDestination(requested: unknown, fallback: string): string {
+  const relative = cleanRelative(typeof requested === 'string' && requested.trim() ? requested.trim() : fallback)
+  const abs = resolveInProject(config.projectsDir, relative)
+  if (!abs) {
+    throw new ConfigError('Project destination must stay inside the projects directory')
+  }
+  if (path.resolve(abs) === path.resolve(config.projectsDir)) {
+    throw new ConfigError('Project destination cannot be the projects directory itself')
+  }
+  return abs
+}
+
+function assertProjectPathAvailable(target: string): void {
+  if (listProjects().some((project) => path.resolve(project.path) === path.resolve(target))) {
+    throw new ConfigError('A project already uses this path', 409)
+  }
+}
+
+function prepareProjectDestination(target: string, source: string): void {
+  if (path.resolve(target) === path.resolve(source)) {
+    throw new ConfigError('Project destination is the same as the source folder')
+  }
+  if (isInside(source, target)) {
+    throw new ConfigError('Project destination cannot be inside the source folder')
+  }
+  if (fs.existsSync(target)) {
+    const stat = fs.lstatSync(target)
+    if (!stat.isDirectory()) {
+      throw new ConfigError('Project destination already exists and is not a folder', 409)
+    }
+    if (fs.readdirSync(target).length > 0) {
+      throw new ConfigError('Project destination already exists and is not empty', 409)
+    }
+    fs.rmdirSync(target)
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+}
+
+function copyProjectFolder(source: string, target: string): void {
+  try {
+    fs.cpSync(source, target, { recursive: true, errorOnExist: true, force: false })
+  } catch (error) {
+    fs.rmSync(target, { recursive: true, force: true })
+    throw new ConfigError(
+      `Could not copy the project folder: ${error instanceof Error ? error.message : String(error)}`,
+      500
+    )
+  }
+}
+
+function moveProjectFolder(source: string, target: string): void {
+  try {
+    fs.renameSync(source, target)
+    return
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') {
+      throw new ConfigError(
+        `Could not move the project folder: ${error instanceof Error ? error.message : String(error)}`,
+        500
+      )
+    }
+  }
+  copyProjectFolder(source, target)
+  try {
+    fs.rmSync(source, { recursive: true, force: true })
+  } catch (error) {
+    fs.rmSync(target, { recursive: true, force: true })
+    throw new ConfigError(
+      `The folder was copied but the original could not be removed: ${error instanceof Error ? error.message : String(error)}`,
+      500
+    )
+  }
 }
 
 function ensureDefaultProject(): void {
