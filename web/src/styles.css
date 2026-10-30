@@ -3237,6 +3237,67 @@ code {
   min-width: 120px;
 }
 
+.files-action-popup {
+  position: fixed;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.files-action-popup.up {
+  margin-bottom: 4px;
+}
+
+.files-action-popup.down {
+  margin-top: 4px;
+}
+
+.files-action-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.files-action-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.files-action-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.files-action-icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.files-url-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.files-url-upload .input {
+  width: 100%;
+}
+
 .files-list {
   flex: 1;
   min-height: 0;

@@ -652,6 +652,7 @@ function FilesPanel({ project }: { project: Project }) {
           projectId={project.id}
           dir={dir}
           busy={busy}
+          setBusy={setBusy}
           createKind={createKind}
           setCreateKind={setCreateKind}
           setNewName={setNewName}
