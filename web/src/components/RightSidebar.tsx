@@ -320,7 +320,7 @@ export function RightSidebar({ project, onClose }: { project: Project; onClose: 
           ))}
         </div>
         <button className="icon-btn" onClick={onClose} aria-label="Close right sidebar" title="Close">
-          ×
+          <XIcon className="icon-btn-icon" />
         </button>
       </div>
       <div className="right-sidebar-body">
