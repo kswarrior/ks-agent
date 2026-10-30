@@ -2344,7 +2344,8 @@ code {
   outline: none;
 }
 
-.model-menu-popup {
+.model-menu-popup,
+.provider-menu-popup {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
