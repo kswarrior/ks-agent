@@ -358,6 +358,15 @@ app.post('/api/projects', async (c) => {
   return c.json(project, 201)
 })
 
+app.delete('/api/projects/:id/terminal/:terminalId', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const terminalId = c.req.param('terminalId')
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(terminalId)) return c.json(errorJson('invalid terminal id', 400), 400)
+  killTerminal(`${project.id}:${terminalId}`)
+  return c.json({ ok: true })
+})
+
 app.delete('/api/projects/:id', (c) => {
   const project = getProject(c.req.param('id'))
   if (!project) return c.json(errorJson('project not found', 404), 404)

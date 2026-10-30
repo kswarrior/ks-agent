@@ -51,6 +51,11 @@ export const createProject = (body: { name: string; path?: string }) =>
 export const deleteProject = (id: string, deleteFolder = false) =>
   req<{ ok: true }>(`/api/projects/${id}${deleteFolder ? '?deleteFolder=true' : ''}`, { method: 'DELETE' })
 
+export const killProjectTerminal = (projectId: string, terminalId: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/terminal/${encodeURIComponent(terminalId)}`, {
+    method: 'DELETE'
+  })
+
 export const listProjectFiles = (projectId: string, path = '') =>
   req<FileListing>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`)
 
