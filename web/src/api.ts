@@ -1,5 +1,7 @@
 import type {
   AgentEvent,
+  Backup,
+  BackupRestoreResult,
   Chat,
   ChatExtensionsState,
   ChatSummary,
@@ -98,6 +100,38 @@ export const uploadProjectFiles = async (projectId: string, path: string, files:
 
 export const projectFileDownloadUrl = (projectId: string, path: string) =>
   `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`
+
+export const listProjectBackups = (projectId: string) =>
+  req<Backup[]>(`/api/projects/${projectId}/backups`)
+export const createProjectBackup = (
+  projectId: string,
+  body: { location?: string; name?: string; includeChats?: boolean }
+) => req<Backup>(`/api/projects/${projectId}/backups`, json('POST', body))
+export const uploadProjectBackup = async (
+  projectId: string,
+  file: File,
+  location?: string
+): Promise<Backup> => {
+  const form = new FormData()
+  if (location) form.append('location', location)
+  form.append('file', file)
+  const res = await fetch(`/api/projects/${projectId}/backups/upload`, { method: 'POST', body: form })
+  const data = (await res.json().catch(() => null)) as Backup | { error?: string } | null
+  if (!res.ok) throw new Error((data as { error?: string } | null)?.error ?? `Request failed (${res.status})`)
+  return data as Backup
+}
+export const addProjectBackupFromUrl = (
+  projectId: string,
+  body: { url: string; location?: string; name?: string }
+) => req<Backup>(`/api/projects/${projectId}/backups/url`, json('POST', body))
+export const restoreProjectBackup = (projectId: string, backupId: string) =>
+  req<BackupRestoreResult>(`/api/projects/${projectId}/backups/${backupId}/restore`, {
+    method: 'POST'
+  })
+export const deleteProjectBackup = (projectId: string, backupId: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/backups/${backupId}`, { method: 'DELETE' })
+export const projectBackupDownloadUrl = (projectId: string, backupId: string) =>
+  `/api/projects/${projectId}/backups/${backupId}/download`
 
 export const listChats = (projectId: string) => req<Chat[]>(`/api/projects/${projectId}/chats`)
 export const createChat = (projectId: string, body: { title?: string; modelId?: string | null } = {}) =>
