@@ -789,12 +789,16 @@ code {
   content: '·';
 }
 
-.msg-footer-model {
+.msg-footer-model,
+.msg-footer-provider {
   overflow: hidden;
   max-width: 260px;
-  color: #c7c7d0;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.msg-footer-model {
+  color: #c7c7d0;
 }
 
 .msg-footer-time {
