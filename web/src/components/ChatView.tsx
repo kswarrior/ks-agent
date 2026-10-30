@@ -129,6 +129,21 @@ function formatArgValue(value: unknown): string {
   return String(value)
 }
 
+function parseSkillOutput(output?: string): { name: string; description: string; body: string } | null {
+  const text = output?.trim()
+  if (!text || !text.startsWith('<skill')) return null
+  const openEnd = text.indexOf('>')
+  if (openEnd === -1) return null
+  const openTag = text.slice(0, openEnd + 1)
+  const closeStart = text.lastIndexOf('</skill>')
+  const body = text.slice(openEnd + 1, closeStart > openEnd ? closeStart : text.length).trim()
+  const attr = (key: string): string => {
+    const match = new RegExp(`${key}="([^"]*)"`, 'i').exec(openTag)
+    return match ? match[1] : ''
+  }
+  return { name: attr('name'), description: attr('description'), body }
+}
+
 function ToolCard({
   name,
   args,
@@ -179,6 +194,7 @@ function ToolCard({
     'delete_file',
     'move_file'
   ].includes(name)
+  const skillOutput = name === 'use_skill' ? parseSkillOutput(output) : null
   const editStartLine = changedLine(output)
   const addedLines = content ? splitLines(content).length : 0
 
@@ -275,7 +291,17 @@ function ToolCard({
         )}
 
         {output !== undefined &&
-          (isMetadataResult ? (
+          (skillOutput ? (
+            <>
+              <div className="tool-label">skill instructions</div>
+              {skillOutput.description && (
+                <p className="tool-skill-description">{skillOutput.description}</p>
+              )}
+              <div className="tool-markdown">
+                <Markdown text={skillOutput.body || '(empty)'} />
+              </div>
+            </>
+          ) : isMetadataResult ? (
             <div className={`tool-note ${ok === false ? 'error' : 'ok'}`}>{output || '(empty)'}</div>
           ) : (
             <>
