@@ -86,14 +86,6 @@ function FolderIcon({ className = '' }: { className?: string }) {
   )
 }
 
-function ChatIcon({ className = '' }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
-
 function formatSize(size: number): string {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -656,12 +648,6 @@ export function BackupPanel({
                   </button>
                 </div>
               </div>
-              {backup.includesChats && (
-                <span className="backup-chat-badge">
-                  <ChatIcon className="backup-chat-badge-icon" />
-                  chats
-                </span>
-              )}
             </div>
           ))}
         </div>

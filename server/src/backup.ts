@@ -277,7 +277,7 @@ export function createProjectBackup(
     name,
     path: destination,
     size: archive.length,
-    includesChats,
+    includesChats: includeChats,
     source: 'created'
   })
   return withFileState(backup)
