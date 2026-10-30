@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Markdown } from './Markdown'
 
 function escapeHtml(value: string): string {
@@ -148,17 +148,27 @@ export function FileEditor({
   const lang = languageFor(path)
   const preRef = useRef<HTMLPreElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const gutterRef = useRef<HTMLDivElement | null>(null)
 
   const highlighted = useMemo(() => {
     if (value.length > 200000) return escapeHtml(value)
     return highlightCode(value, lang)
   }, [value, lang])
 
+  const lineCount = useMemo(() => value.split('\n').length, [value])
+
   const syncScroll = () => {
     if (!preRef.current || !inputRef.current) return
     preRef.current.scrollTop = inputRef.current.scrollTop
     preRef.current.scrollLeft = inputRef.current.scrollLeft
+    if (gutterRef.current) {
+      gutterRef.current.style.transform = `translateY(${-inputRef.current.scrollTop}px)`
+    }
   }
+
+  useEffect(() => {
+    syncScroll()
+  }, [value, mode])
 
   const insertTab = () => {
     const input = inputRef.current
@@ -201,24 +211,34 @@ export function FileEditor({
         </div>
       ) : (
         <div className="files-code-editor">
-          <pre ref={preRef} className="files-code-highlight" aria-hidden="true">
-            <code dangerouslySetInnerHTML={{ __html: `${highlighted}\n` }} />
-          </pre>
-          <textarea
-            ref={inputRef}
-            className="files-code-input"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onScroll={syncScroll}
-            onKeyDown={(event) => {
-              if (event.key === 'Tab') {
-                event.preventDefault()
-                insertTab()
-              }
-            }}
-            spellCheck={false}
-            aria-label={`Edit ${path}`}
-          />
+          <div className="files-code-gutter" aria-hidden="true">
+            <div ref={gutterRef} className="files-code-gutter-inner">
+              {Array.from({ length: lineCount }, (_, index) => (
+                <span key={index}>{index + 1}</span>
+              ))}
+            </div>
+          </div>
+          <div className="files-code-body">
+            <pre ref={preRef} className="files-code-highlight" aria-hidden="true">
+              <code dangerouslySetInnerHTML={{ __html: `${highlighted}\n` }} />
+            </pre>
+            <textarea
+              ref={inputRef}
+              className="files-code-input"
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              onScroll={syncScroll}
+              onKeyDown={(event) => {
+                if (event.key === 'Tab') {
+                  event.preventDefault()
+                  insertTab()
+                }
+              }}
+              wrap="off"
+              spellCheck={false}
+              aria-label={`Edit ${path}`}
+            />
+          </div>
         </div>
       )}
     </div>

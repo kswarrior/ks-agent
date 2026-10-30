@@ -3648,7 +3648,7 @@ code {
 }
 
 .files-code-editor {
-  position: relative;
+  display: flex;
   flex: 1;
   min-height: 200px;
   border: 1px solid var(--line-strong);
@@ -3657,19 +3657,50 @@ code {
   overflow: hidden;
 }
 
+.files-code-gutter {
+  flex: 0 0 auto;
+  min-width: 34px;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  user-select: none;
+}
+
+.files-code-gutter-inner {
+  padding: 10px 8px 10px 10px;
+  will-change: transform;
+}
+
+.files-code-gutter-inner span {
+  display: block;
+  text-align: right;
+}
+
+.files-code-body {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.files-code-gutter-inner,
+.files-code-highlight,
+.files-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .files-code-highlight,
 .files-code-input {
   margin: 0;
   padding: 10px;
   box-sizing: border-box;
   border: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.5;
   tab-size: 2;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-break: break-word;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .files-code-highlight {
