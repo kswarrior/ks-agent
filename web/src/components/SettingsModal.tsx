@@ -335,12 +335,27 @@ export function SettingsModal({
       const target = event.target as Node
       if (!document.querySelector('.model-menu-popup')?.contains(target) && !document.querySelector('.model-menu-trigger')?.contains(target)) {
         setOpenModelMenuId(null)
+        setModelMenuRect(null)
       }
     }
-    const onScroll = () => setOpenModelMenuId(null)
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenModelMenuId(null)
+        setModelMenuRect(null)
+      }
+    }
+    const onScroll = () => {
+      setOpenModelMenuId(null)
+      setModelMenuRect(null)
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
     window.addEventListener('scroll', onScroll, true)
-    ...
-    window.removeEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('scroll', onScroll, true)
+    }
   }, [openModelMenuId])
 
   useEffect(() => {
@@ -349,16 +364,26 @@ export function SettingsModal({
       const target = event.target as Node
       if (!document.querySelector('.provider-menu-popup')?.contains(target) && !document.querySelector('.provider-menu-trigger')?.contains(target)) {
         setOpenProviderMenuId(null)
+        setProviderMenuRect(null)
       }
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpenProviderMenuId(null)
+      if (event.key === 'Escape') {
+        setOpenProviderMenuId(null)
+        setProviderMenuRect(null)
+      }
+    }
+    const onScroll = () => {
+      setOpenProviderMenuId(null)
+      setProviderMenuRect(null)
     }
     window.addEventListener('mousedown', onPointerDown)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('scroll', onScroll, true)
     return () => {
       window.removeEventListener('mousedown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('scroll', onScroll, true)
     }
   }, [openProviderMenuId])
 
@@ -1133,18 +1158,37 @@ export function SettingsModal({
                     aria-haspopup="menu"
                     aria-expanded={openProviderMenuId === provider.id}
                     disabled={busy}
-                    onClick={() => setOpenProviderMenuId(openProviderMenuId === provider.id ? null : provider.id)}
+                    onClick={(event) => {
+                      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+                      if (openProviderMenuId === provider.id) {
+                        setOpenProviderMenuId(null)
+                        setProviderMenuRect(null)
+                      } else {
+                        setOpenProviderMenuId(provider.id)
+                        setProviderMenuRect(rect)
+                      }
+                    }}
                   >
                     ⋯
                   </button>
-                  {openProviderMenuId === provider.id && (
-                    <div className="provider-menu-popup" role="menu">
+                  {openProviderMenuId === provider.id && providerMenuRect && createPortal(
+                    <div
+                      className="provider-menu-popup"
+                      role="menu"
+                      style={{
+                        position: 'fixed',
+                        top: providerMenuRect.bottom + 6,
+                        left: providerMenuRect.right - 160,
+                        zIndex: 1000
+                      }}
+                    >
                       <button
                         className="model-menu-item"
                         role="menuitem"
                         disabled={busy}
                         onClick={() => {
                           setOpenProviderMenuId(null)
+                          setProviderMenuRect(null)
                           startEditProvider(provider)
                         }}
                       >
@@ -1156,12 +1200,14 @@ export function SettingsModal({
                         disabled={busy}
                         onClick={() => {
                           setOpenProviderMenuId(null)
+                          setProviderMenuRect(null)
                           void run(() => deleteProvider(provider.id))
                         }}
                       >
                         Delete
                       </button>
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
               </div>
@@ -1197,18 +1243,37 @@ export function SettingsModal({
                     aria-haspopup="menu"
                     aria-expanded={openModelMenuId === model.id}
                     disabled={busy}
-                    onClick={() => setOpenModelMenuId(openModelMenuId === model.id ? null : model.id)}
+                    onClick={(event) => {
+                      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+                      if (openModelMenuId === model.id) {
+                        setOpenModelMenuId(null)
+                        setModelMenuRect(null)
+                      } else {
+                        setOpenModelMenuId(model.id)
+                        setModelMenuRect(rect)
+                      }
+                    }}
                   >
                     ⋯
                   </button>
-                  {openModelMenuId === model.id && (
-                    <div className="model-menu-popup" role="menu">
+                  {openModelMenuId === model.id && modelMenuRect && createPortal(
+                    <div
+                      className="model-menu-popup"
+                      role="menu"
+                      style={{
+                        position: 'fixed',
+                        top: modelMenuRect.bottom + 6,
+                        left: modelMenuRect.right - 160,
+                        zIndex: 1000
+                      }}
+                    >
                       <button
                         className="model-menu-item"
                         role="menuitem"
                         disabled={busy}
                         onClick={() => {
                           setOpenModelMenuId(null)
+                          setModelMenuRect(null)
                           startEditModel(model)
                         }}
                       >
@@ -1220,6 +1285,7 @@ export function SettingsModal({
                         disabled={busy}
                         onClick={() => {
                           setOpenModelMenuId(null)
+                          setModelMenuRect(null)
                           setContextTarget(model)
                         }}
                       >
@@ -1231,12 +1297,14 @@ export function SettingsModal({
                         disabled={busy}
                         onClick={() => {
                           setOpenModelMenuId(null)
+                          setModelMenuRect(null)
                           void run(() => deleteModel(model.id))
                         }}
                       >
                         Delete
                       </button>
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
               </div>
