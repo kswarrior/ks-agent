@@ -814,7 +814,7 @@ function FilesPanel({ project }: { project: Project }) {
           </button>
           {openFile && (
             <span className="files-file-icon" aria-hidden="true">
-              {fileIcon(baseName(openFile.path))}
+              {getFileIcon(baseName(openFile.path))}
             </span>
           )}
           <span className="files-file-name" title={openFile?.path}>
@@ -1018,7 +1018,7 @@ function FilesPanel({ project }: { project: Project }) {
               title={joinRel(dir, entry.name)}
             >
               <span className="files-row-icon" aria-hidden="true">
-                {entry.type === 'dir' ? '📂' : fileIcon(entry.name)}
+                {entry.type === 'dir' ? <FolderIcon className="files-row-icon" /> : getFileIcon(entry.name)}
               </span>
               <span className="files-row-name">{entry.name}</span>
               {entry.type === 'file' && <span className="files-row-size">{formatSize(entry.size)}</span>}
