@@ -650,14 +650,20 @@ function FilesPanel({ project }: { project: Project }) {
       </div>
 
       <div className="files-actions">
-        <FilesActionMenu
+        <CreateMenu
+          projectId={project.id}
+          dir={dir}
+          busy={busy}
+          createKind={createKind}
+          setCreateKind={setCreateKind}
+          setNewName={setNewName}
+          load={load}
+        />
+        <UploadMenu
           projectId={project.id}
           dir={dir}
           busy={busy}
           setBusy={setBusy}
-          createKind={createKind}
-          setCreateKind={setCreateKind}
-          setNewName={setNewName}
           fileInputRef={fileInputRef}
           load={load}
         />
