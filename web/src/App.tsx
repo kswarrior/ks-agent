@@ -3,6 +3,7 @@ import * as api from './api'
 import { ChatView } from './components/ChatView'
 import { ConfirmModal, Modal } from './components/Modal'
 import { ExtensionsModal } from './components/ExtensionsModal'
+import { RightSidebar } from './components/RightSidebar'
 import { SettingsModal } from './components/SettingsModal'
 import { Sidebar } from './components/Sidebar'
 import type {
@@ -79,6 +80,7 @@ export default function App() {
   const [chatsLoading, setChatsLoading] = useState(false)
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showExtensions, setShowExtensions] = useState(false)
@@ -667,7 +669,13 @@ export default function App() {
         onStop={stop}
         onOpenSidebar={() => setSidebarOpen(true)}
         onEditChat={setEditChatTarget}
+        rightSidebarOpen={rightSidebarOpen}
+        onToggleRightSidebar={() => setRightSidebarOpen((open) => !open)}
       />
+
+      {rightSidebarOpen && activeProject && (
+        <RightSidebar project={activeProject} onClose={() => setRightSidebarOpen(false)} />
+      )}
 
       {bootError && <div className="boot-error">{bootError}</div>}
 

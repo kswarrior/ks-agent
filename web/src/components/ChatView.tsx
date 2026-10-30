@@ -306,6 +306,23 @@ function MenuIcon() {
   )
 }
 
+function FilesIcon() {
+  return (
+    <svg
+      className="menu-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    </svg>
+  )
+}
+
 function ThinkingBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
   return (
     <details className="thinking-block">
@@ -559,7 +576,9 @@ export function ChatView({
   onSend,
   onStop,
   onOpenSidebar,
-  onEditChat
+  onEditChat,
+  rightSidebarOpen,
+  onToggleRightSidebar
 }: {
   project: Project | null
   chat: Chat | null
@@ -586,6 +605,8 @@ export function ChatView({
   onStop: () => void
   onOpenSidebar: () => void
   onEditChat: (chat: Chat) => void
+  rightSidebarOpen: boolean
+  onToggleRightSidebar: () => void
 }) {
   const [draft, setDraft] = useState('')
   const [now, setNow] = useState(Date.now())
@@ -722,6 +743,15 @@ export function ChatView({
           </span>
           <span>{project.name}</span>
         </div>
+        <button
+          className={`icon-btn ${rightSidebarOpen ? 'active' : ''}`}
+          onClick={onToggleRightSidebar}
+          aria-label="Toggle files"
+          aria-pressed={rightSidebarOpen}
+          title="Files"
+        >
+          <FilesIcon />
+        </button>
         {chat && (
           <div
             className={`context-meter ${contextLevel}`}
