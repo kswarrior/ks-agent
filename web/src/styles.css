@@ -2427,7 +2427,7 @@ code {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  min-width: 120px;
+  width: 120px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -3401,7 +3401,7 @@ code {
 
 .files-inline-form .input {
   flex: 1;
-  min-width: 120px;
+  width: 120px;
 }
 
 .files-action-popup,
