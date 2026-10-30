@@ -697,6 +697,7 @@ export function ChatView({
   const send = () => {
     const content = draft.trim()
     if (!content || streaming || !modelId) return
+    stickToBottomRef.current = true
     setDraft('')
     onSend(content)
   }
@@ -796,7 +797,7 @@ export function ChatView({
         )
       ) : (
         <>
-          <div className="messages">
+          <div className="messages" ref={messagesRef} onScroll={handleMessagesScroll}>
             {loading ? (
               <MessageSkeleton />
             ) : (
