@@ -51,9 +51,12 @@ function resolveInitialDatabasePath(): string {
   if (pinnedDbPath) return pinnedDbPath
   const selected = readDatabaseLocation()
   if (!selected) return defaultDbPath
-  if (fs.existsSync(selected)) return selected
-  console.warn(`[db] database location ${selected} is missing; using ${defaultDbPath}`)
-  return defaultDbPath
+  if (!fs.existsSync(selected)) {
+    throw new Error(
+      `Database location ${selected} is missing. Restore it or delete ${databaseLocationPath} to use ${defaultDbPath}.`
+    )
+  }
+  return selected
 }
 
 function openDatabase(location: string): Database.Database {
