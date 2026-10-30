@@ -5,6 +5,8 @@ import type {
   ChatSummary,
   ExtensionInfo,
   ExtensionKind,
+  FileContent,
+  FileListing,
   KnowledgeEntry,
   KnowledgeJob,
   LspServerDetail,
@@ -48,6 +50,39 @@ export const createProject = (body: { name: string; path?: string }) =>
   req<Project>('/api/projects', json('POST', body))
 export const deleteProject = (id: string, deleteFolder = false) =>
   req<{ ok: true }>(`/api/projects/${id}${deleteFolder ? '?deleteFolder=true' : ''}`, { method: 'DELETE' })
+
+export const listProjectFiles = (projectId: string, path = '') =>
+  req<FileListing>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`)
+
+export const readProjectFile = (projectId: string, path: string) =>
+  req<FileContent>(`/api/projects/${projectId}/files/content?path=${encodeURIComponent(path)}`)
+
+export const writeProjectFile = (projectId: string, path: string, content: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files/content`, json('PUT', { path, content }))
+
+export const createFileEntry = (projectId: string, kind: 'file' | 'folder', path: string) =>
+  req<{ ok: true; path: string }>(`/api/projects/${projectId}/files`, json('POST', { kind, path }))
+
+export const renameFileEntry = (projectId: string, from: string, to: string) =>
+  req<{ ok: true; path: string }>(`/api/projects/${projectId}/files`, json('PATCH', { from, to }))
+
+export const deleteFileEntry = (projectId: string, path: string) =>
+  req<{ ok: true }>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`, {
+    method: 'DELETE'
+  })
+
+export const uploadProjectFiles = async (projectId: string, path: string, files: File[]) => {
+  const form = new FormData()
+  form.append('path', path)
+  for (const file of files) form.append('file', file)
+  const res = await fetch(`/api/projects/${projectId}/files/upload`, { method: 'POST', body: form })
+  const data = (await res.json().catch(() => null)) as { error?: string } | null
+  if (!res.ok) throw new Error(data?.error ?? `Request failed (${res.status})`)
+  return data as { ok: true; saved: string[] }
+}
+
+export const projectFileDownloadUrl = (projectId: string, path: string) =>
+  `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}`
 
 export const listChats = (projectId: string) => req<Chat[]>(`/api/projects/${projectId}/chats`)
 export const createChat = (projectId: string, body: { title?: string; modelId?: string | null } = {}) =>

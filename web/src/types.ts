@@ -5,6 +5,24 @@ export interface Project {
   createdAt: number
 }
 
+export interface FileEntry {
+  name: string
+  type: 'dir' | 'file'
+  size?: number
+}
+
+export interface FileListing {
+  path: string
+  entries: FileEntry[]
+}
+
+export interface FileContent {
+  path: string
+  size: number
+  binary: boolean
+  content: string
+}
+
 export interface Chat {
   id: string
   projectId: string
