@@ -3297,6 +3297,62 @@ code {
   font-size: 12px;
 }
 
+.files-skeleton {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  overflow-y: auto;
+}
+
+.files-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+
+.files-skeleton-icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--bg-soft) 25%, var(--bg-hover) 50%, var(--bg-soft) 75%);
+  background-size: 200% 100%;
+  animation: files-skeleton-shimmer 1.5s infinite;
+}
+
+.files-skeleton-name {
+  flex: 1;
+  min-width: 0;
+  height: 13px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-soft) 25%, var(--bg-hover) 50%, var(--bg-soft) 75%);
+  background-size: 200% 100%;
+  animation: files-skeleton-shimmer 1.5s infinite;
+}
+
+.files-skeleton-size {
+  flex: 0 0 auto;
+  width: 50px;
+  height: 11px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--bg-soft) 25%, var(--bg-hover) 50%, var(--bg-soft) 75%);
+  background-size: 200% 100%;
+  animation: files-skeleton-shimmer 1.5s infinite;
+}
+
+@keyframes files-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .files-notice {
   padding: 6px 8px;
   border-radius: 8px;
