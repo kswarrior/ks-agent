@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as api from '../api'
 import type { FileContent, FileEntry, FileListing, Project } from '../types'
 import { FileEditor } from './FileEditor'
