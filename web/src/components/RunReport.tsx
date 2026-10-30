@@ -343,7 +343,7 @@ export function RunReport({ report, onContinue }: { report: RunReportData; onCon
 
         {report.status === 'stopped' && onContinue && (
           <div className="run-report-continue">
-            <span>Add instructions below and continue from this point.</span>
+            <span>Resume from this point, or add instructions in the composer first.</span>
             <button type="button" className="btn primary small" onClick={onContinue}>
               Continue
             </button>
