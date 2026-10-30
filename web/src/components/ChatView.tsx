@@ -31,6 +31,8 @@ const DEFAULT_CONTEXT_WINDOW = 128_000
 const CONTEXT_WARNING_RATIO = 0.6
 const CONTEXT_DANGER_RATIO = 0.85
 const MESSAGE_OVERHEAD_CHARS = 16
+const CONTINUE_PROMPT =
+  'Continue the previous task from where you left off. Do not repeat work that is already complete; finish the remaining steps and verify the result.'
 
 function formatTokens(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M`
@@ -1042,7 +1044,7 @@ export function ChatView({
                 ) : (
                   <button
                     className="icon-action primary"
-                    onClick={send}
+                    onClick={() => send()}
                     disabled={!draft.trim() || !modelId}
                     aria-label="Send"
                     title="Send"
