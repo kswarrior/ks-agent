@@ -512,6 +512,67 @@ export function removeChat(id: string): void {
   db.prepare('DELETE FROM chats WHERE id = ?').run(id)
 }
 
+export function listBackups(projectId: string): Backup[] {
+  return (
+    db
+      .prepare('SELECT * FROM backups WHERE project_id = ? ORDER BY created_at DESC')
+      .all(projectId) as BackupRow[]
+  ).map(backupEntry)
+}
+export function getBackup(id: string): Backup | null {
+  const row = db.prepare('SELECT * FROM backups WHERE id = ?').get(id) as BackupRow | undefined
+  return row ? backupEntry(row) : null
+}
+export function insertBackup(input: {
+  projectId: string
+  name: string
+  path: string
+  size: number
+  includesChats: boolean
+  source: BackupSource
+  createdAt?: number
+}): Backup {
+  const row: BackupRow = {
+    id: newId(),
+    project_id: input.projectId,
+    name: input.name,
+    path: input.path,
+    size: input.size,
+    includes_chats: input.includesChats ? 1 : 0,
+    source: input.source,
+    created_at: input.createdAt ?? Date.now()
+  }
+  db.prepare(
+    `INSERT INTO backups (id, project_id, name, path, size, includes_chats, source, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(project_id, path) DO UPDATE SET
+       name = excluded.name,
+       size = excluded.size,
+       includes_chats = excluded.includes_chats,
+       source = excluded.source,
+       created_at = excluded.created_at`
+  ).run(
+    row.id,
+    row.project_id,
+    row.name,
+    row.path,
+    row.size,
+    row.includes_chats,
+    row.source,
+    row.created_at
+  )
+  const saved = db
+    .prepare('SELECT * FROM backups WHERE project_id = ? AND path = ?')
+    .get(row.project_id, row.path) as BackupRow
+  return backupEntry(saved)
+}
+export function updateBackupSize(id: string, size: number): void {
+  db.prepare('UPDATE backups SET size = ? WHERE id = ?').run(size, id)
+}
+export function removeBackup(id: string): void {
+  db.prepare('DELETE FROM backups WHERE id = ?').run(id)
+}
+
 export function listChatDisabled(chatId: string): Record<ExtensionKind, Set<string>> {
   const out: Record<ExtensionKind, Set<string>> = {
     skill: new Set(),
@@ -634,6 +695,98 @@ export function saveChatSummary(chatId: string, summary: string, coveredMessageI
 
 export function removeChatSummary(chatId: string): void {
   db.prepare('DELETE FROM chat_summaries WHERE chat_id = ?').run(chatId)
+}
+
+export interface ImportedChatMessage {
+  sourceId: string | null
+  role: Role
+  content: string
+  toolCalls: ToolCall[] | null
+  toolCallId: string | null
+  modelId: string | null
+  durationMs: number | null
+  createdAt: number
+}
+
+export interface ImportedChat {
+  title: string
+  modelId: string | null
+  createdAt: number
+  updatedAt: number
+  messages: ImportedChatMessage[]
+  summary: { summary: string; coveredMessageId: string | null; updatedAt: number } | null
+}
+
+export function importChats(
+  projectId: string,
+  records: ImportedChat[]
+): { chats: Chat[]; messages: number } {
+  const insertChatRow = db.prepare(
+    'INSERT INTO chats (id, project_id, title, model_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+  )
+  const insertMessageRow = db.prepare(
+    'INSERT INTO messages (id, chat_id, role, content, tool_calls, tool_call_id, model_id, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  )
+  const insertSummaryRow = db.prepare(
+    'INSERT INTO chat_summaries (chat_id, summary, covered_message_id, updated_at) VALUES (?, ?, ?, ?)'
+  )
+
+  const imported: Chat[] = []
+  let messageCount = 0
+  const run = db.transaction(() => {
+    for (const record of records) {
+      const chatId = newId()
+      const now = Date.now()
+      const createdAt = Number.isFinite(record.createdAt) ? record.createdAt : now
+      const updatedAt = Number.isFinite(record.updatedAt) ? record.updatedAt : createdAt
+      insertChatRow.run(chatId, projectId, record.title, record.modelId, createdAt, updatedAt)
+      imported.push({
+        id: chatId,
+        projectId,
+        title: record.title,
+        modelId: record.modelId,
+        createdAt,
+        updatedAt
+      })
+
+      const ids = new Map<string, string>()
+      let lastMessageId = ''
+      for (const item of record.messages) {
+        const messageId = newId()
+        const messageCreatedAt = Number.isFinite(item.createdAt) ? item.createdAt : now
+        insertMessageRow.run(
+          messageId,
+          chatId,
+          item.role,
+          item.content,
+          item.toolCalls && item.toolCalls.length ? JSON.stringify(item.toolCalls) : null,
+          item.toolCallId,
+          item.modelId,
+          item.durationMs,
+          messageCreatedAt
+        )
+        if (item.sourceId) ids.set(item.sourceId, messageId)
+        lastMessageId = messageId
+        messageCount += 1
+      }
+
+      if (record.summary?.summary) {
+        const covered = record.summary.coveredMessageId
+          ? ids.get(record.summary.coveredMessageId) ?? lastMessageId
+          : lastMessageId
+        if (covered) {
+          insertSummaryRow.run(
+            chatId,
+            record.summary.summary,
+            covered,
+            Number.isFinite(record.summary.updatedAt) ? record.summary.updatedAt : now
+          )
+        }
+      }
+    }
+  })
+  run()
+  return { chats: imported, messages: messageCount }
 }
 
 export function listKnowledge(): KnowledgeEntry[] {
