@@ -611,6 +611,8 @@ export function ChatView({
   const [draft, setDraft] = useState('')
   const [now, setNow] = useState(Date.now())
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  const messagesRef = useRef<HTMLDivElement | null>(null)
+  const stickToBottomRef = useRef(true)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const rootPath = project?.path ?? ''
 
@@ -626,8 +628,20 @@ export function ChatView({
   }, [chat?.id])
 
   useEffect(() => {
+    stickToBottomRef.current = true
+  }, [chat?.id])
+
+  useEffect(() => {
+    if (!stickToBottomRef.current) return
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, live?.content, live?.tools.length, streaming])
+
+  const handleMessagesScroll = () => {
+    const container = messagesRef.current
+    if (!container) return
+    const distance = container.scrollHeight - container.scrollTop - container.clientHeight
+    stickToBottomRef.current = distance <= 96
+  }
 
   const toolResults = useMemo(() => {
     const map = new Map<string, Message>()
