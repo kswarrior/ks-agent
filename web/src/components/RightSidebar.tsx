@@ -144,39 +144,34 @@ export function RightSidebar({ project, onClose }: { project: Project; onClose: 
   )
 }
 
-function FilesActionMenu({
+function CreateMenu({
   projectId,
   dir,
   busy,
-  setBusy,
   createKind,
   setCreateKind,
   setNewName,
-  fileInputRef,
   load
 }: {
   projectId: string
   dir: string
   busy: boolean
-  setBusy: (busy: boolean) => void
   createKind: 'file' | 'folder' | null
   setCreateKind: (kind: 'file' | 'folder' | null) => void
   setNewName: (name: string) => void
-  fileInputRef: React.RefObject<HTMLInputElement | null>
   load: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const [placement, setPlacement] = useState<'down' | 'up'>('down')
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const [urlUpload, setUrlUpload] = useState<{ url: string; name: string } | null>(null)
 
   const position = () => {
     const next = triggerRef.current?.getBoundingClientRect()
     if (!next) return
     setRect(next)
     const spaceBelow = window.innerHeight - next.bottom
-    setPlacement(spaceBelow < 200 && next.top > spaceBelow ? 'up' : 'down')
+    setPlacement(spaceBelow < 160 && next.top > spaceBelow ? 'up' : 'down')
   }
 
   useEffect(() => {
@@ -184,15 +179,13 @@ function FilesActionMenu({
     position()
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node
-      if (!triggerRef.current?.contains(target) && !document.querySelector('.files-action-popup')?.contains(target)) {
+      if (!triggerRef.current?.contains(target) && !document.querySelector('.files-create-popup')?.contains(target)) {
         setMenuOpen(false)
-        setUrlUpload(null)
       }
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpen(false)
-        setUrlUpload(null)
         triggerRef.current?.focus()
       }
     }
@@ -219,6 +212,110 @@ function FilesActionMenu({
     setNewName('')
     setMenuOpen(false)
   }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`files-action-btn ${menuOpen ? 'open' : ''}`}
+        onClick={() => {
+          if (!menuOpen) position()
+          setMenuOpen(!menuOpen)
+        }}
+        disabled={busy}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label="New file or folder"
+        title="New file or folder"
+      >
+        <span className="files-action-btn-icon">+</span>
+        <span className="files-action-btn-label">New</span>
+        <span className="files-action-btn-caret" aria-hidden="true">▾</span>
+      </button>
+      {menuOpen && rect && createPortal(
+        <div
+          className={`files-create-popup ${placement}`}
+          style={{
+            left: rect.left,
+            minWidth: 160,
+            ...(placement === 'up'
+              ? { bottom: window.innerHeight - rect.top + 6 }
+              : { top: rect.bottom + 6 })
+          }}
+          role="menu"
+          aria-label="Create new"
+        >
+          <button className="files-action-item" role="menuitem" onClick={handleNewFile} disabled={busy}>
+            <span className="files-action-icon">📄</span> New file
+          </button>
+          <button className="files-action-item" role="menuitem" onClick={handleNewFolder} disabled={busy}>
+            <span className="files-action-icon">📁</span> New folder
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+function UploadMenu({
+  projectId,
+  dir,
+  busy,
+  setBusy,
+  fileInputRef,
+  load
+}: {
+  projectId: string
+  dir: string
+  busy: boolean
+  setBusy: (busy: boolean) => void
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  load: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const [placement, setPlacement] = useState<'down' | 'up'>('down')
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const [urlUpload, setUrlUpload] = useState<{ url: string; name: string } | null>(null)
+
+  const position = () => {
+    const next = triggerRef.current?.getBoundingClientRect()
+    if (!next) return
+    setRect(next)
+    const spaceBelow = window.innerHeight - next.bottom
+    setPlacement(spaceBelow < 160 && next.top > spaceBelow ? 'up' : 'down')
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return
+    position()
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!triggerRef.current?.contains(target) && !document.querySelector('.files-upload-popup')?.contains(target)) {
+        setMenuOpen(false)
+        setUrlUpload(null)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        setUrlUpload(null)
+        triggerRef.current?.focus()
+      }
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('resize', position)
+    window.addEventListener('scroll', position, true)
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', position, true)
+    }
+  }, [menuOpen])
 
   const handleUpload = () => {
     fileInputRef.current?.click()
@@ -286,7 +383,7 @@ function FilesActionMenu({
       <button
         ref={triggerRef}
         type="button"
-        className={`icon-btn ${menuOpen ? 'open' : ''}`}
+        className={`files-action-btn ${menuOpen ? 'open' : ''}`}
         onClick={() => {
           if (!menuOpen) position()
           setMenuOpen(!menuOpen)
@@ -294,35 +391,31 @@ function FilesActionMenu({
         disabled={busy}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
-        aria-label="New file, folder, or upload"
-        title="New file, folder, or upload"
+        aria-label="Upload file or from URL"
+        title="Upload file or from URL"
       >
-        +
+        <span className="files-action-btn-icon">⬆</span>
+        <span className="files-action-btn-label">Upload</span>
+        <span className="files-action-btn-caret" aria-hidden="true">▾</span>
       </button>
       {menuOpen && rect && createPortal(
         <div
-          className={`files-action-popup ${placement}`}
+          className={`files-upload-popup ${placement}`}
           style={{
             left: rect.left,
-            minWidth: 180,
+            minWidth: 160,
             ...(placement === 'up'
               ? { bottom: window.innerHeight - rect.top + 6 }
               : { top: rect.bottom + 6 })
           }}
           role="menu"
-          aria-label="Create new"
+          aria-label="Upload"
         >
-          <button className="files-action-item" role="menuitem" onClick={handleNewFile} disabled={busy}>
-            <span className="files-action-icon">📄</span> New file
-          </button>
-          <button className="files-action-item" role="menuitem" onClick={handleNewFolder} disabled={busy}>
-            <span className="files-action-icon">📁</span> New folder
-          </button>
           <button className="files-action-item" role="menuitem" onClick={handleUpload} disabled={busy}>
-            <span className="files-action-icon">⬆️</span> Upload
+            <span className="files-action-icon">⬆️</span> Upload file
           </button>
           <button className="files-action-item" role="menuitem" onClick={handleUploadUrl} disabled={busy}>
-            <span className="files-action-icon">🔗</span> Upload URL
+            <span className="files-action-icon">🔗</span> Upload from URL
           </button>
         </div>,
         document.body
