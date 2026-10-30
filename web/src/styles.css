@@ -2856,6 +2856,11 @@ code {
   height: 18px;
 }
 
+.icon-action > span {
+  font-size: 18px;
+  line-height: 1;
+}
+
 .icon-action:hover:not(:disabled) {
   border-color: #4a4a52;
   background: var(--bg-hover);
