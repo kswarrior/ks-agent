@@ -727,8 +727,8 @@ export function ChatView({
   const visibleTools = (tools: LiveState['tools']) =>
     tools.filter((tool) => tool.name !== 'update_plan' && !persistedToolCallIds.has(tool.id))
 
-  const send = () => {
-    const content = draft.trim()
+  const send = (override?: string) => {
+    const content = (override ?? draft).trim()
     if (!content || streaming || !modelId) return
     stickToBottomRef.current = true
     setDraft('')
@@ -736,11 +736,12 @@ export function ChatView({
   }
 
   const continueRun = () => {
-    const composer = composerRef.current
-    if (!composer) return
-    composer.focus()
-    composer.setSelectionRange(composer.value.length, composer.value.length)
-    composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (streaming || !modelId) return
+    if (draft.trim()) {
+      send()
+      return
+    }
+    send(CONTINUE_PROMPT)
   }
 
   const latestReport = runReports.find((entry) => entry.isLatest)
