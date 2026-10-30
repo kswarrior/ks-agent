@@ -70,6 +70,10 @@ interface RunState {
 
 const runs = new Map<string, RunState>()
 
+const MAX_FILE_LIST_ENTRIES = 2000
+const MAX_FILE_EDIT_BYTES = 2 * 1024 * 1024
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
 function errorJson(message: string, status = 400) {
   return { error: message, status }
 }
@@ -100,6 +104,15 @@ function safeName(value: unknown): string | null {
   const name = value.trim()
   if (!name || name.length > 100 || name.includes('\0')) return null
   return name
+}
+
+function validProjectRel(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const rel = cleanRelative(value)
+  if (rel === '.') return null
+  const parts = rel.split('/').filter(Boolean)
+  if (parts.length === 0 || !parts.every(validSegment)) return null
+  return parts.join('/')
 }
 
 function readProjectIds(value: unknown): string[] | null {
