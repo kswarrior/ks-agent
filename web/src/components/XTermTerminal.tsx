@@ -3,11 +3,34 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
-export function XTermTerminal({ projectId }: { projectId: string }) {
+export function XTermTerminal({
+  projectId,
+  terminalId,
+  active
+}: {
+  projectId: string
+  terminalId: string
+  active: boolean
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!active) return
+    const frame = requestAnimationFrame(() => {
+      try {
+        fitRef.current?.fit()
+      } catch {
+        // ignore
+      }
+      termRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [active])
 
   useEffect(() => {
     const element = containerRef.current
@@ -50,6 +73,8 @@ export function XTermTerminal({ projectId }: { projectId: string }) {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(element)
+    termRef.current = term
+    fitRef.current = fit
     requestAnimationFrame(() => {
       try {
         fit.fit()
@@ -169,7 +194,7 @@ export function XTermTerminal({ projectId }: { projectId: string }) {
     element.addEventListener('auxclick', onAuxClick)
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${location.host}/api/projects/${encodeURIComponent(projectId)}/terminal?cols=${term.cols}&rows=${term.rows}`
+    const wsUrl = `${protocol}//${location.host}/api/projects/${encodeURIComponent(projectId)}/terminal?terminal=${encodeURIComponent(terminalId)}&cols=${term.cols}&rows=${term.rows}`
     let closedByUs = false
     let reconnectTimer: number | null = null
     let resizeObserver: ResizeObserver | null = null
@@ -271,13 +296,15 @@ export function XTermTerminal({ projectId }: { projectId: string }) {
         // ignore
       }
       wsRef.current = null
+      termRef.current = null
+      fitRef.current = null
       try {
         term.dispose()
       } catch {
         // ignore
       }
     }
-  }, [projectId])
+  }, [projectId, terminalId])
 
   return (
     <div className="terminal-panel">

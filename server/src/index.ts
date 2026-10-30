@@ -1371,16 +1371,7 @@ function clampDimension(value: string | null, fallback: number): number {
   }
 })
 
-wss.on(
-  'connection',
-  (
-    ws: WebSocket,
-    sessionKey: string,
-    projectId: string,
-    projectPath: string,
-    cols: number,
-    rows: number
-  ) => {
+wss.on('connection', (ws: WebSocket, sessionKey: string, projectId: string, projectPath: string, cols: number, rows: number) => {
   const session = getOrCreateTerminal(sessionKey, projectId, projectPath, cols, rows)
   session.clients.add(ws)
   if (session.buffer) {

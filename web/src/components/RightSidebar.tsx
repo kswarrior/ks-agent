@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../api'
 import type { FileContent, FileEntry, FileListing, Project } from '../types'
-import { XTermTerminal } from './XTermTerminal'
+import { TerminalTabs } from './TerminalTabs'
 
 type RightTab = 'files' | 'terminal' | 'activity'
 
