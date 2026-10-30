@@ -148,6 +148,7 @@ function FilesActionMenu({
   projectId,
   dir,
   busy,
+  setBusy,
   createKind,
   setCreateKind,
   setNewName,
@@ -157,6 +158,7 @@ function FilesActionMenu({
   projectId: string
   dir: string
   busy: boolean
+  setBusy: (busy: boolean) => void
   createKind: 'file' | 'folder' | null
   setCreateKind: (kind: 'file' | 'folder' | null) => void
   setNewName: (name: string) => void
