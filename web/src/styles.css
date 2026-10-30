@@ -3375,6 +3375,14 @@ code {
   background: rgba(255, 255, 255, 0.18);
 }
 
+.files-code-input {
+  scrollbar-width: none;
+}
+
+.files-code-input::-webkit-scrollbar {
+  display: none;
+}
+
 .files-markdown-preview {
   flex: 1;
   min-height: 200px;
