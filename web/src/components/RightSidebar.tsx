@@ -661,7 +661,6 @@ function UploadMenu({
 
 function RowMenu({
   entry,
-  path,
   busy,
   onEdit,
   onOpenFolder,
@@ -673,7 +672,6 @@ function RowMenu({
   onDelete
 }: {
   entry: FileEntry
-  path: string
   busy: boolean
   onEdit: () => void
   onOpenFolder: () => void
@@ -855,6 +853,8 @@ function FilesPanel({ project }: { project: Project }) {
     setCreateKind(null)
     setRenaming(false)
     setConfirmDelete(false)
+    setRenameTarget(null)
+    setDeleteTarget(null)
   }, [project.id])
 
   useEffect(() => {
@@ -971,14 +971,73 @@ function FilesPanel({ project }: { project: Project }) {
     }
   }
 
-  const download = () => {
-    if (!openFile) return
+  const download = (path: string) => {
     const link = document.createElement('a')
-    link.href = api.projectFileDownloadUrl(project.id, openFile.path)
-    link.download = baseName(openFile.path)
+    link.href = api.projectFileDownloadUrl(project.id, path)
+    link.download = baseName(path)
     document.body.appendChild(link)
     link.click()
     link.remove()
+  }
+
+  const renameEntry = async (target: { path: string; name: string }, name: string) => {
+    if (name === target.name) return
+    setBusy(true)
+    try {
+      const to = joinRel(parentOf(target.path), name)
+      await api.renameFileEntry(project.id, target.path, to)
+      setError(null)
+      setNotice(`Renamed to ${name}`)
+      await load()
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeEntry = async (target: { path: string; name: string }) => {
+    setBusy(true)
+    try {
+      await api.deleteFileEntry(project.id, target.path)
+      setError(null)
+      setNotice(`Deleted ${target.name}`)
+      if (openFile && (openFile.path === target.path || openFile.path.startsWith(`${target.path}/`))) {
+        setOpenFile(null)
+        setDraft('')
+      }
+      await load()
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const duplicateEntry = async (entry: FileEntry) => {
+    const source = joinRel(dir, entry.name)
+    const name = uniqueCopyName(entry.name, new Set(entries.map((item) => item.name)))
+    setBusy(true)
+    try {
+      await api.copyFileEntry(project.id, source, joinRel(dir, name))
+      setError(null)
+      setNotice(`Duplicated as ${name}`)
+      await load()
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const copyPath = async (path: string) => {
+    try {
+      await copyText(path)
+      setError(null)
+      setNotice('Path copied')
+    } catch (caught) {
+      setError(errorMessage(caught))
+    }
   }
 
   const crumbs = dir ? dir.split('/') : []
@@ -1047,7 +1106,7 @@ function FilesPanel({ project }: { project: Project }) {
                     {saving ? 'Saving…' : 'Save'}
                   </button>
                 )}
-                <button className="btn ghost small" onClick={download} title="Download">
+                <button className="btn ghost small" onClick={() => download(openFile.path)} title="Download">
                   <DownloadIcon className="btn-icon" />
                 </button>
                 <button
@@ -1195,25 +1254,68 @@ function FilesPanel({ project }: { project: Project }) {
         <div className="files-empty">{query.trim() ? 'No matching files' : 'This folder is empty'}</div>
       ) : (
         <div className="files-list">
-          {filtered.map((entry: FileEntry) => (
-            <button
-              key={`${entry.type}-${entry.name}`}
-              className="files-row"
-              onClick={() => {
-                const path = joinRel(dir, entry.name)
-                if (entry.type === 'dir') setDir(path)
-                else void loadFile(path)
-              }}
-              title={joinRel(dir, entry.name)}
-            >
-              <span className="files-row-icon" aria-hidden="true">
-                {entry.type === 'dir' ? <FolderIcon className="files-row-icon" /> : getFileIcon(entry.name)}
-              </span>
-              <span className="files-row-name">{entry.name}</span>
-              {entry.type === 'file' && <span className="files-row-size">{formatSize(entry.size)}</span>}
-            </button>
-          ))}
+          {filtered.map((entry: FileEntry) => {
+            const path = joinRel(dir, entry.name)
+            return (
+              <div key={`${entry.type}-${entry.name}`} className="files-row-wrap">
+                <button
+                  className="files-row"
+                  onClick={() => {
+                    if (entry.type === 'dir') setDir(path)
+                    else void loadFile(path)
+                  }}
+                  title={path}
+                >
+                  <span className="files-row-icon" aria-hidden="true">
+                    {entry.type === 'dir' ? <FolderIcon className="files-row-icon" /> : getFileIcon(entry.name)}
+                  </span>
+                  <span className="files-row-name">{entry.name}</span>
+                  {entry.type === 'file' && <span className="files-row-size">{formatSize(entry.size)}</span>}
+                </button>
+                <RowMenu
+                  entry={entry}
+                  busy={busy}
+                  onEdit={() => void loadFile(path)}
+                  onOpenFolder={() => setDir(path)}
+                  onCreate={(kind) => {
+                    setDir(path)
+                    setCreateKind(kind)
+                    setNewName('')
+                    setQuery('')
+                  }}
+                  onRename={() => setRenameTarget({ path, name: entry.name })}
+                  onDuplicate={() => void duplicateEntry(entry)}
+                  onDownload={() => download(path)}
+                  onCopyPath={() => void copyPath(path)}
+                  onDelete={() => setDeleteTarget({ path, name: entry.name, type: entry.type })}
+                />
+              </div>
+            )
+          })}
         </div>
+      )}
+
+      {renameTarget && (
+        <PromptModal
+          title="Rename"
+          label={`New name for "${renameTarget.name}"`}
+          initialValue={renameTarget.name}
+          onClose={() => setRenameTarget(null)}
+          onSubmit={(name) => {
+            const target = renameTarget
+            setRenameTarget(null)
+            void renameEntry(target, name)
+          }}
+        />
+      )}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete"
+          message={`Delete "${deleteTarget.name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={() => void removeEntry(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   )
