@@ -463,29 +463,16 @@ function FilesPanel({ project }: { project: Project }) {
       </div>
 
       <div className="files-actions">
-        <button
-          className="btn ghost small"
-          onClick={() => {
-            setCreateKind('file')
-            setNewName('')
-          }}
-          disabled={busy}
-        >
-          New file
-        </button>
-        <button
-          className="btn ghost small"
-          onClick={() => {
-            setCreateKind('folder')
-            setNewName('')
-          }}
-          disabled={busy}
-        >
-          New folder
-        </button>
-        <button className="btn ghost small" onClick={() => fileInputRef.current?.click()} disabled={busy}>
-          Upload
-        </button>
+        <FilesActionMenu
+          projectId={project.id}
+          dir={dir}
+          busy={busy}
+          createKind={createKind}
+          setCreateKind={setCreateKind}
+          setNewName={setNewName}
+          fileInputRef={fileInputRef}
+          load={load}
+        />
       </div>
 
       {createKind && (
