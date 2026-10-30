@@ -3,8 +3,11 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
+import * as pty from 'node-pty'
+import { WebSocketServer, WebSocket } from 'ws'
 import { runAgent } from './agent.js'
 import { config, isInside } from './config.js'
 import {
@@ -73,6 +76,100 @@ const runs = new Map<string, RunState>()
 const MAX_FILE_LIST_ENTRIES = 2000
 const MAX_FILE_EDIT_BYTES = 2 * 1024 * 1024
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+interface TerminalSession {
+  pty: pty.IPty
+  clients: Set<WebSocket>
+  buffer: string
+}
+
+const terminalSessions = new Map<string, TerminalSession>()
+
+function resolveShell(): string {
+  const envShell = process.env.SHELL
+  if (envShell && fs.existsSync(envShell)) return envShell
+  for (const shell of ['/bin/bash', '/bin/zsh', '/bin/sh']) {
+    if (fs.existsSync(shell)) return shell
+  }
+  return '/bin/sh'
+}
+
+function getOrCreateTerminal(
+  projectId: string,
+  projectPath: string,
+  cols = 80,
+  rows = 24
+): TerminalSession {
+  const existing = terminalSessions.get(projectId)
+  if (existing) return existing
+  let cwd = path.resolve(projectPath)
+  try {
+    if (!fs.statSync(cwd).isDirectory()) cwd = os.homedir()
+  } catch {
+    try {
+      fs.mkdirSync(cwd, { recursive: true })
+    } catch {
+      cwd = os.homedir()
+    }
+  }
+  const env = {
+    ...process.env,
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    LANG: process.env.LANG || 'en_US.UTF-8'
+  } as Record<string, string>
+  const shell = pty.spawn(resolveShell(), [], {
+    name: 'xterm-256color',
+    cols,
+    rows,
+    cwd,
+    env
+  })
+  const session: TerminalSession = { pty: shell, clients: new Set(), buffer: '' }
+  shell.onData((data) => {
+    session.buffer += data
+    if (session.buffer.length > 200 * 1024) session.buffer = session.buffer.slice(-200 * 1024)
+    for (const client of session.clients) {
+      if (client.readyState === WebSocket.OPEN) {
+        try {
+          client.send(data)
+        } catch {
+          // ignore broken socket
+        }
+      }
+    }
+  })
+  shell.onExit(() => {
+    for (const client of session.clients) {
+      try {
+        client.close()
+      } catch {
+        // ignore
+      }
+    }
+    terminalSessions.delete(projectId)
+  })
+  terminalSessions.set(projectId, session)
+  return session
+}
+
+function killTerminal(projectId: string): void {
+  const session = terminalSessions.get(projectId)
+  if (!session) return
+  try {
+    session.pty.kill()
+  } catch {
+    // ignore
+  }
+  for (const client of session.clients) {
+    try {
+      client.close()
+    } catch {
+      // ignore
+    }
+  }
+  terminalSessions.delete(projectId)
+}
 
 function errorJson(message: string, status = 400) {
   return { error: message, status }
