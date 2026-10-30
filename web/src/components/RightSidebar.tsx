@@ -425,9 +425,9 @@ function CreateMenu({
         aria-label="New file or folder"
         title="New file or folder"
       >
-        <span className="files-action-btn-icon">+</span>
+        <PlusIcon className="files-action-btn-icon" />
         <span className="files-action-btn-label">New</span>
-        <span className="files-action-btn-caret" aria-hidden="true">▾</span>
+        <CaretDownIcon className="files-action-btn-caret" aria-hidden="true" />
       </button>
       {menuOpen && rect && createPortal(
         <div
@@ -590,9 +590,9 @@ function UploadMenu({
         aria-label="Upload file or from URL"
         title="Upload file or from URL"
       >
-        <span className="files-action-btn-icon">⬆</span>
+        <UploadIcon className="files-action-btn-icon" />
         <span className="files-action-btn-label">Upload</span>
-        <span className="files-action-btn-caret" aria-hidden="true">▾</span>
+        <CaretDownIcon className="files-action-btn-caret" aria-hidden="true" />
       </button>
       {menuOpen && rect && createPortal(
         <div
