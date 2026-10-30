@@ -442,31 +442,100 @@ app.get('/api/config', (c) =>
 // ---------------------------------------------------------------- projects
 app.get('/api/projects', (c) => c.json(listProjects()))
 
+app.get('/api/fs/directories', (c) => {
+  const requested = c.req.query('path')
+  const start = requested && requested.trim() ? path.resolve(requested.trim()) : os.homedir()
+  let real: string
+  try {
+    real = fs.realpathSync(start)
+    if (!fs.statSync(real).isDirectory()) {
+      return c.json(errorJson('Path is not a folder'), 400)
+    }
+  } catch (error) {
+    return c.json(errorJson(`Cannot open folder: ${error instanceof Error ? error.message : String(error)}`), 404)
+  }
+
+  let entries: fs.Dirent[]
+  try {
+    entries = fs.readdirSync(real, { withFileTypes: true })
+  } catch (error) {
+    return c.json(errorJson(`Cannot read folder: ${error instanceof Error ? error.message : String(error)}`), 403)
+  }
+
+  const directories: Array<{ name: string; path: string }> = []
+  for (const entry of entries) {
+    const entryPath = path.join(real, entry.name)
+    let isDirectory = entry.isDirectory()
+    if (!isDirectory && entry.isSymbolicLink()) {
+      try {
+        isDirectory = fs.statSync(entryPath).isDirectory()
+      } catch {
+        isDirectory = false
+      }
+    }
+    if (isDirectory) directories.push({ name: entry.name, path: entryPath })
+  }
+  directories.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+
+  return c.json({
+    path: real,
+    parent: path.dirname(real) === real ? null : path.dirname(real),
+    directories: directories.slice(0, 500),
+    truncated: directories.length > 500,
+    home: os.homedir(),
+    projectsDir: config.projectsDir,
+    root: config.root
+  })
+})
+
 app.post('/api/projects', async (c) => {
   const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return c.json(errorJson('JSON body required'), 400)
   const name = safeName(body.name)
   if (!name) return c.json(errorJson('name is required (max 100 chars)'), 400)
 
-  const requested = typeof body.path === 'string' && body.path.trim() ? body.path.trim() : name
-  const relative = cleanRelative(requested)
-  const abs = resolveInProject(config.projectsDir, relative)
-  if (!abs) return c.json(errorJson('project path must stay inside the projects directory'), 400)
-  if (path.resolve(abs) === path.resolve(config.projectsDir)) {
-    return c.json(errorJson('project path cannot be the projects directory itself'), 400)
-  }
-  if (listProjects().some((project) => path.resolve(project.path) === path.resolve(abs))) {
-    return c.json(errorJson('a project already uses this path'), 409)
-  }
+  const mode =
+    body.mode === 'link' || body.mode === 'copy' || body.mode === 'move' ? body.mode : 'new'
 
-  fs.mkdirSync(abs, { recursive: true })
-  const real = fs.realpathSync(abs)
-  const project = insertProject(name, real)
-  ensureProjectChat(project.id)
-  void extensions.runHook('project.open', real, { projectId: project.id, name }).catch((error) => {
-    console.warn('[extensions] project.open hook failed:', error)
-  })
-  return c.json(project, 201)
+  try {
+    if (mode === 'new') {
+      const abs = resolveProjectDestination(body.path, name)
+      assertProjectPathAvailable(abs)
+      fs.mkdirSync(abs, { recursive: true })
+      return c.json(registerProject(name, abs), 201)
+    }
+
+    const source = resolveSourceProjectFolder(body.sourcePath)
+    if (mode === 'link') {
+      if (path.resolve(source) === path.resolve(config.projectsDir)) {
+        throw new ConfigError('The projects directory itself cannot be a project')
+      }
+      assertProjectPathAvailable(source)
+      return c.json(registerProject(name, source), 201)
+    }
+
+    const target = resolveProjectDestination(body.path, path.basename(source))
+    assertProjectPathAvailable(target)
+    prepareProjectDestination(target, source)
+    if (mode === 'move') {
+      const affected = listProjects().find(
+        (project) => path.resolve(project.path) === source || isInside(source, project.path)
+      )
+      if (affected) {
+        throw new ConfigError(
+          `Cannot move this folder because it contains the registered project "${affected.name}"`,
+          409
+        )
+      }
+      moveProjectFolder(source, target)
+    } else {
+      copyProjectFolder(source, target)
+    }
+    return c.json(registerProject(name, target), 201)
+  } catch (error) {
+    const status = errorStatus(error) as 400 | 403 | 404 | 409 | 500
+    return c.json(errorJson(error instanceof Error ? error.message : String(error), status), status)
+  }
 })
 
 app.delete('/api/projects/:id/terminal/:terminalId', (c) => {

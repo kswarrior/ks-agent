@@ -41,6 +41,26 @@ export function Sidebar({
   onOpenExtensions: () => void
 }) {
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null
+  const [openChatMenuId, setOpenChatMenuId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!openChatMenuId) return
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!document.querySelector('.chat-menu-popup')?.contains(target) && !document.querySelector('.chat-menu-trigger')?.contains(target)) {
+        setOpenChatMenuId(null)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenChatMenuId(null)
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [openChatMenuId])
 
   return (
     <>
@@ -125,26 +145,47 @@ export function Sidebar({
               >
                 <span className="chat-title">{chat.title || 'New chat'}</span>
                 <span className="chat-actions">
-                  <button
-                    className="icon-btn tiny"
-                    title="Edit chat"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onEditChat(chat)
-                    }}
-                  >
-                    ✎
-                  </button>
-                  <button
-                    className="icon-btn tiny"
-                    title="Delete chat"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onDeleteChat(chat)
-                    }}
-                  >
-                    ×
-                  </button>
+                  <span className="chat-menu" style={{ position: 'relative' }}>
+                    <button
+                      className="icon-btn tiny chat-menu-trigger"
+                      title="Chat actions"
+                      aria-label="Chat actions"
+                      aria-haspopup="menu"
+                      aria-expanded={openChatMenuId === chat.id}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setOpenChatMenuId(openChatMenuId === chat.id ? null : chat.id)
+                      }}
+                    >
+                      ⋯
+                    </button>
+                    {openChatMenuId === chat.id && (
+                      <div className="chat-menu-popup" role="menu">
+                        <button
+                          className="model-menu-item"
+                          role="menuitem"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setOpenChatMenuId(null)
+                            onEditChat(chat)
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="model-menu-item danger"
+                          role="menuitem"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setOpenChatMenuId(null)
+                            onDeleteChat(chat)
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </span>
                 </span>
               </div>
             ))}
