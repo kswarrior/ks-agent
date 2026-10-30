@@ -3237,7 +3237,9 @@ code {
   min-width: 120px;
 }
 
-.files-action-popup {
+.files-action-popup,
+.files-create-popup,
+.files-upload-popup {
   position: fixed;
   z-index: 200;
   display: flex;
@@ -3250,12 +3252,119 @@ code {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
-.files-action-popup.up {
+.files-action-popup.up,
+.files-create-popup.up,
+.files-upload-popup.up {
   margin-bottom: 4px;
 }
 
-.files-action-popup.down {
+.files-action-popup.down,
+.files-create-popup.down,
+.files-upload-popup.down {
   margin-top: 4px;
+}
+
+.files-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.files-action-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.files-action-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.files-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.files-action-btn.open {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.files-action-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.files-action-btn-label {
+  flex: 0 0 auto;
+}
+
+.files-action-btn-caret {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.files-action-btn.open .files-action-btn-caret {
+  transform: rotate(180deg);
+}
+
+.files-create-popup,
+.files-upload-popup {
+  min-width: 160px;
+}
+
+.files-action-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.files-action-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.files-action-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.files-action-icon {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .files-action-item {
