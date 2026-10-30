@@ -146,8 +146,9 @@ function ToolCard({
   running?: boolean
   rootPath?: string
 }) {
-  const label = toolLabel(name, running)
   const parsedArgs = parseToolArgs(args)
+  const skillName = name === 'use_skill' ? argsString(parsedArgs, 'name') : ''
+  const label = skillName ? `Skill ${skillName}` : toolLabel(name, running)
   const { primary, detail } = describeTool(name, parsedArgs, rootPath || undefined)
   const rawPath = argsString(parsedArgs, 'path')
   const rawFrom = argsString(parsedArgs, 'from')

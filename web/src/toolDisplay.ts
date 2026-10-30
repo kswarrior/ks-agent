@@ -19,6 +19,7 @@ const TOOL_META: Record<string, ToolMeta> = {
   move_file: { action: 'Move', running: 'Moving' },
   run_shell: { action: 'Run', running: 'Running' },
   update_plan: { action: 'Plan', running: 'Planning' },
+  use_skill: { action: 'Skill', running: 'Loading skill' },
   git_init: { action: 'Git init', running: 'Initializing' },
   git_status: { action: 'Git status', running: 'Checking git' },
   git_diff: { action: 'Git diff', running: 'Diffing' },
