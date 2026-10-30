@@ -55,6 +55,7 @@ function FileIcon() {
 
 export function RightSidebar({ project, onClose }: { project: Project; onClose: () => void }) {
   const [tab, setTab] = useState<RightTab>('files')
+  const [terminalOpened, setTerminalOpened] = useState(false)
   const active = TABS.find((entry) => entry.id === tab) ?? TABS[0]
 
   return (
@@ -65,7 +66,10 @@ export function RightSidebar({ project, onClose }: { project: Project; onClose: 
             <button
               key={entry.id}
               className={`settings-tab ${tab === entry.id ? 'active' : ''}`}
-              onClick={() => setTab(entry.id)}
+              onClick={() => {
+                setTab(entry.id)
+                if (entry.id === 'terminal') setTerminalOpened(true)
+              }}
               role="tab"
               aria-selected={tab === entry.id}
             >
@@ -80,13 +84,14 @@ export function RightSidebar({ project, onClose }: { project: Project; onClose: 
       <div className="right-sidebar-body">
         {tab === 'files' ? (
           <FilesPanel project={project} />
-        ) : tab === 'terminal' ? (
-          <XTermTerminal projectId={project.id} />
-        ) : (
+        ) : tab === 'activity' ? (
           <div className="right-sidebar-soon">
             <strong>{active.label}</strong>
             <p>Coming soon</p>
           </div>
+        ) : null}
+        {terminalOpened && (
+          <TerminalTabs key={project.id} projectId={project.id} active={tab === 'terminal'} />
         )}
       </div>
     </aside>
