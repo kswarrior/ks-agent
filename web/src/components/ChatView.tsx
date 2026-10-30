@@ -957,9 +957,7 @@ export function ChatView({
                 <StepMenu messages={messages} streaming={streaming} />
                 {streaming ? (
                   <button className="icon-action" onClick={onStop} aria-label="Stop" title="Stop">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
-                    </svg>
+                    <span aria-hidden="true">◼</span>
                   </button>
                 ) : (
                   <button
@@ -969,18 +967,7 @@ export function ChatView({
                     aria-label="Send"
                     title="Send"
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 19V5" />
-                      <path d="m5 12 7-7 7 7" />
-                    </svg>
+                    <span aria-hidden="true">⌯⌲</span>
                   </button>
                 )}
               </div>
