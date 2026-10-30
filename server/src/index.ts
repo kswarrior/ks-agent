@@ -388,10 +388,9 @@ function moveProjectFolder(source: string, target: string): void {
   try {
     fs.rmSync(source, { recursive: true, force: true })
   } catch (error) {
-    fs.rmSync(target, { recursive: true, force: true })
-    throw new ConfigError(
-      `The folder was copied but the original could not be removed: ${error instanceof Error ? error.message : String(error)}`,
-      500
+    console.warn(
+      `[projects] copied ${source} to ${target}, but the original could not be removed:`,
+      error instanceof Error ? error.message : error
     )
   }
 }
@@ -516,7 +515,6 @@ app.post('/api/projects', async (c) => {
 
     const target = resolveProjectDestination(body.path, path.basename(source))
     assertProjectPathAvailable(target)
-    prepareProjectDestination(target, source)
     if (mode === 'move') {
       const affected = listProjects().find(
         (project) => path.resolve(project.path) === source || isInside(source, project.path)
@@ -527,6 +525,9 @@ app.post('/api/projects', async (c) => {
           409
         )
       }
+    }
+    prepareProjectDestination(target, source)
+    if (mode === 'move') {
       moveProjectFolder(source, target)
     } else {
       copyProjectFolder(source, target)
