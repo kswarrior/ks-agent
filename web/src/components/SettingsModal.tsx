@@ -12,7 +12,7 @@ import {
   updateRetrySettings
 } from '../api'
 import type { ModelEntry, ProviderPublic, RetrySettings } from '../types'
-import { Modal } from './Modal'
+import { Modal, PromptModal } from './Modal'
 import { SelectMenu } from './SelectMenu'
 
 type SettingsTab = 'providers' | 'models' | 'retry'
@@ -248,6 +248,8 @@ export function SettingsModal({
   const [retryLoading, setRetryLoading] = useState(true)
   const [retrySaving, setRetrySaving] = useState(false)
   const [retrySaved, setRetrySaved] = useState(false)
+  const [openModelMenuId, setOpenModelMenuId] = useState<string | null>(null)
+  const [contextTarget, setContextTarget] = useState<ModelEntry | null>(null)
 
   const selectedPreset = PROVIDER_PRESETS.find((preset) => preset.id === selectedPresetId) ?? CUSTOM_PRESET
   const isLocalEndpoint = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(baseUrl)
@@ -281,6 +283,25 @@ export function SettingsModal({
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!openModelMenuId) return
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!document.querySelector('.model-menu-popup')?.contains(target) && !document.querySelector('.model-menu-trigger')?.contains(target)) {
+        setOpenModelMenuId(null)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenModelMenuId(null)
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [openModelMenuId])
 
   const run = async (task: () => Promise<unknown>) => {
     setBusy(true)
@@ -971,24 +992,58 @@ export function SettingsModal({
                 <div className="settings-card-main">
                   <strong>{model.name}</strong>
                   <span className="muted small">
-                    {model.modelId} · {model.providerName ?? 'provider'}
+                    {model.modelId} · {model.providerName ?? 'provider'} · {model.contextWindow.toLocaleString()} tokens
                   </span>
                 </div>
-                <ModelContextEditor
-                  model={model}
-                  disabled={busy}
-                  onSave={(contextWindow) => saveModelContext(model.id, contextWindow)}
-                />
-                <button
-                  className="btn ghost small"
-                  disabled={busy}
-                  onClick={() => startEditModel(model)}
-                >
-                  Edit
-                </button>
-                <button className="btn ghost small" disabled={busy} onClick={() => run(() => deleteModel(model.id))}>
-                  Delete
-                </button>
+                <div className="model-menu" style={{ position: 'relative' }}>
+                  <button
+                    className="icon-btn model-menu-trigger"
+                    aria-label="Model actions"
+                    aria-haspopup="menu"
+                    aria-expanded={openModelMenuId === model.id}
+                    disabled={busy}
+                    onClick={() => setOpenModelMenuId(openModelMenuId === model.id ? null : model.id)}
+                  >
+                    ⋯
+                  </button>
+                  {openModelMenuId === model.id && (
+                    <div className="model-menu-popup" role="menu">
+                      <button
+                        className="model-menu-item"
+                        role="menuitem"
+                        disabled={busy}
+                        onClick={() => {
+                          setOpenModelMenuId(null)
+                          startEditModel(model)
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="model-menu-item"
+                        role="menuitem"
+                        disabled={busy}
+                        onClick={() => {
+                          setOpenModelMenuId(null)
+                          setContextTarget(model)
+                        }}
+                      >
+                        Set context window
+                      </button>
+                      <button
+                        className="model-menu-item danger"
+                        role="menuitem"
+                        disabled={busy}
+                        onClick={() => {
+                          setOpenModelMenuId(null)
+                          void run(() => deleteModel(model.id))
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             {models.length === 0 && <p className="empty-hint">No models yet.</p>}
