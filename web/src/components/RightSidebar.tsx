@@ -522,7 +522,15 @@ function FilesPanel({ project }: { project: Project }) {
       {notice && <div className="files-notice">{notice}</div>}
 
       {loading ? (
-        <div className="files-empty">Loading…</div>
+        <div className="files-skeleton" aria-busy="true" aria-label="Loading files">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="files-skeleton-row">
+              <span className="files-skeleton-icon" aria-hidden="true" />
+              <span className="files-skeleton-name" aria-hidden="true" />
+              <span className="files-skeleton-size" aria-hidden="true" />
+            </div>
+          ))}
+        </div>
       ) : filtered.length === 0 ? (
         <div className="files-empty">{query.trim() ? 'No matching files' : 'This folder is empty'}</div>
       ) : (
