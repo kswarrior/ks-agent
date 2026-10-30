@@ -354,6 +354,7 @@ app.delete('/api/projects/:id', (c) => {
   const project = getProject(c.req.param('id'))
   if (!project) return c.json(errorJson('project not found', 404), 404)
   const deleteFolder = c.req.query('deleteFolder') === 'true'
+  killTerminal(project.id)
   removeProject(project.id)
   if (
     deleteFolder &&
@@ -1417,6 +1418,8 @@ async function shutdown(signal: string): Promise<void> {
   for (const run of runs.values()) {
     if (!run.done) run.controller.abort()
   }
+  for (const projectId of terminalSessions.keys()) killTerminal(projectId)
+  wss.close()
   mcp.stopAll()
   lsp.stopAll()
   await extensions.stopAll()
