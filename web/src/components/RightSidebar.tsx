@@ -1,8 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import * as api from '../api'
+import { copyText } from '../clipboard'
 import type { FileContent, FileEntry, FileListing, Project } from '../types'
 import { FileEditor } from './FileEditor'
+import { ConfirmModal, PromptModal } from './Modal'
 import { TerminalTabs } from './TerminalTabs'
 
 function FolderIcon({ className = '' }: { className?: string }) {
@@ -208,6 +210,25 @@ function CheckIcon({ className = '' }: { className?: string }) {
   )
 }
 
+function MoreIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+      <circle cx="12" cy="5" r="1.7" />
+      <circle cx="12" cy="12" r="1.7" />
+      <circle cx="12" cy="19" r="1.7" />
+    </svg>
+  )
+}
+
+function DuplicateIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </svg>
+  )
+}
+
 function SearchIcon({ className = '' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -257,6 +278,23 @@ function parentOf(dir: string): string {
 function baseName(file: string): string {
   const parts = file.split('/').filter(Boolean)
   return parts[parts.length - 1] ?? file
+}
+
+function copyNameFor(name: string): string {
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0) return `${name} copy`
+  return `${name.slice(0, dot)} copy${name.slice(dot)}`
+}
+
+function uniqueCopyName(name: string, existing: Set<string>): string {
+  const base = copyNameFor(name)
+  if (!existing.has(base)) return base
+  const dot = base.lastIndexOf('.')
+  const stem = dot <= 0 ? base : base.slice(0, dot)
+  const extension = dot <= 0 ? '' : base.slice(dot)
+  let counter = 2
+  while (existing.has(`${stem} ${counter}${extension}`)) counter += 1
+  return `${stem} ${counter}${extension}`
 }
 
 function formatSize(size?: number): string {
@@ -621,6 +659,153 @@ function UploadMenu({
   )
 }
 
+function RowMenu({
+  entry,
+  path,
+  busy,
+  onEdit,
+  onOpenFolder,
+  onCreate,
+  onRename,
+  onDuplicate,
+  onDownload,
+  onCopyPath,
+  onDelete
+}: {
+  entry: FileEntry
+  path: string
+  busy: boolean
+  onEdit: () => void
+  onOpenFolder: () => void
+  onCreate: (kind: 'file' | 'folder') => void
+  onRename: () => void
+  onDuplicate: () => void
+  onDownload: () => void
+  onCopyPath: () => void
+  onDelete: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const [placement, setPlacement] = useState<'down' | 'up'>('down')
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const popupRef = useRef<HTMLDivElement | null>(null)
+  const isDir = entry.type === 'dir'
+
+  const position = () => {
+    const next = triggerRef.current?.getBoundingClientRect()
+    if (!next) return
+    setRect(next)
+    const spaceBelow = window.innerHeight - next.bottom
+    setPlacement(spaceBelow < 300 && next.top > spaceBelow ? 'up' : 'down')
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return
+    position()
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!triggerRef.current?.contains(target) && !popupRef.current?.contains(target)) {
+        setMenuOpen(false)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('resize', position)
+    window.addEventListener('scroll', position, true)
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', position, true)
+    }
+  }, [menuOpen])
+
+  const run = (action: () => void) => {
+    setMenuOpen(false)
+    action()
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`files-row-more ${menuOpen ? 'open' : ''}`}
+        onClick={() => {
+          if (!menuOpen) position()
+          setMenuOpen(!menuOpen)
+        }}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label={`Actions for ${entry.name}`}
+        title="More actions"
+      >
+        <MoreIcon className="files-row-more-icon" />
+      </button>
+      {menuOpen && rect && createPortal(
+        <div
+          ref={popupRef}
+          className={`files-row-popup ${placement}`}
+          style={{
+            right: Math.max(8, window.innerWidth - rect.right),
+            minWidth: 180,
+            ...(placement === 'up'
+              ? { bottom: window.innerHeight - rect.top + 6 }
+              : { top: rect.bottom + 6 })
+          }}
+          role="menu"
+          aria-label={`Actions for ${entry.name}`}
+        >
+          {isDir ? (
+            <>
+              <button className="files-action-item" role="menuitem" onClick={() => run(onOpenFolder)} disabled={busy}>
+                <FolderIcon className="files-action-icon" /> Open folder
+              </button>
+              <button className="files-action-item" role="menuitem" onClick={() => run(() => onCreate('file'))} disabled={busy}>
+                <FileIcon className="files-action-icon" /> New file inside
+              </button>
+              <button className="files-action-item" role="menuitem" onClick={() => run(() => onCreate('folder'))} disabled={busy}>
+                <FolderIcon className="files-action-icon" /> New folder inside
+              </button>
+              <div className="files-menu-sep" role="separator" />
+            </>
+          ) : (
+            <>
+              <button className="files-action-item" role="menuitem" onClick={() => run(onEdit)} disabled={busy}>
+                <EditIcon className="files-action-icon" /> Edit
+              </button>
+              <button className="files-action-item" role="menuitem" onClick={() => run(onDownload)} disabled={busy}>
+                <DownloadIcon className="files-action-icon" /> Download
+              </button>
+              <div className="files-menu-sep" role="separator" />
+            </>
+          )}
+          <button className="files-action-item" role="menuitem" onClick={() => run(onRename)} disabled={busy}>
+            <EditIcon className="files-action-icon" /> Rename
+          </button>
+          <button className="files-action-item" role="menuitem" onClick={() => run(onDuplicate)} disabled={busy}>
+            <DuplicateIcon className="files-action-icon" /> Duplicate
+          </button>
+          <button className="files-action-item" role="menuitem" onClick={() => run(onCopyPath)} disabled={busy}>
+            <CopyIcon className="files-action-icon" /> Copy path
+          </button>
+          <div className="files-menu-sep" role="separator" />
+          <button className="files-action-item danger" role="menuitem" onClick={() => run(onDelete)} disabled={busy}>
+            <TrashIcon className="files-action-icon" /> Delete
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
 function FilesPanel({ project }: { project: Project }) {
   const [dir, setDir] = useState('')
   const [listing, setListing] = useState<FileListing | null>(null)
@@ -638,6 +823,8 @@ function FilesPanel({ project }: { project: Project }) {
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<{ path: string; name: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string; type: 'file' | 'dir' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const load = useCallback(async () => {

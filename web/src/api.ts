@@ -78,6 +78,9 @@ export const createFileEntry = (projectId: string, kind: 'file' | 'folder', path
 export const renameFileEntry = (projectId: string, from: string, to: string) =>
   req<{ ok: true; path: string }>(`/api/projects/${projectId}/files`, json('PATCH', { from, to }))
 
+export const copyFileEntry = (projectId: string, from: string, to: string) =>
+  req<{ ok: true; path: string }>(`/api/projects/${projectId}/files/copy`, json('POST', { from, to }))
+
 export const deleteFileEntry = (projectId: string, path: string) =>
   req<{ ok: true }>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`, {
     method: 'DELETE'

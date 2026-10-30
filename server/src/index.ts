@@ -648,6 +648,36 @@ app.patch('/api/projects/:id/files', async (c) => {
   return c.json({ ok: true, path: to })
 })
 
+app.post('/api/projects/:id/files/copy', async (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const from = validProjectRel(body?.from)
+  const to = validProjectRel(body?.to)
+  if (!from) return c.json(errorJson('invalid source path'), 400)
+  if (!to) return c.json(errorJson('invalid destination path'), 400)
+  const fromAbs = resolveInProject(project.path, from)
+  const toAbs = resolveInProject(project.path, to)
+  if (!fromAbs || !toAbs) return c.json(errorJson('invalid path'), 400)
+  let stat: fs.Stats
+  try {
+    stat = fs.statSync(fromAbs)
+  } catch {
+    return c.json(errorJson(`"${from}" not found`), 404)
+  }
+  if (fs.existsSync(toAbs)) return c.json(errorJson(`"${to}" already exists`), 400)
+  if (stat.isDirectory() && isInside(fromAbs, toAbs)) {
+    return c.json(errorJson('cannot copy a folder into itself'), 400)
+  }
+  try {
+    fs.mkdirSync(path.dirname(toAbs), { recursive: true })
+    fs.cpSync(fromAbs, toAbs, { recursive: true, errorOnExist: true, force: false })
+  } catch (error) {
+    return c.json(errorJson(error instanceof Error ? error.message : 'copy failed'), 400)
+  }
+  return c.json({ ok: true, path: to }, 201)
+})
+
 app.delete('/api/projects/:id/files', (c) => {
   const project = getProject(c.req.param('id'))
   if (!project) return c.json(errorJson('project not found', 404), 404)
