@@ -6,6 +6,8 @@ import path from 'node:path'
 import { config } from './config.js'
 import { ConfigError } from './errors.js'
 import type {
+  Backup,
+  BackupSource,
   Chat,
   ChatSummary,
   ExtensionKind,
@@ -142,6 +144,18 @@ CREATE TABLE IF NOT EXISTS knowledge (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS backups (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  path TEXT NOT NULL,
+  size INTEGER NOT NULL DEFAULT 0,
+  includes_chats INTEGER NOT NULL DEFAULT 0,
+  source TEXT NOT NULL DEFAULT 'created',
+  created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_project_path ON backups(project_id, path);
+CREATE INDEX IF NOT EXISTS idx_backups_project ON backups(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chats_project ON chats(project_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_chat_disabled_chat ON chat_disabled_extensions(chat_id);
@@ -359,6 +373,16 @@ type KnowledgeRow = {
   created_at: number
   updated_at: number
 }
+type BackupRow = {
+  id: string
+  project_id: string
+  name: string
+  path: string
+  size: number
+  includes_chats: number
+  source: BackupSource
+  created_at: number
+}
 type ProviderRow = { id: string; name: string; base_url: string; api_key: string; created_at: number }
 type ModelRow = {
   id: string
@@ -395,6 +419,17 @@ const chatSummary = (r: ChatSummaryRow): ChatSummary => ({
   summary: r.summary,
   coveredMessageId: r.covered_message_id,
   updatedAt: r.updated_at
+})
+const backupEntry = (r: BackupRow): Backup => ({
+  id: r.id,
+  projectId: r.project_id,
+  name: r.name,
+  path: r.path,
+  size: r.size,
+  includesChats: Boolean(r.includes_chats),
+  source: r.source,
+  createdAt: r.created_at,
+  exists: false
 })
 const knowledgeEntry = (r: KnowledgeRow): KnowledgeEntry => ({
   id: r.id,

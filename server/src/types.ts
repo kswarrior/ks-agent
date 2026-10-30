@@ -13,6 +13,20 @@ export interface Project {
   createdAt: number
 }
 
+export type BackupSource = 'created' | 'uploaded' | 'url'
+
+export interface Backup {
+  id: string
+  projectId: string
+  name: string
+  path: string
+  size: number
+  includesChats: boolean
+  source: BackupSource
+  createdAt: number
+  exists: boolean
+}
+
 export interface Chat {
   id: string
   projectId: string
