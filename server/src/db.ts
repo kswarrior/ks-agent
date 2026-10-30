@@ -289,6 +289,7 @@ export function relocateDatabase(input: unknown): DatabaseSettings {
     oldClosed = true
     fs.renameSync(temporary, targetPath)
     targetCreated = true
+    removeDatabaseFiles(temporary)
 
     const next = openDatabase(targetPath)
     try {
