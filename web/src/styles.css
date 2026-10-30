@@ -2481,6 +2481,16 @@ code {
   font-weight: 600;
 }
 
+.database-path {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .retry-master {
   margin-bottom: 14px;
 }

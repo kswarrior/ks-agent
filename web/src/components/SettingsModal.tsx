@@ -943,6 +943,88 @@ export function SettingsModal({
     </>
   )
 
+  const databaseTargetValue = databaseTarget.trim()
+  const databaseTargetSame =
+    Boolean(databaseSettings && databaseTargetValue) &&
+    trimTrailingSeparators(databaseTargetValue) === trimTrailingSeparators(databaseSettings?.directory ?? '')
+
+  const databasePanel = !databaseSettings ? (
+    <p className="empty-hint">
+      {databaseLoading ? 'Loading database settings…' : 'Database settings are unavailable.'}
+    </p>
+  ) : (
+    <>
+      <div className="settings-toolbar">
+        <h3>Database</h3>
+        {databaseSaved && <span className="settings-saved">Database moved</span>}
+      </div>
+      <div className="settings-section">
+        <h4>Current location</h4>
+        <code className="database-path">{databaseSettings.path}</code>
+        <p className="muted small">
+          {formatBytes(databaseSettings.sizeBytes)} on disk · Default: <code>{databaseSettings.defaultPath}</code>
+        </p>
+      </div>
+      <form
+        className="settings-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void moveDatabaseLocation()
+        }}
+      >
+        <div className="settings-section">
+          <h4>Move database</h4>
+          <label className="field">
+            <span>New folder</span>
+            <input
+              value={databaseTarget}
+              onChange={(event) => {
+                setDatabaseTarget(event.target.value)
+                setDatabaseSaved(false)
+                setError(null)
+              }}
+              placeholder={databaseSettings.defaultDirectory}
+              disabled={databaseSaving || databaseSettings.managedByEnv}
+            />
+            <small className="muted">Absolute folder path. The database file keeps its current name.</small>
+          </label>
+          <p className="muted small">
+            The database is checkpointed, copied and verified before the old copy is removed. If anything goes
+            wrong, the current database stays in place.
+          </p>
+        </div>
+        {databaseSettings.managedByEnv && (
+          <p className="muted small field-error">
+            Database location is pinned by KS_DB_PATH. Unset it and restart to move the database here.
+          </p>
+        )}
+        <div className="settings-form-actions">
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => {
+              setDatabaseTarget(databaseSettings.defaultDirectory)
+              setDatabaseSaved(false)
+              setError(null)
+            }}
+            disabled={databaseSaving || databaseSettings.managedByEnv}
+          >
+            Use default folder
+          </button>
+          <button
+            className="btn primary"
+            type="submit"
+            disabled={
+              databaseSaving || !databaseTargetValue || databaseTargetSame || databaseSettings.managedByEnv
+            }
+          >
+            {databaseSaving ? 'Moving…' : 'Move database'}
+          </button>
+        </div>
+      </form>
+    </>
+  )
+
   return (
     <>
       <Modal title="Settings" onClose={onClose} wide fullHeight>
@@ -970,6 +1052,14 @@ export function SettingsModal({
           aria-selected={tab === 'retry'}
         >
           Retry
+        </button>
+        <button
+          className={`settings-tab ${tab === 'database' ? 'active' : ''}`}
+          onClick={() => openTab('database')}
+          role="tab"
+          aria-selected={tab === 'database'}
+        >
+          Database
         </button>
       </div>
 
@@ -1039,6 +1129,8 @@ export function SettingsModal({
         </>
       ) : tab === 'retry' ? (
         retryPanel
+      ) : tab === 'database' ? (
+        databasePanel
       ) : (
         <>
           <div className="settings-toolbar">
