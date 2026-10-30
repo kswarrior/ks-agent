@@ -5,6 +5,27 @@ export interface Project {
   createdAt: number
 }
 
+export type BackupSource = 'created' | 'uploaded' | 'url'
+
+export interface Backup {
+  id: string
+  projectId: string
+  name: string
+  path: string
+  size: number
+  includesChats: boolean
+  source: BackupSource
+  createdAt: number
+  exists: boolean
+}
+
+export interface BackupRestoreResult {
+  ok: true
+  files: number
+  chats: number
+  messages: number
+}
+
 export type ProjectCreateMode = 'new' | 'link' | 'copy' | 'move'
 
 export interface CreateProjectInput {

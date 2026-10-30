@@ -9,6 +9,15 @@ import { Readable } from 'node:stream'
 import * as pty from 'node-pty'
 import { WebSocketServer, WebSocket } from 'ws'
 import { runAgent } from './agent.js'
+import {
+  addBackupFromUrl,
+  createProjectBackup,
+  deleteProjectBackup,
+  getProjectBackup,
+  listProjectBackups,
+  restoreProjectBackup,
+  saveUploadedBackup
+} from './backup.js'
 import { config, isInside } from './config.js'
 import {
   getChat,
@@ -78,6 +87,7 @@ const runs = new Map<string, RunState>()
 const MAX_FILE_LIST_ENTRIES = 2000
 const MAX_FILE_EDIT_BYTES = 2 * 1024 * 1024
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+const MAX_BACKUP_UPLOAD_BYTES = 512 * 1024 * 1024
 
 interface TerminalSession {
   pty: pty.IPty
@@ -190,6 +200,11 @@ function errorJson(message: string, status = 400) {
 function configErrorJson(error: unknown) {
   const status = errorStatus(error) as 400 | 403 | 404 | 409 | 413 | 500
   return { body: errorJson(error instanceof Error ? error.message : String(error), status), status }
+}
+
+function routeError(c: Context, error: unknown) {
+  const status = errorStatus(error) as 400 | 403 | 404 | 409 | 413 | 500
+  return c.json(errorJson(error instanceof Error ? error.message : String(error), status), status)
 }
 
 function publicProvider(provider: {
@@ -809,6 +824,111 @@ app.post('/api/projects/:id/files/upload', async (c) => {
     saved.push(item.name)
   }
   return c.json({ ok: true, saved }, 201)
+})
+
+// ----------------------------------------------------------------- backups
+app.get('/api/projects/:id/backups', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  return c.json(listProjectBackups(project))
+})
+
+app.post('/api/projects/:id/backups', async (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  try {
+    const backup = createProjectBackup(project, {
+      location: body.location,
+      name: body.name,
+      includeChats: body.includeChats
+    })
+    return c.json(backup, 201)
+  } catch (error) {
+    return routeError(c, error)
+  }
+})
+
+app.post('/api/projects/:id/backups/upload', async (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const contentType = c.req.header('content-type') ?? ''
+  if (!contentType.includes('multipart/form-data')) {
+    return c.json(errorJson('expected multipart form data'), 400)
+  }
+  const form = await c.req.parseBody().catch(() => null)
+  if (!form) return c.json(errorJson('failed to parse form data'), 400)
+  const raw = form.file
+  const file = (Array.isArray(raw) ? raw : [raw]).find((item): item is File => item instanceof File)
+  if (!file) return c.json(errorJson('no backup file in upload'), 400)
+  if (file.size > MAX_BACKUP_UPLOAD_BYTES) return c.json(errorJson('backup file is too large'), 413)
+  try {
+    const backup = saveUploadedBackup(project, {
+      buffer: Buffer.from(await file.arrayBuffer()),
+      fileName: file.name,
+      location: typeof form.location === 'string' ? form.location : undefined
+    })
+    return c.json(backup, 201)
+  } catch (error) {
+    return routeError(c, error)
+  }
+})
+
+app.post('/api/projects/:id/backups/url', async (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body) return c.json(errorJson('JSON body required'), 400)
+  try {
+    const backup = await addBackupFromUrl(project, {
+      url: body.url,
+      location: body.location,
+      name: body.name
+    })
+    return c.json(backup, 201)
+  } catch (error) {
+    return routeError(c, error)
+  }
+})
+
+app.post('/api/projects/:id/backups/:backupId/restore', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  try {
+    return c.json(restoreProjectBackup(project, c.req.param('backupId')))
+  } catch (error) {
+    return routeError(c, error)
+  }
+})
+
+app.get('/api/projects/:id/backups/:backupId/download', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  try {
+    const { backup, stat } = getProjectBackup(project, c.req.param('backupId'))
+    const filename = backup.name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_') || 'backup.zip'
+    c.header('Content-Type', 'application/zip')
+    c.header('Content-Length', String(stat.size))
+    c.header(
+      'Content-Disposition',
+      `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(backup.name)}`
+    )
+    return c.body(Readable.toWeb(fs.createReadStream(backup.path)) as unknown as ReadableStream)
+  } catch (error) {
+    return routeError(c, error)
+  }
+})
+
+app.delete('/api/projects/:id/backups/:backupId', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  try {
+    deleteProjectBackup(project, c.req.param('backupId'))
+    return c.json({ ok: true })
+  } catch (error) {
+    return routeError(c, error)
+  }
 })
 
 // ------------------------------------------------------------------- chats

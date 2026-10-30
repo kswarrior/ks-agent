@@ -297,8 +297,12 @@ function uniqueDestination(directory: string, name: string): string {
 function manifestFromEntries(entries: ZipEntry[]): Record<string, unknown> | null {
   const entry = entries.find((item) => item.name === MANIFEST_NAME)
   if (!entry) return null
-  const parsed = recordOf(JSON.parse(entry.data.toString('utf8')))
-  return parsed?.format === 'ks-agent-backup' ? parsed : null
+  try {
+    const parsed = recordOf(JSON.parse(entry.data.toString('utf8')))
+    return parsed?.format === 'ks-agent-backup' ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function isChatIncluded(manifest: Record<string, unknown> | null, fallback: boolean): boolean {
@@ -549,12 +553,10 @@ export function restoreProjectBackup(
   project: Project,
   id: string
 ): { ok: true; files: number; chats: number; messages: number } {
-  const { stat } = getProjectBackup(project, id)
+  const { backup, stat } = getProjectBackup(project, id)
   if (stat.size > MAX_RESTORE_BYTES) {
     throw new ConfigError('The backup file is too large to restore', 413)
   }
-  const backup = getBackup(id)
-  if (!backup) throw new ConfigError('Backup not found', 404)
   const archive = fs.readFileSync(backup.path)
   let entries: ZipEntry[]
   try {
@@ -617,8 +619,4 @@ export function deleteProjectBackup(project: Project, id: string): void {
     }
   }
   removeBackup(backup.id)
-}
-
-export function backupChatSummary(chat: Chat): string {
-  return chat.title || 'New chat'
 }
