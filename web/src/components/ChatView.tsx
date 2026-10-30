@@ -392,7 +392,7 @@ function waitLabel(ms: number): string {
   return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
 }
 
-function FailureCard({ failure, onContinue }: { failure: FailureInfo; onContinue: () => void }) {
+function FailureCard({ failure, onContinue }: { failure: FailureInfo; onContinue?: () => void }) {
   const attempts = failure.attempts ?? 0
   return (
     <div className="agent-failure" role="alert">
@@ -420,11 +420,13 @@ function FailureCard({ failure, onContinue }: { failure: FailureInfo; onContinue
           <pre>{failure.details}</pre>
         </details>
       )}
-      <div className="agent-failure-actions">
-        <button type="button" className="btn ghost small" onClick={onContinue}>
-          Continue
-        </button>
-      </div>
+      {onContinue && (
+        <div className="agent-failure-actions">
+          <button type="button" className="btn ghost small" onClick={onContinue}>
+            Continue
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -954,7 +956,7 @@ export function ChatView({
                     rootPath={project.path}
                   />
                 ))}
-                {streaming && failure && <FailureCard failure={failure} onContinue={continueRun} />}
+                {streaming && failure && <FailureCard failure={failure} />}
                 {streaming && !failure && retryStatus && <RetryCard retry={retryStatus} now={now} />}
                 {streaming && !failure && !retryStatus && !live?.reasoning.trim() && (
                   <div className="thinking" role="status" aria-label="Thinking" aria-live="polite">
