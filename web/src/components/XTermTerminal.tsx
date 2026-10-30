@@ -271,7 +271,7 @@ export function XTermTerminal({
     })
 
     const sendResize = () => {
-      if (!element.clientWidth || !element.clientHeight) return
+      if (closedByUs || !element.clientWidth || !element.clientHeight) return
       try {
         fit.fit()
       } catch {
