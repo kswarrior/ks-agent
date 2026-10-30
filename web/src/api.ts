@@ -3,6 +3,7 @@ import type {
   Chat,
   ChatExtensionsState,
   ChatSummary,
+  DatabaseSettings,
   ExtensionInfo,
   ExtensionKind,
   FileContent,
@@ -221,6 +222,10 @@ export const updateRetrySettings = (body: RetrySettings) =>
   req<RetrySettings>('/api/settings/retry', json('PUT', body))
 export const resetRetrySettings = () =>
   req<RetrySettings>('/api/settings/retry/reset', { method: 'POST' })
+
+export const getDatabaseSettings = () => req<DatabaseSettings>('/api/settings/database')
+export const moveDatabase = (directory: string) =>
+  req<DatabaseSettings>('/api/settings/database', json('PUT', { directory }))
 
 export const listExtensions = () => req<ExtensionInfo[]>('/api/extensions')
 export const reloadExtensions = () => req<ExtensionInfo[]>('/api/extensions/reload', { method: 'POST' })

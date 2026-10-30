@@ -4,18 +4,20 @@ import {
   createProvider,
   deleteModel,
   deleteProvider,
+  getDatabaseSettings,
   getRetrySettings,
+  moveDatabase,
   resetRetrySettings,
   updateModel,
   updateModelContext,
   updateProvider,
   updateRetrySettings
 } from '../api'
-import type { ModelEntry, ProviderPublic, RetrySettings } from '../types'
+import type { DatabaseSettings, ModelEntry, ProviderPublic, RetrySettings } from '../types'
 import { Modal, PromptModal } from './Modal'
 import { SelectMenu } from './SelectMenu'
 
-type SettingsTab = 'providers' | 'models' | 'retry'
+type SettingsTab = 'providers' | 'models' | 'retry' | 'database'
 type SettingsView =
   | 'list'
   | 'provider-picker'
@@ -40,6 +42,22 @@ function parseStatusCodes(value: string): { codes: number[]; invalid: string[] }
   }
   codes.sort((a, b) => a - b)
   return { codes, invalid }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = bytes / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
+}
+
+function trimTrailingSeparators(value: string): string {
+  return value.replace(/[\\/]+$/, '')
 }
 
 type ProviderPreset = {

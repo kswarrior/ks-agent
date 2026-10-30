@@ -236,12 +236,13 @@ function GlobeIcon({ className = '' }: { className?: string }) {
   )
 }
 
-type RightTab = 'files' | 'terminal' | 'activity'
+type RightTab = 'files' | 'terminal' | 'activity' | 'backup'
 
 const TABS: Array<{ id: RightTab; label: string; soon?: boolean }> = [
   { id: 'files', label: 'Files' },
   { id: 'terminal', label: 'Terminal' },
-  { id: 'activity', label: 'Activity', soon: true }
+  { id: 'activity', label: 'Activity', soon: true },
+  { id: 'backup', label: 'Backup', soon: true }
 ]
 
 function joinRel(dir: string, name: string): string {
@@ -326,7 +327,7 @@ export function RightSidebar({ project, onClose }: { project: Project; onClose: 
       <div className="right-sidebar-body">
         {tab === 'files' ? (
           <FilesPanel project={project} />
-        ) : tab === 'activity' ? (
+        ) : tab === 'activity' || tab === 'backup' ? (
           <div className="right-sidebar-soon">
             <strong>{active.label}</strong>
             <p>Coming soon</p>

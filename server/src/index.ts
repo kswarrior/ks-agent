@@ -960,6 +960,20 @@ app.put('/api/settings/retry', async (c) => {
 
 app.post('/api/settings/retry/reset', (c) => c.json(saveRetrySettings(DEFAULT_RETRY_SETTINGS)))
 
+app.get('/api/settings/database', (c) => c.json(getDatabaseSettings()))
+
+app.put('/api/settings/database', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json(errorJson('JSON object body required'), 400)
+  }
+  try {
+    return c.json(relocateDatabase(body.directory))
+  } catch (error) {
+    return c.json(errorJson(error instanceof Error ? error.message : String(error)), errorStatus(error) as 400 | 409 | 500)
+  }
+})
+
 // -------------------------------------------------------------- extensions
 app.get('/api/extensions', (c) => c.json(extensions.list()))
 

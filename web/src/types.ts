@@ -209,6 +209,15 @@ export interface RetrySettings {
   honorRetryAfter: boolean
 }
 
+export interface DatabaseSettings {
+  path: string
+  directory: string
+  defaultPath: string
+  defaultDirectory: string
+  sizeBytes: number
+  managedByEnv: boolean
+}
+
 export interface FailureInfo {
   message: string
   status?: number
