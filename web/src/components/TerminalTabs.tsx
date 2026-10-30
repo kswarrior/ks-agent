@@ -181,7 +181,6 @@ export function TerminalTabs({ projectId, active }: { projectId: string; active:
             onContextMenu={(event) => {
               event.preventDefault()
               clearPress()
-              suppressClickRef.current = true
               openMenu(id, event.currentTarget)
             }}
             role="tab"
