@@ -318,6 +318,31 @@ function historyAfterSummary(history: Message[], summary: ChatSummary | null): M
   return index >= 0 ? history.slice(index + 1) : history
 }
 
+function withToolResults(history: Message[]): Message[] {
+  const resultIds = new Set(
+    history
+      .filter((message) => message.role === 'tool' && message.toolCallId)
+      .map((message) => message.toolCallId as string)
+  )
+  const repaired: Message[] = []
+  for (const message of history) {
+    repaired.push(message)
+    if (message.role !== 'assistant' || !message.toolCalls?.length) continue
+    for (const call of message.toolCalls) {
+      if (resultIds.has(call.id)) continue
+      repaired.push({
+        ...message,
+        id: `${message.id}:interrupted:${call.id}`,
+        role: 'tool',
+        content: 'Interrupted before this tool call produced a result.',
+        toolCalls: null,
+        toolCallId: call.id
+      })
+    }
+  }
+  return repaired
+}
+
 function systemWithSummary(system: LLMMessage, summary: ChatSummary | null): LLMMessage {
   if (!summary) return system
   return {
@@ -456,12 +481,16 @@ export async function runAgent(options: RunAgentOptions): Promise<void> {
 
   const buildMessages = () => {
     const applied = summaryApplies(history, summary) ? summary : null
-    return trimHistory(systemWithSummary(system, applied), historyAfterSummary(history, applied), contextCharBudget)
+    return trimHistory(
+      systemWithSummary(system, applied),
+      withToolResults(historyAfterSummary(history, applied)),
+      contextCharBudget
+    )
   }
 
   const prepareContext = async (): Promise<LLMMessage[]> => {
     const applied = summaryApplies(history, summary) ? summary : null
-    const remaining = historyAfterSummary(history, applied)
+    const remaining = withToolResults(historyAfterSummary(history, applied))
     const groups = groupHistory(remaining)
     const activeSystem = systemWithSummary(system, applied)
     const currentChars = contextChars(activeSystem, groups)
