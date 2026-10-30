@@ -810,7 +810,7 @@ function FilesPanel({ project }: { project: Project }) {
             aria-label="Back to files"
             title="Back to files"
           >
-            ←
+            <ChevronLeftIcon className="icon-btn-icon" />
           </button>
           {openFile && (
             <span className="files-file-icon" aria-hidden="true">
