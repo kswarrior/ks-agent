@@ -266,6 +266,11 @@ export function SettingsModal({
   const [retryLoading, setRetryLoading] = useState(true)
   const [retrySaving, setRetrySaving] = useState(false)
   const [retrySaved, setRetrySaved] = useState(false)
+  const [databaseSettings, setDatabaseSettings] = useState<DatabaseSettings | null>(null)
+  const [databaseTarget, setDatabaseTarget] = useState('')
+  const [databaseLoading, setDatabaseLoading] = useState(true)
+  const [databaseSaving, setDatabaseSaving] = useState(false)
+  const [databaseSaved, setDatabaseSaved] = useState(false)
   const [openModelMenuId, setOpenModelMenuId] = useState<string | null>(null)
   const [contextTarget, setContextTarget] = useState<ModelEntry | null>(null)
 
@@ -296,6 +301,24 @@ export function SettingsModal({
       })
       .finally(() => {
         if (!cancelled) setRetryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setDatabaseLoading(true)
+    void getDatabaseSettings()
+      .then((settings) => {
+        if (!cancelled) setDatabaseSettings(settings)
+      })
+      .catch((caught) => {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
+      })
+      .finally(() => {
+        if (!cancelled) setDatabaseLoading(false)
       })
     return () => {
       cancelled = true
@@ -485,6 +508,25 @@ export function SettingsModal({
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
       setRetrySaving(false)
+    }
+  }
+
+  const moveDatabaseLocation = async () => {
+    const target = databaseTarget.trim()
+    if (!target || !databaseSettings) return
+    setDatabaseSaving(true)
+    setError(null)
+    setDatabaseSaved(false)
+    try {
+      const next = await moveDatabase(target)
+      setDatabaseSettings(next)
+      setDatabaseTarget('')
+      setDatabaseSaved(true)
+      await onRefresh()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setDatabaseSaving(false)
     }
   }
 
