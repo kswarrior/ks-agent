@@ -81,6 +81,7 @@ interface TerminalSession {
   pty: pty.IPty
   clients: Set<WebSocket>
   buffer: string
+  projectId: string
 }
 
 const terminalSessions = new Map<string, TerminalSession>()
@@ -95,12 +96,13 @@ function resolveShell(): string {
 }
 
 function getOrCreateTerminal(
+  sessionKey: string,
   projectId: string,
   projectPath: string,
   cols = 80,
   rows = 24
 ): TerminalSession {
-  const existing = terminalSessions.get(projectId)
+  const existing = terminalSessions.get(sessionKey)
   if (existing) return existing
   let cwd = path.resolve(projectPath)
   try {
@@ -125,7 +127,7 @@ function getOrCreateTerminal(
     cwd,
     env
   })
-  const session: TerminalSession = { pty: shell, clients: new Set(), buffer: '' }
+  const session: TerminalSession = { pty: shell, clients: new Set(), buffer: '', projectId }
   shell.onData((data) => {
     session.buffer += data
     if (session.buffer.length > 200 * 1024) session.buffer = session.buffer.slice(-200 * 1024)
@@ -147,14 +149,14 @@ function getOrCreateTerminal(
         // ignore
       }
     }
-    terminalSessions.delete(projectId)
+    terminalSessions.delete(sessionKey)
   })
-  terminalSessions.set(projectId, session)
+  terminalSessions.set(sessionKey, session)
   return session
 }
 
-function killTerminal(projectId: string): void {
-  const session = terminalSessions.get(projectId)
+function killTerminal(sessionKey: string): void {
+  const session = terminalSessions.get(sessionKey)
   if (!session) return
   try {
     session.pty.kill()
@@ -168,7 +170,13 @@ function killTerminal(projectId: string): void {
       // ignore
     }
   }
-  terminalSessions.delete(projectId)
+  terminalSessions.delete(sessionKey)
+}
+
+function killProjectTerminals(projectId: string): void {
+  for (const [sessionKey, session] of [...terminalSessions.entries()]) {
+    if (session.projectId === projectId) killTerminal(sessionKey)
+  }
 }
 
 function errorJson(message: string, status = 400) {
@@ -354,7 +362,7 @@ app.delete('/api/projects/:id', (c) => {
   const project = getProject(c.req.param('id'))
   if (!project) return c.json(errorJson('project not found', 404), 404)
   const deleteFolder = c.req.query('deleteFolder') === 'true'
-  killTerminal(project.id)
+  killProjectTerminals(project.id)
   removeProject(project.id)
   if (
     deleteFolder &&
@@ -1347,10 +1355,12 @@ function clampDimension(value: string | null, fallback: number): number {
       socket.destroy()
       return
     }
+    const terminalParam = url.searchParams.get('terminal') ?? '1'
+    const terminalId = /^[A-Za-z0-9_-]{1,64}$/.test(terminalParam) ? terminalParam : '1'
     const cols = clampDimension(url.searchParams.get('cols'), 80)
     const rows = clampDimension(url.searchParams.get('rows'), 24)
     wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit('connection', ws, project.id, project.path, cols, rows)
+      wss.emit('connection', ws, `${project.id}:${terminalId}`, project.id, project.path, cols, rows)
     })
   } catch {
     try {
@@ -1361,8 +1371,17 @@ function clampDimension(value: string | null, fallback: number): number {
   }
 })
 
-wss.on('connection', (ws: WebSocket, projectId: string, projectPath: string, cols: number, rows: number) => {
-  const session = getOrCreateTerminal(projectId, projectPath, cols, rows)
+wss.on(
+  'connection',
+  (
+    ws: WebSocket,
+    sessionKey: string,
+    projectId: string,
+    projectPath: string,
+    cols: number,
+    rows: number
+  ) => {
+  const session = getOrCreateTerminal(sessionKey, projectId, projectPath, cols, rows)
   session.clients.add(ws)
   if (session.buffer) {
     try {
@@ -1418,7 +1437,7 @@ async function shutdown(signal: string): Promise<void> {
   for (const run of runs.values()) {
     if (!run.done) run.controller.abort()
   }
-  for (const projectId of terminalSessions.keys()) killTerminal(projectId)
+  for (const sessionKey of [...terminalSessions.keys()]) killTerminal(sessionKey)
   wss.close()
   mcp.stopAll()
   lsp.stopAll()
