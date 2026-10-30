@@ -144,6 +144,191 @@ export function RightSidebar({ project, onClose }: { project: Project; onClose: 
   )
 }
 
+function FilesActionMenu({
+  projectId,
+  dir,
+  busy,
+  createKind,
+  setCreateKind,
+  setNewName,
+  fileInputRef,
+  load
+}: {
+  projectId: string
+  dir: string
+  busy: boolean
+  createKind: 'file' | 'folder' | null
+  setCreateKind: (kind: 'file' | 'folder' | null) => void
+  setNewName: (name: string) => void
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  load: () => void
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const [placement, setPlacement] = useState<'down' | 'up'>('down')
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const [urlUpload, setUrlUpload] = useState<{ url: string; name: string } | null>(null)
+
+  const position = () => {
+    const next = triggerRef.current?.getBoundingClientRect()
+    if (!next) return
+    setRect(next)
+    const spaceBelow = window.innerHeight - next.bottom
+    setPlacement(spaceBelow < 200 && next.top > spaceBelow ? 'up' : 'down')
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return
+    position()
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (!triggerRef.current?.contains(target) && !document.querySelector('.files-action-popup')?.contains(target)) {
+        setMenuOpen(false)
+        setUrlUpload(null)
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        setUrlUpload(null)
+        triggerRef.current?.focus()
+      }
+    }
+    window.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('resize', position)
+    window.addEventListener('scroll', position, true)
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', position, true)
+    }
+  }, [menuOpen])
+
+  const handleNewFile = () => {
+    setCreateKind('file')
+    setNewName('')
+    setMenuOpen(false)
+  }
+
+  const handleNewFolder = () => {
+    setCreateKind('folder')
+    setNewName('')
+    setMenuOpen(false)
+  }
+
+  const handleUpload = () => {
+    fileInputRef.current?.click()
+    setMenuOpen(false)
+  }
+
+  const handleUploadUrl = () => {
+    setUrlUpload({ url: '', name: '' })
+    setMenuOpen(false)
+  }
+
+  const submitUrlUpload = async () => {
+    if (!urlUpload || !urlUpload.url.trim() || !urlUpload.name.trim()) return
+    setBusy(true)
+    try {
+      const res = await fetch(urlUpload.url)
+      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`)
+      const blob = await res.blob()
+      const file = new File([blob], urlUpload.name, { type: blob.type })
+      const form = new FormData()
+      form.append('path', dir)
+      form.append('file', file)
+      await fetch(`/api/projects/${projectId}/files/upload`, { method: 'POST', body: form })
+      setUrlUpload(null)
+      await load()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Upload failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (urlUpload) {
+    return (
+      <div className="files-url-upload">
+        <input
+          className="input"
+          autoFocus
+          placeholder="https://example.com/file.txt"
+          value={urlUpload.url}
+          onChange={(e) => setUrlUpload({ ...urlUpload, url: e.target.value })}
+          onKeyDown={(e) => { if (e.key === 'Enter') void submitUrlUpload(); if (e.key === 'Escape') setUrlUpload(null) }}
+        />
+        <input
+          className="input"
+          placeholder="file-name.txt"
+          value={urlUpload.name}
+          onChange={(e) => setUrlUpload({ ...urlUpload, name: e.target.value })}
+          onKeyDown={(e) => { if (e.key === 'Enter') void submitUrlUpload(); if (e.key === 'Escape') setUrlUpload(null) }}
+        />
+        <div className="files-inline-form">
+          <button className="btn primary small" onClick={() => void submitUrlUpload()} disabled={busy || !urlUpload.url.trim() || !urlUpload.name.trim()}>
+            Add
+          </button>
+          <button className="btn ghost small" onClick={() => setUrlUpload(null)} disabled={busy}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`icon-btn ${menuOpen ? 'open' : ''}`}
+        onClick={() => {
+          if (!menuOpen) position()
+          setMenuOpen(!menuOpen)
+        }}
+        disabled={busy}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label="New file, folder, or upload"
+        title="New file, folder, or upload"
+      >
+        +
+      </button>
+      {menuOpen && rect && createPortal(
+        <div
+          className={`files-action-popup ${placement}`}
+          style={{
+            left: rect.left,
+            minWidth: 180,
+            ...(placement === 'up'
+              ? { bottom: window.innerHeight - rect.top + 6 }
+              : { top: rect.bottom + 6 })
+          }}
+          role="menu"
+          aria-label="Create new"
+        >
+          <button className="files-action-item" role="menuitem" onClick={handleNewFile} disabled={busy}>
+            <span className="files-action-icon">📄</span> New file
+          </button>
+          <button className="files-action-item" role="menuitem" onClick={handleNewFolder} disabled={busy}>
+            <span className="files-action-icon">📁</span> New folder
+          </button>
+          <button className="files-action-item" role="menuitem" onClick={handleUpload} disabled={busy}>
+            <span className="files-action-icon">⬆️</span> Upload
+          </button>
+          <button className="files-action-item" role="menuitem" onClick={handleUploadUrl} disabled={busy}>
+            <span className="files-action-icon">🔗</span> Upload URL
+          </button>
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
 function FilesPanel({ project }: { project: Project }) {
   const [dir, setDir] = useState('')
   const [listing, setListing] = useState<FileListing | null>(null)
