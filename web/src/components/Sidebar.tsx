@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Chat, Project } from '../types'
 import { Logo } from './Logo'
 import { SelectMenu } from './SelectMenu'

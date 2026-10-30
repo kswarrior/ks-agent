@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   createModel,
   createProvider,
@@ -272,7 +273,9 @@ export function SettingsModal({
   const [databaseSaving, setDatabaseSaving] = useState(false)
   const [databaseSaved, setDatabaseSaved] = useState(false)
   const [openModelMenuId, setOpenModelMenuId] = useState<string | null>(null)
+  const [modelMenuRect, setModelMenuRect] = useState<DOMRect | null>(null)
   const [openProviderMenuId, setOpenProviderMenuId] = useState<string | null>(null)
+  const [providerMenuRect, setProviderMenuRect] = useState<DOMRect | null>(null)
   const [contextTarget, setContextTarget] = useState<ModelEntry | null>(null)
 
   const selectedPreset = PROVIDER_PRESETS.find((preset) => preset.id === selectedPresetId) ?? CUSTOM_PRESET
@@ -334,15 +337,10 @@ export function SettingsModal({
         setOpenModelMenuId(null)
       }
     }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpenModelMenuId(null)
-    }
-    window.addEventListener('mousedown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('mousedown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
-    }
+    const onScroll = () => setOpenModelMenuId(null)
+    window.addEventListener('scroll', onScroll, true)
+    ...
+    window.removeEventListener('scroll', onScroll, true)
   }, [openModelMenuId])
 
   useEffect(() => {
