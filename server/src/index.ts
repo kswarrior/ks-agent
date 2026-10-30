@@ -13,6 +13,7 @@ import { config, isInside } from './config.js'
 import {
   getChat,
   getChatSummary,
+  getDatabaseSettings,
   getKnowledge,
   getModel,
   getProject,
@@ -38,6 +39,7 @@ import {
   removeModel,
   removeProject,
   removeProvider,
+  relocateDatabase,
   saveChatSummary,
   setChatExtensionEnabled,
   touchChat,

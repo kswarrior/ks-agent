@@ -1,8 +1,10 @@
 import Database from 'better-sqlite3'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { config } from './config.js'
+import { ConfigError } from './errors.js'
 import type {
   Chat,
   ChatSummary,
@@ -18,14 +20,59 @@ import type {
   ToolCall
 } from './types.js'
 
-const dbPath = path.join(config.dataDir, 'ksagent.db')
-fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+const DATABASE_FILENAME = 'ksagent.db'
+const DATABASE_LOCATION_FILENAME = 'database-location.json'
+const pinnedDbPath = process.env.KS_DB_PATH ? path.resolve(process.env.KS_DB_PATH) : null
+const defaultDbPath = pinnedDbPath ?? path.join(config.dataDir, DATABASE_FILENAME)
+const databaseLocationPath = path.join(config.dataDir, DATABASE_LOCATION_FILENAME)
 
-export const db = new Database(dbPath)
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
+export interface DatabaseSettings {
+  path: string
+  directory: string
+  defaultPath: string
+  defaultDirectory: string
+  sizeBytes: number
+  managedByEnv: boolean
+}
 
-db.exec(`
+function readDatabaseLocation(): string | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(databaseLocationPath, 'utf8')) as { path?: unknown }
+    return typeof parsed.path === 'string' && path.isAbsolute(parsed.path) ? path.resolve(parsed.path) : null
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn(`[db] ignoring database location file ${databaseLocationPath}`)
+    }
+    return null
+  }
+}
+
+function resolveInitialDatabasePath(): string {
+  if (pinnedDbPath) return pinnedDbPath
+  const selected = readDatabaseLocation()
+  if (!selected) return defaultDbPath
+  if (fs.existsSync(selected)) return selected
+  console.warn(`[db] database location ${selected} is missing; using ${defaultDbPath}`)
+  return defaultDbPath
+}
+
+function openDatabase(location: string): Database.Database {
+  fs.mkdirSync(path.dirname(location), { recursive: true })
+  const connection = new Database(location)
+  connection.pragma('journal_mode = WAL')
+  connection.pragma('foreign_keys = ON')
+  return connection
+}
+
+function ensureColumn(connection: Database.Database, table: string, column: string, definition: string): void {
+  const columns = connection.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  if (!columns.some((entry) => entry.name === column)) {
+    connection.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
+}
+
+function initializeSchema(connection: Database.Database): void {
+  connection.exec(`
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -97,17 +144,186 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_chat_disabled_chat ON chat_disabled_extensions(chat_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_project ON knowledge(project_id, updated_at DESC);
 `)
+  ensureColumn(connection, 'messages', 'model_id', 'TEXT')
+  ensureColumn(connection, 'messages', 'duration_ms', 'INTEGER')
+  ensureColumn(connection, 'models', 'context_window', 'INTEGER NOT NULL DEFAULT 128000')
+}
 
-function ensureColumn(table: string, column: string, definition: string): void {
-  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-  if (!columns.some((entry) => entry.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+let dbPath = resolveInitialDatabasePath()
+export let db = openDatabase(dbPath)
+initializeSchema(db)
+
+function databaseFileSize(location: string): number {
+  let total = 0
+  for (const suffix of ['', '-wal']) {
+    try {
+      total += fs.statSync(location + suffix).size
+    } catch {
+      // missing sidecars are expected
+    }
+  }
+  return total
+}
+
+export function getDatabaseSettings(): DatabaseSettings {
+  return {
+    path: dbPath,
+    directory: path.dirname(dbPath),
+    defaultPath: defaultDbPath,
+    defaultDirectory: path.dirname(defaultDbPath),
+    sizeBytes: databaseFileSize(dbPath),
+    managedByEnv: Boolean(pinnedDbPath)
   }
 }
 
-ensureColumn('messages', 'model_id', 'TEXT')
-ensureColumn('messages', 'duration_ms', 'INTEGER')
-ensureColumn('models', 'context_window', 'INTEGER NOT NULL DEFAULT 128000')
+function expandHome(input: string): string {
+  if (input === '~') return os.homedir()
+  if (input.startsWith('~/') || input.startsWith('~\\')) return path.join(os.homedir(), input.slice(2))
+  return input
+}
+
+function resolveTargetDatabasePath(input: unknown): string {
+  if (typeof input !== 'string' || !input.trim()) {
+    throw new ConfigError('Database folder is required')
+  }
+  const expanded = expandHome(input.trim())
+  if (!path.isAbsolute(expanded)) {
+    throw new ConfigError('Database folder must be an absolute path')
+  }
+  const absolute = path.resolve(expanded)
+  let isDirectory = false
+  try {
+    isDirectory = fs.statSync(absolute).isDirectory()
+  } catch {
+    isDirectory = false
+  }
+  const looksLikeFile = !isDirectory && /\.(?:db|sqlite|sqlite3)$/i.test(absolute)
+  return looksLikeFile ? absolute : path.join(absolute, path.basename(dbPath))
+}
+
+function ensureWritableDirectory(directory: string): void {
+  try {
+    fs.mkdirSync(directory, { recursive: true })
+  } catch (error) {
+    throw new ConfigError(
+      `Cannot create database folder ${directory}: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+  if (!fs.statSync(directory).isDirectory()) {
+    throw new ConfigError(`Database location is not a folder: ${directory}`)
+  }
+  try {
+    fs.accessSync(directory, fs.constants.W_OK)
+  } catch {
+    throw new ConfigError(`Database folder is not writable: ${directory}`)
+  }
+}
+
+function verifyDatabaseCopy(location: string): void {
+  const check = new Database(location, { readonly: true, fileMustExist: true })
+  try {
+    const rows = check.pragma('integrity_check') as Array<{ integrity_check: string }>
+    if (rows.length === 0 || !rows.every((row) => row.integrity_check === 'ok')) {
+      throw new Error('The copied database failed its integrity check')
+    }
+  } finally {
+    check.close()
+  }
+}
+
+function saveDatabaseLocation(location: string): void {
+  if (!pinnedDbPath && path.resolve(location) === path.resolve(defaultDbPath)) {
+    fs.rmSync(databaseLocationPath, { force: true })
+    return
+  }
+  const temporary = `${databaseLocationPath}.${process.pid}.tmp`
+  fs.writeFileSync(
+    temporary,
+    `${JSON.stringify({ path: location, updatedAt: new Date().toISOString() }, null, 2)}\n`
+  )
+  fs.renameSync(temporary, databaseLocationPath)
+}
+
+function removeDatabaseFiles(location: string): void {
+  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+    try {
+      fs.rmSync(location + suffix, { force: true })
+    } catch (error) {
+      console.warn(`[db] could not remove ${location + suffix}:`, error instanceof Error ? error.message : error)
+    }
+  }
+}
+
+export function relocateDatabase(input: unknown): DatabaseSettings {
+  if (pinnedDbPath) {
+    throw new ConfigError('Database location is pinned by KS_DB_PATH. Unset it to move the database from the app.')
+  }
+  const targetPath = resolveTargetDatabasePath(input)
+  if (path.resolve(targetPath) === path.resolve(dbPath)) return getDatabaseSettings()
+
+  const targetDirectory = path.dirname(targetPath)
+  ensureWritableDirectory(targetDirectory)
+  if (fs.existsSync(targetPath)) {
+    throw new ConfigError(
+      `A database already exists at ${targetPath}. Choose another folder so no data is overwritten.`
+    )
+  }
+
+  const temporary = path.join(
+    targetDirectory,
+    `.${path.basename(targetPath)}.${process.pid}.${Date.now()}.tmp`
+  )
+  const oldPath = dbPath
+  let oldClosed = false
+  let targetCreated = false
+
+  try {
+    const checkpoint = db.pragma('wal_checkpoint(TRUNCATE)') as Array<{ busy?: number }>
+    if (Array.isArray(checkpoint) && checkpoint.some((row) => Number(row.busy) > 0)) {
+      throw new ConfigError('The database is busy. Try again in a moment.', 409)
+    }
+    fs.copyFileSync(oldPath, temporary)
+    verifyDatabaseCopy(temporary)
+
+    db.close()
+    oldClosed = true
+    fs.renameSync(temporary, targetPath)
+    targetCreated = true
+
+    const next = openDatabase(targetPath)
+    try {
+      initializeSchema(next)
+    } catch (error) {
+      next.close()
+      throw error
+    }
+    db = next
+    dbPath = targetPath
+    saveDatabaseLocation(targetPath)
+    removeDatabaseFiles(oldPath)
+    return getDatabaseSettings()
+  } catch (error) {
+    if (targetCreated) {
+      try {
+        db.close()
+      } catch {
+        // already closed or failed to open
+      }
+    }
+    if (oldClosed) {
+      db = openDatabase(oldPath)
+      initializeSchema(db)
+      dbPath = oldPath
+    }
+    try {
+      fs.rmSync(temporary, { force: true })
+    } catch {
+      // best-effort cleanup
+    }
+    if (targetCreated) removeDatabaseFiles(targetPath)
+    throw error instanceof Error ? error : new Error(String(error))
+  }
+}
 
 export function newId(): string {
   return crypto.randomUUID()
