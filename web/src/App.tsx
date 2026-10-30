@@ -112,6 +112,13 @@ export default function App() {
   const refreshSkills = useCallback(async () => setSkills(await api.listSkills()), [])
   const refreshMcp = useCallback(async () => setMcpServers(await api.listMcpServers()), [])
   const refreshLsp = useCallback(async () => setLspServers(await api.listLspServers()), [])
+  const refreshProjectChats = useCallback(async (projectId: string) => {
+    try {
+      setChats(await api.listChats(projectId))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    }
+  }, [])
   const refreshChatExtensions = useCallback(async (chatId: string) => {
     const seq = ++chatExtensionsSeq.current
     const state = await api.listChatExtensions(chatId)
@@ -687,7 +694,11 @@ export default function App() {
       />
 
       {(rightSidebarOpen || largeScreen) && activeProject && (
-        <RightSidebar project={activeProject} onClose={() => setRightSidebarOpen(false)} />
+        <RightSidebar
+          project={activeProject}
+          onClose={() => setRightSidebarOpen(false)}
+          onRestored={() => void refreshProjectChats(activeProject.id)}
+        />
       )}
 
       {bootError && <div className="boot-error">{bootError}</div>}

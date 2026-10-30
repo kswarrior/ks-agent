@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import * as api from '../api'
 import { copyText } from '../clipboard'
 import type { FileContent, FileEntry, FileListing, Project } from '../types'
+import { BackupPanel } from './BackupPanel'
 import { FileEditor } from './FileEditor'
 import { ConfirmModal, PromptModal } from './Modal'
 import { TerminalTabs } from './TerminalTabs'
@@ -263,7 +264,7 @@ const TABS: Array<{ id: RightTab; label: string; soon?: boolean }> = [
   { id: 'files', label: 'Files' },
   { id: 'terminal', label: 'Terminal' },
   { id: 'activity', label: 'Activity', soon: true },
-  { id: 'backup', label: 'Backup', soon: true }
+  { id: 'backup', label: 'Backup' }
 ]
 
 function joinRel(dir: string, name: string): string {
@@ -334,7 +335,15 @@ function getFileIcon(name: string): React.ReactElement {
   }
 }
 
-export function RightSidebar({ project, onClose }: { project: Project; onClose: () => void }) {
+export function RightSidebar({
+  project,
+  onClose,
+  onRestored
+}: {
+  project: Project
+  onClose: () => void
+  onRestored?: () => void
+}) {
   const [tab, setTab] = useState<RightTab>('files')
   const [terminalOpened, setTerminalOpened] = useState(false)
   const active = TABS.find((entry) => entry.id === tab) ?? TABS[0]
@@ -365,7 +374,9 @@ export function RightSidebar({ project, onClose }: { project: Project; onClose: 
       <div className="right-sidebar-body">
         {tab === 'files' ? (
           <FilesPanel project={project} />
-        ) : tab === 'activity' || tab === 'backup' ? (
+        ) : tab === 'backup' ? (
+          <BackupPanel project={project} onRestored={onRestored} />
+        ) : tab === 'activity' ? (
           <div className="right-sidebar-soon">
             <strong>{active.label}</strong>
             <p>Coming soon</p>
