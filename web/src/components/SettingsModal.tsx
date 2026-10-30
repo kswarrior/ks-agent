@@ -1178,7 +1178,7 @@ export function SettingsModal({
                       style={{
                         position: 'fixed',
                         top: providerMenuRect.bottom + 6,
-                        left: providerMenuRect.right - 160,
+                        left: providerMenuRect.left,
                         zIndex: 1000
                       }}
                     >
@@ -1263,7 +1263,7 @@ export function SettingsModal({
                       style={{
                         position: 'fixed',
                         top: modelMenuRect.bottom + 6,
-                        left: modelMenuRect.right - 160,
+                        left: modelMenuRect.left,
                         zIndex: 1000
                       }}
                     >

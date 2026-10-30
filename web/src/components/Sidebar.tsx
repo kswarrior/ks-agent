@@ -43,6 +43,7 @@ export function Sidebar({
 }) {
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null
   const [openChatMenuId, setOpenChatMenuId] = useState<string | null>(null)
+  const [chatMenuRect, setChatMenuRect] = useState<DOMRect | null>(null)
 
   useEffect(() => {
     if (!openChatMenuId) return
@@ -50,16 +51,26 @@ export function Sidebar({
       const target = event.target as Node
       if (!document.querySelector('.chat-menu-popup')?.contains(target) && !document.querySelector('.chat-menu-trigger')?.contains(target)) {
         setOpenChatMenuId(null)
+        setChatMenuRect(null)
       }
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpenChatMenuId(null)
+      if (event.key === 'Escape') {
+        setOpenChatMenuId(null)
+        setChatMenuRect(null)
+      }
+    }
+    const onScroll = () => {
+      setOpenChatMenuId(null)
+      setChatMenuRect(null)
     }
     window.addEventListener('mousedown', onPointerDown)
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('scroll', onScroll, true)
     return () => {
       window.removeEventListener('mousedown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('scroll', onScroll, true)
     }
   }, [openChatMenuId])
 
@@ -155,19 +166,36 @@ export function Sidebar({
                       aria-expanded={openChatMenuId === chat.id}
                       onClick={(event) => {
                         event.stopPropagation()
-                        setOpenChatMenuId(openChatMenuId === chat.id ? null : chat.id)
+                        const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+                        if (openChatMenuId === chat.id) {
+                          setOpenChatMenuId(null)
+                          setChatMenuRect(null)
+                        } else {
+                          setOpenChatMenuId(chat.id)
+                          setChatMenuRect(rect)
+                        }
                       }}
                     >
                       ⋯
                     </button>
-                    {openChatMenuId === chat.id && (
-                      <div className="chat-menu-popup" role="menu">
+                    {openChatMenuId === chat.id && chatMenuRect && createPortal(
+                      <div
+                        className="chat-menu-popup"
+                        role="menu"
+                        style={{
+                          position: 'fixed',
+                          top: chatMenuRect.bottom + 6,
+                          left: chatMenuRect.left,
+                          zIndex: 1000
+                        }}
+                      >
                         <button
                           className="model-menu-item"
                           role="menuitem"
                           onClick={(event) => {
                             event.stopPropagation()
                             setOpenChatMenuId(null)
+                            setChatMenuRect(null)
                             onEditChat(chat)
                           }}
                         >
@@ -179,12 +207,14 @@ export function Sidebar({
                           onClick={(event) => {
                             event.stopPropagation()
                             setOpenChatMenuId(null)
+                            setChatMenuRect(null)
                             onDeleteChat(chat)
                           }}
                         >
                           Delete
                         </button>
-                      </div>
+                      </div>,
+                      document.body
                     )}
                   </span>
                 </span>
