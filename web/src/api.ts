@@ -3,7 +3,9 @@ import type {
   Chat,
   ChatExtensionsState,
   ChatSummary,
+  CreateProjectInput,
   DatabaseSettings,
+  DirectoryListing,
   ExtensionInfo,
   ExtensionKind,
   FileContent,
@@ -47,8 +49,12 @@ async function req<T>(url: string, options?: RequestInit): Promise<T> {
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) })
 
 export const listProjects = () => req<Project[]>('/api/projects')
-export const createProject = (body: { name: string; path?: string }) =>
+export const createProject = (body: CreateProjectInput) =>
   req<Project>('/api/projects', json('POST', body))
+export const listDirectories = (path?: string) =>
+  req<DirectoryListing>(
+    `/api/fs/directories${path && path.trim() ? `?path=${encodeURIComponent(path.trim())}` : ''}`
+  )
 export const deleteProject = (id: string, deleteFolder = false) =>
   req<{ ok: true }>(`/api/projects/${id}${deleteFolder ? '?deleteFolder=true' : ''}`, { method: 'DELETE' })
 

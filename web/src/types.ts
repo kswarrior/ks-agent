@@ -5,6 +5,25 @@ export interface Project {
   createdAt: number
 }
 
+export type ProjectCreateMode = 'new' | 'link' | 'copy' | 'move'
+
+export interface CreateProjectInput {
+  name: string
+  path?: string
+  sourcePath?: string
+  mode?: ProjectCreateMode
+}
+
+export interface DirectoryListing {
+  path: string
+  parent: string | null
+  directories: Array<{ name: string; path: string }>
+  truncated: boolean
+  home: string
+  projectsDir: string
+  root: string
+}
+
 export interface FileEntry {
   name: string
   type: 'dir' | 'file'

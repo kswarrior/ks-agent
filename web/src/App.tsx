@@ -11,6 +11,8 @@ import type {
   Chat,
   ChatExtensionsState,
   ChatSummary,
+  CreateProjectInput,
+  DirectoryListing,
   ExtensionInfo,
   ExtensionKind,
   FailureInfo,
@@ -469,8 +471,12 @@ export default function App() {
     setSidebarOpen(false)
   }
 
-  const createProject = async (name: string, path: string) => {
-    const project = await api.createProject({ name, path: path.trim() || undefined })
+  const createProject = async (input: CreateProjectInput) => {
+    const project = await api.createProject({
+      ...input,
+      path: input.path?.trim() || undefined,
+      sourcePath: input.sourcePath?.trim() || undefined
+    })
     setProjects((current) => [...current, project])
     setActiveProjectId(project.id)
     setShowCreate(false)
