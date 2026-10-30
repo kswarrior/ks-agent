@@ -3205,14 +3205,10 @@ code {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
-  color: var(--muted);
-}
-
-.files-row-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .files-row-name {

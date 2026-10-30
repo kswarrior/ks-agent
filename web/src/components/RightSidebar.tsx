@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../api'
 import type { FileContent, FileEntry, FileListing, Project } from '../types'
+import { FileEditor } from './FileEditor'
 import { TerminalTabs } from './TerminalTabs'
 
 type RightTab = 'files' | 'terminal' | 'activity'
@@ -36,21 +37,65 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function FolderIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-    </svg>
-  )
+const FILE_ICONS: Record<string, string> = {
+  md: '📝',
+  markdown: '📝',
+  txt: '📄',
+  log: '📄',
+  pdf: '📕',
+  js: '🟨',
+  mjs: '🟨',
+  cjs: '🟨',
+  jsx: '⚛️',
+  ts: '🔷',
+  tsx: '⚛️',
+  json: '📊',
+  html: '🌐',
+  htm: '🌐',
+  css: '🎨',
+  scss: '🎨',
+  less: '🎨',
+  py: '🐍',
+  java: '☕',
+  go: '🐹',
+  rs: '🦀',
+  sh: '🐚',
+  bash: '🐚',
+  zsh: '🐚',
+  yml: '⚙️',
+  yaml: '⚙️',
+  toml: '⚙️',
+  ini: '⚙️',
+  env: '🔐',
+  png: '🖼️',
+  jpg: '🖼️',
+  jpeg: '🖼️',
+  gif: '🖼️',
+  svg: '🖼️',
+  webp: '🖼️',
+  ico: '🖼️',
+  mp3: '🎵',
+  wav: '🎵',
+  ogg: '🎵',
+  mp4: '🎬',
+  mov: '🎬',
+  webm: '🎬',
+  zip: '🗜️',
+  gz: '🗜️',
+  tar: '🗜️',
+  rar: '🗜️',
+  '7z': '🗜️',
+  lock: '🔒'
 }
 
-function FileIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M6 2h8l4 4v16H6Z" />
-      <path d="M14 2v4h4" />
-    </svg>
-  )
+function fileIcon(name: string): string {
+  const lower = name.toLowerCase()
+  if (lower === 'dockerfile') return '🐳'
+  if (lower === 'makefile') return '🛠️'
+  if (lower === 'package.json' || lower === 'package-lock.json') return '📦'
+  if (lower.startsWith('.env')) return '🔐'
+  const extension = lower.includes('.') ? lower.split('.').pop() ?? '' : ''
+  return FILE_ICONS[extension] ?? '📄'
 }
 
 export function RightSidebar({ project, onClose }: { project: Project; onClose: () => void }) {
@@ -290,6 +335,11 @@ function FilesPanel({ project }: { project: Project }) {
           >
             ←
           </button>
+          {openFile && (
+            <span className="files-file-icon" aria-hidden="true">
+              {fileIcon(baseName(openFile.path))}
+            </span>
+          )}
           <span className="files-file-name" title={openFile?.path}>
             {openFile?.path ?? 'Opening…'}
           </span>
@@ -365,13 +415,7 @@ function FilesPanel({ project }: { project: Project }) {
             {openFile.binary ? (
               <div className="files-empty">Binary file — preview not available.</div>
             ) : (
-              <textarea
-                className="files-editor"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                spellCheck={false}
-                aria-label={`Edit ${openFile.path}`}
-              />
+              <FileEditor key={openFile.path} path={openFile.path} value={draft} onChange={setDraft} />
             )}
 
             <div className="files-meta">
@@ -494,7 +538,9 @@ function FilesPanel({ project }: { project: Project }) {
               }}
               title={joinRel(dir, entry.name)}
             >
-              <span className="files-row-icon">{entry.type === 'dir' ? <FolderIcon /> : <FileIcon />}</span>
+              <span className="files-row-icon" aria-hidden="true">
+                {entry.type === 'dir' ? '📂' : fileIcon(entry.name)}
+              </span>
               <span className="files-row-name">{entry.name}</span>
               {entry.type === 'file' && <span className="files-row-size">{formatSize(entry.size)}</span>}
             </button>
