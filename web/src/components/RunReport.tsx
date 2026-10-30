@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Message, RunStep } from '../types'
 import { formatDuration } from '../format'
 import { absolutePath, argsString, parseToolArgs } from '../toolDisplay'
@@ -259,7 +259,12 @@ function ChevronIcon() {
 
 export function RunReport({ report, onContinue }: { report: RunReportData; onContinue?: () => void }) {
   const [open, setOpen] = useState(true)
-  const visibleChanges = report.changes.slice(0, 4)
+  const [showAllChanges, setShowAllChanges] = useState(false)
+  const visibleChanges = showAllChanges ? report.changes : report.changes.slice(0, 4)
+
+  useEffect(() => {
+    setShowAllChanges(false)
+  }, [report.id])
 
   return (
     <details
@@ -306,10 +311,14 @@ export function RunReport({ report, onContinue }: { report: RunReportData; onCon
                   <code>{change.path}</code>
                 </span>
               ))}
-              {report.changes.length > visibleChanges.length && (
-                <span className="run-change-more">
-                  +{report.changes.length - visibleChanges.length} more
-                </span>
+              {report.changes.length > 4 && (
+                <button
+                  type="button"
+                  className="run-change-more"
+                  onClick={() => setShowAllChanges((shown) => !shown)}
+                >
+                  {showAllChanges ? 'Show less' : `+${report.changes.length - 4} more`}
+                </button>
               )}
             </div>
           </div>

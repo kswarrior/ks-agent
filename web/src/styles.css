@@ -2980,6 +2980,46 @@ code {
   font-size: 12px;
 }
 
+.terminal-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000000;
+}
+
+.terminal-status {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-bottom: 1px solid #1a1a1a;
+  background: #0a0a0a;
+  color: #6b6b6b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.terminal-status.error {
+  border-bottom-color: #2a1a1a;
+  background: #140a0a;
+  color: #ef4444;
+}
+
+.terminal-host {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 0 6px 6px;
+  overflow: hidden;
+  background: #000000;
+}
+
+.terminal-host .xterm {
+  height: 100%;
+}
+
+.terminal-host .xterm-viewport {
+  overflow-y: auto;
+}
+
 .files-panel {
   flex: 1;
   min-height: 0;

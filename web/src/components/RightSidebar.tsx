@@ -1,14 +1,14 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../api'
 import type { FileContent, FileEntry, FileListing, Project } from '../types'
+import { XTermTerminal } from './XTermTerminal'
 
-type RightTab = 'files' | 'terminal' | 'activity' | 'skills'
+type RightTab = 'files' | 'terminal' | 'activity'
 
 const TABS: Array<{ id: RightTab; label: string; soon?: boolean }> = [
   { id: 'files', label: 'Files' },
-  { id: 'terminal', label: 'Terminal', soon: true },
-  { id: 'activity', label: 'Activity', soon: true },
-  { id: 'skills', label: 'Skills', soon: true }
+  { id: 'terminal', label: 'Terminal' },
+  { id: 'activity', label: 'Activity', soon: true }
 ]
 
 function joinRel(dir: string, name: string): string {
@@ -80,6 +80,8 @@ export function RightSidebar({ project, onClose }: { project: Project; onClose: 
       <div className="right-sidebar-body">
         {tab === 'files' ? (
           <FilesPanel project={project} />
+        ) : tab === 'terminal' ? (
+          <XTermTerminal projectId={project.id} />
         ) : (
           <div className="right-sidebar-soon">
             <strong>{active.label}</strong>
