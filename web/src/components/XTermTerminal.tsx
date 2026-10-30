@@ -194,9 +194,9 @@ export function XTermTerminal({
     element.addEventListener('auxclick', onAuxClick)
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${location.host}/api/projects/${encodeURIComponent(projectId)}/terminal?terminal=${encodeURIComponent(terminalId)}&cols=${term.cols}&rows=${term.rows}`
     let closedByUs = false
     let reconnectTimer: number | null = null
+    let connectFrame: number | null = null
     let resizeObserver: ResizeObserver | null = null
     let lastCols = 0
     let lastRows = 0
@@ -218,6 +218,7 @@ export function XTermTerminal({
 
     const connect = () => {
       setError(null)
+      const wsUrl = `${protocol}//${location.host}/api/projects/${encodeURIComponent(projectId)}/terminal?terminal=${encodeURIComponent(terminalId)}&cols=${term.cols}&rows=${term.rows}`
       const ws = new WebSocket(wsUrl)
       ws.binaryType = 'arraybuffer'
       wsRef.current = ws
@@ -247,7 +248,16 @@ export function XTermTerminal({
       }
     }
 
-    connect()
+    connectFrame = requestAnimationFrame(() => {
+      connectFrame = null
+      if (closedByUs) return
+      try {
+        fit.fit()
+      } catch {
+        // ignore
+      }
+      connect()
+    })
 
     const dataDispose = term.onData((data) => {
       const current = wsRef.current
@@ -261,6 +271,7 @@ export function XTermTerminal({
     })
 
     const sendResize = () => {
+      if (!element.clientWidth || !element.clientHeight) return
       try {
         fit.fit()
       } catch {
@@ -280,6 +291,7 @@ export function XTermTerminal({
     return () => {
       closedByUs = true
       if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (connectFrame !== null) cancelAnimationFrame(connectFrame)
       element.removeEventListener('click', focus)
       element.removeEventListener('contextmenu', onContextMenu)
       element.removeEventListener('auxclick', onAuxClick)
