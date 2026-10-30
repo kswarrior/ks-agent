@@ -198,6 +198,23 @@ export function XTermTerminal({
     let closedByUs = false
     let reconnectTimer: number | null = null
     let resizeObserver: ResizeObserver | null = null
+    let lastCols = 0
+    let lastRows = 0
+
+    const sendSize = (force = false) => {
+      const current = wsRef.current
+      if (!current || current.readyState !== WebSocket.OPEN) return
+      const cols = term.cols
+      const rows = term.rows
+      if (!force && cols === lastCols && rows === lastRows) return
+      lastCols = cols
+      lastRows = rows
+      try {
+        current.send(JSON.stringify({ type: 'resize', cols, rows }))
+      } catch {
+        // ignore
+      }
+    }
 
     const connect = () => {
       setError(null)
@@ -207,11 +224,7 @@ export function XTermTerminal({
 
       ws.onopen = () => {
         setConnected(true)
-        try {
-          ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
-        } catch {
-          // ignore
-        }
+        sendSize(true)
         term.focus()
       }
       ws.onclose = () => {
@@ -253,14 +266,7 @@ export function XTermTerminal({
       } catch {
         // ignore
       }
-      const current = wsRef.current
-      if (current && current.readyState === WebSocket.OPEN) {
-        try {
-          current.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
-        } catch {
-          // ignore
-        }
-      }
+      sendSize()
     }
 
     if (typeof ResizeObserver !== 'undefined') {
@@ -269,16 +275,7 @@ export function XTermTerminal({
     }
     window.addEventListener('resize', sendResize)
 
-    const resizeDispose = term.onResize(({ cols, rows }) => {
-      const current = wsRef.current
-      if (current && current.readyState === WebSocket.OPEN) {
-        try {
-          current.send(JSON.stringify({ type: 'resize', cols, rows }))
-        } catch {
-          // ignore
-        }
-      }
-    })
+    const resizeDispose = term.onResize(() => sendSize())
 
     return () => {
       closedByUs = true

@@ -1416,7 +1416,11 @@ wss.on('connection', (ws: WebSocket, sessionKey: string, projectId: string, proj
           control.rows! > 0 &&
           control.rows! <= 500
         ) {
-          session.pty.resize(control.cols!, control.rows!)
+          if (session.cols !== control.cols || session.rows !== control.rows) {
+            session.pty.resize(control.cols!, control.rows!)
+            session.cols = control.cols!
+            session.rows = control.rows!
+          }
           return
         }
         if (control.type === 'data' && typeof control.data === 'string') {
