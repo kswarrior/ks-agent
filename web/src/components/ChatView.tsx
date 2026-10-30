@@ -791,9 +791,9 @@ export function ChatView({
           </span>
           <span>{project.name}</span>
         </div>
-        <button
-          className={`icon-btn ${rightSidebarOpen ? 'active' : ''}`}
-          onClick={onToggleRightSidebar}
+          <button
+            className={`icon-btn mobile-only ${rightSidebarOpen ? 'active' : ''}`}
+            onClick={onToggleRightSidebar}
           aria-label="Toggle files"
           aria-pressed={rightSidebarOpen}
           title="Files"

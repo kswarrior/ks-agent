@@ -81,6 +81,12 @@ export default function App() {
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
+  const [largeScreen, setLargeScreen] = useState(() => window.innerWidth > 860)
+  useEffect(() => {
+    const onResize = () => setLargeScreen(window.innerWidth > 860)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [showCreate, setShowCreate] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showExtensions, setShowExtensions] = useState(false)
@@ -673,7 +679,7 @@ export default function App() {
         onToggleRightSidebar={() => setRightSidebarOpen((open) => !open)}
       />
 
-      {rightSidebarOpen && activeProject && (
+      {(rightSidebarOpen || largeScreen) && activeProject && (
         <RightSidebar project={activeProject} onClose={() => setRightSidebarOpen(false)} />
       )}
 
