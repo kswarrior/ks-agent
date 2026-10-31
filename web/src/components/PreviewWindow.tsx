@@ -69,20 +69,10 @@ function previewHostUrl(proxyPort: number): string {
   return `${protocol}//${host}:${proxyPort}/`
 }
 
+const DEFAULT_PREVIEW_URL = 'http://localhost:5173/'
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-function addressUrl(value: string): string | null {
-  const raw = value.trim()
-  if (!raw) return null
-  try {
-    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
-    return url.toString()
-  } catch {
-    return null
-  }
 }
 
 export function PreviewWindow({
