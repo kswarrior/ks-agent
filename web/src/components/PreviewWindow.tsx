@@ -429,155 +429,155 @@ export function PreviewWindow({
 
       {tab === 'web' ? (
         <>
-        <div className="preview-statusbar">
-          <span className={`preview-dot ${tone}`} aria-hidden="true" />
-          <span className="preview-status-label">{statusLabel}</span>
-          {status?.framework && <span className="preview-badge">{status.framework}</span>}
-          {status?.status === 'running' && !status.owned && <span className="preview-badge">external</span>}
-          <span className="preview-status-spacer" />
-          <button className="preview-link-btn" onClick={() => setShowLogs((value) => !value)}>
-            {showLogs ? 'Hide logs' : 'Logs'}
-          </button>
-          {status?.status === 'running' || status?.status === 'starting' ? (
-            <button className="preview-link-btn danger" onClick={() => void stop()} disabled={busy}>
-              {status.owned ? 'Stop' : 'Detach'}
+          <div className="preview-statusbar">
+            <span className={`preview-dot ${tone}`} aria-hidden="true" />
+            <span className="preview-status-label">{statusLabel}</span>
+            {status?.framework && <span className="preview-badge">{status.framework}</span>}
+            {status?.status === 'running' && !status.owned && <span className="preview-badge">external</span>}
+            <span className="preview-status-spacer" />
+            <button className="preview-link-btn" onClick={() => setShowLogs((value) => !value)}>
+              {showLogs ? 'Hide logs' : 'Logs'}
             </button>
-          ) : (
-            <button
-              className="preview-link-btn"
-              onClick={() => void start()}
-              disabled={busy || !command.trim()}
-            >
-              {busy ? 'Starting…' : 'Start'}
-            </button>
-          )}
-        </div>
-
-        {visibleError && <div className="preview-error">{visibleError}</div>}
-
-        <div className="preview-view">
-          {status?.status === 'running' && previewUrl ? (
-            <iframe
-              key={`${previewUrl}:${iframeKey}`}
-              className="preview-frame"
-              src={previewUrl}
-              title={`${project.name} app preview`}
-              allow="clipboard-read; clipboard-write; fullscreen"
-            />
-          ) : (
-            <div className="preview-setup">
-              {status?.status === 'starting' ? (
-                <div className="preview-starting">
-                  <span className="preview-spinner" aria-hidden="true" />
-                  <strong>Starting {status.framework || 'app'}…</strong>
-                  <p>{status.command}</p>
-                  <span>
-                    Waiting for port {status.port}. The preview appears automatically when the server is ready.
-                  </span>
-                </div>
-              ) : (
-                <>
-                  <div className="preview-setup-title">
-                    <strong>{status?.detected.framework || 'Web app'} preview</strong>
-                    <span>Folder: {status?.detected.cwd || '.'}</span>
-                  </div>
-                  <div className="preview-fields">
-                    <label className="preview-field">
-                      <span>Command</span>
-                      <input
-                        value={command}
-                        onChange={(event) => {
-                          commandTouched.current = true
-                          setCommand(event.target.value)
-                        }}
-                        placeholder="npm run dev"
-                        spellCheck={false}
-                      />
-                    </label>
-                    <label className="preview-field preview-field-port">
-                      <span>Port</span>
-                      <input
-                        value={port}
-                        onChange={(event) => {
-                          portTouched.current = true
-                          setPort(event.target.value)
-                        }}
-                        inputMode="numeric"
-                        aria-label="Preview port"
-                      />
-                    </label>
-                  </div>
-                  <div className="preview-setup-actions">
-                    <button
-                      className="btn primary"
-                      onClick={() => void start()}
-                      disabled={busy || !command.trim()}
-                    >
-                      {busy ? 'Starting…' : 'Start preview'}
-                    </button>
-                    <button
-                      className="btn ghost"
-                      onClick={askAiToStart}
-                      disabled={!chatId || !modelId || streaming}
-                      title={
-                        !chatId
-                          ? 'Select a chat first'
-                          : !modelId
-                            ? 'Add a model in Settings first'
-                            : 'Send a prompt asking the AI to start the app'
-                      }
-                    >
-                      Ask AI to start
-                    </button>
-                  </div>
-                  {status?.detected.note && <p className="preview-note">{status.detected.note}</p>}
-              </>
+            {status?.status === 'running' || status?.status === 'starting' ? (
+              <button className="preview-link-btn danger" onClick={() => void stop()} disabled={busy}>
+                {status.owned ? 'Stop' : 'Detach'}
+              </button>
+            ) : (
+              <button
+                className="preview-link-btn"
+                onClick={() => void start()}
+                disabled={busy || !command.trim()}
+              >
+                {busy ? 'Starting…' : 'Start'}
+              </button>
             )}
           </div>
-        )}
-      </div>
 
-      {showLogs && (
-        <pre className="preview-logs" aria-label="Preview logs">
-          {status?.output.trim() || 'No output yet.'}
-        </pre>
-      )}
+          {visibleError && <div className="preview-error">{visibleError}</div>}
 
-      <form className="preview-prompt" onSubmit={submitPrompt}>
-        <div className="preview-prompt-head">
-          <span>Ask AI</span>
-          {streaming ? (
-            <span className="preview-prompt-live">
-              <span className="preview-dot starting" aria-hidden="true" />
-              Working…
-            </span>
-          ) : (
-            <span className="preview-prompt-hint">Changes update the preview live</span>
+          <div className="preview-view">
+            {status?.status === 'running' && previewUrl ? (
+              <iframe
+                key={`${previewUrl}:${iframeKey}`}
+                className="preview-frame"
+                src={previewUrl}
+                title={`${project.name} app preview`}
+                allow="clipboard-read; clipboard-write; fullscreen"
+              />
+            ) : (
+              <div className="preview-setup">
+                {status?.status === 'starting' ? (
+                  <div className="preview-starting">
+                    <span className="preview-spinner" aria-hidden="true" />
+                    <strong>Starting {status.framework || 'app'}…</strong>
+                    <p>{status.command}</p>
+                    <span>
+                      Waiting for port {status.port}. The preview appears automatically when the server is ready.
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="preview-setup-title">
+                      <strong>{status?.detected.framework || 'Web app'} preview</strong>
+                      <span>Folder: {status?.detected.cwd || '.'}</span>
+                    </div>
+                    <div className="preview-fields">
+                      <label className="preview-field">
+                        <span>Command</span>
+                        <input
+                          value={command}
+                          onChange={(event) => {
+                            commandTouched.current = true
+                            setCommand(event.target.value)
+                          }}
+                          placeholder="npm run dev"
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label className="preview-field preview-field-port">
+                        <span>Port</span>
+                        <input
+                          value={port}
+                          onChange={(event) => {
+                            portTouched.current = true
+                            setPort(event.target.value)
+                          }}
+                          inputMode="numeric"
+                          aria-label="Preview port"
+                        />
+                      </label>
+                    </div>
+                    <div className="preview-setup-actions">
+                      <button
+                        className="btn primary"
+                        onClick={() => void start()}
+                        disabled={busy || !command.trim()}
+                      >
+                        {busy ? 'Starting…' : 'Start preview'}
+                      </button>
+                      <button
+                        className="btn ghost"
+                        onClick={askAiToStart}
+                        disabled={!chatId || !modelId || streaming}
+                        title={
+                          !chatId
+                            ? 'Select a chat first'
+                            : !modelId
+                              ? 'Add a model in Settings first'
+                              : 'Send a prompt asking the AI to start the app'
+                        }
+                      >
+                        Ask AI to start
+                      </button>
+                    </div>
+                    {status?.detected.note && <p className="preview-note">{status.detected.note}</p>}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {showLogs && (
+            <pre className="preview-logs" aria-label="Preview logs">
+              {status?.output.trim() || 'No output yet.'}
+            </pre>
           )}
-        </div>
-        <div className="preview-prompt-row">
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={
-              !chatId
-                ? 'Select a chat to send prompts'
-                : !modelId
-                  ? 'Add a model in Settings first'
-                  : 'Describe a change and watch the preview update…'
-            }
-            disabled={!chatId || !modelId || streaming}
-            aria-label="Prompt the AI about this preview"
-          />
-          <button
-            className="btn primary small"
-            type="submit"
-            disabled={!draft.trim() || !chatId || !modelId || streaming}
-          >
-            Send
-          </button>
-        </div>
-      </form>
+
+          <form className="preview-prompt" onSubmit={submitPrompt}>
+            <div className="preview-prompt-head">
+              <span>Ask AI</span>
+              {streaming ? (
+                <span className="preview-prompt-live">
+                  <span className="preview-dot starting" aria-hidden="true" />
+                  Working…
+                </span>
+              ) : (
+                <span className="preview-prompt-hint">Changes update the preview live</span>
+              )}
+            </div>
+            <div className="preview-prompt-row">
+              <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={
+                  !chatId
+                    ? 'Select a chat to send prompts'
+                    : !modelId
+                      ? 'Add a model in Settings first'
+                      : 'Describe a change and watch the preview update…'
+                }
+                disabled={!chatId || !modelId || streaming}
+                aria-label="Prompt the AI about this preview"
+              />
+              <button
+                className="btn primary small"
+                type="submit"
+                disabled={!draft.trim() || !chatId || !modelId || streaming}
+              >
+                Send
+              </button>
+            </div>
+          </form>
         </>
       ) : (
         <div className="preview-soon">
