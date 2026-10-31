@@ -22,6 +22,7 @@ import type {
   McpServerInfo,
   Message,
   ModelEntry,
+  PreviewStatus,
   Project,
   ProjectCreateMode,
   ProviderPublic,
@@ -88,6 +89,8 @@ export default function App() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewAutoStart, setPreviewAutoStart] = useState(false)
   const [previewFocusSeq, setPreviewFocusSeq] = useState(0)
+  const [previewStatus, setPreviewStatus] = useState<PreviewStatus | null>(null)
+  const [previewToolError, setPreviewToolError] = useState(false)
   const [largeScreen, setLargeScreen] = useState(() => window.innerWidth > 860)
   useEffect(() => {
     const onResize = () => setLargeScreen(window.innerWidth > 860)
@@ -113,6 +116,31 @@ export default function App() {
   useEffect(() => {
     setPreviewOpen(false)
     setPreviewAutoStart(false)
+    setPreviewToolError(false)
+  }, [activeProjectId])
+
+  useEffect(() => {
+    if (!activeProjectId) {
+      setPreviewStatus(null)
+      return
+    }
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const status = await api.getProjectPreview(activeProjectId)
+        if (cancelled) return
+        setPreviewStatus(status)
+        if (status.status === 'running' || status.status === 'starting') setPreviewToolError(false)
+      } catch {
+        // keep the last known state while the server is unavailable
+      }
+    }
+    void tick()
+    const timer = window.setInterval(tick, 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [activeProjectId])
 
   const refreshProviders = useCallback(async () => setProviders(await api.listProviders()), [])
@@ -184,7 +212,10 @@ export default function App() {
       setLive((current) => (current ? { ...current, reasoning: current.reasoning + event.text } : current))
     } else if (event.type === 'tool_start') {
       setRetryStatus(null)
-      if (event.call.name === 'preview_app') {
+      if (event.call.name === 'open_preview') {
+        setPreviewAutoStart(false)
+        setPreviewOpen(true)
+      } else if (event.call.name === 'preview_app') {
         let action = 'start'
         try {
           const parsed = JSON.parse(event.call.arguments || '{}') as { action?: unknown }
@@ -264,17 +295,20 @@ export default function App() {
         )
       }
 
-      if (event.call.name === 'preview_app' && event.result.ok) {
-        let action = 'start'
-        try {
-          const parsed = JSON.parse(event.call.arguments || '{}') as { action?: unknown }
-          if (typeof parsed.action === 'string') action = parsed.action
-        } catch {
-          // default to start
-        }
-        if (action === 'start') {
-          setPreviewAutoStart(false)
-          setPreviewOpen(true)
+      if (event.call.name === 'open_preview' || event.call.name === 'preview_app') {
+        setPreviewToolError(!event.result.ok)
+        if (event.result.ok) {
+          let action = 'start'
+          try {
+            const parsed = JSON.parse(event.call.arguments || '{}') as { action?: unknown }
+            if (typeof parsed.action === 'string') action = parsed.action
+          } catch {
+            // default to start
+          }
+          if (event.call.name === 'open_preview' || action === 'start') {
+            setPreviewAutoStart(false)
+            setPreviewOpen(true)
+          }
         }
       }
 
