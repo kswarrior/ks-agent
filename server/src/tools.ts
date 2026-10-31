@@ -401,6 +401,22 @@ export const builtinToolDefs: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'set_task_report',
+      description:
+        'Control which actions the task report offers to the user. Call once before your final answer. Set preview true only when the task produced or updated a web app or server that can be opened in the live preview. Set recheck true only when there is completed work worth verifying (code changes, builds/tests, a finished feature). Greetings, casual chat and simple read-only answers should set both false. If you omit a flag the app infers it from the run.',
+      parameters: {
+        type: 'object',
+        properties: {
+          recheck: { type: 'boolean', description: 'Show the Recheck action in the task report' },
+          preview: { type: 'boolean', description: 'Show the Open preview action in the task report' }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'git_init',
       description: 'Initialize a git repository in the project (if not already initialized) and set the initial branch.',
       parameters: {
@@ -858,6 +874,15 @@ async function updatePlanTool(args: Record<string, unknown>, ctx: ToolContext): 
   return { ok: true, output: `Updated plan.md\n\n${content}` }
 }
 
+async function setTaskReportTool(args: Record<string, unknown>): Promise<ToolResult> {
+  const recheck = bool(args, 'recheck', false)
+  const preview = bool(args, 'preview', false)
+  return {
+    ok: true,
+    output: `Task report actions: recheck=${recheck ? 'on' : 'off'}, preview=${preview ? 'on' : 'off'}.`
+  }
+}
+
 async function findFilesTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const query = str(args, 'query').trim()
   if (!query) return fail('query is required')
@@ -1308,6 +1333,7 @@ const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext)
   preview_app: previewAppTool,
   open_preview: openPreviewTool,
   update_plan: updatePlanTool,
+  set_task_report: setTaskReportTool,
   git_init: gitInitTool,
   git_status: gitStatusTool,
   git_diff: gitDiffTool,

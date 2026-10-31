@@ -38,6 +38,7 @@ const CHANGE_ACTIONS: Record<string, ChangeAction> = {
 const MUTATING_TOOL_NAMES = new Set(Object.keys(CHANGE_ACTIONS))
 const GIT_WORK_TOOL_NAMES = new Set(['git_init', 'git_commit', 'git_push', 'git_pull', 'git_branch'])
 const PREVIEW_TOOL_NAMES = new Set(['preview_app', 'open_preview'])
+const TASK_REPORT_TOOL = 'set_task_report'
 
 const SHELL_WORK = /\b(?:build|test|tests|typecheck|lint|compile|install|vitest|jest|pytest|tsc|vite|next|nuxt|astro|cargo|mvn|gradle|make|dotnet)\b/i
 const SHELL_DEV_SERVER =
@@ -55,6 +56,23 @@ function isWebAppPath(file: string): boolean {
     WEB_SOURCE_FILE.test(normalized) ||
     WEB_PUBLIC_DIR.test(normalized)
   )
+}
+
+function reportActionOverride(messages: Message[]): { recheck?: boolean; preview?: boolean } | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role !== 'assistant' || !message.toolCalls) continue
+    for (let callIndex = message.toolCalls.length - 1; callIndex >= 0; callIndex -= 1) {
+      const call = message.toolCalls[callIndex]
+      if (call.function.name !== TASK_REPORT_TOOL) continue
+      const args = parseToolArgs(call.function.arguments)
+      return {
+        recheck: typeof args.recheck === 'boolean' ? args.recheck : undefined,
+        preview: typeof args.preview === 'boolean' ? args.preview : undefined
+      }
+    }
+  }
+  return null
 }
 
 function plainText(value: string): string {
