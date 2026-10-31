@@ -923,7 +923,7 @@ export function ChatView({
               />
             )}
           </div>
-          {includeReport && reportEntry && (
+          {includeReport && reportEntry && reportEntry.report.kind === 'task' && (
             <RunReport
               report={reportEntry.report}
               onContinue={reportEntry.isLatest ? continueRun : undefined}

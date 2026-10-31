@@ -5144,6 +5144,13 @@ code {
     var(--bg-elev);
 }
 
+.run-report.chat {
+  border-color: rgba(160, 166, 180, 0.2);
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(160, 166, 180, 0.06), transparent 55%),
+    var(--bg-elev);
+}
+
 .run-report-head {
   display: flex;
   align-items: center;
@@ -5184,6 +5191,12 @@ code {
   border-color: rgba(240, 179, 91, 0.24);
   background: rgba(240, 179, 91, 0.12);
   color: var(--amber);
+}
+
+.run-report.chat .run-report-badge {
+  border-color: rgba(160, 166, 180, 0.24);
+  background: rgba(160, 166, 180, 0.11);
+  color: var(--muted);
 }
 
 .run-report-badge svg {
@@ -5242,6 +5255,11 @@ code {
 .run-report-status.stopped {
   border-color: rgba(240, 179, 91, 0.25);
   color: var(--amber);
+}
+
+.run-report-status.chat {
+  border-color: rgba(160, 166, 180, 0.24);
+  color: var(--muted);
 }
 
 .run-report-duration {

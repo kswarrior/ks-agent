@@ -394,23 +394,39 @@ export function RunReport({
 
   return (
     <details
-      className={`run-report${report.status === 'stopped' ? ' stopped' : ''}${compact ? ' compact' : ''}`}
+      className={`run-report${report.status === 'stopped' ? ' stopped' : ''}${report.kind === 'chat' ? ' chat' : ''}${compact ? ' compact' : ''}`}
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary className="run-report-head">
         <span className="run-report-badge" aria-hidden="true">
-          {report.status === 'complete' ? <CheckIcon /> : <StopIcon />}
+          {report.kind === 'chat' ? (
+            <ChatIcon />
+          ) : report.status === 'complete' ? (
+            <CheckIcon />
+          ) : (
+            <StopIcon />
+          )}
         </span>
         <span className="run-report-heading">
-          <span className="run-report-kicker">Task report</span>
+          <span className="run-report-kicker">{report.kind === 'chat' ? 'Chat' : 'Task report'}</span>
           <span className="run-report-title">
-            {compact ? report.task : report.status === 'complete' ? 'Completed' : 'Stopped early'}
+            {compact || report.kind === 'chat'
+              ? report.task
+              : report.status === 'complete'
+                ? 'Completed'
+                : 'Stopped early'}
           </span>
         </span>
         {compact && (
-          <span className={`run-report-status ${report.status}`}>
-            {report.status === 'complete' ? 'Completed' : 'Stopped'}
+          <span className={`run-report-status ${report.kind === 'chat' ? 'chat' : report.status}`}>
+            {report.kind === 'chat'
+              ? report.status === 'stopped'
+                ? 'Stopped'
+                : 'Chat'
+              : report.status === 'complete'
+                ? 'Completed'
+                : 'Stopped'}
           </span>
         )}
         <span className="run-report-duration">{formatDuration(report.durationMs)}</span>
@@ -421,95 +437,103 @@ export function RunReport({
 
       {children && <div className="run-turn-transcript">{children}</div>}
 
-      <div className="run-report-body">
-        <div className="run-report-row">
-          <span className="run-report-label">Task</span>
-          <p className="run-report-text run-report-task">{report.task}</p>
-        </div>
+      {(report.kind === 'task' || report.summary) && (
+        <div className="run-report-body">
+          {report.kind === 'task' && (
+            <div className="run-report-row">
+              <span className="run-report-label">Task</span>
+              <p className="run-report-text run-report-task">{report.task}</p>
+            </div>
+          )}
 
-        <div className="run-report-row">
-          <span className="run-report-label">Summary</span>
-          <p className="run-report-text">{report.summary}</p>
-        </div>
+          {report.summary && (
+            <div className="run-report-row">
+              <span className="run-report-label">{report.kind === 'chat' ? 'Reply' : 'Summary'}</span>
+              <p className="run-report-text">{report.summary}</p>
+            </div>
+          )}
 
-        {visibleChanges.length > 0 && (
-          <div className="run-report-row">
-            <span className="run-report-label">Changed</span>
-            <div className="run-report-changes">
-              {visibleChanges.map((change) => (
-                <span className="run-change" key={`${change.action}-${change.path}`}>
-                  <span className={`run-change-action ${change.action.toLowerCase()}`}>
-                    {change.action}
+          {report.kind === 'task' && visibleChanges.length > 0 && (
+            <div className="run-report-row">
+              <span className="run-report-label">Changed</span>
+              <div className="run-report-changes">
+                {visibleChanges.map((change) => (
+                  <span className="run-change" key={`${change.action}-${change.path}`}>
+                    <span className={`run-change-action ${change.action.toLowerCase()}`}>
+                      {change.action}
+                    </span>
+                    <code>{change.path}</code>
                   </span>
-                  <code>{change.path}</code>
+                ))}
+                {report.changes.length > 4 && (
+                  <button
+                    type="button"
+                    className="run-change-more"
+                    onClick={() => setShowAllChanges((shown) => !shown)}
+                  >
+                    {showAllChanges ? 'Show less' : `+${report.changes.length - 4} more`}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {report.kind === 'task' && (
+            <div className="run-report-stats">
+              <span>
+                <strong>{report.steps}</strong> {report.steps === 1 ? 'step' : 'steps'}
+              </span>
+              <span>
+                <strong>{report.tools}</strong> {report.tools === 1 ? 'tool' : 'tools'}
+              </span>
+              {report.files > 0 && (
+                <span>
+                  <strong>{report.files}</strong> {report.files === 1 ? 'file' : 'files'}
                 </span>
-              ))}
-              {report.changes.length > 4 && (
+              )}
+              <span className="run-report-local" title="Generated from this run. No extra AI tokens.">
+                Local · no extra tokens
+              </span>
+            </div>
+          )}
+
+          {report.kind === 'task' && (showRecheck || showPreview) && (
+            <div className="run-report-actions">
+              {showRecheck && onRecheck && (
                 <button
                   type="button"
-                  className="run-change-more"
-                  onClick={() => setShowAllChanges((shown) => !shown)}
+                  className="btn small"
+                  onClick={() => onRecheck(report.task)}
+                  disabled={busy}
+                  title="Ask the agent to verify this task again"
                 >
-                  {showAllChanges ? 'Show less' : `+${report.changes.length - 4} more`}
+                  Recheck
+                </button>
+              )}
+              {showPreview && onPreview && (
+                <button
+                  type="button"
+                  className="btn small primary"
+                  onClick={() => onPreview(report.task)}
+                  disabled={busy}
+                  title="Ask the agent to open the web app preview on its port"
+                >
+                  Open preview
                 </button>
               )}
             </div>
-          </div>
-        )}
-
-        <div className="run-report-stats">
-          <span>
-            <strong>{report.steps}</strong> {report.steps === 1 ? 'step' : 'steps'}
-          </span>
-          <span>
-            <strong>{report.tools}</strong> {report.tools === 1 ? 'tool' : 'tools'}
-          </span>
-          {report.files > 0 && (
-            <span>
-              <strong>{report.files}</strong> {report.files === 1 ? 'file' : 'files'}
-            </span>
           )}
-          <span className="run-report-local" title="Generated from this run. No extra AI tokens.">
-            Local · no extra tokens
-          </span>
+
+          {report.kind === 'task' && report.status === 'stopped' && onContinue && (
+            <div className="run-report-continue">
+              <span>Resume from this point, or add instructions in the composer first.</span>
+              <button type="button" className="btn primary small" onClick={onContinue}>
+                Continue
+              </button>
+            </div>
+          )}
         </div>
-
-        {(showRecheck || showPreview) && (
-          <div className="run-report-actions">
-            {showRecheck && onRecheck && (
-              <button
-                type="button"
-                className="btn small"
-                onClick={() => onRecheck(report.task)}
-                disabled={busy}
-                title="Ask the agent to verify this task again"
-              >
-                Recheck
-              </button>
-            )}
-            {showPreview && onPreview && (
-              <button
-                type="button"
-                className="btn small primary"
-                onClick={() => onPreview(report.task)}
-                disabled={busy}
-                title="Ask the agent to open the web app preview on its port"
-              >
-                Open preview
-              </button>
-            )}
-          </div>
-        )}
-
-        {report.status === 'stopped' && onContinue && (
-          <div className="run-report-continue">
-            <span>Resume from this point, or add instructions in the composer first.</span>
-            <button type="button" className="btn primary small" onClick={onContinue}>
-              Continue
-            </button>
-          </div>
-        )}
-      </div>
+      )}
     </details>
   )
 }
