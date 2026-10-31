@@ -757,7 +757,9 @@ export function ChatView({
     for (const message of messages) {
       if (message.role !== 'assistant' || !message.toolCalls) continue
       for (const call of message.toolCalls) {
-        if (call.function.name === 'update_plan') ids.add(call.id)
+        if (call.function.name === 'update_plan' || call.function.name === 'set_task_report') {
+          ids.add(call.id)
+        }
       }
     }
     return ids
@@ -793,7 +795,12 @@ export function ChatView({
     contextRatio >= CONTEXT_DANGER_RATIO ? 'red' : contextRatio >= CONTEXT_WARNING_RATIO ? 'yellow' : 'green'
 
   const visibleTools = (tools: LiveState['tools']) =>
-    tools.filter((tool) => tool.name !== 'update_plan' && !persistedToolCallIds.has(tool.id))
+    tools.filter(
+      (tool) =>
+        tool.name !== 'update_plan' &&
+        tool.name !== 'set_task_report' &&
+        !persistedToolCallIds.has(tool.id)
+    )
 
   const send = (override?: string) => {
     const content = (override ?? draft).trim()
@@ -971,7 +978,11 @@ export function ChatView({
                 )
               }
               if (message.role === 'assistant') {
-                const calls = (message.toolCalls ?? []).filter((call) => call.function.name !== 'update_plan')
+                const calls = (message.toolCalls ?? []).filter(
+                  (call) =>
+                    call.function.name !== 'update_plan' &&
+                    call.function.name !== 'set_task_report'
+                )
                 const hiddenOnly =
                   !message.content &&
                   calls.length === 0 &&

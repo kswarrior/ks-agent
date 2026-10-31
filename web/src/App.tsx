@@ -228,7 +228,7 @@ export default function App() {
           setPreviewOpen(true)
         }
       }
-      if (event.call.name !== 'update_plan') {
+      if (event.call.name !== 'update_plan' && event.call.name !== 'set_task_report') {
         setLive((current) =>
           current
             ? {
@@ -261,7 +261,7 @@ export default function App() {
         )
       }
     } else if (event.type === 'tool_end') {
-      if (event.call.name !== 'update_plan') {
+      if (event.call.name !== 'update_plan' && event.call.name !== 'set_task_report') {
         setLive((current) =>
           current
             ? {

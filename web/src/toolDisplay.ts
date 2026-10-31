@@ -21,6 +21,7 @@ const TOOL_META: Record<string, ToolMeta> = {
   preview_app: { action: 'Preview', running: 'Starting preview' },
   open_preview: { action: 'Open preview', running: 'Opening preview' },
   update_plan: { action: 'Plan', running: 'Planning' },
+  set_task_report: { action: 'Report', running: 'Updating report' },
   use_skill: { action: 'Skill', running: 'Loading skill' },
   git_init: { action: 'Git init', running: 'Initializing' },
   git_status: { action: 'Git status', running: 'Checking git' },

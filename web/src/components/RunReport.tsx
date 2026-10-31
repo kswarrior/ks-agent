@@ -181,7 +181,9 @@ function buildRunReportEntry({
 
   const calls = runMessages.flatMap((message) =>
     message.role === 'assistant' && message.toolCalls
-      ? message.toolCalls.filter((call) => call.function.name !== 'update_plan')
+      ? message.toolCalls.filter(
+          (call) => call.function.name !== 'update_plan' && call.function.name !== TASK_REPORT_TOOL
+        )
       : []
   )
   if (calls.length === 0) return null
@@ -224,6 +226,7 @@ function buildRunReportEntry({
   const ranShellWork = shellCommands.some((command) => SHELL_WORK.test(command))
   const startedDevServer = shellCommands.some((command) => SHELL_DEV_SERVER.test(command))
   const hasPreviewableChanges = changes.some((change) => isWebAppPath(change.path))
+  const override = reportActionOverride(runMessages)
 
   return {
     report: {
@@ -236,8 +239,9 @@ function buildRunReportEntry({
       files: changes.length,
       durationMs,
       changes,
-      canRecheck: changes.length > 0 || mutatingTool || gitWork || ranShellWork,
-      canPreview: usedPreview || startedDevServer || hasPreviewableChanges
+      canRecheck:
+        override?.recheck ?? (changes.length > 0 || mutatingTool || gitWork || ranShellWork),
+      canPreview: override?.preview ?? (usedPreview || startedDevServer || hasPreviewableChanges)
     },
     finalMessageId: finalMessage.id,
     userMessageId: taskMessage.id,
