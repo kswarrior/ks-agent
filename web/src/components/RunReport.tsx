@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { Message, RunStep } from '../types'
+import type { Message, RunStep, ToolCall } from '../types'
 import { formatDuration } from '../format'
 import { absolutePath, argsString, parseToolArgs } from '../toolDisplay'
 
@@ -12,6 +12,7 @@ interface RunReportChange {
 
 export interface RunReportData {
   id: string
+  kind: 'task' | 'chat'
   task: string
   summary: string
   status: 'complete' | 'stopped'
@@ -38,6 +39,19 @@ const CHANGE_ACTIONS: Record<string, ChangeAction> = {
 const MUTATING_TOOL_NAMES = new Set(Object.keys(CHANGE_ACTIONS))
 const GIT_WORK_TOOL_NAMES = new Set(['git_init', 'git_commit', 'git_push', 'git_pull', 'git_branch'])
 const PREVIEW_TOOL_NAMES = new Set(['preview_app', 'open_preview'])
+const READ_ONLY_TOOL_NAMES = new Set([
+  'read_file',
+  'read_multiple_files',
+  'list_dir',
+  'glob',
+  'find_files',
+  'tree',
+  'grep',
+  'get_file_info',
+  'git_status',
+  'git_diff',
+  'git_log'
+])
 const TASK_REPORT_TOOL = 'set_task_report'
 
 const SHELL_WORK = /\b(?:build|test|tests|typecheck|lint|compile|install|vitest|jest|pytest|tsc|vite|next|nuxt|astro|cargo|mvn|gradle|make|dotnet)\b/i
