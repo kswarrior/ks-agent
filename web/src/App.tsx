@@ -3,6 +3,7 @@ import * as api from './api'
 import { ChatView } from './components/ChatView'
 import { ConfirmModal, Modal } from './components/Modal'
 import { ExtensionsModal } from './components/ExtensionsModal'
+import { PreviewWindow } from './components/PreviewWindow'
 import { RightSidebar } from './components/RightSidebar'
 import { SettingsModal } from './components/SettingsModal'
 import { Sidebar } from './components/Sidebar'
@@ -84,6 +85,8 @@ export default function App() {
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewAutoStart, setPreviewAutoStart] = useState(false)
   const [largeScreen, setLargeScreen] = useState(() => window.innerWidth > 860)
   useEffect(() => {
     const onResize = () => setLargeScreen(window.innerWidth > 860)

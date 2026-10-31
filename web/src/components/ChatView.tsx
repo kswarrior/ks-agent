@@ -351,6 +351,28 @@ function FilesIcon() {
   )
 }
 
+function PreviewIcon() {
+  return (
+    <svg
+      className="preview-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="4" width="19" height="14" rx="2" />
+      <path d="M2.5 8h19" />
+      <path d="M8 21h8" />
+      <path d="M12 18v3" />
+      <circle cx="5.5" cy="6" r="0.6" fill="currentColor" />
+      <circle cx="7.5" cy="6" r="0.6" fill="currentColor" />
+    </svg>
+  )
+}
+
 function ThinkingBlock({ reasoning, streaming }: { reasoning: string; streaming: boolean }) {
   return (
     <details className="thinking-block">
@@ -608,7 +630,9 @@ export function ChatView({
   onOpenSidebar,
   onEditChat,
   rightSidebarOpen,
-  onToggleRightSidebar
+  onToggleRightSidebar,
+  previewOpen,
+  onOpenPreview
 }: {
   project: Project | null
   chat: Chat | null
@@ -637,6 +661,8 @@ export function ChatView({
   onEditChat: (chat: Chat) => void
   rightSidebarOpen: boolean
   onToggleRightSidebar: () => void
+  previewOpen: boolean
+  onOpenPreview: () => void
 }) {
   const [draft, setDraft] = useState('')
   const [now, setNow] = useState(Date.now())
@@ -796,9 +822,19 @@ export function ChatView({
           </span>
           <span>{project.name}</span>
         </div>
-          <button
-            className={`icon-btn mobile-only ${rightSidebarOpen ? 'active' : ''}`}
-            onClick={onToggleRightSidebar}
+        <button
+          className={`preview-launch${previewOpen ? ' active' : ''}`}
+          onClick={onOpenPreview}
+          aria-label="Open live app preview"
+          aria-pressed={previewOpen}
+          title="Start the app and show a live, movable preview window"
+        >
+          <PreviewIcon />
+          <span>Preview</span>
+        </button>
+        <button
+          className={`icon-btn mobile-only ${rightSidebarOpen ? 'active' : ''}`}
+          onClick={onToggleRightSidebar}
           aria-label="Toggle files"
           aria-pressed={rightSidebarOpen}
           title="Files"
