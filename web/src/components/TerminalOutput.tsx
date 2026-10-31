@@ -232,15 +232,20 @@ function segmentStyle(style: AnsiStyle): CSSProperties {
 export function TerminalOutput({
   text,
   className = '',
-  error = false
+  error = false,
+  ariaLabel
 }: {
   text: string
   className?: string
   error?: boolean
+  ariaLabel?: string
 }) {
   const segments = useMemo(() => parseAnsi(normalizeText(text)), [text])
   return (
-    <pre className={`terminal-output${error ? ' error' : ''}${className ? ` ${className}` : ''}`}>
+    <pre
+      className={`terminal-output${error ? ' error' : ''}${className ? ` ${className}` : ''}`}
+      aria-label={ariaLabel}
+    >
       {segments.map((segment, index) =>
         segment.style ? (
           <span key={index} style={segmentStyle(segment.style)}>

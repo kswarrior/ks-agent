@@ -400,20 +400,36 @@ export function PreviewWindow({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onDoubleClick={(event) => {
-          if ((event.target as HTMLElement).closest('button')) return
+          if ((event.target as HTMLElement).closest('button, input, form, .preview-address')) return
           setMaximized((value) => !value)
         }}
       >
         <div className="preview-title">
           <span className={`preview-dot ${tone}`} aria-hidden="true" />
           <span className="preview-title-name">{project.name}</span>
-          <span className="preview-title-sub">Live preview</span>
         </div>
+        <form className="preview-address" onSubmit={navigate}>
+          <input
+            value={address}
+            onChange={(event) => {
+              addressTouched.current = true
+              setAddress(event.target.value)
+              setAddressError(null)
+            }}
+            placeholder="localhost:5173"
+            spellCheck={false}
+            aria-label="Preview address"
+            title="Type a URL and press Go"
+          />
+          <button type="submit" className="preview-address-go" title="Open this address">
+            Go
+          </button>
+        </form>
         <div className="preview-window-actions">
           <button
             className="preview-window-btn"
-            onClick={() => window.open(externalUrl ?? '', '_blank', 'noopener,noreferrer')}
-            disabled={!externalUrl}
+            onClick={openExternal}
+            disabled={!customUrl && !externalUrl}
             title="Open in a new tab"
             aria-label="Open preview in a new tab"
           >
@@ -503,11 +519,11 @@ export function PreviewWindow({
           {visibleError && <div className="preview-error">{visibleError}</div>}
 
           <div className="preview-view">
-            {status?.status === 'running' && previewUrl ? (
+            {frameUrl ? (
               <iframe
-                key={`${previewUrl}:${iframeKey}`}
+                key={`${frameUrl}:${iframeKey}`}
                 className="preview-frame"
-                src={previewUrl}
+                src={frameUrl}
                 title={`${project.name} app preview`}
                 allow="clipboard-read; clipboard-write; fullscreen"
               />
@@ -585,9 +601,11 @@ export function PreviewWindow({
           </div>
 
           {showLogs && (
-            <pre className="preview-logs" aria-label="Preview logs">
-              {status?.output.trim() || 'No output yet.'}
-            </pre>
+            <TerminalOutput
+              className="preview-logs"
+              text={status?.output.trim() || 'No output yet.'}
+              ariaLabel="Preview logs"
+            />
           )}
 
           <form className="preview-prompt" onSubmit={submitPrompt}>

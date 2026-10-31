@@ -728,6 +728,12 @@ async function runShellTool(args: Record<string, unknown>, ctx: ToolContext): Pr
         'none',
         '--memory=512m',
         '--cpus=1',
+        '-e',
+        'FORCE_COLOR=3',
+        '-e',
+        'COLORTERM=truecolor',
+        '-e',
+        'TERM=xterm-256color',
         '-v',
         `${ctx.projectPath}:/workspace:rw`,
         '-w',
@@ -744,7 +750,14 @@ async function runShellTool(args: Record<string, unknown>, ctx: ToolContext): Pr
       ? spawn('docker', dockerArgs, { cwd: ctx.projectPath, env: process.env })
       : spawn(process.env.SHELL || '/bin/bash', ['-lc', command], {
           cwd: ctx.projectPath,
-          env: { ...process.env, KS_PROJECT_DIR: ctx.projectPath },
+          env: {
+            ...process.env,
+            KS_PROJECT_DIR: ctx.projectPath,
+            FORCE_COLOR: '3',
+            COLORTERM: 'truecolor',
+            TERM: 'xterm-256color',
+            CLICOLOR_FORCE: '1'
+          },
           detached: process.platform !== 'win32'
         })
 

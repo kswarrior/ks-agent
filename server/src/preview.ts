@@ -683,7 +683,11 @@ export async function startPreview(project: PreviewProject, options: StartOption
         PORT: String(port),
         HOST: '0.0.0.0',
         BROWSER: 'none',
-        KS_PREVIEW_PORT: String(port)
+        KS_PREVIEW_PORT: String(port),
+        FORCE_COLOR: '3',
+        COLORTERM: 'truecolor',
+        TERM: 'xterm-256color',
+        CLICOLOR_FORCE: '1'
       },
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe']
