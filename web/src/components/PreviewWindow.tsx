@@ -93,6 +93,7 @@ export function PreviewWindow({
 }) {
   const [status, setStatus] = useState<PreviewStatus | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
+  const [pollError, setPollError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState('')
   const [command, setCommand] = useState('')
@@ -115,9 +116,9 @@ export function PreviewWindow({
     try {
       const next = await api.getProjectPreview(project.id)
       setStatus(next)
-      setRequestError(null)
+      setPollError(null)
     } catch (error) {
-      setRequestError(errorMessage(error))
+      setPollError(errorMessage(error))
     }
   }, [project.id])
 
@@ -162,7 +163,10 @@ export function PreviewWindow({
   }, [streaming, status?.status])
 
   useEffect(() => {
-    if (focusSeq > 0) setMinimized(false)
+    if (focusSeq > 0) {
+      setMinimized(false)
+      autoStarted.current = false
+    }
   }, [focusSeq])
 
   const start = useCallback(
@@ -290,7 +294,7 @@ export function PreviewWindow({
         : status?.status === 'error'
           ? 'Needs attention'
           : 'Stopped'
-  const visibleError = requestError || status?.error || null
+  const visibleError = requestError || pollError || status?.error || null
 
   const askAiToStart = () => {
     if (!chatId || !modelId || streaming) return
