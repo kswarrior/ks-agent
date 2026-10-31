@@ -410,7 +410,8 @@ function parsePreviewPath(pathname: string): { projectId: string; rest: string }
 
 function withPreviewPrefix(value: string, prefix: string): string {
   if (!prefix) return value
-  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith(prefix)) return value
+  if (!value.startsWith('/') || value.startsWith('//')) return value
+  if (value === prefix.slice(0, -1) || value.startsWith(prefix)) return value
   return `${prefix}${value.slice(1)}`
 }
 
@@ -694,12 +695,18 @@ export function previewProxyRequest(req: http.IncomingMessage, res: http.ServerR
   const { pathname, search } = splitRawUrl(req.url ?? '/')
   const direct = parsePreviewPath(pathname)
   if (direct) {
+    const canonical = previewPath(direct.projectId)
+    if (pathname === canonical.slice(0, -1)) {
+      res.writeHead(308, { location: `${canonical}${search}` })
+      res.end()
+      return true
+    }
     const target = previewProxyTarget(direct.projectId)
     if (!target) {
       sendPreviewError(res, 404, 'Preview is not running')
       return true
     }
-    proxyHttpRequest(req, res, target, previewPath(direct.projectId), `${direct.rest}${search}`)
+    proxyHttpRequest(req, res, target, canonical, `${direct.rest}${search}`)
     return true
   }
 

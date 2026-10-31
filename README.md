@@ -49,6 +49,8 @@ KS_PREVIEW_BIND=0.0.0.0        # preview proxy bind address
 KS_PREVIEW_TIMEOUT_MS=120000   # wait for the dev server port before failing
 ```
 
+Previews are proxied through the agent's own origin (`/preview/<projectId>/`, including HMR WebSockets), so a Cloudflare Tunnel or reverse proxy that only exposes `PORT` (default 8080) is enough. `KS_PREVIEW_BIND` only controls the optional direct proxy port for LAN/phone access.
+
 ## Optional Docker Jail (`KS_DOCKER_JAIL`)
 
 For untrusted code or stronger isolation than the native jail, wrap both `run_shell` and PTY-equivalent execution through Docker:
