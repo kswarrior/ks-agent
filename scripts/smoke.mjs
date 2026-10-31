@@ -935,7 +935,7 @@ async function main() {
     `import http from 'node:http'
 http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': 'text/html' })
-  res.end('<h1>preview-ok</h1>')
+  res.end('<html><head></head><body><h1>preview-ok</h1><script src="/asset.js"></script></body></html>')
 }).listen(Number(process.env.PORT), '127.0.0.1')
 `
   )
@@ -956,6 +956,30 @@ http.createServer((req, res) => {
   assert(previewState.proxyPort, `preview did not open a proxy port: ${JSON.stringify(previewState)}`)
   const previewBody = await (await fetch(`http://127.0.0.1:${previewState.proxyPort}/`)).text()
   assert(previewBody.includes('preview-ok'), `preview proxy returned the wrong body: ${previewBody}`)
+  assert(
+    previewState.proxyPath === `/preview/${previewProject.id}/`,
+    `preview did not expose a same-origin path: ${JSON.stringify(previewState)}`
+  )
+  const previewPathBody = await (
+    await fetch(`http://127.0.0.1:${serverPort}/preview/${previewProject.id}/`)
+  ).text()
+  assert(
+    previewPathBody.includes('preview-ok'),
+    `same-origin preview proxy returned the wrong body: ${previewPathBody}`
+  )
+  assert(
+    previewPathBody.includes(`/preview/${previewProject.id}/asset.js`),
+    `same-origin preview did not rewrite root-absolute assets: ${previewPathBody}`
+  )
+  const previewFallbackBody = await (
+    await fetch(`http://127.0.0.1:${serverPort}/asset.js`, {
+      headers: { referer: `http://127.0.0.1:${serverPort}/preview/${previewProject.id}/` }
+    })
+  ).text()
+  assert(
+    previewFallbackBody.includes('preview-ok'),
+    `same-origin preview did not route root-absolute requests from the referer: ${previewFallbackBody}`
+  )
   const previewStopped = await api('POST', `/api/projects/${previewProject.id}/preview/stop`)
   assert(previewStopped.status === 'stopped', `preview did not stop: ${JSON.stringify(previewStopped)}`)
   assert(previewStopped.proxyPort === null, `preview proxy port was not closed: ${JSON.stringify(previewStopped)}`)
