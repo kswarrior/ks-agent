@@ -412,23 +412,25 @@ export function PreviewWindow({
           <span className={`preview-dot ${tone}`} aria-hidden="true" />
           <span className="preview-title-name">{project.name}</span>
         </div>
-        <form className="preview-address" onSubmit={navigate}>
-          <input
-            value={address}
-            onChange={(event) => {
-              addressTouched.current = true
-              setAddress(event.target.value)
-              setAddressError(null)
-            }}
-            placeholder="localhost:5173"
-            spellCheck={false}
-            aria-label="Preview address"
-            title="Type a URL and press Go"
-          />
-          <button type="submit" className="preview-address-go" title="Open this address">
-            Go
-          </button>
-        </form>
+        {tab === 'web' && (
+          <form className="preview-address" onSubmit={navigate}>
+            <input
+              value={address}
+              onChange={(event) => {
+                addressTouched.current = true
+                setAddress(event.target.value)
+                setAddressError(null)
+              }}
+              placeholder="localhost:5173"
+              spellCheck={false}
+              aria-label="Preview address"
+              title="Type a URL and press Go"
+            />
+            <button type="submit" className="preview-address-go" title="Open this address">
+              Go
+            </button>
+          </form>
+        )}
         <div className="preview-window-actions">
           <button
             className="preview-window-btn"
