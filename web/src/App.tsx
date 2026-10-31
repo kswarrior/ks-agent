@@ -538,6 +538,14 @@ export default function App() {
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? null
+  const previewTone =
+    previewStatus?.status === 'running'
+      ? 'ok'
+      : previewStatus?.status === 'starting'
+        ? 'starting'
+        : previewStatus?.status === 'error' || previewToolError
+          ? 'error'
+          : 'idle'
 
   const selectProject = (project: Project) => {
     setActiveProjectId(project.id)
@@ -762,6 +770,7 @@ export default function App() {
         rightSidebarOpen={rightSidebarOpen}
         onToggleRightSidebar={() => setRightSidebarOpen((open) => !open)}
         previewOpen={previewOpen}
+        previewTone={previewTone}
         onOpenPreview={() => {
           setPreviewAutoStart(true)
           setPreviewOpen(true)

@@ -660,6 +660,7 @@ export function ChatView({
   rightSidebarOpen,
   onToggleRightSidebar,
   previewOpen,
+  previewTone,
   onOpenPreview
 }: {
   project: Project | null
@@ -690,6 +691,7 @@ export function ChatView({
   rightSidebarOpen: boolean
   onToggleRightSidebar: () => void
   previewOpen: boolean
+  previewTone: 'idle' | 'ok' | 'starting' | 'error'
   onOpenPreview: () => void
 }) {
   const [draft, setDraft] = useState('')
@@ -853,12 +855,24 @@ export function ChatView({
         <button
           className={`preview-launch${previewOpen ? ' active' : ''}`}
           onClick={onOpenPreview}
-          aria-label="Open live app preview"
+          aria-label={`Open live app preview (${previewTone})`}
           aria-pressed={previewOpen}
-          title="Start the app and show a live, movable preview window"
+          title={
+            previewTone === 'ok'
+              ? 'Preview is running'
+              : previewTone === 'starting'
+                ? 'Preview is starting'
+                : previewTone === 'error'
+                  ? 'Preview failed — open for details'
+                  : 'No preview running'
+          }
         >
           <PreviewIcon />
           <span>Preview</span>
+          <span
+            className={`preview-dot${previewTone === 'idle' ? '' : ` ${previewTone}`}`}
+            aria-hidden="true"
+          />
         </button>
         <button
           className={`icon-btn mobile-only ${rightSidebarOpen ? 'active' : ''}`}
