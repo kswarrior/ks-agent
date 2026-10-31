@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Message, RunStep } from '../types'
 import { formatDuration } from '../format'
 import { absolutePath, argsString, parseToolArgs } from '../toolDisplay'
@@ -320,15 +320,21 @@ export function RunReport({
   onContinue,
   onRecheck,
   onPreview,
-  busy = false
+  busy = false,
+  defaultOpen = true,
+  compact = false,
+  children
 }: {
   report: RunReportData
   onContinue?: () => void
   onRecheck?: (task: string) => void
   onPreview?: (task: string) => void
   busy?: boolean
+  defaultOpen?: boolean
+  compact?: boolean
+  children?: ReactNode
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(defaultOpen)
   const [showAllChanges, setShowAllChanges] = useState(false)
   const visibleChanges = showAllChanges ? report.changes : report.changes.slice(0, 4)
   const showRecheck = report.canRecheck && Boolean(onRecheck)
@@ -338,9 +344,13 @@ export function RunReport({
     setShowAllChanges(false)
   }, [report.id])
 
+  useEffect(() => {
+    setOpen(defaultOpen)
+  }, [report.id, defaultOpen])
+
   return (
     <details
-      className={`run-report${report.status === 'stopped' ? ' stopped' : ''}`}
+      className={`run-report${report.status === 'stopped' ? ' stopped' : ''}${compact ? ' compact' : ''}`}
       open={open}
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
@@ -351,14 +361,21 @@ export function RunReport({
         <span className="run-report-heading">
           <span className="run-report-kicker">Task report</span>
           <span className="run-report-title">
-            {report.status === 'complete' ? 'Completed' : 'Stopped early'}
+            {compact ? report.task : report.status === 'complete' ? 'Completed' : 'Stopped early'}
           </span>
         </span>
+        {compact && (
+          <span className={`run-report-status ${report.status}`}>
+            {report.status === 'complete' ? 'Completed' : 'Stopped'}
+          </span>
+        )}
         <span className="run-report-duration">{formatDuration(report.durationMs)}</span>
         <span className="run-report-chevron" aria-hidden="true">
           <ChevronIcon />
         </span>
       </summary>
+
+      {children && <div className="run-turn-transcript">{children}</div>}
 
       <div className="run-report-body">
         <div className="run-report-row">
