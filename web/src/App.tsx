@@ -109,6 +109,11 @@ export default function App() {
     activeChatIdRef.current = activeChatId
   }, [activeChatId])
 
+  useEffect(() => {
+    setPreviewOpen(false)
+    setPreviewAutoStart(false)
+  }, [activeProjectId])
+
   const refreshProviders = useCallback(async () => setProviders(await api.listProviders()), [])
   const refreshModels = useCallback(async () => setModels(await api.listModels()), [])
   const refreshExtensions = useCallback(async () => setExtensions(await api.listExtensions()), [])
@@ -243,6 +248,20 @@ export default function App() {
             )
           }))
         )
+      }
+
+      if (event.call.name === 'preview_app' && event.result.ok) {
+        let action = 'start'
+        try {
+          const parsed = JSON.parse(event.call.arguments || '{}') as { action?: unknown }
+          if (typeof parsed.action === 'string') action = parsed.action
+        } catch {
+          // default to start
+        }
+        if (action === 'start') {
+          setPreviewAutoStart(false)
+          setPreviewOpen(true)
+        }
       }
 
       const chatId = activeChatIdRef.current
