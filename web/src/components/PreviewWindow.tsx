@@ -252,8 +252,6 @@ export function PreviewWindow({
     setIframeKey((key) => key + 1)
   }
 
-
-
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (maximized) return
     if ((event.target as HTMLElement).closest('button, input, form, .preview-address')) return
@@ -438,7 +436,7 @@ export function PreviewWindow({
           <button
             className="preview-window-btn"
             onClick={() => setIframeKey((key) => key + 1)}
-            disabled={!previewUrl}
+            disabled={!frameUrl}
             title="Reload preview"
             aria-label="Reload preview"
           >
