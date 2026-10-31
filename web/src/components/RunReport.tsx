@@ -89,6 +89,19 @@ function reportActionOverride(messages: Message[]): { recheck?: boolean; preview
   return null
 }
 
+function callIsTaskWork(call: ToolCall): boolean {
+  const name = call.function.name
+  if (READ_ONLY_TOOL_NAMES.has(name)) return false
+  if (name === 'run_shell') {
+    const command = argsString(parseToolArgs(call.function.arguments), 'command')
+    return SHELL_WORK.test(command) || SHELL_DEV_SERVER.test(command)
+  }
+  if (name === 'git_branch') {
+    return argsString(parseToolArgs(call.function.arguments), 'action') !== 'list'
+  }
+  return true
+}
+
 function plainText(value: string): string {
   return value
     .replace(/```[\s\S]*?```/g, ' [code] ')
@@ -200,7 +213,6 @@ function buildRunReportEntry({
         )
       : []
   )
-  if (calls.length === 0) return null
 
   const resultIds = new Set(
     runMessages
@@ -241,11 +253,17 @@ function buildRunReportEntry({
   const startedDevServer = shellCommands.some((command) => SHELL_DEV_SERVER.test(command))
   const hasPreviewableChanges = changes.some((change) => isWebAppPath(change.path))
   const override = reportActionOverride(runMessages)
+  const kind =
+    calls.some(callIsTaskWork) || override?.recheck === true || override?.preview === true
+      ? 'task'
+      : 'chat'
+  const title = kind === 'task' ? task : plainText(taskMessage.content) || doneTask || 'Chat'
 
   return {
     report: {
       id: finalMessage.id,
-      task: clip(task, 200),
+      kind,
+      task: clip(title, 200),
       summary: clip(plainText(finalMessage.content), 240),
       status: stopped ? 'stopped' : 'complete',
       steps: stepCount,
@@ -254,8 +272,11 @@ function buildRunReportEntry({
       durationMs,
       changes,
       canRecheck:
-        override?.recheck ?? (changes.length > 0 || mutatingTool || gitWork || ranShellWork),
-      canPreview: override?.preview ?? (usedPreview || startedDevServer || hasPreviewableChanges)
+        kind === 'task' &&
+        (override?.recheck ?? (changes.length > 0 || mutatingTool || gitWork || ranShellWork)),
+      canPreview:
+        kind === 'task' &&
+        (override?.preview ?? (usedPreview || startedDevServer || hasPreviewableChanges))
     },
     finalMessageId: finalMessage.id,
     userMessageId: taskMessage.id,
@@ -317,6 +338,15 @@ function StopIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
       <path d="M12 7v5" />
       <path d="M12 16.5v.5" />
+    </svg>
+  )
+}
+
+function ChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12a8 8 0 0 1-8 8H7l-4 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z" />
+      <path d="M8 11h.01M12 11h.01M16 11h.01" />
     </svg>
   )
 }
