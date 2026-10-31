@@ -1064,83 +1064,32 @@ export function ChatView({
               </div>
             )}
 
-            {messages.map((message) => {
-              if (message.role === 'user') {
+            {messageGroups.leading.map((message) => renderMessage(message, true))}
+
+            {messageGroups.groups.map((group, index) => {
+              const isLatest = index === messageGroups.groups.length - 1
+              if (!isLatest && group.report) {
                 return (
-                  <div className="msg user" key={message.id}>
-                    <Markdown text={message.content} />
-                  </div>
+                  <RunReport
+                    key={group.user.id}
+                    report={group.report.report}
+                    compact
+                    defaultOpen={false}
+                    onRecheck={recheckRun}
+                    onPreview={previewRun}
+                    busy={streaming || loading || !modelId}
+                  >
+                    {renderMessage(group.user, false)}
+                    {group.messages.map((message) => renderMessage(message, false))}
+                  </RunReport>
                 )
               }
-              if (message.role === 'assistant') {
-                const calls = (message.toolCalls ?? []).filter(
-                  (call) =>
-                    call.function.name !== 'update_plan' &&
-                    call.function.name !== 'set_task_report'
-                )
-                const hiddenOnly =
-                  !message.content &&
-                  calls.length === 0 &&
-                  (message.toolCalls?.length ?? 0) > 0
-                if (hiddenOnly) return null
-                const reportEntry = reportsByFinalMessage.get(message.id)
-                const messageModelId = message.modelId ?? chat?.modelId ?? null
-                const messageModel = messageModelId
-                  ? models.find((entry) => entry.id === messageModelId)
-                  : undefined
-                return (
-                  <Fragment key={message.id}>
-                    <div className="msg assistant">
-                      {message.content && <Markdown text={message.content} />}
-                      {calls.map((call) => {
-                        const result = toolResults.get(call.id)
-                        return (
-                          <ToolCard
-                            key={call.id}
-                            name={call.function.name}
-                            args={call.function.arguments}
-                            output={result?.content}
-                            ok={result ? true : undefined}
-                            running={streaming && !result}
-                            rootPath={project.path}
-                          />
-                        )
-                      })}
-                      {!message.content && calls.length === 0 && <p className="muted">(empty response)</p>}
-                      {message.content && (
-                        <MessageFooter
-                          content={message.content}
-                          model={messageModel}
-                          modelId={messageModelId}
-                          durationMs={message.durationMs}
-                        />
-                      )}
-                    </div>
-                    {reportEntry && (
-                      <RunReport
-                        report={reportEntry.report}
-                        onContinue={reportEntry.isLatest ? continueRun : undefined}
-                        onRecheck={recheckRun}
-                        onPreview={previewRun}
-                        busy={streaming || loading || !modelId}
-                      />
-                    )}
-                  </Fragment>
-                )
-              }
-              if (message.role === 'tool') {
-                const paired = messages.some(
-                  (entry) => entry.role === 'assistant' && entry.toolCalls?.some((call) => call.id === message.toolCallId)
-                )
-                if (paired) return null
-                if (message.toolCallId && hiddenToolCallIds.has(message.toolCallId)) return null
-                return (
-                  <div className="msg assistant" key={message.id}>
-                    <ToolCard name="tool result" args="{}" output={message.content} ok />
-                  </div>
-                )
-              }
-              return null
+              return (
+                <Fragment key={group.user.id}>
+                  {renderMessage(group.user, true)}
+                  {group.messages.map((message) => renderMessage(message, true))}
+                </Fragment>
+              )
             })}
 
             {(streaming || live) && (
