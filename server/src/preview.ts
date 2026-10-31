@@ -730,6 +730,62 @@ export async function startPreview(project: PreviewProject, options: StartOption
   return statusOf(session)
 }
 
+export async function openPreview(project: PreviewProject, port: number): Promise<PreviewStatus> {
+  if (!(await isPortOpen(port))) {
+    throw new ConfigError(
+      `Nothing is listening on port ${port}. Start the server first (for example with run_shell), then open the preview with that port.`
+    )
+  }
+  const existing = sessions.get(project.id)
+  if (existing) {
+    if (existing.port === port && (existing.status === 'running' || existing.status === 'starting')) {
+      return statusOf(existing)
+    }
+    if (existing.status === 'running' || existing.status === 'starting') {
+      throw new ConfigError(
+        `Preview is already using port ${existing.port}. Stop it before opening port ${port}.`
+      )
+    }
+    closeProxy(existing)
+    sessions.delete(project.id)
+  }
+
+  const detection = detectPreview(project.path)
+  const session: PreviewSession = {
+    projectId: project.id,
+    projectPath: project.path,
+    detection,
+    status: 'starting',
+    command: '',
+    port,
+    cwd: detection.cwd,
+    framework: detection.framework,
+    output: `Attached to the server already running on port ${port}.\n`,
+    error: null,
+    owned: false,
+    startedAt: Date.now(),
+    readyAt: null,
+    child: null,
+    proxyServer: null,
+    proxyPort: null,
+    stopping: false
+  }
+  sessions.set(project.id, session)
+
+  try {
+    await attachProxy(session)
+    session.status = 'running'
+    session.readyAt = Date.now()
+    session.error = null
+    return statusOf(session)
+  } catch (error) {
+    session.status = 'error'
+    session.error = `Preview proxy failed: ${error instanceof Error ? error.message : String(error)}`
+    closeProxy(session)
+    return statusOf(session)
+  }
+}
+
 export function stopPreview(project: PreviewProject): PreviewStatus {
   const session = sessions.get(project.id)
   if (!session) return emptyStatus(project, detectPreview(project.path))
