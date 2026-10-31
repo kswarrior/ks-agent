@@ -87,6 +87,7 @@ export default function App() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewAutoStart, setPreviewAutoStart] = useState(false)
+  const [previewFocusSeq, setPreviewFocusSeq] = useState(0)
   const [largeScreen, setLargeScreen] = useState(() => window.innerWidth > 860)
   useEffect(() => {
     const onResize = () => setLargeScreen(window.innerWidth > 860)
@@ -183,6 +184,19 @@ export default function App() {
       setLive((current) => (current ? { ...current, reasoning: current.reasoning + event.text } : current))
     } else if (event.type === 'tool_start') {
       setRetryStatus(null)
+      if (event.call.name === 'preview_app') {
+        let action = 'start'
+        try {
+          const parsed = JSON.parse(event.call.arguments || '{}') as { action?: unknown }
+          if (typeof parsed.action === 'string') action = parsed.action
+        } catch {
+          // default to start
+        }
+        if (action === 'start') {
+          setPreviewAutoStart(false)
+          setPreviewOpen(true)
+        }
+      }
       if (event.call.name !== 'update_plan') {
         setLive((current) =>
           current
@@ -717,6 +731,7 @@ export default function App() {
         onOpenPreview={() => {
           setPreviewAutoStart(true)
           setPreviewOpen(true)
+          setPreviewFocusSeq((seq) => seq + 1)
         }}
       />
 
@@ -736,6 +751,7 @@ export default function App() {
           modelId={modelId}
           streaming={streaming}
           autoStart={previewAutoStart}
+          focusSeq={previewFocusSeq}
           onClose={() => {
             setPreviewOpen(false)
             setPreviewAutoStart(false)

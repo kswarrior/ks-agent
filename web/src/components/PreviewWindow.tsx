@@ -78,6 +78,7 @@ export function PreviewWindow({
   modelId,
   streaming,
   autoStart,
+  focusSeq,
   onClose,
   onSend
 }: {
@@ -86,6 +87,7 @@ export function PreviewWindow({
   modelId: string
   streaming: boolean
   autoStart: boolean
+  focusSeq: number
   onClose: () => void
   onSend: (content: string) => void
 }) {
@@ -158,6 +160,10 @@ export function PreviewWindow({
     }
     wasStreaming.current = streaming
   }, [streaming, status?.status])
+
+  useEffect(() => {
+    if (focusSeq > 0) setMinimized(false)
+  }, [focusSeq])
 
   const start = useCallback(
     async (override?: { command?: string; port?: number }) => {
@@ -341,7 +347,10 @@ export function PreviewWindow({
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        onDoubleClick={() => setMaximized((value) => !value)}
+        onDoubleClick={(event) => {
+          if ((event.target as HTMLElement).closest('button')) return
+          setMaximized((value) => !value)
+        }}
       >
         <div className="preview-title">
           <span className={`preview-dot ${tone}`} aria-hidden="true" />
