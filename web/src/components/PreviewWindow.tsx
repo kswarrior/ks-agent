@@ -145,7 +145,13 @@ export function PreviewWindow({
     if (!status) return
     if (!commandTouched.current) setCommand(status.detected.command)
     if (!portTouched.current) setPort(String(status.detected.port))
-    if (!addressTouched.current && status.port) setAddress(`localhost:${status.port}`)
+    if (
+      !addressTouched.current &&
+      status.port &&
+      (status.status === 'running' || status.status === 'starting')
+    ) {
+      setAddress(`localhost:${status.port}`)
+    }
   }, [status])
 
   useEffect(() => {
