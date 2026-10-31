@@ -297,6 +297,7 @@ export interface PreviewStatus {
   cwd: string
   framework: string
   proxyPort: number | null
+  proxyPath: string | null
   url: string | null
   output: string
   error: string | null

@@ -1714,8 +1714,15 @@ if (fs.existsSync(config.distDir)) {
 
 void mcp.ready()
 
-const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
-  console.log(`[ks-agent] http://localhost:${info.port}`)
+const requestListener = getRequestListener(app.fetch)
+const server = createServer((req, res) => {
+  if (previewProxyRequest(req, res)) return
+  void requestListener(req, res)
+})
+server.listen(config.port, () => {
+  const address = server.address()
+  const port = address && typeof address === 'object' ? address.port : config.port
+  console.log(`[ks-agent] http://localhost:${port}`)
   console.log(`[ks-agent] projects: ${config.projectsDir}`)
   console.log(
     `[ks-agent] extensions: ${extensions.list().map((extension) => extension.name).join(', ') || '(none)'}`
@@ -1730,8 +1737,9 @@ function clampDimension(value: string | null, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 && parsed <= 500 ? parsed : fallback
 }
 
-;(server as unknown as import('node:http').Server).on('upgrade', (req, socket, head) => {
+server.on('upgrade', (req, socket, head) => {
   try {
+    if (previewProxyUpgrade(req, socket, head)) return
     const host = req.headers.host ?? `localhost:${config.port}`
     const url = new URL(req.url ?? '', `http://${host}`)
     const match = url.pathname.match(/^\/api\/projects\/([^/]+)\/terminal$/)

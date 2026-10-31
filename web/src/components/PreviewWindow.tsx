@@ -69,6 +69,12 @@ function previewHostUrl(proxyPort: number): string {
   return `${protocol}//${host}:${proxyPort}/`
 }
 
+function previewUrl(status: PreviewStatus): string | null {
+  if (status.proxyPath) return new URL(status.proxyPath, window.location.origin).toString()
+  if (status.proxyPort) return previewHostUrl(status.proxyPort)
+  return null
+}
+
 const DEFAULT_PREVIEW_URL = 'http://localhost:5173/'
 
 function errorMessage(error: unknown): string {
@@ -151,7 +157,11 @@ export function PreviewWindow({
       status.port &&
       (status.status === 'running' || status.status === 'starting')
     ) {
-      setAddress(`localhost:${status.port}`)
+      if (status.status === 'running' && status.proxyPath) {
+        setAddress(new URL(status.proxyPath, window.location.origin).toString())
+      } else {
+        setAddress(`localhost:${status.port}`)
+      }
     }
   }, [status])
 
@@ -323,9 +333,9 @@ export function PreviewWindow({
     }
   }
 
-  const previewUrl = status?.proxyPort ? previewHostUrl(status.proxyPort) : null
-  const externalUrl = previewUrl || status?.url || null
-  const frameUrl = customUrl ?? (status?.status === 'running' ? previewUrl : DEFAULT_PREVIEW_URL)
+  const liveUrl = status ? previewUrl(status) : null
+  const externalUrl = liveUrl || status?.url || null
+  const frameUrl = customUrl ?? (status?.status === 'running' ? liveUrl : DEFAULT_PREVIEW_URL)
   const openExternal = () => {
     const target = customUrl ?? externalUrl
     if (target) window.open(target, '_blank', 'noopener,noreferrer')
