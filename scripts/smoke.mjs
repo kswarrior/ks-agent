@@ -912,6 +912,59 @@ async function main() {
   assert(otherProject.id && otherProject.id !== project.id, 'second project was not created')
   console.log('PASS project create + path/shell guards')
 
+  const previewProject = await api('POST', '/api/projects', { name: 'preview' })
+  const previewFrontend = path.join(previewProject.path, 'frontend')
+  fs.mkdirSync(previewFrontend, { recursive: true })
+  fs.writeFileSync(
+    path.join(previewFrontend, 'package.json'),
+    JSON.stringify({ scripts: { dev: 'vite' }, devDependencies: { vite: '^5.0.0' } })
+  )
+  const detection = await api('GET', `/api/projects/${previewProject.id}/preview`)
+  assert(detection.detected.framework === 'Vite', `preview detection missed Vite: ${JSON.stringify(detection)}`)
+  assert(detection.detected.cwd === 'frontend', `preview detection missed frontend/: ${JSON.stringify(detection)}`)
+  assert(detection.detected.port === 5173, `preview detection missed the Vite port: ${JSON.stringify(detection)}`)
+  assert(
+    detection.detected.command.includes('npm run dev'),
+    `preview detection missed the dev script: ${JSON.stringify(detection)}`
+  )
+  console.log('PASS preview detection (Vite in frontend/)')
+
+  const previewPort = await freePort()
+  fs.writeFileSync(
+    path.join(previewFrontend, 'preview-server.mjs'),
+    `import http from 'node:http'
+http.createServer((req, res) => {
+  res.writeHead(200, { 'content-type': 'text/html' })
+  res.end('<h1>preview-ok</h1>')
+}).listen(Number(process.env.PORT), '127.0.0.1')
+`
+  )
+  const previewStarted = await api('POST', `/api/projects/${previewProject.id}/preview/start`, {
+    command: 'node preview-server.mjs',
+    port: previewPort
+  })
+  assert(
+    previewStarted.status === 'starting' || previewStarted.status === 'running',
+    `preview did not start: ${JSON.stringify(previewStarted)}`
+  )
+  let previewState = previewStarted
+  for (let i = 0; i < 100 && previewState.status === 'starting'; i += 1) {
+    await sleep(100)
+    previewState = await api('GET', `/api/projects/${previewProject.id}/preview`)
+  }
+  assert(previewState.status === 'running', `preview never became ready: ${JSON.stringify(previewState)}`)
+  assert(previewState.proxyPort, `preview did not open a proxy port: ${JSON.stringify(previewState)}`)
+  const previewBody = await (await fetch(`http://127.0.0.1:${previewState.proxyPort}/`)).text()
+  assert(previewBody.includes('preview-ok'), `preview proxy returned the wrong body: ${previewBody}`)
+  const previewStopped = await api('POST', `/api/projects/${previewProject.id}/preview/stop`)
+  assert(previewStopped.status === 'stopped', `preview did not stop: ${JSON.stringify(previewStopped)}`)
+  assert(previewStopped.proxyPort === null, `preview proxy port was not closed: ${JSON.stringify(previewStopped)}`)
+  await assertRejects(
+    fetch(`http://127.0.0.1:${previewState.proxyPort}/`),
+    'preview proxy still answered after stop'
+  )
+  console.log('PASS preview start + proxy + stop')
+
   process.env.KS_DATA_DIR = path.join(temp, 'tool-data')
   process.env.KS_PROJECTS_DIR = path.join(temp, 'tool-projects')
   process.env.KS_EXTENSIONS_DIR = path.join(temp, 'tool-extensions')
