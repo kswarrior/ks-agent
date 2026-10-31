@@ -713,6 +713,11 @@ export default function App() {
         onEditChat={setEditChatTarget}
         rightSidebarOpen={rightSidebarOpen}
         onToggleRightSidebar={() => setRightSidebarOpen((open) => !open)}
+        previewOpen={previewOpen}
+        onOpenPreview={() => {
+          setPreviewAutoStart(true)
+          setPreviewOpen(true)
+        }}
       />
 
       {(rightSidebarOpen || largeScreen) && activeProject && (
@@ -720,6 +725,22 @@ export default function App() {
           project={activeProject}
           onClose={() => setRightSidebarOpen(false)}
           onRestored={() => void refreshProjectChats(activeProject.id)}
+        />
+      )}
+
+      {previewOpen && activeProject && (
+        <PreviewWindow
+          key={activeProject.id}
+          project={activeProject}
+          chatId={activeChatId}
+          modelId={modelId}
+          streaming={streaming}
+          autoStart={previewAutoStart}
+          onClose={() => {
+            setPreviewOpen(false)
+            setPreviewAutoStart(false)
+          }}
+          onSend={send}
         />
       )}
 
