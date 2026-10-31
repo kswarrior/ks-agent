@@ -478,3 +478,8 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   logs, start/stop/detach and an in-window prompt bar that sends to the active
   chat while the preview updates live. Opening an already-running port attaches
   instead of spawning a duplicate server.
+- 2026-10-31: Task reports now show Recheck and Open preview only when they
+  make sense. The agent can set both explicitly with the new `set_task_report`
+  tool; otherwise the UI infers them from the run (file changes, verification
+  commands, preview tools and web-app files). Greetings and read-only answers
+  no longer offer either action.
