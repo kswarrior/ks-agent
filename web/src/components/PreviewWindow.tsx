@@ -325,8 +325,7 @@ export function PreviewWindow({
 
   const previewUrl = status?.proxyPort ? previewHostUrl(status.proxyPort) : null
   const externalUrl = previewUrl || status?.url || null
-  const frameUrl =
-    customUrl ?? (status?.status === 'running' ? previewUrl : addressUrl(address))
+  const frameUrl = customUrl ?? (status?.status === 'running' ? previewUrl : DEFAULT_PREVIEW_URL)
   const openExternal = () => {
     const target = customUrl ?? externalUrl
     if (target) window.open(target, '_blank', 'noopener,noreferrer')
