@@ -972,6 +972,27 @@ http.createServer((req, res) => {
   process.env.KS_PROJECTS_DIR = path.join(temp, 'tool-projects')
   process.env.KS_EXTENSIONS_DIR = path.join(temp, 'tool-extensions')
   const { executeBuiltinTool } = await import('../dist-server/tools.js')
+  const previewToolPort = await freePort()
+  const previewToolStart = await executeBuiltinTool(
+    'preview_app',
+    { action: 'start', command: 'node preview-server.mjs', port: previewToolPort },
+    { projectPath: previewProject.path, projectId: previewProject.id }
+  )
+  assert(previewToolStart.ok, `preview_app start failed: ${previewToolStart.output}`)
+  assert(previewToolStart.output.includes('running'), `preview_app start was not ready: ${previewToolStart.output}`)
+  const previewToolStatus = await executeBuiltinTool(
+    'preview_app',
+    { action: 'status' },
+    { projectPath: previewProject.path, projectId: previewProject.id }
+  )
+  assert(previewToolStatus.ok && previewToolStatus.output.includes('running'), `preview_app status failed: ${previewToolStatus.output}`)
+  const previewToolStop = await executeBuiltinTool(
+    'preview_app',
+    { action: 'stop' },
+    { projectPath: previewProject.path, projectId: previewProject.id }
+  )
+  assert(previewToolStop.ok && previewToolStop.output.includes('stopped'), `preview_app stop failed: ${previewToolStop.output}`)
+  console.log('PASS preview_app tool start/status/stop')
   const callTool = (name, args) => executeBuiltinTool(name, args, { projectPath: project.path })
   const okTool = async (name, args) => {
     const result = await callTool(name, args)
