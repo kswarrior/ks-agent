@@ -166,6 +166,7 @@ export function PreviewWindow({
   useEffect(() => {
     if (focusSeq > 0) {
       setMinimized(false)
+      setTab('web')
       autoStarted.current = false
     }
   }, [focusSeq])
