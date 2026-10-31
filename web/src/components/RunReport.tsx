@@ -309,6 +309,8 @@ export function RunReport({
   const [open, setOpen] = useState(true)
   const [showAllChanges, setShowAllChanges] = useState(false)
   const visibleChanges = showAllChanges ? report.changes : report.changes.slice(0, 4)
+  const showRecheck = report.canRecheck && Boolean(onRecheck)
+  const showPreview = report.canPreview && Boolean(onPreview)
 
   useEffect(() => {
     setShowAllChanges(false)
@@ -389,9 +391,9 @@ export function RunReport({
           </span>
         </div>
 
-        {(onRecheck || onPreview) && (
+        {(showRecheck || showPreview) && (
           <div className="run-report-actions">
-            {onRecheck && (
+            {showRecheck && onRecheck && (
               <button
                 type="button"
                 className="btn small"
@@ -402,7 +404,7 @@ export function RunReport({
                 Recheck
               </button>
             )}
-            {onPreview && (
+            {showPreview && onPreview && (
               <button
                 type="button"
                 className="btn small primary"
