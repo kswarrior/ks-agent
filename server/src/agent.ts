@@ -228,8 +228,16 @@ function chatExtensionsStatus(project: Project, disabled: DisabledExtensions): T
   return { ok: true, output: lines.join('\n') }
 }
 
+function stripAnsi(text: string): string {
+  return text
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, '')
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\u001b[@-_]/g, '')
+}
+
 function messageToLLM(message: Message): LLMMessage {
-  const out: LLMMessage = { role: message.role, content: message.content }
+  const content = message.role === 'tool' ? stripAnsi(message.content) : message.content
+  const out: LLMMessage = { role: message.role, content }
   if (message.role === 'assistant' && message.toolCalls?.length) out.tool_calls = message.toolCalls
   if (message.role === 'tool' && message.toolCallId) out.tool_call_id = message.toolCallId
   return out
