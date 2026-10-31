@@ -959,10 +959,13 @@ http.createServer((req, res) => {
   const previewStopped = await api('POST', `/api/projects/${previewProject.id}/preview/stop`)
   assert(previewStopped.status === 'stopped', `preview did not stop: ${JSON.stringify(previewStopped)}`)
   assert(previewStopped.proxyPort === null, `preview proxy port was not closed: ${JSON.stringify(previewStopped)}`)
-  await assertRejects(
-    fetch(`http://127.0.0.1:${previewState.proxyPort}/`),
-    'preview proxy still answered after stop'
-  )
+  let proxyClosed = false
+  try {
+    await fetch(`http://127.0.0.1:${previewState.proxyPort}/`)
+  } catch {
+    proxyClosed = true
+  }
+  assert(proxyClosed, 'preview proxy still answered after stop')
   console.log('PASS preview start + proxy + stop')
 
   process.env.KS_DATA_DIR = path.join(temp, 'tool-data')
