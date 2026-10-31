@@ -20,6 +20,8 @@ export interface RunReportData {
   files: number
   durationMs: number
   changes: RunReportChange[]
+  canRecheck: boolean
+  canPreview: boolean
 }
 
 const CHANGE_ACTIONS: Record<string, ChangeAction> = {
@@ -31,6 +33,28 @@ const CHANGE_ACTIONS: Record<string, ChangeAction> = {
   edit_file: 'Edited',
   delete_file: 'Deleted',
   move_file: 'Moved'
+}
+
+const MUTATING_TOOL_NAMES = new Set(Object.keys(CHANGE_ACTIONS))
+const GIT_WORK_TOOL_NAMES = new Set(['git_init', 'git_commit', 'git_push', 'git_pull', 'git_branch'])
+const PREVIEW_TOOL_NAMES = new Set(['preview_app', 'open_preview'])
+
+const SHELL_WORK = /\b(?:build|test|tests|typecheck|lint|compile|install|vitest|jest|pytest|tsc|vite|next|nuxt|astro|cargo|mvn|gradle|make|dotnet)\b/i
+const SHELL_DEV_SERVER =
+  /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|preview)\b|\b(?:vite|next\s+dev|nuxt\s+dev|astro\s+dev|ng\s+serve|serve|http\.server|flask\s+run|uvicorn|gunicorn|rails\s+(?:s|server)|php\s+-S|dotnet\s+run)\b/i
+
+const WEB_CONFIG_FILE =
+  /(?:^|\/)(?:index\.html?|(?:vite|next|nuxt|svelte|astro|remix|angular|webpack|rollup|parcel|tailwind|postcss)\.config\.[cm]?[jt]s|angular\.json)$/i
+const WEB_SOURCE_FILE = /\.(?:tsx|jsx|vue|svelte|html?|css|scss|sass|less)$/i
+const WEB_PUBLIC_DIR = /(?:^|\/)(?:public|static)\//i
+
+function isWebAppPath(file: string): boolean {
+  const normalized = file.replace(/\\/g, '/')
+  return (
+    WEB_CONFIG_FILE.test(normalized) ||
+    WEB_SOURCE_FILE.test(normalized) ||
+    WEB_PUBLIC_DIR.test(normalized)
+  )
 }
 
 function plainText(value: string): string {
@@ -173,6 +197,16 @@ function buildRunReportEntry({
   const doneTask = firstMeaningfulSentence(finalMessage.content)
   const task = planTitle || doneTask || plainText(taskMessage.content)
 
+  const mutatingTool = calls.some((call) => MUTATING_TOOL_NAMES.has(call.function.name))
+  const gitWork = calls.some((call) => GIT_WORK_TOOL_NAMES.has(call.function.name))
+  const usedPreview = calls.some((call) => PREVIEW_TOOL_NAMES.has(call.function.name))
+  const shellCommands = calls
+    .filter((call) => call.function.name === 'run_shell')
+    .map((call) => argsString(parseToolArgs(call.function.arguments), 'command'))
+  const ranShellWork = shellCommands.some((command) => SHELL_WORK.test(command))
+  const startedDevServer = shellCommands.some((command) => SHELL_DEV_SERVER.test(command))
+  const hasPreviewableChanges = changes.some((change) => isWebAppPath(change.path))
+
   return {
     report: {
       id: finalMessage.id,
@@ -183,7 +217,9 @@ function buildRunReportEntry({
       tools: calls.length,
       files: changes.length,
       durationMs,
-      changes
+      changes,
+      canRecheck: changes.length > 0 || mutatingTool || gitWork || ranShellWork,
+      canPreview: usedPreview || startedDevServer || hasPreviewableChanges
     },
     finalMessageId: finalMessage.id,
     userMessageId: taskMessage.id,
