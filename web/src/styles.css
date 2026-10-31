@@ -5387,6 +5387,13 @@ code {
   letter-spacing: 0.02em;
 }
 
+.run-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+}
+
 .run-report-continue {
   display: flex;
   align-items: center;

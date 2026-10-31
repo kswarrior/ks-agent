@@ -35,6 +35,14 @@ const MESSAGE_OVERHEAD_CHARS = 16
 const CONTINUE_PROMPT =
   'Continue the previous task from where you left off. Do not repeat work that is already complete; finish the remaining steps and verify the result.'
 
+function recheckPrompt(task: string): string {
+  return `Recheck this completed task: ${task}\n\nInspect the current project, run the relevant typecheck/build/tests, and verify the feature or app still works. Fix any issues you find, then report what you checked and the result. Do not redo work that is already complete.`
+}
+
+function previewPrompt(task: string): string {
+  return `Open the live preview for the web app from this task: ${task}\n\nUse the preview_app or open_preview tool with the port the app runs on. If the dev server is not running, start it first, then make sure the preview window is open. If this task was not a web app, say so instead of starting a server.`
+}
+
 function formatTokens(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M`
   if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1)}k`
@@ -804,6 +812,16 @@ export function ChatView({
     send(CONTINUE_PROMPT)
   }
 
+  const recheckRun = (task: string) => {
+    if (loading) return
+    send(recheckPrompt(task))
+  }
+
+  const previewRun = (task: string) => {
+    if (loading) return
+    send(previewPrompt(task))
+  }
+
   const latestReport = runReports.find((entry) => entry.isLatest)
   const stopped = latestReport?.report.status === 'stopped'
 
@@ -996,6 +1014,9 @@ export function ChatView({
                       <RunReport
                         report={reportEntry.report}
                         onContinue={reportEntry.isLatest ? continueRun : undefined}
+                        onRecheck={recheckRun}
+                        onPreview={previewRun}
+                        busy={streaming || loading || !modelId}
                       />
                     )}
                   </Fragment>

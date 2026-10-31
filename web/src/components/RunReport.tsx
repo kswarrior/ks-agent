@@ -257,7 +257,19 @@ function ChevronIcon() {
   )
 }
 
-export function RunReport({ report, onContinue }: { report: RunReportData; onContinue?: () => void }) {
+export function RunReport({
+  report,
+  onContinue,
+  onRecheck,
+  onPreview,
+  busy = false
+}: {
+  report: RunReportData
+  onContinue?: () => void
+  onRecheck?: (task: string) => void
+  onPreview?: (task: string) => void
+  busy?: boolean
+}) {
   const [open, setOpen] = useState(true)
   const [showAllChanges, setShowAllChanges] = useState(false)
   const visibleChanges = showAllChanges ? report.changes : report.changes.slice(0, 4)
@@ -340,6 +352,33 @@ export function RunReport({ report, onContinue }: { report: RunReportData; onCon
             Local · no extra tokens
           </span>
         </div>
+
+        {(onRecheck || onPreview) && (
+          <div className="run-report-actions">
+            {onRecheck && (
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => onRecheck(report.task)}
+                disabled={busy}
+                title="Ask the agent to verify this task again"
+              >
+                Recheck
+              </button>
+            )}
+            {onPreview && (
+              <button
+                type="button"
+                className="btn small primary"
+                onClick={() => onPreview(report.task)}
+                disabled={busy}
+                title="Ask the agent to open the web app preview on its port"
+              >
+                Open preview
+              </button>
+            )}
+          </div>
+        )}
 
         {report.status === 'stopped' && onContinue && (
           <div className="run-report-continue">
