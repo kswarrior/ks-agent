@@ -467,3 +467,14 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   Smoke covers provider/model/chat edits, skill folder + flat-file renames and
   conflicts, MCP foreground/background installs and install-command edits, LSP
   edits, and background knowledge jobs.
+- 2026-10-31: Added a live web-app preview window. The new `preview_app` tool
+  and `GET/POST /api/projects/:id/preview[...]` routes auto-detect
+  npm/pnpm/yarn/bun dev scripts, frameworks (Vite, Next, Astro, Nuxt,
+  SvelteKit, Angular, CRA, Vue CLI, Express, Django, static Python) and
+  subfolders such as `frontend/`, start the dev server, wait for the port and
+  serve it through an ephemeral same-host reverse proxy for HTTP and HMR
+  WebSockets (frame-blocking headers are stripped). The UI adds a Preview
+  button and a movable/resizable window with minimize, maximize, close, live
+  logs, start/stop/detach and an in-window prompt bar that sends to the active
+  chat while the preview updates live. Opening an already-running port attaches
+  instead of spawning a duplicate server.

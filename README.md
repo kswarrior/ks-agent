@@ -45,6 +45,8 @@ KS_MCP_CONFIG=/data/mcp.json     # MCP config path
 KS_LSP_CONFIG=/data/lsp.json     # LSP config path
 KS_MAX_STEPS=30
 KS_SHELL_TIMEOUT_MS=120000
+KS_PREVIEW_BIND=0.0.0.0        # preview proxy bind address
+KS_PREVIEW_TIMEOUT_MS=120000   # wait for the dev server port before failing
 ```
 
 ## Optional Docker Jail (`KS_DOCKER_JAIL`)
@@ -82,6 +84,7 @@ docker run --rm --network none --memory=512m --cpus=1 -v <projectPath>:/workspac
 - Provider presets (OpenAI, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Moonshot, NVIDIA NIM, Ollama, LM Studio) + custom
 - Auto-titled chats, per-message model/duration footer, run reports attached to their own output
 - Chat header context meter (estimated used/window tokens) colored green, yellow or red by usage
+- Live web-app preview: a movable, resizable window with minimize/maximize/close, live logs and an in-window prompt bar. The Preview button auto-detects the dev command/port and starts the app; the AI can also start/stop it with the `preview_app` tool, and HTTP + HMR WebSocket traffic is proxied through an ephemeral same-host port so it works on phones too
 - Automatic context compaction: near the model window, older messages become an editable handoff summary and are no longer sent to the provider
 
 ## Agent config (`.ks-agent/`)
