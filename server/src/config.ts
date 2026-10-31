@@ -28,7 +28,9 @@ export const config = {
   providerRetries: Math.max(0, Number(process.env.KS_PROVIDER_RETRIES || 2)),
   providerRetryDelayMs: Math.max(100, Number(process.env.KS_PROVIDER_RETRY_DELAY_MS || 1000)),
   dockerJail: process.env.KS_DOCKER_JAIL === '1',
-  dockerImage: process.env.KS_DOCKER_IMAGE || 'node:20-alpine'
+  dockerImage: process.env.KS_DOCKER_IMAGE || 'node:20-alpine',
+  previewBind: process.env.KS_PREVIEW_BIND || '0.0.0.0',
+  previewTimeoutMs: Math.max(5000, Number(process.env.KS_PREVIEW_TIMEOUT_MS || 120_000))
 }
 
 for (const dir of [config.agentDir, config.dataDir, config.projectsDir, config.extensionsDir]) {

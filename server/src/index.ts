@@ -63,6 +63,7 @@ import { cleanRelative, isProbablyBinary, relWithin, resolveInProject, validSegm
 import { knowledge } from './knowledge.js'
 import { lsp } from './lsp.js'
 import { mcp } from './mcp.js'
+import { getPreview, startPreview, stopAllPreviews, stopPreview } from './preview.js'
 import {
   DEFAULT_RETRY_SETTINGS,
   getRetrySettings,
