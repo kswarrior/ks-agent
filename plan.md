@@ -483,3 +483,7 @@ opt-in Minecraft/Android example scaffolds, and static UI serving.
   tool; otherwise the UI infers them from the run (file changes, verification
   commands, preview tools and web-app files). Greetings and read-only answers
   no longer offer either action.
+- 2026-10-31: Older turns now collapse into their task report card once a new
+  prompt is sent. The compact card shows the task title, status and duration;
+  expanding it restores the original user prompt, assistant output, tool cards
+  and the full report details. The newest turn stays expanded.
