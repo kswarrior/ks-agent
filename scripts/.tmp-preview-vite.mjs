@@ -57,7 +57,10 @@ try {
   }
   const project = await api('POST', '/api/projects', { name: 'vite-preview' })
   fs.symlinkSync(path.join(repo, 'node_modules'), path.join(project.path, 'node_modules'), 'dir')
-  fs.writeFileSync(path.join(project.path, 'package.json'), JSON.stringify({ scripts: { dev: 'vite' } }))
+  fs.writeFileSync(
+    path.join(project.path, 'package.json'),
+    JSON.stringify({ scripts: { dev: 'vite' }, devDependencies: { vite: '^5.0.0' } })
+  )
   fs.writeFileSync(
     path.join(project.path, 'index.html'),
     '<!doctype html><html><head></head><body><div id="app"></div><script type="module" src="/main.js"></script></body></html>'
