@@ -167,7 +167,6 @@ export function ChatExtensionsMenu({
           <circle cx="15" cy="12" r="2" fill="var(--bg-elev)" />
           <circle cx="8" cy="18" r="2" fill="var(--bg-elev)" />
         </svg>
-        <span>Tools</span>
         <span
           className={`chat-tools-count ${unavailableCount ? 'warn' : ''}`}
           title={
