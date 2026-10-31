@@ -26,6 +26,7 @@ import {
 import {
   describePreview,
   getPreview,
+  openPreview,
   startPreview,
   stopPreview,
   waitForPreview
@@ -349,6 +350,24 @@ export const builtinToolDefs: ToolDef[] = [
           }
         },
         required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'open_preview',
+      description:
+        'Open the live preview window for a web server that is already running on a port (for example a dev server you started with run_shell). This attaches to the existing process and sends the port to the preview UI; it does not start a new process. Use preview_app when you need the agent to start the dev server itself.',
+      parameters: {
+        type: 'object',
+        properties: {
+          port: {
+            type: 'integer',
+            description: 'Port the server is listening on (1024-65535)'
+          }
+        },
+        required: ['port']
       }
     }
   },
@@ -1254,6 +1273,20 @@ async function previewAppTool(args: Record<string, unknown>, ctx: ToolContext): 
   }
 }
 
+async function openPreviewTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  if (!ctx.projectId) return fail('open_preview is only available inside a project')
+  const rawPort = args.port
+  if (rawPort === undefined || rawPort === null || rawPort === '') return fail('port is required')
+  const port = int(args, 'port', 0, 1024, 65535)
+  try {
+    const status = await openPreview({ id: ctx.projectId, path: ctx.projectPath }, port)
+    const output = describePreview(status, true)
+    return status.status === 'error' ? fail(output) : { ok: true, output }
+  } catch (error) {
+    return fail(`open_preview failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>> = {
   read_file: readFileTool,
   read_multiple_files: readMultipleFilesTool,
@@ -1273,6 +1306,7 @@ const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext)
   append_file: appendFileTool,
   run_shell: runShellTool,
   preview_app: previewAppTool,
+  open_preview: openPreviewTool,
   update_plan: updatePlanTool,
   git_init: gitInitTool,
   git_status: gitStatusTool,

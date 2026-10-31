@@ -19,6 +19,7 @@ const TOOL_META: Record<string, ToolMeta> = {
   move_file: { action: 'Move', running: 'Moving' },
   run_shell: { action: 'Run', running: 'Running' },
   preview_app: { action: 'Preview', running: 'Starting preview' },
+  open_preview: { action: 'Open preview', running: 'Opening preview' },
   update_plan: { action: 'Plan', running: 'Planning' },
   use_skill: { action: 'Skill', running: 'Loading skill' },
   git_init: { action: 'Git init', running: 'Initializing' },
@@ -103,6 +104,10 @@ export function describeTool(
         primary: action === 'stop' ? 'Stop preview' : action === 'status' ? 'Preview status' : 'Start preview',
         detail: [port ? `port ${port}` : '', argsString(args, 'cwd')].filter(Boolean).join(' · ')
       }
+    }
+    case 'open_preview': {
+      const port = args.port === undefined ? '' : String(args.port)
+      return { primary: 'Open preview', detail: port ? `port ${port}` : '' }
     }
     case 'grep':
     case 'glob':
