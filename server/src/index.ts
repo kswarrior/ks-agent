@@ -564,11 +564,38 @@ app.delete('/api/projects/:id/terminal/:terminalId', (c) => {
   return c.json({ ok: true })
 })
 
+app.get('/api/projects/:id/preview', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  return c.json(getPreview(project))
+})
+
+app.post('/api/projects/:id/preview/start', async (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const command = typeof body?.command === 'string' ? body.command : undefined
+  const cwd = typeof body?.cwd === 'string' ? body.cwd : undefined
+  const port = body?.port === undefined ? undefined : Number(body.port)
+  try {
+    return c.json(await startPreview(project, { command, cwd, port }), 202)
+  } catch (error) {
+    return routeError(c, error)
+  }
+})
+
+app.post('/api/projects/:id/preview/stop', (c) => {
+  const project = getProject(c.req.param('id'))
+  if (!project) return c.json(errorJson('project not found', 404), 404)
+  return c.json(stopPreview(project))
+})
+
 app.delete('/api/projects/:id', (c) => {
   const project = getProject(c.req.param('id'))
   if (!project) return c.json(errorJson('project not found', 404), 404)
   const deleteFolder = c.req.query('deleteFolder') === 'true'
   killProjectTerminals(project.id)
+  stopPreview(project)
   removeProject(project.id)
   if (
     deleteFolder &&
@@ -1792,6 +1819,7 @@ async function shutdown(signal: string): Promise<void> {
     if (!run.done) run.controller.abort()
   }
   for (const sessionKey of [...terminalSessions.keys()]) killTerminal(sessionKey)
+  stopAllPreviews()
   wss.close()
   mcp.stopAll()
   lsp.stopAll()

@@ -23,9 +23,17 @@ import {
   gitPush,
   gitStatus
 } from './git.js'
+import {
+  describePreview,
+  getPreview,
+  startPreview,
+  stopPreview,
+  waitForPreview
+} from './preview.js'
 import type { AgentEvent, ToolDef, ToolResult } from './types.js'
 
 export interface ToolContext {
+  projectId?: string
   projectPath: string
   signal?: AbortSignal
   emit?: (event: AgentEvent) => void
@@ -310,6 +318,37 @@ export const builtinToolDefs: ToolDef[] = [
           timeout_ms: { type: 'integer', description: 'Timeout in milliseconds (default 120000, max 1800000)' }
         },
         required: ['command']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'preview_app',
+      description:
+        'Start, stop or inspect the project web app in the live preview window. Start runs the dev server inside the project (auto-detects npm/pnpm/yarn/bun scripts, framework, port and subfolders such as frontend/) and opens a floating preview in the UI. Prefer this over run_shell for starting web apps so the user can see and interact with the result. Omit command/port to auto-detect, or pass them to override. Use status to read the URL and recent logs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['start', 'stop', 'status'],
+            description: 'Action to perform (default "start")'
+          },
+          command: {
+            type: 'string',
+            description: 'Optional shell command to start the app, for example "npm run dev"'
+          },
+          port: {
+            type: 'integer',
+            description: 'Optional port between 1024 and 65535; defaults to the detected port'
+          },
+          cwd: {
+            type: 'string',
+            description: 'Optional folder inside the project to run the command in'
+          }
+        },
+        required: ['action']
       }
     }
   },
