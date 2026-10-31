@@ -25,6 +25,7 @@ import { Markdown } from './Markdown'
 import { MessageFooter } from './MessageFooter'
 import { ModelSelect } from './ModelSelect'
 import { StepMenu } from './StepMenu'
+import { TerminalOutput } from './TerminalOutput'
 import { buildRunReports, RunReport } from './RunReport'
 
 const DEFAULT_CONTEXT_WINDOW = 128_000
@@ -199,6 +200,7 @@ function ToolCard({
   const skillOutput = name === 'use_skill' ? parseSkillOutput(output) : null
   const editStartLine = changedLine(output)
   const addedLines = content ? splitLines(content).length : 0
+  const [outputView, setOutputView] = useState<'terminal' | 'markdown'>('terminal')
 
   return (
     <details className={`tool-card ${running ? 'running' : ok === false ? 'failed' : 'done'}`}>
@@ -307,8 +309,34 @@ function ToolCard({
             <div className={`tool-note ${ok === false ? 'error' : 'ok'}`}>{output || '(empty)'}</div>
           ) : (
             <>
-              <div className="tool-label">output</div>
-              <pre className={`tool-output ${ok === false ? 'error' : ''}`}>{output || '(empty)'}</pre>
+              <div className="tool-output-head">
+                <span className="tool-label">output</span>
+                <span className="tool-view-toggle" role="group" aria-label="Output view">
+                  <button
+                    type="button"
+                    className={outputView === 'terminal' ? 'active' : ''}
+                    onClick={() => setOutputView('terminal')}
+                    title="Terminal view with ANSI colours"
+                  >
+                    Terminal
+                  </button>
+                  <button
+                    type="button"
+                    className={outputView === 'markdown' ? 'active' : ''}
+                    onClick={() => setOutputView('markdown')}
+                    title="Markdown view"
+                  >
+                    Markdown
+                  </button>
+                </span>
+              </div>
+              {outputView === 'markdown' ? (
+                <div className="tool-markdown">
+                  <Markdown text={output || '(empty)'} />
+                </div>
+              ) : (
+                <TerminalOutput text={output || '(empty)'} className="tool-output" error={ok === false} />
+              )}
             </>
           ))}
       </div>
