@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import net from 'node:net'
 import path from 'node:path'
+import type { Duplex } from 'node:stream'
 import { config, isInside } from './config.js'
 import { ConfigError } from './errors.js'
 import { unsafeCommand } from './fsx.js'
@@ -32,6 +33,7 @@ export interface PreviewStatus {
   cwd: string
   framework: string
   proxyPort: number | null
+  proxyPath: string | null
   url: string | null
   output: string
   error: string | null
@@ -73,6 +75,7 @@ interface StartOptions {
 
 const sessions = new Map<string, PreviewSession>()
 const OUTPUT_LIMIT = 40_000
+const PREVIEW_PATH_ROOT = '/preview/'
 const CANDIDATE_DIRS = [
   '',
   'frontend',
