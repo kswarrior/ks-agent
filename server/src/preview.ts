@@ -268,7 +268,7 @@ function detect(projectPath: string): DetectionInternal {
     if (script) {
       const framework =
         FRAMEWORKS.find((entry) => best?.deps.includes(entry.dependency)) ??
-        ({ name: 'Node app', port: 3000, args: () => [] } as Framework)
+        ({ name: 'Node app', dependency: '', port: 3000, args: () => [] } as Framework)
       const scriptText = best.scripts[script]
       const port = scriptPort(scriptText) ?? framework.port
       const packageManager = detectPackageManager(path.resolve(projectPath, best.cwd))
@@ -451,7 +451,7 @@ function createProxy(targetPort: number): Promise<{ server: http.Server; port: n
           headers: rewriteProxyRequest(req, targetPort)
         },
         (upstreamRes) => {
-          const headers = { ...upstreamRes.headers }
+          const headers: http.OutgoingHttpHeaders = { ...upstreamRes.headers }
           delete headers['x-frame-options']
           delete headers['content-security-policy']
           delete headers['content-security-policy-report-only']

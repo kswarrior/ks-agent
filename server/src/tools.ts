@@ -1214,6 +1214,33 @@ async function gitPullTool(args: Record<string, unknown>, ctx: ToolContext): Pro
   )
 }
 
+async function previewAppTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  if (!ctx.projectId) return fail('preview_app is only available inside a project')
+  const project = { id: ctx.projectId, path: ctx.projectPath }
+  const action = (str(args, 'action', 'start') || 'start').toLowerCase()
+  try {
+    if (action === 'status') return { ok: true, output: describePreview(getPreview(project), true) }
+    if (action === 'stop') return { ok: true, output: describePreview(stopPreview(project), true) }
+    if (action !== 'start') return fail('action must be start, stop or status')
+    const rawPort = args.port
+    const port =
+      rawPort === undefined || rawPort === null || rawPort === ''
+        ? undefined
+        : int(args, 'port', 0, 1024, 65535)
+    const started = await startPreview(project, {
+      command: str(args, 'command') || undefined,
+      cwd: str(args, 'cwd') || undefined,
+      port
+    })
+    const status = (await waitForPreview(project.id, 30_000)) ?? started
+    const output = describePreview(status, true)
+    if (status.status === 'error') return fail(output)
+    return { ok: true, output }
+  } catch (error) {
+    return fail(`preview_app failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>> = {
   read_file: readFileTool,
   read_multiple_files: readMultipleFilesTool,
@@ -1232,6 +1259,7 @@ const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext)
   move_file: moveFileTool,
   append_file: appendFileTool,
   run_shell: runShellTool,
+  preview_app: previewAppTool,
   update_plan: updatePlanTool,
   git_init: gitInitTool,
   git_status: gitStatusTool,

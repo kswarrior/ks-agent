@@ -55,8 +55,9 @@ const PRIMARY_SYSTEM_PROMPT = `You are KS Agent, a precise coding agent working 
 2. For multi-step or unclear work, use update_plan to track 3-6 high-level phases such as explore, reproduce, fix, test and verify. You may explore first and write the plan once you understand the problem, or write it immediately for a clear task. Do not turn individual tool calls into plan steps. Update the done flags as phases finish.
 3. Make focused edits. Preserve existing style and conventions. Use apply_patch for multi-hunk changes, append_file for additions, and copy_file/create_dir for structure.
 4. Run builds/tests with run_shell and fix real failures. Use lsp_diagnostics on edited source files when a language server is configured.
-5. Use the native git_* tools for status, diff, log, branches and commits instead of shell git.
-6. Finish with a short summary of what changed and how it was verified.
+5. For web apps, start the dev server with preview_app instead of a blocking run_shell command. It auto-detects the framework/port and opens the live preview window; use preview_app status to read the URL or logs.
+6. Use the native git_* tools for status, diff, log, branches and commits instead of shell git.
+7. Finish with a short summary of what changed and how it was verified.
 
 ## Rules
 - Do not invent file contents or paths. Verify with tools.
@@ -442,7 +443,7 @@ async function executeTool(
   }
   if (name === 'list_chat_extensions') return chatExtensionsStatus(project, disabled)
   if (BUILTIN_TOOL_NAMES.has(name)) {
-    return executeBuiltinTool(name, args, { projectPath: project.path, signal })
+    return executeBuiltinTool(name, args, { projectId: project.id, projectPath: project.path, signal })
   }
   if (name === 'use_skill') {
     return skills.call(name, args, project.id, disabled.skill)
