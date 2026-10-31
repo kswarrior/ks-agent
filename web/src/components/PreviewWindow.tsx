@@ -102,7 +102,6 @@ export function PreviewWindow({
   const [geometry, setGeometry] = useState<Geometry>(loadGeometry)
   const [minimized, setMinimized] = useState(false)
   const [maximized, setMaximized] = useState(false)
-  const [tab, setTab] = useState<'web' | 'android'>('web')
   const [iframeKey, setIframeKey] = useState(0)
   const [showLogs, setShowLogs] = useState(false)
   const [address, setAddress] = useState('localhost:5173')
@@ -178,7 +177,6 @@ export function PreviewWindow({
   useEffect(() => {
     if (focusSeq > 0) {
       setMinimized(false)
-      setTab('web')
       autoStarted.current = false
     }
   }, [focusSeq])
@@ -412,25 +410,23 @@ export function PreviewWindow({
           <span className={`preview-dot ${tone}`} aria-hidden="true" />
           <span className="preview-title-name">{project.name}</span>
         </div>
-        {tab === 'web' && (
-          <form className="preview-address" onSubmit={navigate}>
-            <input
-              value={address}
-              onChange={(event) => {
-                addressTouched.current = true
-                setAddress(event.target.value)
-                setAddressError(null)
-              }}
-              placeholder="localhost:5173"
-              spellCheck={false}
-              aria-label="Preview address"
-              title="Type a URL and press Go"
-            />
-            <button type="submit" className="preview-address-go" title="Open this address">
-              Go
-            </button>
-          </form>
-        )}
+        <form className="preview-address" onSubmit={navigate}>
+          <input
+            value={address}
+            onChange={(event) => {
+              addressTouched.current = true
+              setAddress(event.target.value)
+              setAddressError(null)
+            }}
+            placeholder="localhost:5173"
+            spellCheck={false}
+            aria-label="Preview address"
+            title="Type a URL and press Go"
+          />
+          <button type="submit" className="preview-address-go" title="Open this address">
+            Go
+          </button>
+        </form>
         <div className="preview-window-actions">
           <button
             className="preview-window-btn"
@@ -477,27 +473,7 @@ export function PreviewWindow({
         </div>
       </div>
 
-      <div className="preview-tabs" role="tablist" aria-label="Preview platform">
-        <button
-          className={`settings-tab ${tab === 'web' ? 'active' : ''}`}
-          onClick={() => setTab('web')}
-          role="tab"
-          aria-selected={tab === 'web'}
-        >
-          Web
-        </button>
-        <button
-          className={`settings-tab ${tab === 'android' ? 'active' : ''}`}
-          onClick={() => setTab('android')}
-          role="tab"
-          aria-selected={tab === 'android'}
-        >
-          Android
-        </button>
-      </div>
-
-      {tab === 'web' ? (
-        <>
+      <>
           <div className="preview-statusbar">
             <span className={`preview-dot ${tone}`} aria-hidden="true" />
             <span className="preview-status-label">{statusLabel}</span>
@@ -649,26 +625,7 @@ export function PreviewWindow({
               </button>
             </div>
           </form>
-        </>
-      ) : (
-        <div className="preview-soon">
-          <svg
-            className="preview-soon-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect x="7" y="2" width="10" height="20" rx="2.5" />
-            <path d="M11 18h2" />
-          </svg>
-          <strong>Android preview</strong>
-          <p>Coming soon</p>
-        </div>
-      )}
+      </>
 
       {!maximized && (
         <div
