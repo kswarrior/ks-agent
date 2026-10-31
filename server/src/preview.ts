@@ -809,6 +809,7 @@ function statusOf(session: PreviewSession): PreviewStatus {
     cwd: session.cwd,
     framework: session.framework,
     proxyPort: session.proxyPort,
+    proxyPath: session.status === 'running' ? previewPath(session.projectId) : null,
     url: session.proxyPort ? `http://localhost:${session.proxyPort}/` : null,
     output: session.output,
     error: session.error,
@@ -828,6 +829,7 @@ function emptyStatus(project: PreviewProject, detection: PreviewDetection): Prev
     cwd: detection.cwd,
     framework: detection.framework,
     proxyPort: null,
+    proxyPath: null,
     url: null,
     output: '',
     error: null,
@@ -1070,6 +1072,7 @@ export function describePreview(status: PreviewStatus, includeOutput = false): s
   if (status.port) {
     lines.push(`Port: ${status.port}${status.proxyPort ? ` (proxy ${status.proxyPort})` : ''}`)
   }
+  if (status.proxyPath) lines.push(`Path: ${status.proxyPath} (same origin, works through tunnels)`)
   if (status.url) lines.push(`URL: ${status.url}`)
   if (status.command) lines.push(`Command: ${status.command}`)
   lines.push(`Folder: ${status.cwd || '.'}`)

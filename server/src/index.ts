@@ -1,8 +1,9 @@
-import { serve } from '@hono/node-server'
+import { getRequestListener } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono, type Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import fs from 'node:fs'
+import { createServer } from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
@@ -63,7 +64,14 @@ import { cleanRelative, isProbablyBinary, relWithin, resolveInProject, validSegm
 import { knowledge } from './knowledge.js'
 import { lsp } from './lsp.js'
 import { mcp } from './mcp.js'
-import { getPreview, startPreview, stopAllPreviews, stopPreview } from './preview.js'
+import {
+  getPreview,
+  previewProxyRequest,
+  previewProxyUpgrade,
+  startPreview,
+  stopAllPreviews,
+  stopPreview
+} from './preview.js'
 import {
   DEFAULT_RETRY_SETTINGS,
   getRetrySettings,
