@@ -26,7 +26,7 @@ import { MessageFooter } from './MessageFooter'
 import { ModelSelect } from './ModelSelect'
 import { StepMenu } from './StepMenu'
 import { TerminalOutput } from './TerminalOutput'
-import { buildRunReports, RunReport } from './RunReport'
+import { buildRunReports, RunReport, type RunReportEntry } from './RunReport'
 
 const DEFAULT_CONTEXT_WINDOW = 128_000
 const CONTEXT_WARNING_RATIO = 0.6
@@ -775,6 +775,25 @@ export function ChatView({
     [runReports]
   )
 
+  const messageGroups = useMemo(() => {
+    const leading: Message[] = []
+    const groups: Array<{ user: Message; messages: Message[]; report: RunReportEntry | null }> = []
+    let current: (typeof groups)[number] | null = null
+    for (const message of messages) {
+      if (message.role === 'user') {
+        current = { user: message, messages: [], report: null }
+        groups.push(current)
+      } else if (current) {
+        current.messages.push(message)
+      } else {
+        leading.push(message)
+      }
+    }
+    const reportsByUser = new Map(runReports.map((entry) => [entry.userMessageId, entry]))
+    for (const group of groups) group.report = reportsByUser.get(group.user.id) ?? null
+    return { leading, groups }
+  }, [messages, runReports])
+
   const persistedToolCallIds = useMemo(() => {
     const ids = new Set<string>()
     for (const message of messages) {
@@ -853,6 +872,82 @@ export function ChatView({
         )}
       </main>
     )
+  }
+
+  const renderMessage = (message: Message, includeReport: boolean) => {
+    if (message.role === 'user') {
+      return (
+        <div className="msg user" key={message.id}>
+          <Markdown text={message.content} />
+        </div>
+      )
+    }
+    if (message.role === 'assistant') {
+      const calls = (message.toolCalls ?? []).filter(
+        (call) =>
+          call.function.name !== 'update_plan' && call.function.name !== 'set_task_report'
+      )
+      const hiddenOnly =
+        !message.content && calls.length === 0 && (message.toolCalls?.length ?? 0) > 0
+      if (hiddenOnly) return null
+      const reportEntry = reportsByFinalMessage.get(message.id)
+      const messageModelId = message.modelId ?? chat?.modelId ?? null
+      const messageModel = messageModelId
+        ? models.find((entry) => entry.id === messageModelId)
+        : undefined
+      return (
+        <Fragment key={message.id}>
+          <div className="msg assistant">
+            {message.content && <Markdown text={message.content} />}
+            {calls.map((call) => {
+              const result = toolResults.get(call.id)
+              return (
+                <ToolCard
+                  key={call.id}
+                  name={call.function.name}
+                  args={call.function.arguments}
+                  output={result?.content}
+                  ok={result ? true : undefined}
+                  running={streaming && !result}
+                  rootPath={project.path}
+                />
+              )
+            })}
+            {!message.content && calls.length === 0 && <p className="muted">(empty response)</p>}
+            {message.content && (
+              <MessageFooter
+                content={message.content}
+                model={messageModel}
+                modelId={messageModelId}
+                durationMs={message.durationMs}
+              />
+            )}
+          </div>
+          {includeReport && reportEntry && (
+            <RunReport
+              report={reportEntry.report}
+              onContinue={reportEntry.isLatest ? continueRun : undefined}
+              onRecheck={recheckRun}
+              onPreview={previewRun}
+              busy={streaming || loading || !modelId}
+            />
+          )}
+        </Fragment>
+      )
+    }
+    if (message.role === 'tool') {
+      const paired = messages.some(
+        (entry) => entry.role === 'assistant' && entry.toolCalls?.some((call) => call.id === message.toolCallId)
+      )
+      if (paired) return null
+      if (message.toolCallId && hiddenToolCallIds.has(message.toolCallId)) return null
+      return (
+        <div className="msg assistant" key={message.id}>
+          <ToolCard name="tool result" args="{}" output={message.content} ok />
+        </div>
+      )
+    }
+    return null
   }
 
   return (
