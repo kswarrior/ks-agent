@@ -1051,6 +1051,11 @@ http.createServer((req, res) => {
   assert(info.includes('lines:'), `get_file_info missing line count: ${info}`)
   await okTool('update_plan', { title: 'Tools smoke', steps: [{ text: 'test tools', done: true }] })
   assert(fs.readFileSync(path.join(project.path, 'plan.md'), 'utf8').includes('[x] test tools'), 'update_plan failed')
+  const reportTool = await okTool('set_task_report', { recheck: true, preview: false })
+  assert(
+    reportTool.includes('recheck=on') && reportTool.includes('preview=off'),
+    `set_task_report returned the wrong flags: ${reportTool}`
+  )
 
   await okTool('append_file', {
     path: 'src/utils/math.ts',
