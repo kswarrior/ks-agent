@@ -5269,6 +5269,25 @@ code {
   transform: rotate(180deg);
 }
 
+.run-turn-transcript {
+  padding: 10px 13px 2px;
+  border-top: 1px solid var(--line);
+}
+
+.run-turn-transcript .msg {
+  max-width: 100%;
+  margin-bottom: 10px;
+}
+
+.run-turn-transcript .msg.user {
+  margin-right: 0;
+  max-width: min(760px, 88%);
+}
+
+.run-turn-transcript .msg:last-child {
+  margin-bottom: 0;
+}
+
 .run-report-body {
   margin: 0 13px;
   padding: 12px 0 12px 38px;
@@ -5451,6 +5470,14 @@ code {
   .run-report-body {
     margin: 0 10px;
     padding: 11px 0 11px 37px;
+  }
+
+  .run-turn-transcript {
+    padding: 8px 10px 2px;
+  }
+
+  .run-turn-transcript .msg.user {
+    max-width: 92%;
   }
 
   .run-report-row {
