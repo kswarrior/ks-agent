@@ -20,6 +20,7 @@ import type {
   McpServerInfo,
   Message,
   ModelEntry,
+  PreviewStatus,
   Project,
   ProviderPublic,
   RetrySettings,
@@ -64,6 +65,17 @@ export const killProjectTerminal = (projectId: string, terminalId: string) =>
   req<{ ok: true }>(`/api/projects/${projectId}/terminal/${encodeURIComponent(terminalId)}`, {
     method: 'DELETE'
   })
+
+export const getProjectPreview = (projectId: string) =>
+  req<PreviewStatus>(`/api/projects/${projectId}/preview`)
+
+export const startProjectPreview = (
+  projectId: string,
+  body: { command?: string; port?: number; cwd?: string }
+) => req<PreviewStatus>(`/api/projects/${projectId}/preview/start`, json('POST', body))
+
+export const stopProjectPreview = (projectId: string) =>
+  req<PreviewStatus>(`/api/projects/${projectId}/preview/stop`, { method: 'POST' })
 
 export const listProjectFiles = (projectId: string, path = '') =>
   req<FileListing>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`)

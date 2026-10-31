@@ -277,6 +277,35 @@ export interface RetryStatus extends FailureInfo {
   unlimited: boolean
 }
 
+export type PreviewState = 'stopped' | 'starting' | 'running' | 'error'
+
+export interface PreviewDetection {
+  command: string
+  port: number
+  framework: string
+  cwd: string
+  script: string | null
+  packageManager: string | null
+  note: string
+}
+
+export interface PreviewStatus {
+  projectId: string
+  status: PreviewState
+  command: string
+  port: number
+  cwd: string
+  framework: string
+  proxyPort: number | null
+  url: string | null
+  output: string
+  error: string | null
+  owned: boolean
+  detected: PreviewDetection
+  startedAt: number | null
+  readyAt: number | null
+}
+
 export type AgentEvent =
   | { type: 'step'; step: number; maxSteps: number }
   | { type: 'assistant_start'; step: number }
