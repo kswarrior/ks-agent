@@ -381,16 +381,60 @@ function isPortOpen(port: number, timeoutMs = 350): Promise<boolean> {
   })
 }
 
-function rewriteLocation(value: string, targetPort: number): string {
+export function previewPath(projectId: string): string {
+  return `${PREVIEW_PATH_ROOT}${encodeURIComponent(projectId)}/`
+}
+
+function splitRawUrl(rawUrl: string): { pathname: string; search: string } {
+  const index = rawUrl.indexOf('?')
+  if (index === -1) return { pathname: rawUrl || '/', search: '' }
+  return { pathname: rawUrl.slice(0, index) || '/', search: rawUrl.slice(index) }
+}
+
+function parsePreviewPath(pathname: string): { projectId: string; rest: string } | null {
+  if (!pathname.startsWith(PREVIEW_PATH_ROOT)) return null
+  const remainder = pathname.slice(PREVIEW_PATH_ROOT.length)
+  if (!remainder) return null
+  const slash = remainder.indexOf('/')
+  const rawId = slash === -1 ? remainder : remainder.slice(0, slash)
+  if (!rawId) return null
+  let projectId: string
+  try {
+    projectId = decodeURIComponent(rawId)
+  } catch {
+    return null
+  }
+  const rest = slash === -1 ? '/' : remainder.slice(slash)
+  return { projectId, rest: rest || '/' }
+}
+
+function withPreviewPrefix(value: string, prefix: string): string {
+  if (!prefix) return value
+  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith(prefix)) return value
+  return `${prefix}${value.slice(1)}`
+}
+
+function stripPreviewPrefix(pathname: string, prefix: string): string {
+  if (!prefix) return pathname
+  if (pathname === prefix.slice(0, -1)) return '/'
+  if (pathname.startsWith(prefix)) return `/${pathname.slice(prefix.length)}`
+  return pathname
+}
+
+function isLocalHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+}
+
+function rewriteLocation(value: string, targetPort: number, prefix = ''): string {
   try {
     const url = new URL(value)
-    if ((url.hostname === 'localhost' || url.hostname === '127.0.0.1') && Number(url.port) === targetPort) {
-      return `${url.pathname}${url.search}${url.hash}`
+    if (isLocalHost(url.hostname) && (url.port === '' || Number(url.port) === targetPort)) {
+      return withPreviewPrefix(`${url.pathname}${url.search}${url.hash}`, prefix)
     }
   } catch {
     // relative location
   }
-  return value
+  return withPreviewPrefix(value, prefix)
 }
 
 function stripCookieDomain(value: string): string {
@@ -405,7 +449,11 @@ function proxyHostHeader(targetPort: number): string {
   return `127.0.0.1:${targetPort}`
 }
 
-function rewriteProxyRequest(req: http.IncomingMessage, targetPort: number): Record<string, string | string[]> {
+function rewriteProxyRequest(
+  req: http.IncomingMessage,
+  targetPort: number,
+  prefix = ''
+): Record<string, string | string[]> {
   const headers: Record<string, string | string[]> = {}
   for (const [name, value] of Object.entries(req.headers)) {
     if (value === undefined) continue
@@ -414,6 +462,14 @@ function rewriteProxyRequest(req: http.IncomingMessage, targetPort: number): Rec
     headers[lower] = value
   }
   headers.host = proxyHostHeader(targetPort)
+  if (req.headers.host) headers['x-forwarded-host'] = req.headers.host
+  const forwardedProto = req.headers['x-forwarded-proto']
+  headers['x-forwarded-proto'] =
+    typeof forwardedProto === 'string' ? forwardedProto.split(',')[0].trim() : 'http'
+  if (prefix) {
+    headers['x-forwarded-prefix'] = prefix.slice(0, -1)
+    headers['accept-encoding'] = 'identity'
+  }
   if (req.headers.origin) headers.origin = `http://${proxyHostHeader(targetPort)}`
   if (req.headers.referer) {
     try {
@@ -421,6 +477,7 @@ function rewriteProxyRequest(req: http.IncomingMessage, targetPort: number): Rec
       referer.protocol = 'http:'
       referer.hostname = '127.0.0.1'
       referer.port = String(targetPort)
+      referer.pathname = stripPreviewPrefix(referer.pathname, prefix)
       headers.referer = referer.toString()
     } catch {
       // leave a malformed referer out
@@ -429,8 +486,13 @@ function rewriteProxyRequest(req: http.IncomingMessage, targetPort: number): Rec
   return headers
 }
 
-function rawUpgradeRequest(req: http.IncomingMessage, targetPort: number): string {
-  const lines = [`${req.method ?? 'GET'} ${req.url ?? '/'} HTTP/1.1`]
+function rawUpgradeRequest(
+  req: http.IncomingMessage,
+  targetPort: number,
+  requestPath = req.url ?? '/',
+  prefix = ''
+): string {
+  const lines = [`${req.method ?? 'GET'} ${requestPath} HTTP/1.1`]
   for (let index = 0; index < req.rawHeaders.length; index += 2) {
     const name = req.rawHeaders[index]
     const lower = name.toLowerCase()
@@ -439,48 +501,144 @@ function rawUpgradeRequest(req: http.IncomingMessage, targetPort: number): strin
     else if (lower === 'origin') value = `http://${proxyHostHeader(targetPort)}`
     lines.push(`${name}: ${value}`)
   }
+  if (prefix) {
+    lines.push(`X-Forwarded-Prefix: ${prefix.slice(0, -1)}`)
+    if (req.headers.host) lines.push(`X-Forwarded-Host: ${req.headers.host}`)
+  }
   return `${lines.join('\r\n')}\r\n\r\n`
+}
+
+function previewWebSocketShim(prefix: string): string {
+  const encodedPrefix = JSON.stringify(prefix)
+  return `<script data-ks-preview>(function(){var p=${encodedPrefix};var W=window.WebSocket;if(!W)return;function r(u){try{var x=new URL(String(u),location.href);if(x.hostname!==location.hostname)return u;if(x.pathname===p.slice(0,-1)||x.pathname.indexOf(p)===0)return u;var path=p+x.pathname.replace(/^\\/+/, '');return (location.protocol==='https:'?'wss:':'ws:')+'//'+location.host+path+x.search}catch(e){return u}}function S(u,o){return o===undefined?new W(r(u)):new W(r(u),o)}S.prototype=W.prototype;S.CONNECTING=W.CONNECTING;S.OPEN=W.OPEN;S.CLOSING=W.CLOSING;S.CLOSED=W.CLOSED;window.WebSocket=S})()</script>`
+}
+
+function injectPreviewShim(html: string, prefix: string): string {
+  const shim = previewWebSocketShim(prefix)
+  const head = /<head(?:\s[^>]*)?>/i.exec(html)
+  if (!head) return `${shim}${html}`
+  const at = head.index + head[0].length
+  return `${html.slice(0, at)}${shim}${html.slice(at)}`
+}
+
+function rewriteCssUrls(css: string, prefix: string): string {
+  return css
+    .replace(
+      /(url\(\s*)(["']?)(\/(?!\/)[^)"']*)\2(\s*\))/gi,
+      (match, lead: string, quote: string, url: string, tail: string) => {
+        const next = withPreviewPrefix(url, prefix)
+        return next === url ? match : `${lead}${quote}${next}${quote}${tail}`
+      }
+    )
+    .replace(
+      /(@import\s+)(["'])(\/(?!\/)[^"']*)\2/gi,
+      (match, lead: string, quote: string, url: string) => {
+        const next = withPreviewPrefix(url, prefix)
+        return next === url ? match : `${lead}${quote}${next}${quote}`
+      }
+    )
+}
+
+function rewriteHtml(html: string, prefix: string): string {
+  const rewritten = html.replace(
+    /(\b(?:src|href|action|poster)\s*=\s*)(["'])(\/(?!\/)[^"']*)\2/gi,
+    (match, lead: string, quote: string, url: string) => {
+      const next = withPreviewPrefix(url, prefix)
+      return next === url ? match : `${lead}${quote}${next}${quote}`
+    }
+  )
+  return injectPreviewShim(rewriteCssUrls(rewritten, prefix), prefix)
+}
+
+function proxyResponseHeaders(
+  upstreamRes: http.IncomingMessage,
+  targetPort: number,
+  prefix: string
+): http.OutgoingHttpHeaders {
+  const headers: http.OutgoingHttpHeaders = { ...upstreamRes.headers }
+  delete headers['x-frame-options']
+  delete headers['content-security-policy']
+  delete headers['content-security-policy-report-only']
+  delete headers.connection
+  delete headers['keep-alive']
+  delete headers['transfer-encoding']
+  if (typeof headers.location === 'string') {
+    headers.location = rewriteLocation(headers.location, targetPort, prefix)
+  }
+  const cookies = headers['set-cookie']
+  if (Array.isArray(cookies)) headers['set-cookie'] = cookies.map(stripCookieDomain)
+  else if (typeof cookies === 'string') headers['set-cookie'] = stripCookieDomain(cookies)
+  return headers
+}
+
+function notReachableHtml(): string {
+  return '<!doctype html><html><body style="margin:0;display:grid;place-items:center;height:100vh;background:#0b0b0d;color:#f2f2f4;font-family:system-ui,sans-serif"><div style="text-align:center"><strong>Preview server is not reachable</strong><p style="color:#8b8b96">Check the command and logs in the preview window.</p></div></body></html>'
+}
+
+function proxyHttpRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  targetPort: number,
+  prefix = '',
+  pathOverride?: string
+): void {
+  const upstream = http.request(
+    {
+      host: '127.0.0.1',
+      port: targetPort,
+      method: req.method,
+      path: pathOverride ?? req.url,
+      headers: rewriteProxyRequest(req, targetPort, prefix)
+    },
+    (upstreamRes) => {
+      const headers = proxyResponseHeaders(upstreamRes, targetPort, prefix)
+      const contentType = String(upstreamRes.headers['content-type'] ?? '')
+      const rewritable =
+        Boolean(prefix) &&
+        !headers['content-encoding'] &&
+        /\btext\/(?:html|css)\b/i.test(contentType)
+      if (!rewritable) {
+        res.writeHead(upstreamRes.statusCode ?? 502, headers)
+        upstreamRes.pipe(res)
+        return
+      }
+      const chunks: Buffer[] = []
+      upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk))
+      upstreamRes.on('error', () => {
+        if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/html; charset=utf-8' })
+        res.end(notReachableHtml())
+      })
+      upstreamRes.on('end', () => {
+        try {
+          const text = Buffer.concat(chunks).toString('utf8')
+          const body = Buffer.from(
+            /\btext\/css\b/i.test(contentType) ? rewriteCssUrls(text, prefix) : rewriteHtml(text, prefix),
+            'utf8'
+          )
+          delete headers['content-length']
+          delete headers['content-encoding']
+          headers['content-length'] = String(body.length)
+          res.writeHead(upstreamRes.statusCode ?? 502, headers)
+          res.end(body)
+        } catch {
+          if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/html; charset=utf-8' })
+          res.end(notReachableHtml())
+        }
+      })
+    }
+  )
+  upstream.on('error', () => {
+    if (!res.headersSent) {
+      res.writeHead(502, { 'content-type': 'text/html; charset=utf-8' })
+    }
+    res.end(notReachableHtml())
+  })
+  req.pipe(upstream)
 }
 
 function createProxy(targetPort: number): Promise<{ server: http.Server; port: number }> {
   return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const upstream = http.request(
-        {
-          host: '127.0.0.1',
-          port: targetPort,
-          method: req.method,
-          path: req.url,
-          headers: rewriteProxyRequest(req, targetPort)
-        },
-        (upstreamRes) => {
-          const headers: http.OutgoingHttpHeaders = { ...upstreamRes.headers }
-          delete headers['x-frame-options']
-          delete headers['content-security-policy']
-          delete headers['content-security-policy-report-only']
-          delete headers.connection
-          delete headers['keep-alive']
-          delete headers['transfer-encoding']
-          if (typeof headers.location === 'string') {
-            headers.location = rewriteLocation(headers.location, targetPort)
-          }
-          const cookies = headers['set-cookie']
-          if (Array.isArray(cookies)) headers['set-cookie'] = cookies.map(stripCookieDomain)
-          else if (typeof cookies === 'string') headers['set-cookie'] = stripCookieDomain(cookies)
-          res.writeHead(upstreamRes.statusCode ?? 502, headers)
-          upstreamRes.pipe(res)
-        }
-      )
-      upstream.on('error', () => {
-        if (!res.headersSent) {
-          res.writeHead(502, { 'content-type': 'text/html; charset=utf-8' })
-        }
-        res.end(
-          '<!doctype html><html><body style="margin:0;display:grid;place-items:center;height:100vh;background:#0b0b0d;color:#f2f2f4;font-family:system-ui,sans-serif"><div style="text-align:center"><strong>Preview server is not reachable</strong><p style="color:#8b8b96">Check the command and logs in the preview window.</p></div></body></html>'
-        )
-      })
-      req.pipe(upstream)
-    })
+    const server = http.createServer((req, res) => proxyHttpRequest(req, res, targetPort))
 
     server.on('upgrade', (req, socket, head) => {
       const upstream = net.connect(targetPort, '127.0.0.1', () => {
@@ -505,6 +663,94 @@ function createProxy(targetPort: number): Promise<{ server: http.Server; port: n
       resolve({ server, port: address.port })
     })
   })
+}
+
+function previewProxyTarget(projectId: string): number | null {
+  const session = sessions.get(projectId)
+  return session?.status === 'running' ? session.port : null
+}
+
+function latestPreviewTarget(): number | null {
+  let latest: PreviewSession | null = null
+  for (const session of sessions.values()) {
+    if (session.status !== 'running') continue
+    if (!latest || (session.startedAt ?? 0) > (latest.startedAt ?? 0)) latest = session
+  }
+  return latest?.port ?? null
+}
+
+function sendPreviewError(res: http.ServerResponse, status: number, message: string): void {
+  if (res.headersSent) {
+    res.end()
+    return
+  }
+  res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+  res.end(
+    `<!doctype html><html><body style="margin:0;display:grid;place-items:center;height:100vh;background:#0b0b0d;color:#f2f2f4;font-family:system-ui,sans-serif"><div style="text-align:center"><strong>${message}</strong><p style="color:#8b8b96">Start the app from the preview window.</p></div></body></html>`
+  )
+}
+
+export function previewProxyRequest(req: http.IncomingMessage, res: http.ServerResponse): boolean {
+  const { pathname, search } = splitRawUrl(req.url ?? '/')
+  const direct = parsePreviewPath(pathname)
+  if (direct) {
+    const target = previewProxyTarget(direct.projectId)
+    if (!target) {
+      sendPreviewError(res, 404, 'Preview is not running')
+      return true
+    }
+    proxyHttpRequest(req, res, target, previewPath(direct.projectId), `${direct.rest}${search}`)
+    return true
+  }
+
+  const referer = req.headers.referer
+  if (!referer) return false
+  try {
+    const fromReferer = parsePreviewPath(new URL(referer).pathname)
+    if (!fromReferer) return false
+    const target = previewProxyTarget(fromReferer.projectId)
+    if (!target) return false
+    proxyHttpRequest(req, res, target, previewPath(fromReferer.projectId))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function previewProxyUpgrade(
+  req: http.IncomingMessage,
+  socket: Duplex,
+  head: Buffer
+): boolean {
+  const { pathname, search } = splitRawUrl(req.url ?? '/')
+  const direct = parsePreviewPath(pathname)
+  let target: number | null = null
+  let requestPath = req.url ?? '/'
+  let prefix = ''
+  if (direct) {
+    target = previewProxyTarget(direct.projectId)
+    prefix = previewPath(direct.projectId)
+    requestPath = `${direct.rest}${search}`
+  } else if (!pathname.startsWith('/api') && !pathname.startsWith(PREVIEW_PATH_ROOT)) {
+    target = latestPreviewTarget()
+  }
+  if (!target) {
+    if (direct) {
+      socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n')
+      socket.destroy()
+      return true
+    }
+    return false
+  }
+  const upstream = net.connect(target, '127.0.0.1', () => {
+    upstream.write(rawUpgradeRequest(req, target, requestPath, prefix))
+    if (head.length) upstream.write(head)
+    upstream.pipe(socket)
+    socket.pipe(upstream)
+  })
+  upstream.on('error', () => socket.destroy())
+  socket.on('error', () => upstream.destroy())
+  return true
 }
 
 async function attachProxy(session: PreviewSession): Promise<void> {
