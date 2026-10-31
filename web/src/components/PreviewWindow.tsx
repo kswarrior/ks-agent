@@ -73,6 +73,18 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function addressUrl(value: string): string | null {
+  const raw = value.trim()
+  if (!raw) return null
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
 export function PreviewWindow({
   project,
   chatId,
@@ -323,7 +335,8 @@ export function PreviewWindow({
 
   const previewUrl = status?.proxyPort ? previewHostUrl(status.proxyPort) : null
   const externalUrl = previewUrl || status?.url || null
-  const frameUrl = customUrl ?? (status?.status === 'running' ? previewUrl : null)
+  const frameUrl =
+    customUrl ?? (status?.status === 'running' ? previewUrl : addressUrl(address))
   const openExternal = () => {
     const target = customUrl ?? externalUrl
     if (target) window.open(target, '_blank', 'noopener,noreferrer')
