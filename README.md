@@ -84,7 +84,7 @@ docker run --rm --network none --memory=512m --cpus=1 -v <projectPath>:/workspac
 - Provider presets (OpenAI, Gemini, DeepSeek, OpenRouter, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Moonshot, NVIDIA NIM, Ollama, LM Studio) + custom
 - Auto-titled chats, per-message model/duration footer, run reports attached to their own output
 - Chat header context meter (estimated used/window tokens) colored green, yellow or red by usage
-- Live web-app preview: a movable, resizable window with minimize/maximize/close, live logs and an in-window prompt bar. The Preview button auto-detects the dev command/port and starts the app; the AI can also start/stop it with the `preview_app` tool, and HTTP + HMR WebSocket traffic is proxied through an ephemeral same-host port so it works on phones too
+- Live web-app preview: a movable, resizable window with minimize/maximize/close, live logs and an in-window prompt bar. The Preview button auto-detects the dev command/port and starts the app; the AI can also start/stop it with the `preview_app` tool. Apps are served through the agent's own origin at `/preview/<projectId>/` (HTTP + HMR WebSockets), so previews work behind Cloudflare Tunnel or any single-port reverse proxy; an ephemeral same-host proxy port is also available for direct LAN/phone access
 - Automatic context compaction: near the model window, older messages become an editable handoff summary and are no longer sent to the provider
 
 ## Agent config (`.ks-agent/`)
