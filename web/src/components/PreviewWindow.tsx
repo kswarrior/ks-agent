@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from '../api'
 import type { PreviewStatus, Project } from '../types'
+import { TerminalOutput } from './TerminalOutput'
 
 interface Geometry {
   x: number
@@ -104,6 +105,10 @@ export function PreviewWindow({
   const [tab, setTab] = useState<'web' | 'android'>('web')
   const [iframeKey, setIframeKey] = useState(0)
   const [showLogs, setShowLogs] = useState(false)
+  const [address, setAddress] = useState('localhost:5173')
+  const [customUrl, setCustomUrl] = useState<string | null>(null)
+  const [addressError, setAddressError] = useState<string | null>(null)
+  const addressTouched = useRef(false)
   const commandTouched = useRef(false)
   const portTouched = useRef(false)
   const autoStarted = useRef(false)
@@ -140,6 +145,7 @@ export function PreviewWindow({
     if (!status) return
     if (!commandTouched.current) setCommand(status.detected.command)
     if (!portTouched.current) setPort(String(status.detected.port))
+    if (!addressTouched.current && status.port) setAddress(`localhost:${status.port}`)
   }, [status])
 
   useEffect(() => {
@@ -176,6 +182,7 @@ export function PreviewWindow({
       if (busy) return
       setBusy(true)
       setRequestError(null)
+      setAddressError(null)
       try {
         const next = await api.startProjectPreview(project.id, {
           command: override?.command ?? (command.trim() || undefined),
@@ -183,6 +190,7 @@ export function PreviewWindow({
           cwd: status?.detected.cwd || undefined
         })
         setStatus(next)
+        setCustomUrl(null)
         setIframeKey((key) => key + 1)
       } catch (error) {
         setRequestError(errorMessage(error))
@@ -204,8 +212,10 @@ export function PreviewWindow({
     if (busy) return
     setBusy(true)
     setRequestError(null)
+    setAddressError(null)
     try {
       setStatus(await api.stopProjectPreview(project.id))
+      setCustomUrl(null)
     } catch (error) {
       setRequestError(errorMessage(error))
     } finally {
@@ -213,9 +223,40 @@ export function PreviewWindow({
     }
   }
 
+  const navigate = (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault()
+    const raw = address.trim()
+    if (!raw) {
+      setAddressError('Enter a URL to open')
+      return
+    }
+    let url: URL
+    try {
+      url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `http://${raw}`)
+    } catch {
+      setAddressError('Enter a valid URL, for example localhost:5173')
+      return
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      setAddressError('Only http and https URLs are supported')
+      return
+    }
+    setAddressError(null)
+    const localHost = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+    const appPort = status?.port ?? null
+    if (localHost && appPort && Number(url.port) === appPort && status?.status === 'running') {
+      setCustomUrl(null)
+    } else {
+      setCustomUrl(url.toString())
+    }
+    setIframeKey((key) => key + 1)
+  }
+
+
+
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (maximized) return
-    if ((event.target as HTMLElement).closest('button')) return
+    if ((event.target as HTMLElement).closest('button, input, form, .preview-address')) return
     event.preventDefault()
     dragState.current = {
       pointerId: event.pointerId,
@@ -280,6 +321,11 @@ export function PreviewWindow({
 
   const previewUrl = status?.proxyPort ? previewHostUrl(status.proxyPort) : null
   const externalUrl = previewUrl || status?.url || null
+  const frameUrl = customUrl ?? (status?.status === 'running' ? previewUrl : null)
+  const openExternal = () => {
+    const target = customUrl ?? externalUrl
+    if (target) window.open(target, '_blank', 'noopener,noreferrer')
+  }
   const tone =
     status?.status === 'running'
       ? 'ok'
@@ -296,7 +342,7 @@ export function PreviewWindow({
         : status?.status === 'error'
           ? 'Needs attention'
           : 'Stopped'
-  const visibleError = requestError || pollError || status?.error || null
+  const visibleError = addressError || requestError || pollError || status?.error || null
 
   const askAiToStart = () => {
     if (!chatId || !modelId || streaming) return
