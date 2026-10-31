@@ -1174,6 +1174,61 @@ code {
   text-transform: uppercase;
 }
 
+.tool-output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+
+.tool-output-head .tool-label {
+  margin: 0;
+}
+
+.tool-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg-soft);
+}
+
+.tool-view-toggle button {
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.tool-view-toggle button:hover {
+  color: var(--text);
+}
+
+.tool-view-toggle button.active {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.terminal-output {
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #050506;
+  color: #e8e8e8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 4;
+}
+
 .tool-body pre {
   margin: 0;
   max-height: 260px;
