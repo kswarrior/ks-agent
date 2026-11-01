@@ -21,6 +21,7 @@ import {
 } from './backup.js'
 import { config, isInside } from './config.js'
 import {
+  answerQuestion,
   getChat,
   getChatSummary,
   getDatabaseSettings,
@@ -28,6 +29,7 @@ import {
   getModel,
   getProject,
   getProvider,
+  getQuestion,
   insertChat,
   insertKnowledge,
   insertMessage,
@@ -43,6 +45,7 @@ import {
   listProjectKnowledge,
   listProjects,
   listProviders,
+  listQuestions,
   removeChat,
   removeChatSummary,
   removeKnowledge,

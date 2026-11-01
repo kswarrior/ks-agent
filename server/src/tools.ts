@@ -1367,66 +1367,16 @@ async function openPreviewTool(args: Record<string, unknown>, ctx: ToolContext):
 }
 
 const WEBFETCH_MAX_BYTES = 2 * 1024 * 1024
-const PRIVATE_HOST_RE =
-  /^(?:localhost$|127\.|0\.0\.0\.0$|\[?::1\]?$|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|metadata\.google\.internal$)/i
-
-function decodeEntities(text: string): string {
-  return text
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&apos;|&#39;/gi, "'")
-}
-
-function htmlToText(html: string): string {
-  const text = html
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
-    .replace(/<svg[\s\S]*?<\/svg>/gi, '')
-    .replace(/<h([1-6])[^>]*>/gi, (_m, level) => `\n\n${'#'.repeat(Number(level))} `)
-    .replace(/<\/h[1-6]>/gi, '\n\n')
-    .replace(/<li[^>]*>/gi, '\n- ')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(?:p|div|section|article|header|footer|tr|ul|ol|blockquote|pre|table)>/gi, '\n\n')
-    .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) => {
-      const cleanHref = String(href).trim()
-      const cleanLabel = String(label).replace(/<[^>]+>/g, '').trim()
-      return cleanHref && cleanLabel && cleanHref !== cleanLabel
-        ? `${cleanLabel} (${cleanHref})`
-        : cleanLabel || cleanHref
-    })
-    .replace(/<[^>]+>/g, '')
-  return decodeEntities(text)
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
 
 async function webFetchTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const rawUrl = str(args, 'url').trim()
   if (!rawUrl) return fail('url is required')
   let parsed: URL
   try {
-    parsed = new URL(rawUrl)
-  } catch {
-    return fail(`Invalid URL: ${rawUrl}`)
+    parsed = parsePublicHttpUrl(rawUrl)
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error))
   }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return fail('Only http/https URLs are allowed')
-  }
-  let host = parsed.hostname.toLowerCase()
-  try {
-    host = decodeURIComponent(host).toLowerCase()
-  } catch {
-    // keep raw hostname
-  }
-  if (PRIVATE_HOST_RE.test(host)) return fail(`Refusing to fetch local/private host: ${parsed.hostname}`)
 
   const timeoutMs = int(args, 'timeout_ms', 30_000, 1_000, 120_000)
   const signals: AbortSignal[] = [AbortSignal.timeout(timeoutMs)]
