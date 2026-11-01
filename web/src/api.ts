@@ -23,6 +23,7 @@ import type {
   PreviewStatus,
   Project,
   ProviderPublic,
+  Question,
   RetrySettings,
   SkillDetail,
   SkillInfo

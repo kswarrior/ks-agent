@@ -1442,6 +1442,58 @@ async function webFetchTool(args: Record<string, unknown>, ctx: ToolContext): Pr
   return { ok: true, output: truncate(`${header}\n\n${body}`) }
 }
 
+async function webSearchTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const query = str(args, 'query').trim()
+  if (!query) return fail('query is required')
+  if (query.length > 500) return fail('query is too long (max 500 chars)')
+  const limit = int(args, 'limit', 8, 1, 20)
+  const timeoutMs = int(args, 'timeout_ms', 30_000, 1_000, 120_000)
+  try {
+    const { engine, results } = await searchWeb(query, {
+      engineId: str(args, 'engine') || undefined,
+      limit,
+      timeoutMs,
+      signal: ctx.signal
+    })
+    if (!results.length) {
+      return { ok: true, output: `No results for "${query}" (engine: ${engine.name})` }
+    }
+    const lines = results.map(
+      (result, index) =>
+        `${index + 1}. ${result.title}\n   ${result.url}${result.snippet ? `\n   ${result.snippet}` : ''}`
+    )
+    return {
+      ok: true,
+      output: truncate(`Engine: ${engine.name} (${engine.id})\nQuery: ${query}\n\n${lines.join('\n\n')}`)
+    }
+  } catch (error) {
+    return fail(`websearch failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+const DISABLED_TOOLS_KEY = 'disabledBuiltinTools'
+
+export function getDisabledBuiltinTools(): Set<string> {
+  try {
+    const raw = getSetting(DISABLED_TOOLS_KEY)
+    if (!raw) return new Set()
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return new Set()
+    return new Set(parsed.filter((name): name is string => typeof name === 'string' && BUILTIN_TOOL_NAMES.has(name)))
+  } catch {
+    return new Set()
+  }
+}
+
+export function saveDisabledBuiltinTools(value: unknown): string[] {
+  const names = Array.isArray(value)
+    ? value.filter((name): name is string => typeof name === 'string' && BUILTIN_TOOL_NAMES.has(name))
+    : []
+  const unique = [...new Set(names)].sort()
+  setSetting(DISABLED_TOOLS_KEY, JSON.stringify(unique))
+  return unique
+}
+
 async function askQuestionTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   if (!ctx.chatId) return fail('ask_question is only available inside a chat')
   const header = str(args, 'header').trim().slice(0, 40) || 'Question'
@@ -1528,7 +1580,7 @@ const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext)
   git_push: gitPushTool,
   git_pull: gitPullTool,
   webfetch: webFetchTool,
-  ask_question: askQuestionTool
+  websearch: webSearchTool
 }
 
 export async function executeBuiltinTool(

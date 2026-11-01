@@ -323,8 +323,27 @@ export type AgentEvent =
   | { type: 'summary_start'; estimatedTokens: number; contextWindow: number }
   | { type: 'summary'; summary: ChatSummary }
   | { type: 'summary_error'; message: string }
+  | { type: 'question'; question: Question }
   | { type: 'done'; message?: Message; aborted?: boolean; maxStepsReached?: boolean }
   | ({ type: 'error'; error: string } & FailureInfo)
+
+export type QuestionStatus = 'pending' | 'answered'
+
+export interface Question {
+  id: string
+  chatId: string
+  header: string
+  question: string
+  options: string[]
+  allowCustom: boolean
+  customPlaceholder?: string
+  status: QuestionStatus
+  answer: string | null
+  selectedOption: string | null
+  toolCallId: string | null
+  createdAt: number
+  answeredAt: number | null
+}
 
 export interface LiveTool {
   id: string
