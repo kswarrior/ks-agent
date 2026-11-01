@@ -763,7 +763,11 @@ export function ChatView({
     for (const message of messages) {
       if (message.role !== 'assistant' || !message.toolCalls) continue
       for (const call of message.toolCalls) {
-        if (call.function.name === 'update_plan' || call.function.name === 'set_task_report') {
+        if (
+          call.function.name === 'update_plan' ||
+          call.function.name === 'set_task_report' ||
+          call.function.name === 'ask_question'
+        ) {
           ids.add(call.id)
         }
       }
@@ -824,6 +828,7 @@ export function ChatView({
       (tool) =>
         tool.name !== 'update_plan' &&
         tool.name !== 'set_task_report' &&
+        tool.name !== 'ask_question' &&
         !persistedToolCallIds.has(tool.id)
     )
 
@@ -891,7 +896,9 @@ export function ChatView({
     if (message.role === 'assistant') {
       const calls = (message.toolCalls ?? []).filter(
         (call) =>
-          call.function.name !== 'update_plan' && call.function.name !== 'set_task_report'
+          call.function.name !== 'update_plan' &&
+          call.function.name !== 'set_task_report' &&
+          call.function.name !== 'ask_question'
       )
       const hiddenOnly =
         !message.content && calls.length === 0 && (message.toolCalls?.length ?? 0) > 0
