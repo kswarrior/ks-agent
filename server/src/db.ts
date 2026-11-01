@@ -401,6 +401,21 @@ type BackupRow = {
   source: BackupSource
   created_at: number
 }
+type QuestionRow = {
+  id: string
+  chat_id: string
+  header: string
+  question: string
+  options: string
+  allow_custom: number
+  custom_placeholder: string | null
+  status: QuestionStatus
+  answer: string | null
+  selected_option: string | null
+  tool_call_id: string | null
+  created_at: number
+  answered_at: number | null
+}
 type ProviderRow = { id: string; name: string; base_url: string; api_key: string; created_at: number }
 type ModelRow = {
   id: string
@@ -459,6 +474,21 @@ const knowledgeEntry = (r: KnowledgeRow): KnowledgeEntry => ({
   source: r.source,
   createdAt: r.created_at,
   updatedAt: r.updated_at
+})
+const question = (r: QuestionRow): Question => ({
+  id: r.id,
+  chatId: r.chat_id,
+  header: r.header,
+  question: r.question,
+  options: r.options ? (JSON.parse(r.options) as string[]) : [],
+  allowCustom: Boolean(r.allow_custom),
+  customPlaceholder: r.custom_placeholder ?? undefined,
+  status: r.status,
+  answer: r.answer,
+  selectedOption: r.selected_option,
+  toolCallId: r.tool_call_id,
+  createdAt: r.created_at,
+  answeredAt: r.answered_at
 })
 const provider = (r: ProviderRow): Provider => ({
   id: r.id,
