@@ -3735,6 +3735,8 @@ code {
 }
 
 .preview-window-actions {
+  position: relative;
+  z-index: 6;
   display: flex;
   align-items: center;
   gap: 2px;

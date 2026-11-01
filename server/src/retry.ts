@@ -12,6 +12,7 @@ export interface RetrySettings {
   jitter: boolean
   retryOnNetwork: boolean
   retryOnServerErrors: boolean
+  retryOnAnyError: boolean
   retryOnStatusCodes: number[]
   honorRetryAfter: boolean
 }
@@ -28,6 +29,7 @@ export const DEFAULT_RETRY_SETTINGS: RetrySettings = {
   jitter: true,
   retryOnNetwork: true,
   retryOnServerErrors: true,
+  retryOnAnyError: false,
   retryOnStatusCodes: [408, 409, 425, 429],
   honorRetryAfter: true
 }
@@ -79,6 +81,7 @@ export function normalizeRetrySettings(
     jitter: readBoolean(input.jitter, base.jitter),
     retryOnNetwork: readBoolean(input.retryOnNetwork, base.retryOnNetwork),
     retryOnServerErrors: readBoolean(input.retryOnServerErrors, base.retryOnServerErrors),
+    retryOnAnyError: readBoolean(input.retryOnAnyError, base.retryOnAnyError),
     retryOnStatusCodes: readStatusCodes(input.retryOnStatusCodes, base.retryOnStatusCodes),
     honorRetryAfter: readBoolean(input.honorRetryAfter, base.honorRetryAfter)
   }
