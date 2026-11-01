@@ -240,7 +240,11 @@ export default function App() {
           setPreviewOpen(true)
         }
       }
-      if (event.call.name !== 'update_plan' && event.call.name !== 'set_task_report') {
+      if (
+        event.call.name !== 'update_plan' &&
+        event.call.name !== 'set_task_report' &&
+        event.call.name !== 'ask_question'
+      ) {
         setLive((current) =>
           current
             ? {
@@ -273,7 +277,11 @@ export default function App() {
         )
       }
     } else if (event.type === 'tool_end') {
-      if (event.call.name !== 'update_plan' && event.call.name !== 'set_task_report') {
+      if (
+        event.call.name !== 'update_plan' &&
+        event.call.name !== 'set_task_report' &&
+        event.call.name !== 'ask_question'
+      ) {
         setLive((current) =>
           current
             ? {
