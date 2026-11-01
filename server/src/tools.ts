@@ -525,6 +525,22 @@ export const builtinToolDefs: ToolDef[] = [
         }
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'webfetch',
+      description:
+        'Fetch a public http/https URL and return its content as readable text (HTML is converted to markdown-like text). Use for online docs, changelogs, APIs and raw files. No API key needed. Local/private hosts are blocked. Large pages are truncated.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: 'Absolute http/https URL to fetch' },
+          timeout_ms: { type: 'integer', description: 'Timeout in milliseconds (default 30000, max 120000)' }
+        },
+        required: ['url']
+      }
+    }
   }
 ]
 
