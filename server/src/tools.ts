@@ -1472,6 +1472,61 @@ async function webFetchTool(args: Record<string, unknown>, ctx: ToolContext): Pr
   return { ok: true, output: truncate(`${header}\n\n${body}`) }
 }
 
+async function askQuestionTool(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  if (!ctx.chatId) return fail('ask_question is only available inside a chat')
+  const header = str(args, 'header').trim().slice(0, 40) || 'Question'
+  const questionText = str(args, 'question').trim()
+  if (!questionText) return fail('question is required')
+  if (questionText.length < 5 || questionText.length > 500) return fail('question must be 5-500 chars')
+  const rawOptions = Array.isArray(args.options) ? args.options : []
+  const options = rawOptions
+    .map((o) => String(o ?? '').trim())
+    .filter(Boolean)
+    .slice(0, 6)
+  const allowCustom = bool(args, 'allow_custom', true)
+  if (options.length === 0 && !allowCustom) return fail('provide at least one option or allow_custom=true')
+  if (options.some((o) => o.length > 80)) return fail('each option must be <= 80 chars')
+  const customPlaceholder = str(args, 'custom_placeholder').trim().slice(0, 80) || undefined
+
+  const q = insertQuestion({
+    chatId: ctx.chatId,
+    header,
+    question: questionText,
+    options,
+    allowCustom,
+    customPlaceholder,
+    toolCallId: ctx.toolCallId ?? null
+  })
+  ctx.emit?.({ type: 'question', question: q })
+
+  const signal = ctx.signal
+  let answer: string
+  try {
+    answer = await new Promise<string>((resolve, reject) => {
+      const onAbort = () => {
+        pendingQuestionResolvers.delete(q.id)
+        reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }))
+      }
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
+      pendingQuestionResolvers.set(q.id, (ans) => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve(ans)
+      })
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error
+    return fail(String(error instanceof Error ? error.message : error))
+  }
+
+  const isOption = options.includes(answer)
+  const display = isOption ? `selected "${answer}"` : `answered "${answer}"`
+  return { ok: true, output: `User ${display}: "${answer}"` }
+}
+
 const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>> = {
   read_file: readFileTool,
   read_multiple_files: readMultipleFilesTool,
@@ -1502,7 +1557,8 @@ const handlers: Record<string, (args: Record<string, unknown>, ctx: ToolContext)
   git_commit: gitCommitTool,
   git_push: gitPushTool,
   git_pull: gitPullTool,
-  webfetch: webFetchTool
+  webfetch: webFetchTool,
+  ask_question: askQuestionTool
 }
 
 export async function executeBuiltinTool(
