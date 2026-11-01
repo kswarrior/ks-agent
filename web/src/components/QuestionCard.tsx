@@ -142,7 +142,7 @@ function SingleQuestionCard({ question, index, total, canGoBack, onBack, onConfi
           <span />
         )}
         {pending && (
-          <button className="btn btn-primary" onClick={() => void handleConfirm()} disabled={!canConfirm}>
+          <button className="btn primary" onClick={() => void handleConfirm()} disabled={!canConfirm}>
             {busy ? 'Saving…' : 'Confirm'}
           </button>
         )}
