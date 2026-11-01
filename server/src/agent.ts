@@ -687,7 +687,16 @@ Update the summary using the required format. Keep facts from the previous summa
             call: { id: call.id, name: call.function.name, arguments: call.function.arguments }
           })
           const started = Date.now()
-          const toolResult = await executeTool(call.function.name, args, project, signal, disabled)
+          const toolResult = await executeTool(
+            call.function.name,
+            args,
+            project,
+            signal,
+            disabled,
+            emit,
+            chat.id,
+            call.id
+          )
           insertMessage({
             chatId: chat.id,
             role: 'tool',
