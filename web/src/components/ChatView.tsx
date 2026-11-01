@@ -9,6 +9,7 @@ import type {
   Message,
   ModelEntry,
   Project,
+  Question,
   RetryStatus,
   RunStep
 } from '../types'
