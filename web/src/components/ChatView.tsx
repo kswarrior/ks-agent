@@ -1136,6 +1136,8 @@ export function ChatView({
                 <FailureCard failure={failure} onContinue={continueRun} />
               </div>
             )}
+
+            <QuestionList questions={questions} onAnswer={onAnswerQuestion} />
               </>
             )}
             <div ref={bottomRef} />
