@@ -3922,6 +3922,71 @@ code {
   background: #ffffff;
 }
 
+.preview-view.device {
+  display: block;
+  padding: 18px;
+  overflow: auto;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.05), transparent 60%),
+    #0d0d11;
+}
+
+.preview-device {
+  margin: 0 auto;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 1px var(--line-strong),
+    0 18px 50px rgba(0, 0, 0, 0.55);
+}
+
+.preview-device .preview-frame {
+  display: block;
+}
+
+.preview-device-select {
+  flex: 0 0 auto;
+}
+
+.preview-device-select .select-trigger {
+  width: auto;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.preview-device-select .select-value {
+  font-size: 11px;
+}
+
+.preview-custom-size {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.preview-custom-size input {
+  width: 46px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: #0a0a0d;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  outline: none;
+}
+
+.preview-custom-size input:focus {
+  border-color: #4a4a58;
+}
+
 .preview-setup {
   flex: 1;
   display: flex;
