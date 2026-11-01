@@ -1208,6 +1208,35 @@ app.post('/api/chats/:id/stop', (c) => {
   return c.json({ ok: true })
 })
 
+app.get('/api/chats/:id/questions', (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  return c.json(listQuestions(chat.id))
+})
+
+app.post('/api/chats/:id/questions/:qid/answer', async (c) => {
+  const chat = getChat(c.req.param('id'))
+  if (!chat) return c.json(errorJson('chat not found', 404), 404)
+  const question = getQuestion(c.req.param('qid'))
+  if (!question || question.chatId !== chat.id) return c.json(errorJson('question not found', 404), 404)
+  const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null
+  const answer = typeof body?.answer === 'string' ? body.answer.trim() : ''
+  if (!answer) return c.json(errorJson('answer is required'), 400)
+  if (answer.length > 2000) return c.json(errorJson('answer too long'), 400)
+  if (!question.allowCustom && !question.options.includes(answer)) {
+    return c.json(errorJson('custom answer not allowed for this question'), 400)
+  }
+  const wasPending = question.status === 'pending'
+  const updated = answerQuestion(question.id, answer)
+  if (!updated) return c.json(errorJson('question not found', 404), 404)
+  if (wasPending) resolvePendingQuestion(question.id, answer)
+  const run = runs.get(chat.id)
+  if (run && !run.done) {
+    run.events.push({ type: 'question', question: updated })
+  }
+  return c.json(updated)
+})
+
 // --------------------------------------------------------------- providers
 app.get('/api/providers', (c) => c.json(listProviders().map(publicProvider)))
 

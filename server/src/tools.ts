@@ -560,6 +560,24 @@ export const builtinToolDefs: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'websearch',
+      description:
+        'Search the web and return ranked results (title, URL, snippet). Default engine is DuckDuckGo and needs no API key; more engines (Brave, Google, Bing, Tavily, custom URL) can be added in Settings > Tools. Use webfetch afterwards to read a result page.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query' },
+          engine: { type: 'string', description: 'Optional engine id or name from Settings > Tools (default: first enabled engine)' },
+          limit: { type: 'integer', description: 'Max results (default 8, max 20)' },
+          timeout_ms: { type: 'integer', description: 'Timeout in milliseconds (default 30000, max 120000)' }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'ask_question',
       description:
         'Ask the user a question during execution. Renders an interactive card in the chat UI with clickable option buttons and optional custom text input, and pauses execution until the user answers. Use it whenever you need to gather preferences, clarify ambiguous instructions, get a decision on implementation choices, or offer choices about direction. Do not write questions in your reply text — call this tool instead. A "Type your own answer" input is available when allow_custom is true.',
