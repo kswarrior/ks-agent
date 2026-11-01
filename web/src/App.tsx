@@ -26,6 +26,7 @@ import type {
   Project,
   ProjectCreateMode,
   ProviderPublic,
+  Question,
   RetryStatus,
   RunStep,
   SkillInfo
@@ -76,6 +77,7 @@ export default function App() {
   const [modelId, setModelId] = useState('')
   const [live, setLive] = useState<LiveState | null>(null)
   const [steps, setSteps] = useState<RunStep[]>([])
+  const [questions, setQuestions] = useState<Question[]>([])
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failure, setFailure] = useState<FailureInfo | null>(null)
