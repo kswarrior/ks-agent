@@ -41,7 +41,8 @@ Sources:
 | 26 | `git_branch` | List/create branches |
 | 27 | `git_commit` | Commit changes |
 | 28 | `git_push` | Push to remote |
-| 29 | `git_pull` | Pull from remote |
+ | 29 | `git_pull` | Pull from remote |
+ | 30 | `webfetch` | Fetch a public http/https URL, HTML converted to text (no API key, private hosts blocked) |
 
 ### Conditional / extension tools
 
@@ -134,7 +135,7 @@ Built-in plugin tools in `packages/core/src/tool/plugin/`:
 | Read / write / edit / patch files | ✅ (5 tools) | ✅ (`read`, `write`, `edit`, `patch`) | ✅ (`Read`, `Write`, `Edit`, `MultiEdit`) |
 | Glob / grep / find | ✅ (`glob`, `grep`, `find_files`, `list_dir`, `tree`) | ✅ (`glob`, `grep`) | ✅ (`Glob`, `Grep`, `LS`) |
 | Shell | ✅ `run_shell` | ✅ `shell` | ✅ `Bash`, `BashOutput`, `KillShell` |
-| Web fetch / search | ❌ (via MCP/extensions) | ✅ `webfetch`, `websearch` | ✅ `WebFetch`, `WebSearch` |
+ | Web fetch / search | ⚠️ `webfetch` only (search via MCP/extensions) | ✅ `webfetch`, `websearch` | ✅ `WebFetch`, `WebSearch` |
 | Todo / plan | ✅ `update_plan`, `set_task_report` | ✅ `todowrite` | ✅ `TodoWrite` |
 | Subagent / task | ❌ | ✅ `subagent` | ✅ `Task` (+ `TaskOutput`, `TaskStop`) |
 | Ask user question | ❌ | ✅ `question` | ✅ `AskUserQuestion` |
