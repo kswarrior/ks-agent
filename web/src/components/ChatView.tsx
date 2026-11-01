@@ -654,6 +654,8 @@ export function ChatView({
   live,
   streaming,
   steps,
+  questions,
+  onAnswerQuestion,
   loading,
   error,
   failure,
@@ -685,6 +687,8 @@ export function ChatView({
   live: LiveState | null
   streaming: boolean
   steps: RunStep[]
+  questions: Question[]
+  onAnswerQuestion: (questionId: string, answer: string) => Promise<void>
   loading: boolean
   error: string | null
   failure: FailureInfo | null
