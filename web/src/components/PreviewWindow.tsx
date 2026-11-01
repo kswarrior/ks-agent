@@ -561,6 +561,37 @@ export function PreviewWindow({
             {status?.framework && <span className="preview-badge">{status.framework}</span>}
             {status?.status === 'running' && !status.owned && <span className="preview-badge">external</span>}
             <span className="preview-status-spacer" />
+            <SelectMenu
+              className="preview-device-select"
+              value={device.preset}
+              options={DEVICE_OPTIONS}
+              onChange={(value) => setDevice((current) => ({ ...current, preset: value as DevicePreset }))}
+              ariaLabel="Preview screen size"
+              placeholder="Screen size"
+            />
+            {device.preset === 'custom' && (
+              <span className="preview-custom-size">
+                <input
+                  value={device.customWidth}
+                  onChange={(event) =>
+                    setDevice((current) => ({ ...current, customWidth: event.target.value }))
+                  }
+                  inputMode="numeric"
+                  aria-label="Custom width"
+                  title="Custom width in pixels"
+                />
+                <span aria-hidden="true">×</span>
+                <input
+                  value={device.customHeight}
+                  onChange={(event) =>
+                    setDevice((current) => ({ ...current, customHeight: event.target.value }))
+                  }
+                  inputMode="numeric"
+                  aria-label="Custom height"
+                  title="Custom height in pixels"
+                />
+              </span>
+            )}
             <button className="preview-link-btn" onClick={() => setShowLogs((value) => !value)}>
               {showLogs ? 'Hide logs' : 'Logs'}
             </button>
@@ -581,15 +612,27 @@ export function PreviewWindow({
 
           {visibleError && <div className="preview-error">{visibleError}</div>}
 
-          <div className="preview-view">
+          <div className={`preview-view${activeSize ? ' device' : ''}`}>
             {frameUrl ? (
-              <iframe
-                key={`${frameUrl}:${iframeKey}`}
-                className="preview-frame"
-                src={frameUrl}
-                title={`${project.name} app preview`}
-                allow="clipboard-read; clipboard-write; fullscreen"
-              />
+              activeSize ? (
+                <div className="preview-device" style={{ width: activeSize.width, height: activeSize.height }}>
+                  <iframe
+                    key={`${frameUrl}:${iframeKey}`}
+                    className="preview-frame"
+                    src={frameUrl}
+                    title={`${project.name} app preview`}
+                    allow="clipboard-read; clipboard-write; fullscreen"
+                  />
+                </div>
+              ) : (
+                <iframe
+                  key={`${frameUrl}:${iframeKey}`}
+                  className="preview-frame"
+                  src={frameUrl}
+                  title={`${project.name} app preview`}
+                  allow="clipboard-read; clipboard-write; fullscreen"
+                />
+              )
             ) : (
               <div className="preview-setup">
                 {status?.status === 'starting' ? (
