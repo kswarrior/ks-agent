@@ -394,13 +394,15 @@ export default function App() {
       setRetryStatus(null)
 
       try {
-        const [list, savedSummary] = await Promise.all([
+        const [list, savedSummary, savedQuestions] = await Promise.all([
           api.listMessages(chatId),
-          api.getChatSummary(chatId).catch(() => null)
+          api.getChatSummary(chatId).catch(() => null),
+          api.listQuestions(chatId).catch(() => [])
         ])
         if (subscription.cancelled) return
         setMessages(list)
         setChatSummary(savedSummary)
+        setQuestions(savedQuestions)
         setMessagesLoading(false)
         const status = await api.getChatRun(chatId)
         if (subscription.cancelled || !status.active) return
