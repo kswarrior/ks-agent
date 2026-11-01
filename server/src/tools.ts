@@ -1330,7 +1330,7 @@ async function openPreviewTool(args: Record<string, unknown>, ctx: ToolContext):
 
 const WEBFETCH_MAX_BYTES = 2 * 1024 * 1024
 const PRIVATE_HOST_RE =
-  /^(?:localhost|127\.|0\.0\.0\.0|\[?::1\]?|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|metadata\.google\.internal)$/i
+  /^(?:localhost$|127\.|0\.0\.0\.0$|\[?::1\]?$|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|169\.254\.|metadata\.google\.internal$)/i
 
 function decodeEntities(text: string): string {
   return text
