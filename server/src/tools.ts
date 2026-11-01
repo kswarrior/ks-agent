@@ -31,13 +31,26 @@ import {
   stopPreview,
   waitForPreview
 } from './preview.js'
-import type { AgentEvent, ToolDef, ToolResult } from './types.js'
+import { answerQuestion, getQuestion, insertQuestion, newId } from './db.js'
+import type { AgentEvent, Question, ToolDef, ToolResult } from './types.js'
 
 export interface ToolContext {
   projectId?: string
   projectPath: string
   signal?: AbortSignal
   emit?: (event: AgentEvent) => void
+  chatId?: string
+  toolCallId?: string
+}
+
+export const pendingQuestionResolvers = new Map<string, (answer: string) => void>()
+
+export function resolvePendingQuestion(questionId: string, answer: string): boolean {
+  const fn = pendingQuestionResolvers.get(questionId)
+  if (!fn) return false
+  pendingQuestionResolvers.delete(questionId)
+  fn(answer)
+  return true
 }
 
 export const builtinToolDefs: ToolDef[] = [
