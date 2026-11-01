@@ -10,6 +10,10 @@ interface Geometry {
   height: number
 }
 
+type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+const RESIZE_DIRECTIONS: ResizeDirection[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
+
 const STORAGE_KEY = 'ks-preview-window-v1'
 const MIN_WIDTH = 380
 const MIN_HEIGHT = 320
@@ -30,6 +34,26 @@ function clampGeometry(geometry: Geometry): Geometry {
     x: clamp(geometry.x, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN)),
     y: clamp(geometry.y, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, window.innerHeight - height - VIEWPORT_MARGIN))
   }
+}
+
+function resizeGeometry(start: Geometry, direction: ResizeDirection, dx: number, dy: number): Geometry {
+  const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2)
+  const maxHeight = Math.max(MIN_HEIGHT, window.innerHeight - VIEWPORT_MARGIN * 2)
+  let width = start.width
+  let height = start.height
+  let x = start.x
+  let y = start.y
+  if (direction.includes('e')) width = clamp(start.width + dx, MIN_WIDTH, maxWidth)
+  if (direction.includes('w')) {
+    width = clamp(start.width - dx, MIN_WIDTH, maxWidth)
+    x = start.x + (start.width - width)
+  }
+  if (direction.includes('s')) height = clamp(start.height + dy, MIN_HEIGHT, maxHeight)
+  if (direction.includes('n')) {
+    height = clamp(start.height - dy, MIN_HEIGHT, maxHeight)
+    y = start.y + (start.height - height)
+  }
+  return clampGeometry({ x, y, width, height })
 }
 
 function defaultGeometry(): Geometry {
