@@ -446,14 +446,24 @@ async function executeTool(
   args: Record<string, unknown>,
   project: Project,
   signal: AbortSignal,
-  disabled: DisabledExtensions
+  disabled: DisabledExtensions,
+  emit?: (event: AgentEvent) => void | Promise<void>,
+  chatId?: string,
+  toolCallId?: string
 ): Promise<ToolResult> {
   if (args.__parse_error) {
     return { ok: false, output: `Could not parse tool arguments as JSON: ${String(args.__parse_error).slice(0, 500)}` }
   }
   if (name === 'list_chat_extensions') return chatExtensionsStatus(project, disabled)
   if (BUILTIN_TOOL_NAMES.has(name)) {
-    return executeBuiltinTool(name, args, { projectId: project.id, projectPath: project.path, signal })
+    return executeBuiltinTool(name, args, {
+      projectId: project.id,
+      projectPath: project.path,
+      signal,
+      emit,
+      chatId,
+      toolCallId
+    })
   }
   if (name === 'use_skill') {
     return skills.call(name, args, project.id, disabled.skill)
