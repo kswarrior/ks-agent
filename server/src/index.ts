@@ -81,6 +81,7 @@ import {
   saveRetrySettings
 } from './retry.js'
 import { normalizeProjects } from './scope.js'
+import { resolvePendingQuestion } from './tools.js'
 import { skills } from './skills.js'
 import type { AgentEvent, Chat, ChatExtensionsState, ExtensionKind, Project, ProviderPublic } from './types.js'
 
