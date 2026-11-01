@@ -203,6 +203,16 @@ export default function App() {
     } else if (event.type === 'summary_error') {
       setSummaryBusy(false)
       setSummaryError(event.message)
+    } else if (event.type === 'question') {
+      setQuestions((current) => {
+        const idx = current.findIndex((q) => q.id === event.question.id)
+        if (idx >= 0) {
+          const next = current.slice()
+          next[idx] = event.question
+          return next
+        }
+        return [...current, event.question]
+      })
     } else if (event.type === 'token') {
       setRetryStatus(null)
       setLive((current) => (current ? { ...current, content: current.content + event.text } : current))
