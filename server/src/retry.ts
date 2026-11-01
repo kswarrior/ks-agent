@@ -106,6 +106,7 @@ export function saveRetrySettings(value: unknown): RetrySettings {
 export function isRetryableProviderError(error: unknown, settings: RetrySettings): boolean {
   if (!(error instanceof Error)) return false
   if (error.name === 'AbortError') return false
+  if (settings.retryOnAnyError) return true
   if (error.name === 'TimeoutError') return settings.retryOnNetwork
   if (error instanceof ProviderError) {
     if (error.status >= 500) {
