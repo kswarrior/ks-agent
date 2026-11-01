@@ -328,15 +328,16 @@ export function PreviewWindow({
     }
   }
 
-  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+  const startResize = (event: React.PointerEvent<HTMLDivElement>, direction: ResizeDirection) => {
     if (maximized) return
     event.preventDefault()
+    event.stopPropagation()
     resizeState.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      width: geometry.width,
-      height: geometry.height
+      direction,
+      start: { ...geometry }
     }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -346,9 +347,7 @@ export function PreviewWindow({
     if (!resize || resize.pointerId !== event.pointerId) return
     const dx = event.clientX - resize.startX
     const dy = event.clientY - resize.startY
-    setGeometry((current) =>
-      clampGeometry({ ...current, width: resize.width + dx, height: resize.height + dy })
-    )
+    setGeometry(resizeGeometry(resize.start, resize.direction, dx, dy))
   }
 
   const endResize = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -667,17 +666,19 @@ export function PreviewWindow({
           </form>
       </>
 
-      {!maximized && (
-        <div
-          className="preview-resize"
-          onPointerDown={startResize}
-          onPointerMove={moveResize}
-          onPointerUp={endResize}
-          onPointerCancel={endResize}
-          role="presentation"
-          title="Resize preview"
-        />
-      )}
+      {!maximized &&
+        RESIZE_DIRECTIONS.map((direction) => (
+          <div
+            key={direction}
+            className={`preview-resize ${direction}`}
+            onPointerDown={(event) => startResize(event, direction)}
+            onPointerMove={moveResize}
+            onPointerUp={endResize}
+            onPointerCancel={endResize}
+            role="presentation"
+            title={`Resize preview (${direction.toUpperCase()})`}
+          />
+        ))}
     </section>
   )
 }
