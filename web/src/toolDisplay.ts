@@ -31,6 +31,7 @@ const TOOL_META: Record<string, ToolMeta> = {
   git_commit: { action: 'Git commit', running: 'Committing' },
   git_push: { action: 'Git push', running: 'Pushing' },
   git_pull: { action: 'Git pull', running: 'Pulling' },
+  webfetch: { action: 'Fetch', running: 'Fetching' },
   'tool result': { action: 'Result', running: 'Working' }
 }
 
@@ -98,6 +99,8 @@ export function describeTool(
   switch (name) {
     case 'run_shell':
       return { primary: argsString(args, 'command'), detail: '' }
+    case 'webfetch':
+      return { primary: argsString(args, 'url'), detail: '' }
     case 'preview_app': {
       const action = argsString(args, 'action') || 'start'
       const port = args.port === undefined ? '' : String(args.port)

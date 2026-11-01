@@ -7,7 +7,7 @@ Sources:
 
 ---
 
-## 1. KS Agent (29 built-in + 3 conditional + dynamic)
+## 1. KS Agent (30 built-in + 3 conditional + dynamic)
 
 ### Built-in tools (`server/src/tools.ts`)
 
