@@ -233,6 +233,7 @@ export interface AgentEvent {
     | 'summary_start'
     | 'summary'
     | 'summary_error'
+    | 'question'
     | 'done'
     | 'error'
   [key: string]: unknown

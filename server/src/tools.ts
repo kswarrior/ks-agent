@@ -31,8 +31,10 @@ import {
   stopPreview,
   waitForPreview
 } from './preview.js'
-import { answerQuestion, getQuestion, insertQuestion, newId } from './db.js'
+import { answerQuestion, getQuestion, getSetting, insertQuestion, newId, setSetting } from './db.js'
 import type { AgentEvent, Question, ToolDef, ToolResult } from './types.js'
+import { htmlToText, parsePublicHttpUrl } from './webutil.js'
+import { searchWeb } from './websearch.js'
 
 export interface ToolContext {
   projectId?: string
