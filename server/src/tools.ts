@@ -554,6 +554,29 @@ export const builtinToolDefs: ToolDef[] = [
         required: ['url']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ask_question',
+      description:
+        'Ask the user a question during execution. Renders an interactive card in the chat UI with clickable option buttons and optional custom text input, and pauses execution until the user answers. Use it whenever you need to gather preferences, clarify ambiguous instructions, get a decision on implementation choices, or offer choices about direction. Do not write questions in your reply text — call this tool instead. A "Type your own answer" input is available when allow_custom is true.',
+      parameters: {
+        type: 'object',
+        properties: {
+          header: { type: 'string', description: 'Short card title (2-40 chars), e.g. "Choose Framework"' },
+          question: { type: 'string', description: 'Full question text to show (5-500 chars). Be specific and concise.' },
+          options: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '1-6 short clickable option labels (2-60 chars each). At least one option or allow_custom=true required.'
+          },
+          allow_custom: { type: 'boolean', description: 'Allow a custom typed answer in addition to options (default true)' },
+          custom_placeholder: { type: 'string', description: 'Placeholder for the custom input, e.g. "Type custom framework…"' }
+        },
+        required: ['question']
+      }
+    }
   }
 ]
 
