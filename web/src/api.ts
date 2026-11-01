@@ -168,6 +168,10 @@ export const deleteChatSummary = (chatId: string) =>
   req<{ ok: true }>(`/api/chats/${chatId}/summary`, { method: 'DELETE' })
 export const stopChat = (chatId: string) => req<{ ok: true }>(`/api/chats/${chatId}/stop`, { method: 'POST' })
 
+export const listQuestions = (chatId: string) => req<Question[]>(`/api/chats/${chatId}/questions`)
+export const answerQuestion = (chatId: string, questionId: string, answer: string) =>
+  req<Question>(`/api/chats/${chatId}/questions/${questionId}/answer`, json('POST', { answer }))
+
 export const listGlobalKnowledge = () => req<KnowledgeEntry[]>('/api/knowledge?scope=global')
 export const listProjectKnowledge = (projectId: string) =>
   req<KnowledgeEntry[]>(`/api/projects/${projectId}/knowledge`)
