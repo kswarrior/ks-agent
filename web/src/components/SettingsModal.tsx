@@ -923,14 +923,6 @@ export function SettingsModal({
             <label className="check-row">
               <input
                 type="checkbox"
-                checked={retryDraft.retryOnAnyError}
-                onChange={(event) => updateRetry('retryOnAnyError', event.target.checked)}
-              />
-              Any error (always retry, overrides the options below)
-            </label>
-            <label className="check-row">
-              <input
-                type="checkbox"
                 checked={retryDraft.retryOnNetwork}
                 onChange={(event) => updateRetry('retryOnNetwork', event.target.checked)}
               />

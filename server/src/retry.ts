@@ -12,7 +12,6 @@ export interface RetrySettings {
   jitter: boolean
   retryOnNetwork: boolean
   retryOnServerErrors: boolean
-  retryOnAnyError: boolean
   retryOnStatusCodes: number[]
   honorRetryAfter: boolean
 }
@@ -29,7 +28,6 @@ export const DEFAULT_RETRY_SETTINGS: RetrySettings = {
   jitter: true,
   retryOnNetwork: true,
   retryOnServerErrors: true,
-  retryOnAnyError: false,
   retryOnStatusCodes: [408, 409, 425, 429],
   honorRetryAfter: true
 }
@@ -81,7 +79,6 @@ export function normalizeRetrySettings(
     jitter: readBoolean(input.jitter, base.jitter),
     retryOnNetwork: readBoolean(input.retryOnNetwork, base.retryOnNetwork),
     retryOnServerErrors: readBoolean(input.retryOnServerErrors, base.retryOnServerErrors),
-    retryOnAnyError: readBoolean(input.retryOnAnyError, base.retryOnAnyError),
     retryOnStatusCodes: readStatusCodes(input.retryOnStatusCodes, base.retryOnStatusCodes),
     honorRetryAfter: readBoolean(input.honorRetryAfter, base.honorRetryAfter)
   }
@@ -106,7 +103,6 @@ export function saveRetrySettings(value: unknown): RetrySettings {
 export function isRetryableProviderError(error: unknown, settings: RetrySettings): boolean {
   if (!(error instanceof Error)) return false
   if (error.name === 'AbortError') return false
-  if (settings.retryOnAnyError) return true
   if (error.name === 'TimeoutError') return settings.retryOnNetwork
   if (error instanceof ProviderError) {
     if (error.status >= 500) {

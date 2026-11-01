@@ -3735,8 +3735,6 @@ code {
 }
 
 .preview-window-actions {
-  position: relative;
-  z-index: 6;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -4130,64 +4128,12 @@ code {
 
 .preview-resize {
   position: absolute;
-  z-index: 5;
-  touch-action: none;
-}
-
-.preview-resize.n {
-  top: 0;
-  left: 10px;
-  right: 10px;
-  height: 6px;
-  cursor: ns-resize;
-}
-
-.preview-resize.s {
-  bottom: 0;
-  left: 10px;
-  right: 10px;
-  height: 6px;
-  cursor: ns-resize;
-}
-
-.preview-resize.e {
-  top: 10px;
-  bottom: 10px;
-  right: 0;
-  width: 6px;
-  cursor: ew-resize;
-}
-
-.preview-resize.w {
-  top: 10px;
-  bottom: 10px;
-  left: 0;
-  width: 6px;
-  cursor: ew-resize;
-}
-
-.preview-resize.ne {
-  top: 0;
-  right: 0;
-  width: 16px;
-  height: 16px;
-  cursor: nesw-resize;
-}
-
-.preview-resize.nw {
-  top: 0;
-  left: 0;
-  width: 16px;
-  height: 16px;
-  cursor: nwse-resize;
-}
-
-.preview-resize.se {
   right: 0;
   bottom: 0;
   width: 18px;
   height: 18px;
   cursor: nwse-resize;
+  touch-action: none;
   background: linear-gradient(
     135deg,
     transparent 0 45%,
@@ -4196,14 +4142,6 @@ code {
     var(--line-strong) 70% 80%,
     transparent 80%
   );
-}
-
-.preview-resize.sw {
-  bottom: 0;
-  left: 0;
-  width: 16px;
-  height: 16px;
-  cursor: nesw-resize;
 }
 
 .preview-mini {

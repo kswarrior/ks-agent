@@ -10,10 +10,6 @@ interface Geometry {
   height: number
 }
 
-type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
-
-const RESIZE_DIRECTIONS: ResizeDirection[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']
-
 const STORAGE_KEY = 'ks-preview-window-v1'
 const MIN_WIDTH = 380
 const MIN_HEIGHT = 320
@@ -34,26 +30,6 @@ function clampGeometry(geometry: Geometry): Geometry {
     x: clamp(geometry.x, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN)),
     y: clamp(geometry.y, VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, window.innerHeight - height - VIEWPORT_MARGIN))
   }
-}
-
-function resizeGeometry(start: Geometry, direction: ResizeDirection, dx: number, dy: number): Geometry {
-  const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2)
-  const maxHeight = Math.max(MIN_HEIGHT, window.innerHeight - VIEWPORT_MARGIN * 2)
-  let width = start.width
-  let height = start.height
-  let x = start.x
-  let y = start.y
-  if (direction.includes('e')) width = clamp(start.width + dx, MIN_WIDTH, maxWidth)
-  if (direction.includes('w')) {
-    width = clamp(start.width - dx, MIN_WIDTH, maxWidth)
-    x = start.x + (start.width - width)
-  }
-  if (direction.includes('s')) height = clamp(start.height + dy, MIN_HEIGHT, maxHeight)
-  if (direction.includes('n')) {
-    height = clamp(start.height - dy, MIN_HEIGHT, maxHeight)
-    y = start.y + (start.height - height)
-  }
-  return clampGeometry({ x, y, width, height })
 }
 
 function defaultGeometry(): Geometry {
@@ -144,13 +120,9 @@ export function PreviewWindow({
   const portTouched = useRef(false)
   const autoStarted = useRef(false)
   const dragState = useRef<{ pointerId: number; startX: number; startY: number; x: number; y: number } | null>(null)
-  const resizeState = useRef<{
-    pointerId: number
-    startX: number
-    startY: number
-    direction: ResizeDirection
-    start: Geometry
-  } | null>(null)
+  const resizeState = useRef<{ pointerId: number; startX: number; startY: number; width: number; height: number } | null>(
+    null
+  )
   const wasStreaming = useRef(streaming)
 
   const loadStatus = useCallback(async () => {
@@ -328,16 +300,15 @@ export function PreviewWindow({
     }
   }
 
-  const startResize = (event: React.PointerEvent<HTMLDivElement>, direction: ResizeDirection) => {
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
     if (maximized) return
     event.preventDefault()
-    event.stopPropagation()
     resizeState.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      direction,
-      start: { ...geometry }
+      width: geometry.width,
+      height: geometry.height
     }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -347,7 +318,9 @@ export function PreviewWindow({
     if (!resize || resize.pointerId !== event.pointerId) return
     const dx = event.clientX - resize.startX
     const dy = event.clientY - resize.startY
-    setGeometry(resizeGeometry(resize.start, resize.direction, dx, dy))
+    setGeometry((current) =>
+      clampGeometry({ ...current, width: resize.width + dx, height: resize.height + dy })
+    )
   }
 
   const endResize = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -666,19 +639,17 @@ export function PreviewWindow({
           </form>
       </>
 
-      {!maximized &&
-        RESIZE_DIRECTIONS.map((direction) => (
-          <div
-            key={direction}
-            className={`preview-resize ${direction}`}
-            onPointerDown={(event) => startResize(event, direction)}
-            onPointerMove={moveResize}
-            onPointerUp={endResize}
-            onPointerCancel={endResize}
-            role="presentation"
-            title={`Resize preview (${direction.toUpperCase()})`}
-          />
-        ))}
+      {!maximized && (
+        <div
+          className="preview-resize"
+          onPointerDown={startResize}
+          onPointerMove={moveResize}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          role="presentation"
+          title="Resize preview"
+        />
+      )}
     </section>
   )
 }

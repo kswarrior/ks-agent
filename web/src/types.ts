@@ -245,7 +245,6 @@ export interface RetrySettings {
   jitter: boolean
   retryOnNetwork: boolean
   retryOnServerErrors: boolean
-  retryOnAnyError: boolean
   retryOnStatusCodes: number[]
   honorRetryAfter: boolean
 }
