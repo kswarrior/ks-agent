@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as api from '../api'
 import type { PreviewStatus, Project } from '../types'
+import { SelectMenu, type SelectOption } from './SelectMenu'
 import { TerminalOutput } from './TerminalOutput'
 
 interface Geometry {
@@ -11,9 +12,59 @@ interface Geometry {
 }
 
 const STORAGE_KEY = 'ks-preview-window-v1'
+const DEVICE_STORAGE_KEY = 'ks-preview-device-v1'
 const MIN_WIDTH = 380
 const MIN_HEIGHT = 320
 const VIEWPORT_MARGIN = 8
+const CUSTOM_SIZE_MIN = 240
+const CUSTOM_SIZE_MAX = 4096
+
+type DevicePreset = 'responsive' | 'desktop' | 'tablet' | 'phone' | 'custom'
+
+const DEVICE_PRESETS: Record<Exclude<DevicePreset, 'responsive' | 'custom'>, { width: number; height: number }> = {
+  desktop: { width: 1440, height: 900 },
+  tablet: { width: 768, height: 1024 },
+  phone: { width: 390, height: 844 }
+}
+
+const DEVICE_OPTIONS: SelectOption[] = [
+  { value: 'responsive', label: 'Responsive' },
+  { value: 'desktop', label: 'Desktop · 1440×900' },
+  { value: 'tablet', label: 'Tablet · 768×1024' },
+  { value: 'phone', label: 'Phone · 390×844' },
+  { value: 'custom', label: 'Custom…' }
+]
+
+interface DeviceState {
+  preset: DevicePreset
+  customWidth: string
+  customHeight: string
+}
+
+function loadDevice(): DeviceState {
+  const fallback: DeviceState = { preset: 'responsive', customWidth: '390', customHeight: '844' }
+  try {
+    const raw = localStorage.getItem(DEVICE_STORAGE_KEY)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw) as Partial<DeviceState>
+    const preset = DEVICE_OPTIONS.some((option) => option.value === parsed.preset)
+      ? (parsed.preset as DevicePreset)
+      : 'responsive'
+    return {
+      preset,
+      customWidth: typeof parsed.customWidth === 'string' && parsed.customWidth.trim() ? parsed.customWidth : '390',
+      customHeight:
+        typeof parsed.customHeight === 'string' && parsed.customHeight.trim() ? parsed.customHeight : '844'
+    }
+  } catch {
+    return fallback
+  }
+}
+
+function parseCustomSize(raw: string, fallback: number): number {
+  const value = Number.parseInt(raw, 10)
+  return clamp(Number.isFinite(value) ? value : fallback, CUSTOM_SIZE_MIN, CUSTOM_SIZE_MAX)
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -115,6 +166,7 @@ export function PreviewWindow({
   const [address, setAddress] = useState('localhost:5173')
   const [customUrl, setCustomUrl] = useState<string | null>(null)
   const [addressError, setAddressError] = useState<string | null>(null)
+  const [device, setDevice] = useState<DeviceState>(loadDevice)
   const addressTouched = useRef(false)
   const commandTouched = useRef(false)
   const portTouched = useRef(false)
@@ -172,6 +224,14 @@ export function PreviewWindow({
       // ignore storage failures
     }
   }, [geometry])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(device))
+    } catch {
+      // ignore storage failures
+    }
+  }, [device])
 
   useEffect(() => {
     const onResize = () => setGeometry((current) => clampGeometry(current))
@@ -336,6 +396,15 @@ export function PreviewWindow({
   const liveUrl = status ? previewUrl(status) : null
   const externalUrl = liveUrl || status?.url || null
   const frameUrl = customUrl ?? (status?.status === 'running' ? liveUrl : DEFAULT_PREVIEW_URL)
+  const activeSize =
+    device.preset === 'responsive'
+      ? null
+      : device.preset === 'custom'
+        ? {
+            width: parseCustomSize(device.customWidth, 390),
+            height: parseCustomSize(device.customHeight, 844)
+          }
+        : DEVICE_PRESETS[device.preset]
   const openExternal = () => {
     const target = customUrl ?? externalUrl
     if (target) window.open(target, '_blank', 'noopener,noreferrer')
