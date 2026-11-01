@@ -144,9 +144,13 @@ export function PreviewWindow({
   const portTouched = useRef(false)
   const autoStarted = useRef(false)
   const dragState = useRef<{ pointerId: number; startX: number; startY: number; x: number; y: number } | null>(null)
-  const resizeState = useRef<{ pointerId: number; startX: number; startY: number; width: number; height: number } | null>(
-    null
-  )
+  const resizeState = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    direction: ResizeDirection
+    start: Geometry
+  } | null>(null)
   const wasStreaming = useRef(streaming)
 
   const loadStatus = useCallback(async () => {
