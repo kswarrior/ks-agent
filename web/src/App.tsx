@@ -511,6 +511,7 @@ export default function App() {
       setMessages([])
       setLive(null)
       setSteps([])
+      setQuestions([])
       setStreaming(false)
       setMessagesLoading(false)
       setError(null)
