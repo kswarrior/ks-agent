@@ -18,6 +18,8 @@ import type {
   ModelEntry,
   Project,
   Provider,
+  Question,
+  QuestionStatus,
   Role,
   ToolCall
 } from './types.js'
@@ -133,6 +135,21 @@ CREATE TABLE IF NOT EXISTS chat_summaries (
   covered_message_id TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS questions (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  header TEXT NOT NULL DEFAULT 'Question',
+  question TEXT NOT NULL,
+  options TEXT NOT NULL DEFAULT '[]',
+  allow_custom INTEGER NOT NULL DEFAULT 1,
+  custom_placeholder TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  answer TEXT,
+  selected_option TEXT,
+  tool_call_id TEXT,
+  created_at INTEGER NOT NULL,
+  answered_at INTEGER
+);
 CREATE TABLE IF NOT EXISTS knowledge (
   id TEXT PRIMARY KEY,
   scope TEXT NOT NULL,
@@ -160,6 +177,7 @@ CREATE INDEX IF NOT EXISTS idx_chats_project ON chats(project_id, updated_at DES
 CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_chat_disabled_chat ON chat_disabled_extensions(chat_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_project ON knowledge(project_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_questions_chat ON questions(chat_id, created_at);
 `)
   ensureColumn(connection, 'messages', 'model_id', 'TEXT')
   ensureColumn(connection, 'messages', 'duration_ms', 'INTEGER')
