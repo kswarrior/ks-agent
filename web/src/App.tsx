@@ -693,6 +693,12 @@ export default function App() {
     }
   }
 
+  const answerQuestion = async (questionId: string, answer: string) => {
+    if (!activeChatId) return
+    const updated = await api.answerQuestion(activeChatId, questionId, answer)
+    setQuestions((current) => current.map((q) => (q.id === updated.id ? updated : q)))
+  }
+
   const toggleChatExtension = async (kind: ExtensionKind, name: string, enabled: boolean) => {
     const chatId = activeChatId
     if (!chatId) return
@@ -769,6 +775,8 @@ export default function App() {
         live={live}
         streaming={streaming}
         steps={steps}
+        questions={questions}
+        onAnswerQuestion={answerQuestion}
         loading={projectsLoading || chatsLoading || messagesLoading}
         error={error}
         failure={failure}
