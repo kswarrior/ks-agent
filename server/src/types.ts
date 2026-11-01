@@ -242,3 +242,21 @@ export interface ToolResult {
   ok: boolean
   output: string
 }
+
+export type QuestionStatus = 'pending' | 'answered'
+
+export interface Question {
+  id: string
+  chatId: string
+  header: string
+  question: string
+  options: string[]
+  allowCustom: boolean
+  customPlaceholder?: string
+  status: QuestionStatus
+  answer: string | null
+  selectedOption: string | null
+  toolCallId: string | null
+  createdAt: number
+  answeredAt: number | null
+}
