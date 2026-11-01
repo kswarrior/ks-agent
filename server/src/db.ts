@@ -1042,3 +1042,71 @@ export function setSetting(key: string, value: string): void {
     value
   )
 }
+
+export function listQuestions(chatId: string): Question[] {
+  return (
+    db
+      .prepare('SELECT * FROM questions WHERE chat_id = ? ORDER BY created_at ASC, rowid ASC')
+      .all(chatId) as QuestionRow[]
+  ).map(question)
+}
+
+export function getQuestion(id: string): Question | null {
+  const row = db.prepare('SELECT * FROM questions WHERE id = ?').get(id) as QuestionRow | undefined
+  return row ? question(row) : null
+}
+
+export function insertQuestion(input: {
+  chatId: string
+  header: string
+  question: string
+  options: string[]
+  allowCustom: boolean
+  customPlaceholder?: string
+  toolCallId?: string | null
+}): Question {
+  const row: QuestionRow = {
+    id: newId(),
+    chat_id: input.chatId,
+    header: input.header,
+    question: input.question,
+    options: JSON.stringify(input.options),
+    allow_custom: input.allowCustom ? 1 : 0,
+    custom_placeholder: input.customPlaceholder ?? null,
+    status: 'pending',
+    answer: null,
+    selected_option: null,
+    tool_call_id: input.toolCallId ?? null,
+    created_at: Date.now(),
+    answered_at: null
+  }
+  db.prepare(
+    `INSERT INTO questions (id, chat_id, header, question, options, allow_custom, custom_placeholder, status, answer, selected_option, tool_call_id, created_at, answered_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    row.id,
+    row.chat_id,
+    row.header,
+    row.question,
+    row.options,
+    row.allow_custom,
+    row.custom_placeholder,
+    row.status,
+    row.answer,
+    row.selected_option,
+    row.tool_call_id,
+    row.created_at,
+    row.answered_at
+  )
+  return question(row)
+}
+
+export function answerQuestion(id: string, answer: string): Question | null {
+  const current = getQuestion(id)
+  if (!current) return null
+  const selected = current.options.includes(answer) ? answer : null
+  db.prepare(
+    'UPDATE questions SET status = ?, answer = ?, selected_option = ?, answered_at = ? WHERE id = ?'
+  ).run('answered', answer, selected, Date.now(), id)
+  return getQuestion(id)
+}
